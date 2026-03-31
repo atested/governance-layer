@@ -188,6 +188,59 @@ def test_app_js_atested_title():
 
 
 # ---------------------------------------------------------------------------
+# D-036: Chain integrity API and font alignment
+# ---------------------------------------------------------------------------
+
+def test_chain_integrity_api_returns_ok():
+    """assemble_governance_status_record returns chain_integrity=ok for fresh chain."""
+    from readout import assemble_governance_status_record, load_chain_rows
+    from verification import VerificationStateTracker
+    from approval_store import ApprovalStore
+    from event_model import build_non_action_event
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+        e1 = build_non_action_event("usage_attestation", {
+            "attestation_type": "test",
+            "attestation_scope": "unit",
+        }, prev_record_hash=None)
+        f.write(json.dumps(e1, sort_keys=True, separators=(",", ":")) + "\n")
+        chain_path = Path(f.name)
+
+    try:
+        status = assemble_governance_status_record(
+            chain_path, VerificationStateTracker(), ApprovalStore()
+        )
+        assert status["chain_integrity"] == "ok", f"Expected ok, got {status['chain_integrity']}"
+        assert status["chain_event_count"] == 1
+        print("PASS: chain_integrity_api_returns_ok")
+    finally:
+        chain_path.unlink()
+
+
+def test_fonts_inter_in_css():
+    """styles.css uses Inter font family."""
+    css = (REPO / "dashboard" / "ui" / "styles.css").read_text()
+    assert '"Inter"' in css, "Missing Inter font in styles.css"
+    print("PASS: fonts_inter_in_css")
+
+
+def test_fonts_jetbrains_mono_in_css():
+    """styles.css uses JetBrains Mono for code elements."""
+    css = (REPO / "dashboard" / "ui" / "styles.css").read_text()
+    assert '"JetBrains Mono"' in css, "Missing JetBrains Mono font in styles.css"
+    print("PASS: fonts_jetbrains_mono_in_css")
+
+
+def test_fonts_loaded_in_html():
+    """index.html loads Inter and JetBrains Mono from Google Fonts."""
+    html = (REPO / "dashboard" / "ui" / "index.html").read_text()
+    assert "fonts.googleapis.com" in html, "Missing Google Fonts link in index.html"
+    assert "Inter" in html, "Missing Inter in Google Fonts link"
+    assert "JetBrains+Mono" in html or "JetBrains%20Mono" in html, "Missing JetBrains Mono in Google Fonts link"
+    print("PASS: fonts_loaded_in_html")
+
+
+# ---------------------------------------------------------------------------
 # Run all
 # ---------------------------------------------------------------------------
 
@@ -204,4 +257,8 @@ if __name__ == "__main__":
     test_app_js_clickable_activity()
     test_app_js_overview_explainer()
     test_app_js_atested_title()
-    print(f"\nAll 12 tests passed.")
+    test_chain_integrity_api_returns_ok()
+    test_fonts_inter_in_css()
+    test_fonts_jetbrains_mono_in_css()
+    test_fonts_loaded_in_html()
+    print(f"\nAll 16 tests passed.")
