@@ -1,0 +1,30 @@
+{
+  "record_version": "0.2",
+  "timestamp_utc": "2026-03-10T00:00:00Z",
+  "session_id": "sess-rdd-phase5",
+  "request_id": "req-rdd-phase5",
+  "cap_registry_hash": "sha256:1b6d4f6d992fb1b73c5ea5b6e8d59062e1348b21de21c595773894f41bdc71d4",
+  "policy_reasons": [],
+  "policy_decision": "TRIAGE",
+  "tool": "FS_COPY",
+  "intent": {
+    "intent": "FS_COPY"
+  },
+  "policy_inputs": {},
+  "normalized_args": {},
+  "evidence_refs": [],
+  "untrusted_inputs": [],
+  "coverage_stamp": null,
+  "record_type": "terminal_judgment",
+  "process_id": "phase5-proc-terminal",
+  "originating_triage_hash": "sha256:a212abdd67d2b0761faf9283cf4ee5757ea156bd30e02e790950eeacfc039617",
+  "judgment_method": "NON_RESOLUTION",
+  "judgment_rationale": "Deferred pending structural update",
+  "disposition": {
+    "type": "NON_RESOLUTION"
+  },
+  "prev_record_hash": "sha256:a212abdd67d2b0761faf9283cf4ee5757ea156bd30e02e790950eeacfc039617",
+  "record_hash": "sha256:c93cca209f62656570428ec9b6066005e3a6e6a45217f9f5b02f4700869e6c12",
+  "signature": "kNX88in_hGUu2V1lIzDEmLYGi_BsdreLAISBM6fwqfsS6mbbHDrIubcQJ1e7DVOD7NItx4ID2hZ9rts91WnbAg",
+  "signing_key_id": "ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6"
+}

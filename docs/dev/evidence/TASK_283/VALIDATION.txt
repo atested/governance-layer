@@ -1,0 +1,7 @@
+Validation checks:
+- Verified origin/main baseline resolved and matched expected post-M71 SHA.
+- Verified candidate set size is within 2..4 (exactly 4).
+- Verified recommendation selects exactly one preferred lane.
+- Verified no implementation/code surfaces were modified.
+- Verified do-not-touch file set remained untouched.
+RESULT=PASS

@@ -1,0 +1,36 @@
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+$ bash tests/test_github_actions_release_gate_ci_profile.sh
+[exit=0]
+$ bash tests/test_github_actions_release_gate_ci_profile.sh
+[exit=0]
+RUN1_SHA256=8a499454961859c70bdf586d6288684fbbb76464dddc463c5287de06af2c415a
+RUN2_SHA256=8a499454961859c70bdf586d6288684fbbb76464dddc463c5287de06af2c415a
+DETERMINISTIC=yes
+
+RUN1_OUTPUT:
+--- T-GHA-CI-PROFILE-001: workflow contains required CI gating steps and artifact paths ---
+PASS: checkout step present
+PASS: setup-python step present
+PASS: explicit GOV_PROFILE=ci release-gate invocation present
+PASS: proof-bundle artifact path present
+PASS: release-gate stdout log artifact path present
+WORKFLOW_SHA256_RUN1=b7d25e02c1eb415c4aa23b200570e4243645ceb77b0a063c5db40760b15ec2f6
+WORKFLOW_SHA256_RUN2=b7d25e02c1eb415c4aa23b200570e4243645ceb77b0a063c5db40760b15ec2f6
+PASS: workflow digest deterministic across two reads
+Summary: GitHub Actions release-gate CI profile workflow sanity checks complete
+
+RUN2_OUTPUT:
+--- T-GHA-CI-PROFILE-001: workflow contains required CI gating steps and artifact paths ---
+PASS: checkout step present
+PASS: setup-python step present
+PASS: explicit GOV_PROFILE=ci release-gate invocation present
+PASS: proof-bundle artifact path present
+PASS: release-gate stdout log artifact path present
+WORKFLOW_SHA256_RUN1=b7d25e02c1eb415c4aa23b200570e4243645ceb77b0a063c5db40760b15ec2f6
+WORKFLOW_SHA256_RUN2=b7d25e02c1eb415c4aa23b200570e4243645ceb77b0a063c5db40760b15ec2f6
+PASS: workflow digest deterministic across two reads
+Summary: GitHub Actions release-gate CI profile workflow sanity checks complete
+
+Implementation note:
+- Updated workflow to inline GOV_PROFILE=ci in the release-gate command.
+- Tightened local sanity test to require explicit inline CI profile invocation.

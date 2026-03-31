@@ -1,0 +1,20 @@
+AFTER_REQUIRED_RC=0
+RUN1_SHA256=d26534ec018a325879b7bdd39e5679e5a8a008e595c3490c7d070a6754105d64
+RUN2_SHA256=d26534ec018a325879b7bdd39e5679e5a8a008e595c3490c7d070a6754105d64
+DETERMINISTIC=YES
+AFTER_STRICT0_RC=0
+AFTER_STRICT1_RC=0
+--- REQUIRED STDOUT (tail 80) ---
+LOG_DIR=/Users/gregkeeter/codex-workspaces/governance-layer/out/aat_shim_test_logs
+LOG_DIR_MODE=repo_out
+LOG_DIR=<REPO_ROOT>/out/aat_shim_test_logs
+LOG_DIR_MODE=repo_out
+CASE=default_disabled_unchanged PASS
+CASE=enabled_nonstrict_missing_inputs PASS
+CASE=enabled_strict_inputs_present_pass PASS
+CASE=enabled_strict_inputs_present_nonad PASS
+CASE=enabled_strict_inputs_present_legacy_root PASS
+SHIM_TEST_STATUS=PASS
+RUN1_SHA256=d26534ec018a325879b7bdd39e5679e5a8a008e595c3490c7d070a6754105d64
+RUN2_SHA256=d26534ec018a325879b7bdd39e5679e5a8a008e595c3490c7d070a6754105d64
+DETERMINISTIC=YES

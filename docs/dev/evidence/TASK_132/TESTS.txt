@@ -1,0 +1,39 @@
+$ bash tests/test_proof_packet_missing_components.sh
+--- T-PROOF-MISS-001: valid control passes (digest stable across two runs) ---
+PASS: valid control pass marker run1
+PASS: valid control pass marker run2
+VALID_VERIFY_OUT_SHA256_RUN1=f1b71ad142e85a0b9c3880e66a03e3284adc1d2389cd91016ff4b5d9a1ff1fa8
+VALID_VERIFY_OUT_SHA256_RUN2=f1b71ad142e85a0b9c3880e66a03e3284adc1d2389cd91016ff4b5d9a1ff1fa8
+PASS: valid control verify output deterministic
+
+--- T-PROOF-MISS-002A: missing manifest.json fails (digest stable across two runs) ---
+PASS: missing manifest marker run1
+PASS: missing manifest marker run2
+MISSING_MANIFEST_OUT_SHA256_RUN1=283891295891a10bec8687010d26eb0561b651a55ae3d8fec0f1d209da3956a9
+MISSING_MANIFEST_OUT_SHA256_RUN2=283891295891a10bec8687010d26eb0561b651a55ae3d8fec0f1d209da3956a9
+PASS: missing manifest failure output deterministic
+
+--- T-PROOF-MISS-002B: missing payload/record.json fails ---
+PASS: missing record marker
+
+--- T-PROOF-MISS-002C: missing manifest-listed artifact fails ---
+PASS: missing artifact marker
+
+--- T-PROOF-MISS-002D: missing payload/replay_audit_report.json fails ---
+PASS: missing replay report marker
+
+--- T-PROOF-MISS-002E: malformed manifest JSON fails ---
+PASS: malformed manifest marker
+
+--- T-PROOF-MISS-002F: manifest hash mismatch fails (digest stable across two runs) ---
+PASS: hash mismatch marker run1
+PASS: hash mismatch marker run2
+HASH_MISMATCH_OUT_SHA256_RUN1=c9531b803484de6e817fb60cbec5378d0bfce56fa8051ddeaea1807a966938bf
+HASH_MISMATCH_OUT_SHA256_RUN2=c9531b803484de6e817fb60cbec5378d0bfce56fa8051ddeaea1807a966938bf
+PASS: hash mismatch failure output deterministic
+
+--- T-PROOF-MISS-002G: extra payload member not in manifest fails ---
+PASS: extra payload marker
+
+Summary: proof-packet missing-components negative controls complete
+[exit=0]

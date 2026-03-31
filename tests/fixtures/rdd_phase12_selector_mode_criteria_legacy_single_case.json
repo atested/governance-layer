@@ -1,0 +1,36 @@
+{
+  "criteria_version": "rdd_triage_criteria.v1",
+  "fs_copy_dest_exists_no_overwrite": {
+    "findings": [
+      {
+        "id": "F1",
+        "type": "rule_gap",
+        "basis": "deterministic",
+        "structural_deficiency": true
+      },
+      {
+        "id": "F2",
+        "type": "insufficient_information",
+        "basis": "judgmental",
+        "basis_detail": "Legacy single-case compatibility fixture.",
+        "structural_deficiency": false
+      }
+    ],
+    "governing_condition": "F1",
+    "governing_rationale": "Legacy compatibility case remains supported.",
+    "disposition": {
+      "type": "DEFER_STRUCTURAL_DEFICIENCY",
+      "signal_ref": "S1",
+      "structural_change_needed": "fixture"
+    },
+    "structural_signals": [
+      {
+        "id": "S1",
+        "finding_ref": "F1",
+        "deficiency_class": "RULE_GAP",
+        "surface": "filesystem",
+        "description": "fixture"
+      }
+    ]
+  }
+}

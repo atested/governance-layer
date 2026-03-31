@@ -1,0 +1,7 @@
+ docs/dev/CURRENT_MAIN_CAPABILITY_MAP.md            | 86 ++++++++--------------
+ .../RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md | 75 +++++++++++--------
+ .../DIFF_NAME_ONLY.txt                             |  0
+ .../PLANNING_COHERENCE_CLEANUP__v3/DIFF_STAT.txt   |  0
+ .../HOTFILE_SCAN.txt                               | 11 +++
+ .../PLANNING_COHERENCE_CLEANUP__v3/VALIDATION.txt  | 63 ++++++++++++++++
+ 6 files changed, 149 insertions(+), 86 deletions(-)

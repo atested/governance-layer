@@ -1,0 +1,7 @@
+$ bash tests/test_queue_drift_scan_json_optional.sh
+--- T-QDS-JSON-OPT-001: queue_drift_scan.json emitted with deterministic schema/digest ---
+PASS: queue_drift_scan.json schema/version and text digest linkage valid
+QDS_JSON_SHA256_RUN1=782f6319c4bd9cd39cdc3bfcc890e0d05a6182577fc4c55add54d18b99299982
+QDS_JSON_SHA256_RUN2=782f6319c4bd9cd39cdc3bfcc890e0d05a6182577fc4c55add54d18b99299982
+PASS: queue_drift_scan.json deterministic across two runs
+[exit=0]

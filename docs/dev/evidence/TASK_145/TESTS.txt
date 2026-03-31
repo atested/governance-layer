@@ -1,0 +1,14 @@
+$ TASK145_WORKFLOW_FILE=/var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T//task145-ciwf.XXXXXX.yml bash tests/test_github_actions_release_gate_ci_profile.sh
+--- T-GHA-CI-PROFILE-001: workflow contains required CI gating steps and artifact paths ---
+PASS: checkout step present
+PASS: setup-python step present
+PASS: GOV_PROFILE=ci env present
+PASS: release-gate invocation present
+PASS: proof-bundle artifact path present
+WORKFLOW_SHA256_RUN1=61e15224efa5782066bace20314f968f78c45e40da05ba912516efebacbc167b
+WORKFLOW_SHA256_RUN2=61e15224efa5782066bace20314f968f78c45e40da05ba912516efebacbc167b
+PASS: workflow digest deterministic across two reads
+Summary: GitHub Actions release-gate CI profile workflow sanity checks complete
+[exit=0]
+
+SUPERSEDED_BRANCHES: origin/codex/TASK_145__625c740, origin/codex/TASK_145__c2e8159

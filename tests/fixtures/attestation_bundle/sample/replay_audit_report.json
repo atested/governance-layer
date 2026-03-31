@@ -1,0 +1,1 @@
+{"generator":{"tool":"replay-record.py"},"invariant_counts":{"extra":0,"matched":5,"mismatched":0,"missing":0,"total_checked":5},"record_counts":{"fatal":0,"matched":1,"mismatched":0,"total":1},"records":[{"kind":"pass","mismatches":[],"record_hash":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}],"report_version":"replay_audit_summary_v1"}

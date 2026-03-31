@@ -1,0 +1,21 @@
+{
+  "tool": "FS_READ",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "max_bytes": 4096,
+    "offset": 0,
+    "as_text": true
+  },
+  "intent": {
+    "goal": "Attempt FS_READ on a directory path.",
+    "constraints": {},
+    "requested_action": "FS_READ",
+    "inputs": [],
+    "expected_outputs": [
+      {
+        "ref": "file:path",
+        "value": "/Volumes/SSD/archive/gov/governance-layer/docs"
+      }
+    ]
+  }
+}

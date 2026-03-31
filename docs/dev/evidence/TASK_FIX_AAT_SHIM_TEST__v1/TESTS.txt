@@ -1,0 +1,26 @@
+BASE_SHA_RESOLVED=cad9921fb5485cfb45dee6fac52d4c90b8d225f6
+BASE7=cad9921
+BRANCH=codex/FIX_AAT_SHIM_TEST_OUTPUT__v1
+HEAD_SHA=cad9921fb5485cfb45dee6fac52d4c90b8d225f6
+
+COMMAND_1=bash -x system/tests/test_validate_proof_bundle_aat_shim.sh > out/aat_shim_test_trace.stdout 2> out/aat_shim_test_trace.stderr || true
+EXIT_1=0
+TRACE_STDOUT_PATH=out/aat_shim_test_trace.stdout
+TRACE_STDERR_PATH=out/aat_shim_test_trace.stderr
+
+COMMAND_2=GOV_PROFILE=dev bash system/tests/test_validate_proof_bundle_aat_shim.sh
+EXIT_2=0
+---OUTPUT_2---
+CASE=default_disabled_unchanged PASS
+CASE=enabled_nonstrict_missing_inputs PASS
+CASE=enabled_strict_inputs_present_pass PASS
+CASE=enabled_strict_inputs_present_nonad PASS
+SHIM_TEST_STATUS=PASS
+RUN1_SHA256=47fb95c609a859c456ae17feccb8f5ed12e14b01b0ce7d757149390e13f59085
+RUN2_SHA256=47fb95c609a859c456ae17feccb8f5ed12e14b01b0ce7d757149390e13f59085
+DETERMINISTIC=YES
+
+COMMAND_3=GOV_PROFILE=dev bash system/scripts/release-gate.sh
+EXIT_3=0
+PASS_LINES=12
+FAIL_LINES=0

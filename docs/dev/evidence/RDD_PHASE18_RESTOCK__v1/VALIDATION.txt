@@ -1,0 +1,66 @@
+RDD Phase 18 Restock Validation
+
+BASE_SHA
+- be97677889497322ab874dc3829eda34577f9793
+
+Outcome
+- Existing next ready RDD tasks found beyond TASK_352: NO
+- New restock specs created: YES
+- WORK_QUEUE changed: YES (bounded, required by repo convention)
+
+Files inspected
+- docs/dev/OPS_PROCESS__CHATGPT_CODEX_CECIL__v1.md
+- docs/dev/WORK_QUEUE.md
+- docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md
+- docs/RESIDUAL_DISCRETION_DOCTRINE.md
+- scripts/rdd-pass-triage.sh
+- tests/test_rdd_triage_selector_mode.sh
+- docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md
+- docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md
+- docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md
+- docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+- docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+- docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+- docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+- docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md
+- docs/dev/tasks/ready/TASK_325__rdd_signal_extractor_minimal_plumbing.md
+- docs/dev/tasks/ready/TASK_326__rdd_signal_extractor_test_coverage.md
+- docs/dev/tasks/ready/TASK_327__rdd_replay_extension_for_triage_terminal_records.md
+- docs/dev/tasks/ready/TASK_328__rdd_replay_extension_test_coverage.md
+- docs/dev/tasks/ready/TASK_329__rdd_external_triage_criteria_file.md
+- docs/dev/tasks/ready/TASK_330__rdd_external_triage_criteria_coverage.md
+- docs/dev/tasks/ready/TASK_331__rdd_triage_criteria_selector_from_pass_insufficiency.md
+- docs/dev/tasks/ready/TASK_332__rdd_triage_criteria_selector_coverage.md
+- docs/dev/tasks/ready/TASK_333__rdd_triage_selector_contract_strictness.md
+- docs/dev/tasks/ready/TASK_334__rdd_triage_selector_contract_coverage.md
+- docs/dev/tasks/ready/TASK_335__rdd_selector_mode_explicit_wiring.md
+- docs/dev/tasks/ready/TASK_336__rdd_selector_mode_coverage.md
+- docs/dev/tasks/ready/TASK_337__rdd_selector_mode_source_contract_hardening.md
+- docs/dev/tasks/ready/TASK_338__rdd_selector_mode_source_contract_coverage.md
+- docs/dev/tasks/ready/TASK_339__rdd_selector_mode_request_source_strictness.md
+- docs/dev/tasks/ready/TASK_340__rdd_selector_mode_request_source_strictness_coverage.md
+- docs/dev/tasks/ready/TASK_341__rdd_selector_mode_source_conflict_fail_closed.md
+- docs/dev/tasks/ready/TASK_342__rdd_selector_mode_source_conflict_coverage.md
+- docs/dev/tasks/ready/TASK_343__rdd_selector_mode_legacy_alias_conflict_fail_closed.md
+- docs/dev/tasks/ready/TASK_344__rdd_selector_mode_legacy_alias_conflict_coverage.md
+- docs/dev/tasks/ready/TASK_345__rdd_selector_mode_legacy_dual_alias_mismatch_fail_closed.md
+- docs/dev/tasks/ready/TASK_346__rdd_selector_mode_legacy_dual_alias_mismatch_coverage.md
+- docs/dev/tasks/ready/TASK_347__rdd_selector_mode_legacy_dual_alias_value_contract_hardening.md
+- docs/dev/tasks/ready/TASK_348__rdd_selector_mode_legacy_dual_alias_value_contract_coverage.md
+- docs/dev/tasks/ready/TASK_349__rdd_selector_mode_legacy_dual_alias_allowed_value_contract_hardening.md
+- docs/dev/tasks/ready/TASK_350__rdd_selector_mode_legacy_dual_alias_allowed_value_contract_coverage.md
+- docs/dev/tasks/ready/TASK_351__rdd_selector_mode_legacy_dual_alias_normalized_value_equivalence_hardening.md
+- docs/dev/tasks/ready/TASK_352__rdd_selector_mode_legacy_dual_alias_normalized_value_equivalence_coverage.md
+
+Files changed
+- docs/dev/WORK_QUEUE.md
+
+Validation performed
+- Confirmed no RDD ready tasks exist beyond TASK_352 on current main.
+- Confirmed new specs define bounded scope, explicit acceptance, allowlists, and STOP rules.
+- Confirmed no implementation/runtime files were changed.
+- Confirmed no protected hot scripts were touched.
+
+Recommended next lane
+1. docs/dev/tasks/ready/TASK_353__rdd_selector_mode_legacy_dual_alias_case_normalization_hardening.md
+2. docs/dev/tasks/ready/TASK_354__rdd_selector_mode_legacy_dual_alias_case_normalization_coverage.md

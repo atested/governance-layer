@@ -1,0 +1,9 @@
+docs/dev/WORK_QUEUE.md
+scripts/attest/verify_tool_catalog_bundle.py
+scripts/attest/verify_tool_event_bundle.py
+system/tests/helpers/tool_catalog_contract_common.sh
+system/tests/test_verify_tool_catalog_bundle_edge_cases.sh
+system/tests/test_verify_tool_event_bundle.sh
+docs/dev/tasks/ready/TASK_248__attestation_verify_negative_matrix.md
+docs/dev/tasks/ready/TASK_249__attestation_verify_reason_alignment.md
+docs/dev/tasks/ready/TASK_250__attestation_verify_fixture_alignment.md

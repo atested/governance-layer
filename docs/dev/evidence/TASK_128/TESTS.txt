@@ -1,0 +1,28 @@
+$ bash tests/test_release_gate_proof_packet_info.sh
+--- T-RELEASE-GATE-PROOF-001: default informational proof-packet section deterministic across two runs ---
+RELEASE_GATE_PROOF_SECTION_SHA256_RUN1=a8c55242475fd584521380369a88b7eab27b1ddc6d3b99c22652067403020263
+RELEASE_GATE_PROOF_SECTION_SHA256_RUN2=a8c55242475fd584521380369a88b7eab27b1ddc6d3b99c22652067403020263
+PASS: release-gate proof-packet section deterministic across two runs
+PASS: default includes proof-packet header
+PASS: default is informational strict=0
+PASS: default prints pass marker
+
+--- T-RELEASE-GATE-PROOF-002: strict mode pass when proof-packet check succeeds ---
+PASS: strict mode line
+PASS: strict pass marker
+PASS: strict proof-packet mode passes when check succeeds
+
+--- T-RELEASE-GATE-PROOF-003: strict mode fails deterministically when fixture unavailable ---
+PASS: strict fail marker
+PASS: strict proof-packet mode fails deterministically when fixture unavailable (rc=1)
+
+Summary: release-gate informational proof-packet check tests complete
+[exit=0]
+
+$ RELEASE_GATE_SKIP_BASE=1 bash system/scripts/release-gate.sh | sed -n "1,20p"
+## Proof-Packet Check (informational)
+INFO: proof-packet strict=0
+PASS: proof packet manifest + payload hashes verified
+SUMMARY_SHA256=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+INFO: proof-packet check pass packet_sha=sha256:e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e summary_sha=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+[exit=0]

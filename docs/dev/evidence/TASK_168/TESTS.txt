@@ -1,0 +1,111 @@
+BASE_SHA=a01abae620e3dee328d813eac9895a74aba4376f
+$ bash tests/test_external_packaging_smoke.sh > /tmp/task168/run1.stdout 2>&1
+[exit=0]
+$ bash tests/test_external_packaging_smoke.sh > /tmp/task168/run2.stdout 2>&1
+[exit=0]
+RUN1_STDOUT_SHA256=fa09770b926ca82ea132c5d759929a8b071603f6687064ab0d32632588439de6
+RUN2_STDOUT_SHA256=fa09770b926ca82ea132c5d759929a8b071603f6687064ab0d32632588439de6
+PASS: deterministic stdout across two runs
+$ GOV_PROFILE=dev bash system/scripts/release-gate.sh > /tmp/task168/release_gate.stdout 2>&1
+[exit=0]
+RELEASE_GATE_PASS_LINES=12
+RELEASE_GATE_FAIL_LINES=0
+--- RUN1 STDOUT (tail 30) ---
+--- T-EXTERNAL-PACKAGING-SMOKE-001: packaging file/doc smoke deterministic ---
+INFO: git status dirty (non-fatal packaging smoke)
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:126:- `out/proof-bundles/<run-id>/proof_packet.tar`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:127:- `out/proof-bundles/<run-id>/proof_packet.sha256`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:128:- `out/proof-bundles/<run-id>/proof_packet_verify_summary.json`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:129:- `out/proof-bundles/<run-id>/versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:169:- **Required files guaranteed:** `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:124:**`release_gate_log.txt`, `versions.txt`:**
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:177:- Order of keys in `release_gate_log.txt` and `versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:22:1. **`proof_packet.tar`** - Deterministic proof-packet archive
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:27:2. **`proof_packet_verify_summary.json`** - Verifier summary
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:31:3. **`proof_packet.sha256`** - SHA256 checksum
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:32:   - Format: `<hex-sha256>  proof_packet.tar\n` (RFC 3174 lowercase hex)
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:34:4. **`release_gate_log.txt`** - Release gate status log
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:38:5. **`versions.txt`** - Version metadata
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/dev/ATTESTATION_SPEC.md:293:  --out /tmp/proof_packet.tar
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/dev/ATTESTATION_SPEC.md:297:  --bundle /tmp/proof_packet.tar \
+PASS: docs proof-bundle references present
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN1=0b8a52bded59c20cce5f51e84dee1928e2cc4f6244deec5c22cc529cd1fc514d
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN2=0b8a52bded59c20cce5f51e84dee1928e2cc4f6244deec5c22cc529cd1fc514d
+PASS: external packaging smoke output deterministic across two runs
+--- RUN2 STDOUT (tail 30) ---
+--- T-EXTERNAL-PACKAGING-SMOKE-001: packaging file/doc smoke deterministic ---
+INFO: git status dirty (non-fatal packaging smoke)
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:126:- `out/proof-bundles/<run-id>/proof_packet.tar`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:127:- `out/proof-bundles/<run-id>/proof_packet.sha256`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:128:- `out/proof-bundles/<run-id>/proof_packet_verify_summary.json`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:129:- `out/proof-bundles/<run-id>/versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/README.md:169:- **Required files guaranteed:** `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:124:**`release_gate_log.txt`, `versions.txt`:**
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:177:- Order of keys in `release_gate_log.txt` and `versions.txt`
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:22:1. **`proof_packet.tar`** - Deterministic proof-packet archive
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:27:2. **`proof_packet_verify_summary.json`** - Verifier summary
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:31:3. **`proof_packet.sha256`** - SHA256 checksum
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:32:   - Format: `<hex-sha256>  proof_packet.tar\n` (RFC 3174 lowercase hex)
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:34:4. **`release_gate_log.txt`** - Release gate status log
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/EXTERNAL_CONTRACTS.md:38:5. **`versions.txt`** - Version metadata
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/dev/ATTESTATION_SPEC.md:293:  --out /tmp/proof_packet.tar
+/Users/gregkeeter/codex-workspaces/governance-layer/docs/dev/ATTESTATION_SPEC.md:297:  --bundle /tmp/proof_packet.tar \
+PASS: docs proof-bundle references present
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN1=0b8a52bded59c20cce5f51e84dee1928e2cc4f6244deec5c22cc529cd1fc514d
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN2=0b8a52bded59c20cce5f51e84dee1928e2cc4f6244deec5c22cc529cd1fc514d
+PASS: external packaging smoke output deterministic across two runs
+--- RELEASE GATE (tail 40) ---
+[exit=0]
+$ bash tests/test_signing_key_loading.sh
+-- A: no key configured
+-- B: GOV_SIGNING_KEY_PATH configured
+-- C: default key exists
+Summary complete
+[exit=0]
+$ bash tests/test_signing_emit.sh
+SIGNING_KEY_ID=ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6
+SIGNATURE=tIbuv4l0gSPh6MWl33u3rWNDaljrMdn1c6ldoQvzXr9LI9YlyiSNOMEDUpjQfBNar6gNsYNTth81SgRxwk8SAw
+RECORD_HASH=sha256:79257f6b3e349fa6b2f6548e0c1990913a1bdc8b0b4df61036e1ccc92e77a38d
+PASS: record_hash + signature verified
+[exit=0]
+$ bash tests/test_verify_signatures.sh
+--- T-SIGVERIFY-001: verify-record accepts valid signed record ---
+PASS: T-SIGVERIFY-001 valid signed record (exit=0)
+PASS: T-SIGVERIFY-001 output
+
+--- T-SIGVERIFY-002: verify-record rejects tampered signature ---
+PASS: T-SIGVERIFY-002 tampered signature (exit=1)
+PASS: T-SIGVERIFY-002 output
+
+--- T-SIGVERIFY-003: verify-record rejects signing_key_id mismatch ---
+PASS: T-SIGVERIFY-003 signing_key_id mismatch (exit=1)
+PASS: T-SIGVERIFY-003 output
+
+--- T-SIGVERIFY-004: verify-chain enforces per-record signature verification ---
+PASS: T-SIGVERIFY-004 chain valid signature (exit=0)
+PASS: T-SIGVERIFY-004 output
+PASS: T-SIGVERIFY-004 chain tampered signature (exit=1)
+PASS: T-SIGVERIFY-004 tampered output
+
+Summary: pass=10 fail=0
+[exit=0]
+## Proof-Packet Check (informational)
+INFO: proof-packet strict=0
+PASS: proof packet manifest + payload hashes verified
+SUMMARY_SHA256=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+INFO: proof-bundle output dir=/Users/gregkeeter/codex-workspaces/governance-layer/out/proof-bundles/20260227_080933
+INFO: proof-packet check pass packet_sha=sha256:e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e summary_sha=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+Implementation note:
+- Replaced TMPDIR_LOCAL with normalized tmp_root/tmp_dir and explicit mktemp -d.
+- Ensured docs_scan.tmp write/read is always under tmp_dir.
+- Preserved deterministic stdout by not emitting temp paths.

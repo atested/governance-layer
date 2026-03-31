@@ -1,0 +1,7 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md

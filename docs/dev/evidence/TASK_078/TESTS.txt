@@ -1,0 +1,217 @@
+$ git switch codex/full-cycle-20260221061449
+Switched to branch 'codex/full-cycle-20260221061449'
+M	system/scripts/codex-batch.sh
+Your branch is up to date with 'origin/codex/full-cycle-20260221061449'.
+[exit=0]
+
+$ git rev-parse --abbrev-ref HEAD  # before codex-batch
+codex/full-cycle-20260221061449
+[exit=0]
+
+$ awk '/^## Next/{flag=1} /^## Backlog/{flag=0} flag{print}' docs/dev/WORK_QUEUE.md
+## Next
+Ready and prioritised for immediate pickup.
+
+| TASK_ID | Title | Status | Executor | Dependencies | Task File |
+|---|---|---|---|---|---|
+| TASK_001 | Upload snapshot to ChatGPT | Ready | Greg | TASK_000 | [→](tasks/ready/TASK_001__upload-snapshot.md) |
+| TASK_002 | Batch plan from snapshot | Ready | — | TASK_001 | [→](tasks/ready/TASK_002__batch-plan-from-snapshot.md) |
+| TASK_010 | Update ops/ACTIVE-TASK.md | Ready | — | none | [→](tasks/ready/TASK_010__update-active-task.md) |
+| TASK_011 | Update CHANGELOG 2B1-2C2 | Ready | — | none | [→](tasks/ready/TASK_011__update-changelog-2b1-2c2.md) |
+| TASK_012 | Sync TEST-SUITE catalogue | Ready | — | none | [→](tasks/ready/TASK_012__sync-test-suite-catalogue.md) |
+| TASK_013 | Roadmap position update | Ready | — | none | [→](tasks/ready/TASK_013__roadmap-position-update.md) |
+| TASK_020 | Phase 2D scope proposal | Ready | — | none | [→](tasks/ready/TASK_020__phase-2d-scope-proposal.md) |
+| TASK_040 | Phase 2D FS_DELETE: intent schema | Ready | — | none | [→](tasks/blocked/TASK_040__phase-2d-fs-delete-intent-schema.md) |
+| TASK_041 | Phase 2D FS_DELETE: policy-eval | Ready | — | TASK_040 | [→](tasks/blocked/TASK_041__phase-2d-fs-delete-policy-eval.md) |
+| TASK_042 | Phase 2D FS_DELETE: MCP tool | Ready | — | TASK_041 | [→](tasks/blocked/TASK_042__phase-2d-fs-delete-mcp-tool.md) |
+| TASK_043 | Phase 2D FS_DELETE: tests | Ready | — | TASK_041, TASK_042 | [→](tasks/blocked/TASK_043__phase-2d-fs-delete-tests.md) |
+| TASK_021 | Signing phase 3 spec | Ready | — | none | [→](tasks/ready/TASK_021__signing-phase3-spec.md) |
+| TASK_022 | Cross-root promotion design | Ready | — | none | [→](tasks/ready/TASK_022__cross-root-promotion-design.md) |
+| TASK_030 | MCP smoke deterministic python | Ready | — | none | [→](tasks/ready/TASK_030__mcp-smoke-deterministic-python.md) |
+| TASK_031 | Document canonical venv | Ready | — | none | [→](tasks/ready/TASK_031__document-venv-canonical.md) |
+| TASK_032 | Add smoke failure-mode test | Ready | — | TASK_030 (recommended) | [→](tasks/ready/TASK_032__add-smoke-failure-mode-test.md) |
+
+| TASK_075 | Test RC-FS-EXECUTABLE-DISALLOWED | Ready | Codex | none | [→](tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md) |
+| TASK_076 | Test RC-FS-EXECUTABLE-DISALLOWED | Ready | Codex | none | [→](tasks/ready/TASK_076__test_rc_fs_executable_disallowed.md) |
+| TASK_077 | Test RC-FS-NOT-A-DIRECTORY | Ready | Codex | none | [→](tasks/ready/TASK_077__test_rc_fs_not_a_directory.md) |
+| TASK_078 | Test RC-FS-INCLUDE-HIDDEN-DISALLOWED | Ready | Codex | none | [→](tasks/ready/TASK_078__test_rc_fs_include_hidden_disallowed.md) |
+---
+
+[exit=0]
+
+$ CODEX_BATCH_CAP=4 bash system/scripts/codex-batch.sh
+Codex batch generation (cap: 4)
+
+--- Preflight ---
+Preflight: OK
+
+CODEX RUN BATCH
+================
+Cap: 4 tasks
+
+Instructions for Codex:
+For each task below, create a branch, implement changes within allowed files only,
+generate evidence bundle, and push to origin.
+
+Tasks:
+
+1. TASK: TASK_075
+   File: docs/dev/tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_075
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_075/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+2. TASK: TASK_076
+   File: docs/dev/tasks/ready/TASK_076__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_076
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_076/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+3. TASK: TASK_077
+   File: docs/dev/tasks/ready/TASK_077__test_rc_fs_not_a_directory.md
+   Branch: codex/TASK_077
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_077/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+4. TASK: TASK_078
+   File: docs/dev/tasks/ready/TASK_078__test_rc_fs_include_hidden_disallowed.md
+   Branch: codex/TASK_078
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_078/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+Total tasks: 4
+Status: Ready for Codex (read-only list, no claims made)
+
+
+Batch written to: ops/CODEX_BATCH.txt
+[exit=0]
+
+$ git rev-parse --abbrev-ref HEAD  # after codex-batch
+codex/full-cycle-20260221061449
+[exit=0]
+
+$ sed -n '1,200p' ops/CODEX_BATCH.txt
+CODEX RUN BATCH
+================
+Cap: 4 tasks
+
+Instructions for Codex:
+For each task below, create a branch, implement changes within allowed files only,
+generate evidence bundle, and push to origin.
+
+Tasks:
+
+1. TASK: TASK_075
+   File: docs/dev/tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_075
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_075/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+2. TASK: TASK_076
+   File: docs/dev/tasks/ready/TASK_076__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_076
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_076/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+3. TASK: TASK_077
+   File: docs/dev/tasks/ready/TASK_077__test_rc_fs_not_a_directory.md
+   Branch: codex/TASK_077
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_077/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+4. TASK: TASK_078
+   File: docs/dev/tasks/ready/TASK_078__test_rc_fs_include_hidden_disallowed.md
+   Branch: codex/TASK_078
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_078/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+Total tasks: 4
+Status: Ready for Codex (read-only list, no claims made)
+
+[exit=0]
+
+$ git switch codex/TASK_078
+Switched to branch 'codex/TASK_078'
+M	ops/CODEX_BATCH.txt
+M	system/scripts/codex-batch.sh
+Your branch is up to date with 'origin/main'.
+[exit=0]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]

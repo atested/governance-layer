@@ -1,0 +1,22 @@
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+COMMAND_RUN_1=git show --no-patch --oneline 7694654 && rg -n "Provenance / Already implemented on origin/main|7694654" docs/dev/tasks/ready/TASK_012__sync-test-suite-catalogue.md
+COMMAND_RUN_2=git show --no-patch --oneline 7694654 && rg -n "Provenance / Already implemented on origin/main|7694654" docs/dev/tasks/ready/TASK_012__sync-test-suite-catalogue.md
+RUN1_EXIT=0
+RUN2_EXIT=0
+RUN1_SHA256=32a4bec8275b0adde9fbb75320287e0b05bc9167c07c2b37ee4503ce0908a5da
+RUN2_SHA256=32a4bec8275b0adde9fbb75320287e0b05bc9167c07c2b37ee4503ce0908a5da
+DETERMINISTIC=yes
+
+RUN1_OUTPUT:
+7694654 docs(test-suite): sync catalogue through MOVE and POISON_MOVE
+30:Provenance / Already implemented on origin/main
+31:- 7694654 docs(test-suite): sync catalogue through MOVE and POISON_MOVE
+
+RUN2_OUTPUT:
+7694654 docs(test-suite): sync catalogue through MOVE and POISON_MOVE
+30:Provenance / Already implemented on origin/main
+31:- 7694654 docs(test-suite): sync catalogue through MOVE and POISON_MOVE
+
+Implementation note:
+- Evidence-closeout only; no implementation files changed.
+- Verified provenance commit and spec provenance section.

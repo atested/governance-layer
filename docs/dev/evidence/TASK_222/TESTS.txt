@@ -1,0 +1,6 @@
+COMMANDS:
+- bash system/tests/test_mcp_tool_event_export_returns_bundle_id.sh
+- bash system/tests/test_mcp_tool_event_bundle_verify.sh
+- bash system/tests/test_mcp_tool_event_receipts_query.sh
+- bash system/tests/test_mcp_receipt_tool_events_query.sh
+RESULT=PASS

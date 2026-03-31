@@ -1,0 +1,17 @@
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_320/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_320/DIFF_STAT.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_320/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_320/TESTS.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_321/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_321/DIFF_STAT.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_321/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_321/TESTS.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_322/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_322/DIFF_STAT.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_322/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_TRIAGE_EVAL__v1/TASK_322/TESTS.txt
+scripts/rdd-pass-triage.sh
+scripts/triage-eval.py
+tests/fixtures/rdd_triage_pass_allow_input.json
+tests/fixtures/rdd_triage_pass_undecided_input.json
+tests/test_rdd_triage_eval.sh

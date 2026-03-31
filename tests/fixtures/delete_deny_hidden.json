@@ -1,0 +1,14 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/.git/config",
+    "recursive": false
+  },
+  "intent": {
+    "goal": "Attempt delete hidden path segment.",
+    "constraints": { "recursive": false },
+    "requested_action": "FS_DELETE",
+    "inputs": [{ "ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/.git/config" }],
+    "expected_outputs": []
+  }
+}

@@ -1,0 +1,16 @@
+ .../TASK_333/DIFF_NAME_ONLY.txt                    |  0
+ .../TASK_333/DIFF_STAT.txt                         |  0
+ .../TASK_333/HOTFILE_SCAN.txt                      |  6 ++
+ .../TASK_333/TESTS.txt                             |  9 +++
+ .../TASK_334/DIFF_NAME_ONLY.txt                    |  0
+ .../TASK_334/DIFF_STAT.txt                         |  0
+ .../TASK_334/HOTFILE_SCAN.txt                      |  6 ++
+ .../TASK_334/TESTS.txt                             | 10 +++
+ docs/dev/evidence/TASK_333/TESTS.txt               |  9 +++
+ docs/dev/evidence/TASK_334/TESTS.txt               | 10 +++
+ scripts/triage-eval.py                             | 10 +++
+ ...age_selector_contract_map_non_string_entry.json | 32 ++++++++
+ ...e8_triage_selector_contract_map_wrong_type.json | 33 ++++++++
+ ...hase8_triage_selector_contract_missing_map.json | 36 +++++++++
+ tests/test_rdd_triage_criteria_selector.sh         | 87 ++++++++++++++++++++--
+ 15 files changed, 243 insertions(+), 5 deletions(-)

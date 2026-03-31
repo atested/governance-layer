@@ -1,0 +1,17 @@
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_327/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_327/DIFF_STAT.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_327/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_327/TESTS.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_328/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_328/DIFF_STAT.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_328/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_REPLAY_EXTENSION__v1/TASK_328/TESTS.txt
+docs/dev/evidence/TASK_327/TESTS.txt
+docs/dev/evidence/TASK_328/TESTS.txt
+scripts/replay-record.py
+tests/fixtures/rdd_phase5_replay_missing_originating_field.json
+tests/fixtures/rdd_phase5_replay_unsupported_record_type.json
+tests/fixtures/rdd_phase5_replay_valid_terminal.json
+tests/fixtures/rdd_phase5_replay_valid_triage.json
+tests/test_replay.sh
+tests/test_replay_rdd_phase5.sh

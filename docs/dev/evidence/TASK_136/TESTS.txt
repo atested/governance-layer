@@ -1,0 +1,10 @@
+$ bash tests/test_release_gate_proof_bundle_output.sh
+--- T-RELEASE-GATE-BUNDLE-001: emits deterministic proof-bundle output contract ---
+PROOF_PACKET_SHA256_RUN1=e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e
+PROOF_PACKET_SHA256_RUN2=e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e
+PROOF_PACKET_SUMMARY_SHA256_RUN1=5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+PROOF_PACKET_SUMMARY_SHA256_RUN2=5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+PASS: proof packet and summary hashes stable across runs
+BUNDLE_FILES=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,queue_drift_scan.txt,release_gate_log.txt,versions.txt
+PASS: proof-bundle directory contains expected files
+[exit=0]

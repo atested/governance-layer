@@ -1,0 +1,9 @@
+TASK_122
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+$ rg -n "queue-drift-scan|release-gate|informational|exit-on-drift|Recommended operator sequence" docs/dev/RUNBOOK.md
+[exit=0]
+$ rg -n "queue-drift-scan|release-gate|informational|exit-on-drift|Recommended operator sequence" docs/dev/RUNBOOK.md  # run2
+[exit=0]
+RUN1_SHA256=173c8bc2c915fae2c25880b008fcd1fab9d3c91af52a7ea4e347135378a7045f
+RUN2_SHA256=173c8bc2c915fae2c25880b008fcd1fab9d3c91af52a7ea4e347135378a7045f
+PASS: deterministic RUNBOOK grep output

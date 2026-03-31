@@ -1,0 +1,7 @@
+ mcp/tool_catalog_store.py                            | 19 ++++++++++++++-----
+ scripts/attest/export_tool_catalog_bundle.py         |  8 ++++++++
+ scripts/attest/verify_tool_catalog_bundle.py         | 13 +++++++++++--
+ system/tests/helpers/tool_catalog_contract_common.sh |  4 ++++
+ system/tests/test_export_tool_catalog_bundle.sh      |  3 ++-
+ system/tests/test_verify_tool_catalog_bundle.sh      |  3 ++-
+ 6 files changed, 41 insertions(+), 9 deletions(-)

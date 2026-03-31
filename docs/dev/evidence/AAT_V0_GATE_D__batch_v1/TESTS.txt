@@ -1,0 +1,136 @@
+BASE_SHA_RESOLVED=27e0532ebf2a2bbe53bac4693d01fa516b0a1e7c
+BASE7=27e0532
+CMD1=GOV_PROFILE=dev bash system/tests/test_aat_profile_expansion.sh
+CMD2=GOV_PROFILE=dev bash system/tests/test_aat_profile_expansion.sh
+CMD3=GOV_PROFILE=dev bash system/tests/test_aat_determinism.sh
+CMD4=GOV_PROFILE=dev bash system/scripts/release-gate.sh
+RC1=0
+RC2=0
+RC_DETERMINISM_SUITE=0
+RC_RELEASE_GATE=0
+RUN1_SHA256=c52ef613c2e137232d8125fd41472981d96b377bb7dde130bd44c4a7240b36df
+RUN2_SHA256=c52ef613c2e137232d8125fd41472981d96b377bb7dde130bd44c4a7240b36df
+DETERMINISTIC=YES
+RELEASE_GATE_PASS_LINES=12
+RELEASE_GATE_FAIL_LINES=
+--- PROFILE TEST RUN1 ---
+CASE=default_core_generic_c1_is_report_only PASS
+CASE=default_core_generic_c1_is_report_only RUN1_SHA256=90bc75720ae73f9c2d8420973b84d2e5e08e7d9ec508fecf3922e519285f91f1
+CASE=default_core_generic_c1_is_report_only RUN2_SHA256=90bc75720ae73f9c2d8420973b84d2e5e08e7d9ec508fecf3922e519285f91f1
+CASE=explicit_tool_exec_c1_enforced PASS
+CASE=explicit_tool_exec_c1_enforced RUN1_SHA256=7a6b0d59b9d0e5f80d8b8cdfda3d05bec19979a798f9d04e4b45f5746f22d862
+CASE=explicit_tool_exec_c1_enforced RUN2_SHA256=7a6b0d59b9d0e5f80d8b8cdfda3d05bec19979a798f9d04e4b45f5746f22d862
+CASE=explicit_tool_exec_c2_enforced PASS
+CASE=explicit_tool_exec_c2_enforced RUN1_SHA256=bee9f28e9c86c62f2cd2c87be3ac04b971edcbfff90233c4ebd3d841ffe8d6d7
+CASE=explicit_tool_exec_c2_enforced RUN2_SHA256=bee9f28e9c86c62f2cd2c87be3ac04b971edcbfff90233c4ebd3d841ffe8d6d7
+CASE=explicit_tool_exec_pass PASS
+CASE=explicit_tool_exec_pass RUN1_SHA256=5fcfc094ca85c3c491b9d3cde880625fdbd9374c52caef81065c1a5bf783ec8f
+CASE=explicit_tool_exec_pass RUN2_SHA256=5fcfc094ca85c3c491b9d3cde880625fdbd9374c52caef81065c1a5bf783ec8f
+CASE=wrapper_profile_forwarding_c1 PASS
+CASE=wrapper_profile_forwarding_c1 RUN1_SHA256=dba8822da2ddad9dddc901bf02bb7932e61c6fbf043488024e100fdbec993999
+CASE=wrapper_profile_forwarding_c1 RUN2_SHA256=dba8822da2ddad9dddc901bf02bb7932e61c6fbf043488024e100fdbec993999
+CASE=unknown_profile_fail_closed PASS
+CASE=unknown_profile_fail_closed RUN1_SHA256=ce40cae46aeb91a771c8573d89d672b11bdf9f1866a9a07c970267258527952f
+CASE=unknown_profile_fail_closed RUN2_SHA256=ce40cae46aeb91a771c8573d89d672b11bdf9f1866a9a07c970267258527952f
+PROFILE_EXPANSION_STATUS=PASS
+--- PROFILE TEST RUN2 ---
+CASE=default_core_generic_c1_is_report_only PASS
+CASE=default_core_generic_c1_is_report_only RUN1_SHA256=90bc75720ae73f9c2d8420973b84d2e5e08e7d9ec508fecf3922e519285f91f1
+CASE=default_core_generic_c1_is_report_only RUN2_SHA256=90bc75720ae73f9c2d8420973b84d2e5e08e7d9ec508fecf3922e519285f91f1
+CASE=explicit_tool_exec_c1_enforced PASS
+CASE=explicit_tool_exec_c1_enforced RUN1_SHA256=7a6b0d59b9d0e5f80d8b8cdfda3d05bec19979a798f9d04e4b45f5746f22d862
+CASE=explicit_tool_exec_c1_enforced RUN2_SHA256=7a6b0d59b9d0e5f80d8b8cdfda3d05bec19979a798f9d04e4b45f5746f22d862
+CASE=explicit_tool_exec_c2_enforced PASS
+CASE=explicit_tool_exec_c2_enforced RUN1_SHA256=bee9f28e9c86c62f2cd2c87be3ac04b971edcbfff90233c4ebd3d841ffe8d6d7
+CASE=explicit_tool_exec_c2_enforced RUN2_SHA256=bee9f28e9c86c62f2cd2c87be3ac04b971edcbfff90233c4ebd3d841ffe8d6d7
+CASE=explicit_tool_exec_pass PASS
+CASE=explicit_tool_exec_pass RUN1_SHA256=5fcfc094ca85c3c491b9d3cde880625fdbd9374c52caef81065c1a5bf783ec8f
+CASE=explicit_tool_exec_pass RUN2_SHA256=5fcfc094ca85c3c491b9d3cde880625fdbd9374c52caef81065c1a5bf783ec8f
+CASE=wrapper_profile_forwarding_c1 PASS
+CASE=wrapper_profile_forwarding_c1 RUN1_SHA256=dba8822da2ddad9dddc901bf02bb7932e61c6fbf043488024e100fdbec993999
+CASE=wrapper_profile_forwarding_c1 RUN2_SHA256=dba8822da2ddad9dddc901bf02bb7932e61c6fbf043488024e100fdbec993999
+CASE=unknown_profile_fail_closed PASS
+CASE=unknown_profile_fail_closed RUN1_SHA256=ce40cae46aeb91a771c8573d89d672b11bdf9f1866a9a07c970267258527952f
+CASE=unknown_profile_fail_closed RUN2_SHA256=ce40cae46aeb91a771c8573d89d672b11bdf9f1866a9a07c970267258527952f
+PROFILE_EXPANSION_STATUS=PASS
+--- EXISTING DETERMINISM SUITE ---
+[1;33m[INFO][0m Starting AAT Determinism Tests
+[1;33m[INFO][0m Testing two-run SHA256 comparison for all golden fixtures
+
+[1;33m[INFO][0m Testing PASS cases...
+[0;32m[PASS][0m Determinism: PASS/core_generic (SHA256 match)
+[0;32m[PASS][0m Determinism: PASS/tool_exec (SHA256 match)
+[0;32m[PASS][0m Determinism: PASS/tool_exec_profile (SHA256 match)
+[1;33m[INFO][0m Testing FAIL cases...
+[0;32m[PASS][0m Determinism: FAIL/c1_contradiction (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/c2_evidence_not_in_im (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/c3_forbidden_claim (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/k1_phantom_action (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/k2_undeclared_dependency (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/k3_constraint_unacknowledged (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/k4_method_forbidden (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/m1_schema_invalid (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/tool_exec_profile_c1_enforced (SHA256 match)
+[0;32m[PASS][0m Determinism: FAIL/tool_exec_profile_c2_enforced (SHA256 match)
+
+================================
+Determinism Test Summary
+================================
+PASS: 13
+FAIL: 0
+TOTAL: 13
+
+[0;32mAll determinism tests passed![0m
+AAT produces identical outputs for identical inputs (no wall clock, network, or LLM dependencies)
+--- RELEASE GATE (tail 120) ---
+INFO: proof-packet strictness source=profile GOV_PROFILE=dev value=0
+$ python3 -m py_compile scripts/policy-eval.py
+[exit=0]
+$ python3 -m py_compile scripts/verify-record.py
+[exit=0]
+$ python3 -m py_compile scripts/verify-chain.py
+[exit=0]
+$ python3 -m py_compile scripts/replay-record.py
+[exit=0]
+$ bash tests/test_signing_key_loading.sh
+-- A: no key configured
+-- B: GOV_SIGNING_KEY_PATH configured
+-- C: default key exists
+Summary complete
+[exit=0]
+$ bash tests/test_signing_emit.sh
+SIGNING_KEY_ID=ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6
+SIGNATURE=g8UYcZZ7fsjqPc-YOoyJpE9LRDKmZ7vPihYskPbneAwgOFfCttv_XNKvDp6uexp_AsCBCjTuB4cmRwY0-XpKAg
+RECORD_HASH=sha256:ed586a83fa15a0d9816c544b67172f71a86f35e2275ffc1d23ec1f27361d7fa2
+Coverage Summary
+coverage_stamp_version=coverage_stamp_v1
+overall_status=missing reason_code=COVERAGE_STAMP_MISSING
+PASS: record_hash + signature verified
+[exit=0]
+$ bash tests/test_verify_signatures.sh
+--- T-SIGVERIFY-001: verify-record accepts valid signed record ---
+PASS: T-SIGVERIFY-001 valid signed record (exit=0)
+PASS: T-SIGVERIFY-001 output
+
+--- T-SIGVERIFY-002: verify-record rejects tampered signature ---
+PASS: T-SIGVERIFY-002 tampered signature (exit=1)
+PASS: T-SIGVERIFY-002 output
+
+--- T-SIGVERIFY-003: verify-record rejects signing_key_id mismatch ---
+PASS: T-SIGVERIFY-003 signing_key_id mismatch (exit=1)
+PASS: T-SIGVERIFY-003 output
+
+--- T-SIGVERIFY-004: verify-chain enforces per-record signature verification ---
+PASS: T-SIGVERIFY-004 chain valid signature (exit=0)
+PASS: T-SIGVERIFY-004 output
+PASS: T-SIGVERIFY-004 chain tampered signature (exit=1)
+PASS: T-SIGVERIFY-004 tampered output
+
+Summary: pass=10 fail=0
+[exit=0]
+## Proof-Packet Check (informational)
+INFO: proof-packet strict=0
+PASS: proof packet manifest + payload hashes verified
+SUMMARY_SHA256=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+INFO: proof-bundle output dir=/Users/gregkeeter/codex-workspaces/governance-layer/out/proof-bundles/20260303_055840
+INFO: proof-packet check pass packet_sha=sha256:e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e summary_sha=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd

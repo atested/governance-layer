@@ -1,0 +1,43 @@
+RDD Phase 3 restock validation
+============================
+
+Base SHA: 3bfb58db9a709bb29d20b73a310c4badd0845222
+Branch: codex/RDD_PHASE3_RESTOCK__v1
+Head SHA: 4f4cce9be0219e856db0d3e23a25ba07e9521b71
+
+Authoritative files inspected:
+- docs/dev/OPS_PROCESS__CHATGPT_CODEX_CECIL__v1.md
+- docs/dev/WORK_QUEUE.md
+- docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md
+- docs/RESIDUAL_DISCRETION_DOCTRINE.md
+- docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md
+- docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md
+- docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md
+- docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+- docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+- docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+
+Existing next-ready Phase 3 tasks on current main before restock: NONE
+Action taken: created minimal next-ready Phase 3 specs TASK_323 and TASK_324, added WORK_QUEUE rows
+
+Recommended execution order:
+1. docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+2. docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md
+
+Files changed (BASE..HEAD):
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE3_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md
+
+Implementation drift check:
+PASS: no implementation/runtime files changed
+
+Spec structure check:
+- docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+  PASS: required sections present
+- docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md
+  PASS: required sections present

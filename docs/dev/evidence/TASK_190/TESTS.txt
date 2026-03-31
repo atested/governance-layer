@@ -1,0 +1,10 @@
+$ bash tests/test_external_packaging_meta_runner_ordering_regression.sh
+--- T-EXTERNAL-PACKAGING-META-ORDER-001: meta-runner ordering/rc map deterministic ---
+RC_RUN1=0
+RC_RUN2=0
+PASS: meta-runner ordering and rc markers stable
+META_RUNNER_ORDER_SHA256_RUN1=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+META_RUNNER_ORDER_SHA256_RUN2=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+PASS: meta-runner normalized output deterministic across two runs
+Summary: external packaging meta-runner ordering regression checks complete
+[exit=0]

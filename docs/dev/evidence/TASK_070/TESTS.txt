@@ -1,0 +1,29 @@
+$ bash system/scripts/codex-unattended.sh begin-task TASK_062
+Reset branch 'codex/TASK_062'
+M	docs/dev/evidence/TASK_070/TESTS.txt
+M	system/scripts/codex-unattended.sh
+branch 'codex/TASK_062' set up to track 'origin/main'.
+Your branch is up to date with 'origin/main'.
+Task spec: docs/dev/tasks/ready/TASK_062__test_rc_fs_executable_disallowed.md
+Allowed Files:
+tests/test_rc_fs_executable_disallowed.sh
+tests/fixtures/fs_write_executable_disallowed.json
+docs/dev/evidence/TASK_062/**
+[exit 0]
+
+$ bash system/scripts/codex-unattended.sh verify-task TASK_062
+Allowed Files violations:
+docs/dev/evidence/TASK_070/TESTS.txt
+system/scripts/codex-unattended.sh
+[exit 1]
+
+$ bash -n system/scripts/codex-unattended.sh
+[exit 0]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit 0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit 0]
+[exit=1]

@@ -1,0 +1,5 @@
+ docs/dev/WORK_QUEUE.md                             |  3 +++
+ system/tests/helpers/tool_event_contract_common.sh | 29 ++++++++++++++++++++++
+ system/tests/test_export_tool_event_bundle.sh      | 19 ++++++--------
+ system/tests/test_verify_tool_event_bundle.sh      | 26 +++++++++----------
+ 4 files changed, 53 insertions(+), 24 deletions(-)

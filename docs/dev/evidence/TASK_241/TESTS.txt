@@ -1,0 +1,78 @@
+BASELINE_ORIGIN_MAIN=45676678e18c1b2e0c64a26c6594cdb58beb58f7
+BRANCH=codex/RESTOCK_ATTESTATION_PROOF_UNIFICATION__v1
+HEAD_BEFORE_COMMIT=7156f1b7f107788ace81ac7d751ef135fc1cfd54
+
+=== RUN: bash system/tests/test_export_receipt_attestation_bundle.sh
+MANIFEST_PARSE=PASS
+EXPORT_RECEIPT_ATTESTATION_BUNDLE=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=93d4ce32686878b456fac817f3733b003f5d2e6f7af7861baf29de18a0786b76
+RUN2_SHA256=93d4ce32686878b456fac817f3733b003f5d2e6f7af7861baf29de18a0786b76
+=== PASS: bash system/tests/test_export_receipt_attestation_bundle.sh
+
+=== RUN: bash system/tests/test_export_receipt_bundle_includes_replay_check.sh
+EXPORT_RECEIPT_BUNDLE_INCLUDES_REPLAY_CHECK=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=570355229692dc178001e9d8adddc8764bfecf9f67185fa15e4e42f1d7e438dc
+RUN2_SHA256=570355229692dc178001e9d8adddc8764bfecf9f67185fa15e4e42f1d7e438dc
+=== PASS: bash system/tests/test_export_receipt_bundle_includes_replay_check.sh
+
+=== RUN: bash system/tests/test_export_receipt_bundle_signature_parity.sh
+EXPORT_RECEIPT_BUNDLE_SIGNATURE_PARITY=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=f662aed12f4dd375963a2a16c9373ec637d2559396ea1d26734e843c5bcf87c8
+RUN2_SHA256=f662aed12f4dd375963a2a16c9373ec637d2559396ea1d26734e843c5bcf87c8
+=== PASS: bash system/tests/test_export_receipt_bundle_signature_parity.sh
+
+=== RUN: bash system/tests/test_verify_receipt_attestation_bundle.sh
+VERIFY_RECEIPT_ATTESTATION_BUNDLE=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=4f51cbd164c437fc12d455bc5dd3ec57571c2149cfcb62671e9d1a0073cba76a
+RUN2_SHA256=4f51cbd164c437fc12d455bc5dd3ec57571c2149cfcb62671e9d1a0073cba76a
+=== PASS: bash system/tests/test_verify_receipt_attestation_bundle.sh
+
+=== RUN: bash system/tests/test_verify_receipt_bundle_replay_check_artifact.sh
+VERIFY_RECEIPT_BUNDLE_REPLAY_CHECK_ARTIFACT=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=0ba855c597bcc42041d8962a20cb57d4b1f7de0821a5ec8903ca7bd4d5799cfd
+RUN2_SHA256=0ba855c597bcc42041d8962a20cb57d4b1f7de0821a5ec8903ca7bd4d5799cfd
+=== PASS: bash system/tests/test_verify_receipt_bundle_replay_check_artifact.sh
+
+=== RUN: bash system/tests/test_verify_receipt_bundle_require_signature.sh
+VERIFY_RECEIPT_BUNDLE_REQUIRE_SIGNATURE=PASS
+DETERMINISTIC=YES
+RUN1_SHA256=a17e7bde74f0573ad73914799fba738ed9989e1fb0c403e608660eea1b27c497
+RUN2_SHA256=a17e7bde74f0573ad73914799fba738ed9989e1fb0c403e608660eea1b27c497
+=== PASS: bash system/tests/test_verify_receipt_bundle_require_signature.sh
+
+=== RUN: bash system/tests/test_no_conflict_markers_tracked.sh
+CASE=NO_CONFLICT_MARKERS_TRACKED PASS
+=== PASS: bash system/tests/test_no_conflict_markers_tracked.sh
+
+=== RUN: bash system/tests/test_no_absolute_paths_tracked.sh
+CASE=NO_ABSOLUTE_PATHS_TRACKED PASS
+=== PASS: bash system/tests/test_no_absolute_paths_tracked.sh
+
+=== RUN: bash system/tests/test_no_trailing_whitespace.sh
+CASE=NO_TRAILING_WHITESPACE PASS
+=== PASS: bash system/tests/test_no_trailing_whitespace.sh
+
+=== RUN: bash system/tests/test_shell_scripts_strict_mode.sh
+CASE=SHELL_STRICT_MODE PASS
+=== PASS: bash system/tests/test_shell_scripts_strict_mode.sh
+
+=== RUN: bash system/tests/test_dev_scripts_safe_defaults.sh
+CHECK=PASS:scripts/dev_generate_dependency_edges.py
+CHECK=PASS:scripts/dev_generate_progress_map.py
+CHECK=PASS:scripts/dev_generate_verification_catalog.py
+CHECK=PASS:scripts/dev_mcp_reference_workflow.sh
+CHECK=PASS:scripts/dev_merge_rehearsal_from_spine.sh
+CHECK=PASS:scripts/dev_merge_sim_inputs_from_queue.sh
+CHECK=PASS:scripts/dev_merge_window_simulator.sh
+CHECK=PASS:scripts/dev_next_actions_compiler.sh
+CHECK=PASS:scripts/dev_phase2_regression.sh
+CHECK=PASS:scripts/dev_progress_spine_run.sh
+CHECK=PASS:scripts/dev_progress_status.sh
+CASE=DEV_SCRIPTS_SAFE_DEFAULTS PASS
+=== PASS: bash system/tests/test_dev_scripts_safe_defaults.sh
+

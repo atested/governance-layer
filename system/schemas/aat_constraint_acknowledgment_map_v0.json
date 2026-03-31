@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Constraint Acknowledgment Map v0",
+  "description": "Maps each constraint from CSD to an acknowledgment status",
+  "type": "object",
+  "required": ["cam_version", "acknowledgments"],
+  "additionalProperties": false,
+  "properties": {
+    "cam_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "acknowledgments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["constraint_id", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "constraint_id": {
+            "type": "string",
+            "pattern": "^c-[0-9]{3,}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["satisfied", "not_applicable", "blocked", "unknown"]
+          }
+        }
+      }
+    }
+  },
+  "field_order": ["cam_version", "acknowledgments"]
+}

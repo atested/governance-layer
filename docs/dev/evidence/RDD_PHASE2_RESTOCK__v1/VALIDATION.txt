@@ -1,0 +1,43 @@
+RDD Phase 2 restock validation
+==============================
+
+Base SHA: 30f56ace6528b44ae81da4ff2c5267811df18846
+Branch: codex/RDD_PHASE2_RESTOCK__v1
+Head SHA: 8a1522cc60bc2806ab1ca999f0fef1d05fdab5d8
+
+Authoritative files inspected:
+- docs/dev/OPS_PROCESS__CHATGPT_CODEX_CECIL__v1.md
+- docs/dev/WORK_QUEUE.md
+- docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md
+- docs/RESIDUAL_DISCRETION_DOCTRINE.md
+- docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md
+- docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md
+- docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md
+
+Legacy doctrine path present: NO (checked)
+
+Ready-task determination:
+- Existing Phase 2 RDD ready task files on current main: NONE
+- Existing Phase 2 RDD WORK_QUEUE entries on current main: NONE
+- Action taken: created minimal next-ready Phase 2 set TASK_320..TASK_322 and added bounded WORK_QUEUE entries
+
+Files changed (BASE..HEAD):
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+
+Implementation file drift check:
+PASS: no implementation/runtime surfaces changed
+
+Spec quality check:
+- docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+  PASS: required sections present
+- docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+  PASS: required sections present
+- docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+  PASS: required sections present

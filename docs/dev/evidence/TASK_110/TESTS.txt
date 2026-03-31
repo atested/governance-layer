@@ -1,0 +1,41 @@
+TASK_110 bundle evidence
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+
+$ bash tests/test_attestation_bundle_pack.sh  # run1
+WROTE=/var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/task110-bundle.Nd8S31/bundle1.tar
+BUNDLE_SHA256=sha256:c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+MANIFEST_SHA256=sha256:0c1935494f75eed93ed9fa85d4a8cb2916055cf9a09bded072364788810d8f4d
+MANIFEST_FILES=artifacts/replay_audit_report.json,artifacts/request.txt,artifacts/response.txt,record.json
+WROTE=/var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/task110-bundle.Nd8S31/bundle2.tar
+BUNDLE_SHA256=sha256:c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+MANIFEST_SHA256=sha256:0c1935494f75eed93ed9fa85d4a8cb2916055cf9a09bded072364788810d8f4d
+MANIFEST_FILES=artifacts/replay_audit_report.json,artifacts/request.txt,artifacts/response.txt,record.json
+BUNDLE_SHA256_RUN1=c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+BUNDLE_SHA256_RUN2=c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+PASS: bundle bytes deterministic across two runs
+PASS: bundle contains expected files + deterministic manifest
+[exit=0]
+
+$ bash tests/test_attestation_bundle_pack.sh  # run2
+WROTE=/var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/task110-bundle.f3mTfq/bundle1.tar
+BUNDLE_SHA256=sha256:c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+MANIFEST_SHA256=sha256:0c1935494f75eed93ed9fa85d4a8cb2916055cf9a09bded072364788810d8f4d
+MANIFEST_FILES=artifacts/replay_audit_report.json,artifacts/request.txt,artifacts/response.txt,record.json
+WROTE=/var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/task110-bundle.f3mTfq/bundle2.tar
+BUNDLE_SHA256=sha256:c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+MANIFEST_SHA256=sha256:0c1935494f75eed93ed9fa85d4a8cb2916055cf9a09bded072364788810d8f4d
+MANIFEST_FILES=artifacts/replay_audit_report.json,artifacts/request.txt,artifacts/response.txt,record.json
+BUNDLE_SHA256_RUN1=c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+BUNDLE_SHA256_RUN2=c5454188cfad20afa5c0b92ae6d5e887b2e25c61752df965c6aaacf66119df96
+PASS: bundle bytes deterministic across two runs
+PASS: bundle contains expected files + deterministic manifest
+[exit=0]
+
+PACK_TEST_STDOUT_SHA256_RUN1=bbead615eb489cf6458c916dcf8de88db229a3a4ca55b7d5af3fe9e2c479e023
+PACK_TEST_STDOUT_SHA256_RUN2=bb63d71544baa71b110c72f6b21e6cc70c6bd9439d8f05d20a4fc288c226c337
+FAIL: pack test stdout digest mismatch
+
+Implementation note:
+- Contract option A chosen: replay audit report canonicalized to artifacts/replay_audit_report.json.
+- Pack now canonicalizes and sorts by canonical manifest path.
+- Tests updated to assert the canonical artifact path.

@@ -1,0 +1,5 @@
+HOT_FILES=system/scripts/release-gate.sh system/scripts/validate-proof-bundle.sh system/scripts/codex-unattended.sh docs/dev/WORK_QUEUE.md docs/dev/ASSIGNMENTS.md
+CMD=git diff --name-only origin/main..HEAD | rg -n '^(system/scripts/release-gate\.sh|system/scripts/validate-proof-bundle\.sh|system/scripts/codex-unattended\.sh|docs/dev/WORK_QUEUE\.md|docs/dev/ASSIGNMENTS\.md)$'
+HOTFILE_SCAN=PASS
+MATCHES=NONE
+VALIDATE_PROOF_BUNDLE_UNCHANGED=YES

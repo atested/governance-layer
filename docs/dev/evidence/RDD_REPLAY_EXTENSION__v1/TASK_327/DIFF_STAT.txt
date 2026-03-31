@@ -1,0 +1,18 @@
+ .../TASK_327/DIFF_NAME_ONLY.txt                    |   0
+ .../TASK_327/DIFF_STAT.txt                         |   0
+ .../TASK_327/HOTFILE_SCAN.txt                      |   5 +
+ .../RDD_REPLAY_EXTENSION__v1/TASK_327/TESTS.txt    | 174 +++++++++++++++++++++
+ .../TASK_328/DIFF_NAME_ONLY.txt                    |   0
+ .../TASK_328/DIFF_STAT.txt                         |   0
+ .../TASK_328/HOTFILE_SCAN.txt                      |   5 +
+ .../RDD_REPLAY_EXTENSION__v1/TASK_328/TESTS.txt    | 174 +++++++++++++++++++++
+ docs/dev/evidence/TASK_327/TESTS.txt               | 174 +++++++++++++++++++++
+ docs/dev/evidence/TASK_328/TESTS.txt               | 174 +++++++++++++++++++++
+ scripts/replay-record.py                           | 137 ++++++++++++++++
+ ...dd_phase5_replay_missing_originating_field.json |  48 ++++++
+ .../rdd_phase5_replay_unsupported_record_type.json |  24 +++
+ .../fixtures/rdd_phase5_replay_valid_terminal.json |  30 ++++
+ tests/fixtures/rdd_phase5_replay_valid_triage.json |  49 ++++++
+ tests/test_replay.sh                               |  32 +++-
+ tests/test_replay_rdd_phase5.sh                    | 121 ++++++++++++++
+ 17 files changed, 1143 insertions(+), 4 deletions(-)

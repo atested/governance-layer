@@ -1,0 +1,10 @@
+REPRO_EXIT_CODE=1
+--- REPRO STDOUT (tail 80) ---
+LOG_DIR=/Users/gregkeeter/codex-workspaces/governance-layer/out/aat_shim_test_logs
+LOG_DIR_MODE=repo_out
+--- REPRO STDERR (tail 120) ---
+FAIL at line 286: bash "$0" --single-run > "$r1_raw" 2>&1 (exit=1)
+LOG_STDOUT=/Users/gregkeeter/codex-workspaces/governance-layer/out/aat_shim_test_logs/main.stdout.log
+LOG_STDERR=/Users/gregkeeter/codex-workspaces/governance-layer/out/aat_shim_test_logs/main.stderr.log
+--- LAST 200 STDERR ---
+--- LAST 200 STDOUT ---

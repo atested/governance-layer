@@ -1,0 +1,23 @@
+TASK: TASK_352 — RDD selector-mode legacy dual-alias normalized-value equivalence coverage
+
+Tests run:
+1) bash tests/test_rdd_triage_selector_mode.sh
+   - Result: PASS (PASS: 43 FAIL: 0)
+   - Determinism:
+     - SELECTOR_MODE_MATRIX_HASH_1=beeeea0f1f25e408140d2081283fde15246aaf76a3b6654afd1134a54df55a9d
+     - SELECTOR_MODE_MATRIX_HASH_2=beeeea0f1f25e408140d2081283fde15246aaf76a3b6654afd1134a54df55a9d
+     - match: YES
+
+2) bash tests/test_rdd_triage_criteria_selector.sh
+   - Result: PASS (PASS: 16 FAIL: 0)
+   - Determinism:
+     - SELECTOR_MATRIX_HASH_1=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+     - SELECTOR_MATRIX_HASH_2=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+     - match: YES
+
+3) bash tests/test_rdd_triage_eval.sh
+   - Result: PASS (PASS: 10 FAIL: 0)
+   - Determinism:
+     - DET_HASH_1=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+     - DET_HASH_2=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+     - match: YES

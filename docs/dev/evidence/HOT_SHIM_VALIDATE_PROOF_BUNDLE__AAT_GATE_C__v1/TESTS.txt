@@ -1,0 +1,22 @@
+BASE_SHA_RESOLVED=fe28289728a5ca4ba2cc03452f4ec380033a7153
+BASE7=fe28289
+BRANCH=codex/HOT_SHIM_VALIDATE_PROOF_BUNDLE__AAT_GATE_C__v1
+HEAD_SHA=2aad13acc1133409efc7fe1c57a592344be3c9e5
+
+COMMAND_1=bash system/tests/test_validate_proof_bundle_aat_shim.sh
+EXIT_1=0
+SHA256_1=8c0032ff6f15d71e71bfd8c6889428a7531408821a94e7d54cbf9a34d3777ddb
+---OUTPUT_1---
+CASE=default_disabled_unchanged PASS
+CASE=enabled_nonstrict_missing_inputs PASS
+CASE=enabled_strict_inputs_present_pass PASS
+CASE=enabled_strict_inputs_present_nonad PASS
+SHIM_TEST_STATUS=PASS
+RUN1_SHA256=47fb95c609a859c456ae17feccb8f5ed12e14b01b0ce7d757149390e13f59085
+RUN2_SHA256=47fb95c609a859c456ae17feccb8f5ed12e14b01b0ce7d757149390e13f59085
+DETERMINISTIC=YES
+
+COMMAND_2=GOV_PROFILE=dev bash system/scripts/release-gate.sh
+EXIT_2=0
+PASS_LINES=12
+FAIL_LINES=0

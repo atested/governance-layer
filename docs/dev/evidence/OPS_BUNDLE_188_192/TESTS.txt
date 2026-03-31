@@ -1,0 +1,70 @@
+OPS_BUNDLE_188_192
+
+## Repo SHA
+$ git rev-parse --short HEAD
+b865505
+
+## Picked commits
+- 188-191 bundle range from origin/codex/EXTERNAL_READINESS_REGRESSIONS_BUNDLE_188_191__8edd554
+- restock192: 3ac153f origin/codex/QUEUE_RESTOCK_BASH_PORTABILITY_REMEDIATION__3ac153f
+- task192: ca5c646 origin/codex/TASK_192__ca5c646
+
+## TASK_188
+$ bash tests/test_external_locale_invariance.sh
+
+[exit=0]
+$ bash tests/test_external_locale_invariance.sh  # run2
+
+[exit=0]
+TASK_188_RC_RUN1=0
+TASK_188_RC_RUN2=0
+TASK_188_SHA256_RUN1=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+TASK_188_SHA256_RUN2=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+PASS: TASK_188 normalized output deterministic across two runs
+
+## TASK_189
+$ bash tests/test_external_bash_portability_scan.sh
+
+[exit=0]
+$ bash tests/test_external_bash_portability_scan.sh  # run2
+
+[exit=0]
+TASK_189_RC_RUN1=0
+TASK_189_RC_RUN2=0
+TASK_189_SHA256_RUN1=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+TASK_189_SHA256_RUN2=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+PASS: TASK_189 normalized output deterministic across two runs
+
+## TASK_190
+$ bash tests/test_external_packaging_meta_runner_ordering_regression.sh
+
+[exit=0]
+$ bash tests/test_external_packaging_meta_runner_ordering_regression.sh  # run2
+
+[exit=0]
+TASK_190_RC_RUN1=0
+TASK_190_RC_RUN2=0
+TASK_190_SHA256_RUN1=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+TASK_190_SHA256_RUN2=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+PASS: TASK_190 normalized output deterministic across two runs
+
+## TASK_191
+$ bash tests/test_proof_bundle_required_files_parity_scan.sh
+
+[exit=0]
+$ bash tests/test_proof_bundle_required_files_parity_scan.sh  # run2
+
+[exit=0]
+TASK_191_RC_RUN1=0
+TASK_191_RC_RUN2=0
+TASK_191_SHA256_RUN1=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+TASK_191_SHA256_RUN2=01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
+PASS: TASK_191 normalized output deterministic across two runs
+
+BUNDLE_TRANSCRIPT_SHA256_RUN1=a80bad4be80b285b5bc4f74b0056bbcc6fc44e9f249da3716e5ea5dacc469a86
+BUNDLE_TRANSCRIPT_SHA256_RUN2=a80bad4be80b285b5bc4f74b0056bbcc6fc44e9f249da3716e5ea5dacc469a86
+PASS: bundle transcript deterministic across two reads
+
+SUPERSEDED_BRANCHES:
+- origin/codex/EXTERNAL_READINESS_REGRESSIONS_BUNDLE_188_191__8edd554
+- origin/codex/TASK_192__ca5c646

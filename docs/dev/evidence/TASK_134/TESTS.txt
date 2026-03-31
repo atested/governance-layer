@@ -1,0 +1,9 @@
+TASK_134
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+$ rg -n "External Run Quickstart|bootstrap-run.sh|release-gate.sh|out/proof-bundles|release_gate.stdout.log|PASS|FAIL|SKIP" README.md
+[exit=0]
+$ rg -n "External Run Quickstart|bootstrap-run.sh|release-gate.sh|out/proof-bundles|release_gate.stdout.log|PASS|FAIL|SKIP" README.md  # run2
+[exit=0]
+RUN1_SHA256=a97add11eb73b4d2cbc23f0da2743c91688d8936dc9e465caf8b8aa77fc2f875
+RUN2_SHA256=a97add11eb73b4d2cbc23f0da2743c91688d8936dc9e465caf8b8aa77fc2f875
+PASS: deterministic README quickstart/output grep

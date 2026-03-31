@@ -1,0 +1,23 @@
+[1;33m[INFO][0m Starting AAT Kernel Validator Tests
+[1;33m[INFO][0m Fixtures directory: /Volumes/SSD/archive/gov/governance-layer/system/tests/fixtures/aat/kernel
+[1;33m[INFO][0m Testing K1: Phantom action detection
+[0;32m[PASS][0m K1: Detected phantom action (verification claim without tool_event evidence)
+[1;33m[INFO][0m Testing K2: Undeclared dependency detection
+[0;32m[PASS][0m K2: Detected undeclared dependency (evidence ref not in IM)
+[1;33m[INFO][0m Testing K3: Constraint acknowledgment completeness
+[0;32m[PASS][0m K3: Detected unacknowledged constraint
+[1;33m[INFO][0m Testing K4: Method binding required
+[0;32m[PASS][0m K4: Detected forbidden method for action kind
+[1;33m[INFO][0m Testing K5: Version binding required (integration test)
+[0;32m[PASS][0m K5: Skipped (tested in integration tests)
+[1;33m[INFO][0m Testing valid bundle (should PASS)
+[0;32m[PASS][0m Valid bundle passed kernel validation
+
+================================
+Test Summary
+================================
+PASS: 6
+FAIL: 0
+TOTAL: 6
+
+[0;32mAll tests passed![0m

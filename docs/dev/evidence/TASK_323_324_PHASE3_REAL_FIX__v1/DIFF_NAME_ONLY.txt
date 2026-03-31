@@ -1,0 +1,13 @@
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/DIFF_STAT.txt
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/FIXTURE_CHECK.txt
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/HASHES.txt
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/TASK_323_324_PHASE3_REAL_FIX__v1/TESTS.txt
+tests/fixtures/rdd_chain_phase3_invalid_duplicate_triage.jsonl
+tests/fixtures/rdd_chain_phase3_invalid_pass_backlink.jsonl
+tests/fixtures/rdd_chain_phase3_invalid_terminal_before_triage.jsonl
+tests/fixtures/rdd_chain_phase3_invalid_triage_before_pass.jsonl
+tests/fixtures/rdd_chain_phase3_invalid_triage_refs_non_undecided_pass.jsonl
+tests/fixtures/rdd_chain_phase3_legacy_compat.jsonl
+tests/fixtures/rdd_chain_phase3_valid.jsonl

@@ -1,0 +1,237 @@
+OPS_BUNDLE_EXTERNAL_PACKAGING_SUPER_CLEAN
+
+## Picked commits
+- 2d1b758 READY: restock TASK_165-169 external packaging checks
+- aba0d31 TASK_166: add minimal distribution manifest doc
+- c055413 TASK_165: add deterministic repo packaging check
+- fcb835b TASK_167: document external validator CLI and exit taxonomy
+- 1796f79 TASK_168: add deterministic external packaging smoke test
+- acbdb42 TASK_169: add workflow artifact completeness test
+- f93521b OPS_BUNDLE_165_169: deterministic external packaging tranche transcript
+- 117cdb5 TASK_170: add deterministic self-harness mode for scanner
+- ac5df8a TASK_171: make docs consistency test dependency-aware with SKIP
+
+## TASK_165
+$ bash tests/test_repo_packaging_check.sh
+--- T-REPO-PACKAGING-001: required top-level external files present ---
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+--- T-REPO-PACKAGING-002: forbidden local-only artifacts absent ---
+PASS: forbidden local-only artifacts absent
+REPO_PACKAGING_SHA256_RUN1=7c4fbf1f6cd652ceb1e9dc4dcb1979d95c2d28f170201d8ba5042293407c41b4
+REPO_PACKAGING_SHA256_RUN2=7c4fbf1f6cd652ceb1e9dc4dcb1979d95c2d28f170201d8ba5042293407c41b4
+PASS: repo packaging check output deterministic across two runs
+[exit=0]
+$ bash tests/test_repo_packaging_check.sh  # run2
+--- T-REPO-PACKAGING-001: required top-level external files present ---
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+--- T-REPO-PACKAGING-002: forbidden local-only artifacts absent ---
+PASS: forbidden local-only artifacts absent
+REPO_PACKAGING_SHA256_RUN1=7c4fbf1f6cd652ceb1e9dc4dcb1979d95c2d28f170201d8ba5042293407c41b4
+REPO_PACKAGING_SHA256_RUN2=7c4fbf1f6cd652ceb1e9dc4dcb1979d95c2d28f170201d8ba5042293407c41b4
+PASS: repo packaging check output deterministic across two runs
+[exit=0]
+
+## TASK_168
+$ bash tests/test_external_packaging_smoke.sh
+--- T-EXTERNAL-PACKAGING-SMOKE-001: packaging file/doc smoke deterministic ---
+INFO: git status clean
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:115:- `out/proof-bundles/<run-id>/proof_packet.tar`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:116:- `out/proof-bundles/<run-id>/proof_packet.sha256`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:117:- `out/proof-bundles/<run-id>/proof_packet_verify_summary.json`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:118:- `out/proof-bundles/<run-id>/versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:138:- **Required files guaranteed:** `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:119:**`release_gate_log.txt`, `versions.txt`:**
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:172:- Order of keys in `release_gate_log.txt` and `versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:22:1. **`proof_packet.tar`** - Deterministic proof-packet archive
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:27:2. **`proof_packet_verify_summary.json`** - Verifier summary
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:31:3. **`proof_packet.sha256`** - SHA256 checksum
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:32:   - Format: `<hex-sha256>  proof_packet.tar\n` (RFC 3174 lowercase hex)
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:34:4. **`release_gate_log.txt`** - Release gate status log
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:38:5. **`versions.txt`** - Version metadata
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/dev/ATTESTATION_SPEC.md:293:  --out /tmp/proof_packet.tar
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/dev/ATTESTATION_SPEC.md:297:  --bundle /tmp/proof_packet.tar \
+PASS: docs proof-bundle references present
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN1=46fcc96808dd1a79da4b7db4fb125d427346a5cd1e700fcf7ef64d22da00a29f
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN2=46fcc96808dd1a79da4b7db4fb125d427346a5cd1e700fcf7ef64d22da00a29f
+PASS: external packaging smoke output deterministic across two runs
+[exit=0]
+$ bash tests/test_external_packaging_smoke.sh  # run2
+--- T-EXTERNAL-PACKAGING-SMOKE-001: packaging file/doc smoke deterministic ---
+INFO: git status clean
+PASS: required file present: README.md
+PASS: required file present: docs/EXTERNAL_CONTRACTS.md
+PASS: required file present: docs/TEST-SUITE.md
+PASS: required file present: system/scripts/bootstrap-run.sh
+PASS: required file present: system/scripts/release-gate.sh
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:115:- `out/proof-bundles/<run-id>/proof_packet.tar`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:116:- `out/proof-bundles/<run-id>/proof_packet.sha256`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:117:- `out/proof-bundles/<run-id>/proof_packet_verify_summary.json`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:118:- `out/proof-bundles/<run-id>/versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/README.md:138:- **Required files guaranteed:** `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:119:**`release_gate_log.txt`, `versions.txt`:**
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:172:- Order of keys in `release_gate_log.txt` and `versions.txt`
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:22:1. **`proof_packet.tar`** - Deterministic proof-packet archive
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:27:2. **`proof_packet_verify_summary.json`** - Verifier summary
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:31:3. **`proof_packet.sha256`** - SHA256 checksum
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:32:   - Format: `<hex-sha256>  proof_packet.tar\n` (RFC 3174 lowercase hex)
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:34:4. **`release_gate_log.txt`** - Release gate status log
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/EXTERNAL_CONTRACTS.md:38:5. **`versions.txt`** - Version metadata
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/dev/ATTESTATION_SPEC.md:293:  --out /tmp/proof_packet.tar
+/private/tmp/ext_pack_super_clean_rI8Ef4/docs/dev/ATTESTATION_SPEC.md:297:  --bundle /tmp/proof_packet.tar \
+PASS: docs proof-bundle references present
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN1=46fcc96808dd1a79da4b7db4fb125d427346a5cd1e700fcf7ef64d22da00a29f
+EXTERNAL_PACKAGING_SMOKE_SHA256_RUN2=46fcc96808dd1a79da4b7db4fb125d427346a5cd1e700fcf7ef64d22da00a29f
+PASS: external packaging smoke output deterministic across two runs
+[exit=0]
+
+## TASK_169
+$ bash tests/test_github_actions_release_gate_artifacts_completeness.sh
+--- T-GHA-ARTIFACTS-COMPLETE-001: workflow artifact completeness + wildcard optionals ---
+PASS: checkout step present
+PASS: setup-python step present
+PASS: GOV_PROFILE=ci env present
+PASS: release-gate invocation present
+PASS: proof-bundle wildcard artifact path present
+PASS: release-gate stdout artifact path present
+PASS: wildcard artifact path covers optional queue_drift_scan.json when present
+PASS: wildcard artifact path covers optional validator summary JSON when present
+WORKFLOW_SHA256_RUN1=d6090f9556316269fcb54cfb1e0d2947a1f6f2932534370b42a915f51042344b
+WORKFLOW_SHA256_RUN2=d6090f9556316269fcb54cfb1e0d2947a1f6f2932534370b42a915f51042344b
+ARTIFACT_CHECK_STDOUT_SHA256_RUN1=65a35acdbadfb79684fa5b9dbf3210e2356c4278164ae32abcb7a4b151cd3600
+ARTIFACT_CHECK_STDOUT_SHA256_RUN2=65a35acdbadfb79684fa5b9dbf3210e2356c4278164ae32abcb7a4b151cd3600
+PASS: workflow and artifact completeness outputs deterministic across two runs
+[exit=0]
+$ bash tests/test_github_actions_release_gate_artifacts_completeness.sh  # run2
+--- T-GHA-ARTIFACTS-COMPLETE-001: workflow artifact completeness + wildcard optionals ---
+PASS: checkout step present
+PASS: setup-python step present
+PASS: GOV_PROFILE=ci env present
+PASS: release-gate invocation present
+PASS: proof-bundle wildcard artifact path present
+PASS: release-gate stdout artifact path present
+PASS: wildcard artifact path covers optional queue_drift_scan.json when present
+PASS: wildcard artifact path covers optional validator summary JSON when present
+WORKFLOW_SHA256_RUN1=d6090f9556316269fcb54cfb1e0d2947a1f6f2932534370b42a915f51042344b
+WORKFLOW_SHA256_RUN2=d6090f9556316269fcb54cfb1e0d2947a1f6f2932534370b42a915f51042344b
+ARTIFACT_CHECK_STDOUT_SHA256_RUN1=65a35acdbadfb79684fa5b9dbf3210e2356c4278164ae32abcb7a4b151cd3600
+ARTIFACT_CHECK_STDOUT_SHA256_RUN2=65a35acdbadfb79684fa5b9dbf3210e2356c4278164ae32abcb7a4b151cd3600
+PASS: workflow and artifact completeness outputs deterministic across two runs
+[exit=0]
+
+## TASK_170
+$ TASK170_SELFTEST=1 bash tests/test_proof_bundle_dir_contract_scan.sh
+INFO: TASK170 selftest bundle generated
+--- T-PROOF-BUNDLE-DIR-SCAN-001: required files + optional semantics ---
+PASS: required file present: proof_packet.tar
+PASS: required file present: proof_packet.sha256
+PASS: required file present: proof_packet_verify_summary.json
+PASS: required file present: release_gate_log.txt
+PASS: required file present: versions.txt
+PASS: queue_drift_scan.txt non-empty human text allowed
+PASS: queue_drift_scan.json schema/version and text digest linkage valid
+PASS: status_bundle.json schema/version and strictness typing valid
+DIR_FILE_LIST=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,queue_drift_scan.json,queue_drift_scan.txt,release_gate_log.txt,status_bundle.json,versions.txt
+[exit=0]
+$ TASK170_SELFTEST=1 bash tests/test_proof_bundle_dir_contract_scan.sh  # run2
+INFO: TASK170 selftest bundle generated
+--- T-PROOF-BUNDLE-DIR-SCAN-001: required files + optional semantics ---
+PASS: required file present: proof_packet.tar
+PASS: required file present: proof_packet.sha256
+PASS: required file present: proof_packet_verify_summary.json
+PASS: required file present: release_gate_log.txt
+PASS: required file present: versions.txt
+PASS: queue_drift_scan.txt non-empty human text allowed
+PASS: queue_drift_scan.json schema/version and text digest linkage valid
+PASS: status_bundle.json schema/version and strictness typing valid
+DIR_FILE_LIST=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,queue_drift_scan.json,queue_drift_scan.txt,release_gate_log.txt,status_bundle.json,versions.txt
+[exit=0]
+
+## TASK_171
+$ bash tests/test_external_docs_contract_consistency.sh || true
+--- T-EXTERNAL-DOCS-CONSISTENCY-001: required/optional proof-bundle outputs documented consistently ---
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.tar
+PASS: required file referenced in DISTRIBUTION: proof_packet.tar
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet_verify_summary.json
+PASS: required file referenced in DISTRIBUTION: proof_packet_verify_summary.json
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.sha256
+PASS: required file referenced in DISTRIBUTION: proof_packet.sha256
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: release_gate_log.txt
+PASS: required file referenced in DISTRIBUTION: release_gate_log.txt
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: versions.txt
+PASS: required file referenced in DISTRIBUTION: versions.txt
+PASS: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.txt
+PASS: optional file referenced in DISTRIBUTION: queue_drift_scan.txt
+FAIL: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.json
+--- T-EXTERNAL-DOCS-CONSISTENCY-001: required/optional proof-bundle outputs documented consistently ---
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.tar
+PASS: required file referenced in DISTRIBUTION: proof_packet.tar
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet_verify_summary.json
+PASS: required file referenced in DISTRIBUTION: proof_packet_verify_summary.json
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.sha256
+PASS: required file referenced in DISTRIBUTION: proof_packet.sha256
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: release_gate_log.txt
+PASS: required file referenced in DISTRIBUTION: release_gate_log.txt
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: versions.txt
+PASS: required file referenced in DISTRIBUTION: versions.txt
+PASS: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.txt
+PASS: optional file referenced in DISTRIBUTION: queue_drift_scan.txt
+FAIL: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.json
+RC_RUN1=1
+RC_RUN2=1
+DOCS_CONSISTENCY_SHA256_RUN1=9fbb7ca90c4ccbd001884a94700229734e2e3fce62a90d5f19279dc9940c099f
+DOCS_CONSISTENCY_SHA256_RUN2=9fbb7ca90c4ccbd001884a94700229734e2e3fce62a90d5f19279dc9940c099f
+FAIL: unexpected docs consistency rc=1
+$ bash tests/test_external_docs_contract_consistency.sh  # run2 || true
+--- T-EXTERNAL-DOCS-CONSISTENCY-001: required/optional proof-bundle outputs documented consistently ---
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.tar
+PASS: required file referenced in DISTRIBUTION: proof_packet.tar
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet_verify_summary.json
+PASS: required file referenced in DISTRIBUTION: proof_packet_verify_summary.json
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.sha256
+PASS: required file referenced in DISTRIBUTION: proof_packet.sha256
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: release_gate_log.txt
+PASS: required file referenced in DISTRIBUTION: release_gate_log.txt
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: versions.txt
+PASS: required file referenced in DISTRIBUTION: versions.txt
+PASS: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.txt
+PASS: optional file referenced in DISTRIBUTION: queue_drift_scan.txt
+FAIL: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.json
+--- T-EXTERNAL-DOCS-CONSISTENCY-001: required/optional proof-bundle outputs documented consistently ---
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.tar
+PASS: required file referenced in DISTRIBUTION: proof_packet.tar
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet_verify_summary.json
+PASS: required file referenced in DISTRIBUTION: proof_packet_verify_summary.json
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: proof_packet.sha256
+PASS: required file referenced in DISTRIBUTION: proof_packet.sha256
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: release_gate_log.txt
+PASS: required file referenced in DISTRIBUTION: release_gate_log.txt
+PASS: required file referenced in README or EXTERNAL_CONTRACTS: versions.txt
+PASS: required file referenced in DISTRIBUTION: versions.txt
+PASS: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.txt
+PASS: optional file referenced in DISTRIBUTION: queue_drift_scan.txt
+FAIL: optional file referenced in EXTERNAL_CONTRACTS: queue_drift_scan.json
+RC_RUN1=1
+RC_RUN2=1
+DOCS_CONSISTENCY_SHA256_RUN1=9fbb7ca90c4ccbd001884a94700229734e2e3fce62a90d5f19279dc9940c099f
+DOCS_CONSISTENCY_SHA256_RUN2=9fbb7ca90c4ccbd001884a94700229734e2e3fce62a90d5f19279dc9940c099f
+FAIL: unexpected docs consistency rc=1
+
+SUPERBUNDLE_CLEAN_TRANSCRIPT_SHA256_RUN1=dc71cf51455325b1d4b31438043f6c95d7b61038ed0d8c0f4a4806c20978f063
+SUPERBUNDLE_CLEAN_TRANSCRIPT_SHA256_RUN2=dc71cf51455325b1d4b31438043f6c95d7b61038ed0d8c0f4a4806c20978f063
+PASS: superbundle clean transcript deterministic across two reads
+
+SUPERSEDED_BRANCHES:
+- origin/codex/EXTERNAL_PACKAGING_SUPERBUNDLE__fb51b1c

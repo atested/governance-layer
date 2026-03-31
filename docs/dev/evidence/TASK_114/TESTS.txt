@@ -1,0 +1,82 @@
+$ bash tests/test_replay.sh
+--- T-REPLAY-001: replay DENY record ---
+PASS: T-REPLAY-001 baseline verify-record (record_hash verified)
+PASS: T-REPLAY-001 exit 0 (exit=0)
+PASS: T-REPLAY-001 PASS output (contains 'PASS: replay matches original')
+PASS: T-REPLAY-001 shows DENY (contains 'decision=DENY')
+PASS: T-REPLAY-001 shows RC (contains 'RC-FS-OVERWRITE-DISALLOWED')
+
+--- T-REPLAY-002: replay ALLOW record ---
+PASS: T-REPLAY-002 baseline verify-record (record_hash verified)
+PASS: T-REPLAY-002 exit 0 (exit=0)
+PASS: T-REPLAY-002 PASS output (contains 'PASS: replay matches original')
+PASS: T-REPLAY-002 shows ALLOW (contains 'decision=ALLOW')
+
+--- T-REPLAY-003: tamper request_bytes_b64 → fail-closed ---
+PASS: T-REPLAY-003 exit 2 (fail-closed) (exit=2)
+PASS: T-REPLAY-003 hash mismatch message (contains 'request_hash mismatch')
+
+--- T-REPLAY-004: registry drift via controlled registry swap ---
+PASS: T-REPLAY-004 baseline verify-record (record_hash verified)
+PASS: T-REPLAY-004 exit 1 (registry drift fail-closed) (exit=1)
+PASS: T-REPLAY-004 mismatch summary (contains 'FAIL: replay mismatch on 1 invariant(s):')
+PASS: T-REPLAY-004 cap hash field (contains 'field:    cap_registry_hash')
+PASS: T-REPLAY-004 sha256 markers (contains 'sha256:')
+PASS: T-REPLAY-004 mismatch kind (contains 'kind:     value')
+
+--- T-REPLAY-005..009: invariant mismatch matrix via controlled replay mutations ---
+PASS: T-REPLAY-005 base record verify-record (record_hash verified)
+PASS: T-REPLAY-005 (missing invariant field) exit 1 (exit=1)
+PASS: T-REPLAY-005 (missing invariant field) mismatch field (contains 'field:    normalized_args')
+PASS: T-REPLAY-005 (missing invariant field) mismatch kind (contains 'kind:     missing')
+PASS: T-REPLAY-005 (missing invariant field) repeat exit 1 (exit=1)
+PASS: T-REPLAY-005 (missing invariant field) repeat mismatch field (contains 'field:    normalized_args')
+PASS: T-REPLAY-005 (missing invariant field) repeat mismatch kind (contains 'kind:     missing')
+PASS: T-REPLAY-005 (missing invariant field) report sha256 stable (6ec8f48dc875201e1830f96eff36433af6577a1234f2f6f51b6a168ab5245aea)
+PASS: T-REPLAY-005 (missing invariant field) audit report includes field=normalized_args kind=missing
+MISMATCH_FIELDS=normalized_args
+PASS: T-REPLAY-006 (extra invariant field) exit 1 (exit=1)
+PASS: T-REPLAY-006 (extra invariant field) mismatch field (contains 'field:    __replay_test_extra_invariant__')
+PASS: T-REPLAY-006 (extra invariant field) mismatch kind (contains 'kind:     extra')
+PASS: T-REPLAY-006 (extra invariant field) repeat exit 1 (exit=1)
+PASS: T-REPLAY-006 (extra invariant field) repeat mismatch field (contains 'field:    __replay_test_extra_invariant__')
+PASS: T-REPLAY-006 (extra invariant field) repeat mismatch kind (contains 'kind:     extra')
+PASS: T-REPLAY-006 (extra invariant field) report sha256 stable (51ea01b9211e9d748fcd637ce53cd72fefb5055c860764cf58e5ecb2d53c0c08)
+PASS: T-REPLAY-006 (extra invariant field) audit report includes field=__replay_test_extra_invariant__ kind=extra
+MISMATCH_FIELDS=__replay_test_extra_invariant__
+PASS: T-REPLAY-007 (value mismatch on stable field) exit 1 (exit=1)
+PASS: T-REPLAY-007 (value mismatch on stable field) mismatch field (contains 'field:    tool')
+PASS: T-REPLAY-007 (value mismatch on stable field) mismatch kind (contains 'kind:     value')
+PASS: T-REPLAY-007 (value mismatch on stable field) repeat exit 1 (exit=1)
+PASS: T-REPLAY-007 (value mismatch on stable field) repeat mismatch field (contains 'field:    tool')
+PASS: T-REPLAY-007 (value mismatch on stable field) repeat mismatch kind (contains 'kind:     value')
+PASS: T-REPLAY-007 (value mismatch on stable field) report sha256 stable (7821948a748cb3813daeabfa17b6ba5fa9708b09bc240ad2ebfcfaf665f5f106)
+PASS: T-REPLAY-007 (value mismatch on stable field) audit report includes field=tool kind=value
+MISMATCH_FIELDS=tool
+PASS: T-REPLAY-008 (type mismatch on stable field) exit 1 (exit=1)
+PASS: T-REPLAY-008 (type mismatch on stable field) mismatch field (contains 'field:    cap_registry_hash')
+PASS: T-REPLAY-008 (type mismatch on stable field) mismatch kind (contains 'kind:     type')
+PASS: T-REPLAY-008 (type mismatch on stable field) repeat exit 1 (exit=1)
+PASS: T-REPLAY-008 (type mismatch on stable field) repeat mismatch field (contains 'field:    cap_registry_hash')
+PASS: T-REPLAY-008 (type mismatch on stable field) repeat mismatch kind (contains 'kind:     type')
+PASS: T-REPLAY-008 (type mismatch on stable field) report sha256 stable (bcba2bdaa2018163938928bfc44cfe93b72427f56720e6b8986493a556319514)
+PASS: T-REPLAY-008 (type mismatch on stable field) audit report includes field=cap_registry_hash kind=type
+MISMATCH_FIELDS=cap_registry_hash
+PASS: T-REPLAY-009 (reason_codes mismatch) exit 1 (exit=1)
+PASS: T-REPLAY-009 (reason_codes mismatch) mismatch field (contains 'field:    reason_codes')
+PASS: T-REPLAY-009 (reason_codes mismatch) mismatch kind (contains 'kind:     value')
+PASS: T-REPLAY-009 (reason_codes mismatch) repeat exit 1 (exit=1)
+PASS: T-REPLAY-009 (reason_codes mismatch) repeat mismatch field (contains 'field:    reason_codes')
+PASS: T-REPLAY-009 (reason_codes mismatch) repeat mismatch kind (contains 'kind:     value')
+PASS: T-REPLAY-009 (reason_codes mismatch) report sha256 stable (fd1936118a595243900907052304983ec38beeccfe559aed4709f6318b0a9af2)
+PASS: T-REPLAY-009 (reason_codes mismatch) audit report includes field=reason_codes kind=value
+MISMATCH_FIELDS=reason_codes
+
+Summary: pass=53 fail=0
+[exit=0]
+
+$ git diff --name-only origin/main...HEAD
+[exit=0]
+
+$ git diff --stat origin/main...HEAD
+[exit=0]

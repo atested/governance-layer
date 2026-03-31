@@ -1,0 +1,84 @@
+$ python3 - <<"PY"  # detect max TASK_ID and count across required sources
+count=39
+max=TASK_077
+[exit=0]
+
+$ awk 'BEGIN{n=0} /^=== SEED ===/{n++; if(n==3) exit} n>=1 {print}' docs/dev/task-seeds/SEED.md > /tmp/task091_seed_two.md
+[exit=0]
+
+$ python3 scripts/task_scaffold.py --seed /tmp/task091_seed_two.md --write
+Detected existing TASK_IDs: count=39 max=TASK_077
+Planned tasks: 2
+  - TASK_078: docs/dev/tasks/ready/TASK_078__test_rc_fs_executable_disallowed.md
+  - TASK_079: docs/dev/tasks/ready/TASK_079__test_rc_fs_not_a_directory.md
+
+Created 2 task files
+[exit=0]
+
+$ python3 - <<"PY"  # verify generated IDs > previous max and non-colliding
+generated_files:
+non_colliding: True
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | rg "^TASK_09[0-9]__"
+[exit=1]
+
+$ bash system/scripts/codex-batch.sh
+Codex batch generation (cap: 4)
+
+--- Preflight ---
+Switched to branch 'main'
+M	scripts/task_scaffold.py
+Your branch is up to date with 'origin/main'.
+Already up to date.
+ERROR: Working tree not clean
+Allowed: ops/CODEX_BATCH.txt (modified/untracked), and untracked .codex/ entries
+Found:
+ M scripts/task_scaffold.py
+?? docs/dev/tasks/ready/TASK_078__test_rc_fs_executable_disallowed.md
+?? docs/dev/tasks/ready/TASK_079__test_rc_fs_not_a_directory.md
+[exit=1]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | grep "^TASK_078__"
+TASK_078__test_rc_fs_executable_disallowed.md
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | grep "^TASK_079__"
+TASK_079__test_rc_fs_not_a_directory.md
+[exit=0]
+
+$ python3 - <<"PY"  # generated IDs > detected max and non-colliding
+max_before=TASK_077
+TASK_078 exists=True path=docs/dev/tasks/ready/TASK_078__test_rc_fs_executable_disallowed.md gt_max=True
+TASK_079 exists=True path=docs/dev/tasks/ready/TASK_079__test_rc_fs_not_a_directory.md gt_max=True
+non_colliding= True
+[exit=0]
+
+$ git rev-parse --short origin/main
+aa71d68
+[exit=0]
+
+$ python3 - <<"PY"  # detected max TASK_ID on current demo run basis
+detected_count=41
+detected_max=TASK_081
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | rg "^TASK_08[0-1]__"
+TASK_080__test_rc_fs_executable_disallowed.md
+TASK_081__test_rc_fs_not_a_directory.md
+[exit=0]
+
+$ for id in 080 081; do git cat-file -e "origin/main:docs/dev/tasks/ready/TASK_${id}__test_rc_fs_"*".md" 2>/dev/null && echo "TASK_${id} on origin/main: YES" || echo "TASK_${id} on origin/main: NO"; done
+TASK_080 on origin/main: NO
+TASK_081 on origin/main: NO
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | rg "^TASK_07[8-9]__" || true
+[exit=0]

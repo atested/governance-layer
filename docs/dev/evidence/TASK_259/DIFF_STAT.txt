@@ -1,0 +1,7 @@
+ docs/dev/WORK_QUEUE.md                             |  3 ++
+ scripts/attest/export_tool_catalog_bundle.py       | 35 +++++++++++++-
+ .../tests/helpers/tool_catalog_contract_common.sh  | 17 ++++++-
+ system/tests/test_export_tool_catalog_bundle.sh    | 53 ++++++++++++++++++++--
+ system/tests/test_verify_tool_catalog_bundle.sh    |  9 +++-
+ .../test_verify_tool_catalog_bundle_edge_cases.sh  | 30 ++++++++++--
+ 6 files changed, 136 insertions(+), 11 deletions(-)

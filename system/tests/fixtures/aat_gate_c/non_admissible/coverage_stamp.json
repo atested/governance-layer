@@ -1,0 +1,1 @@
+{"coverage_stamp_version":"coverage_stamp_v1","generated_by":"aat_gate_b_fixture","generated_from":["aat"],"overall_status":"complete","surfaces":[{"capability_surface":"shell","coverage":{"enforcement":true,"observation":true,"provenance":true},"evidence_sources":["fixture"],"surface_id":"shell"}]}

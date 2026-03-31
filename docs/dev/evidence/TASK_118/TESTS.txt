@@ -1,0 +1,108 @@
+TASK_118 evidence
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+
+$ bash tests/test_queue_drift_scan.sh  # run1
+--- T-QUEUE-DRIFT-001: default scan deterministic output (rc=0) ---
+DEFAULT_SHA256_RUN1=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+DEFAULT_SHA256_RUN2=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+PASS: default scan output deterministic
+
+--- T-QUEUE-DRIFT-002: --exit-on-drift returns rc=2 when drift present ---
+RC_EXIT_ON_DRIFT_RUN1=2
+RC_EXIT_ON_DRIFT_RUN2=2
+EXIT_ON_DRIFT_SHA256_RUN1=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+EXIT_ON_DRIFT_SHA256_RUN2=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+PASS: --exit-on-drift output deterministic when drift present
+PASS: queue drift scan regression checks complete
+[exit=0]
+
+$ bash tests/test_queue_drift_scan.sh  # run2
+--- T-QUEUE-DRIFT-001: default scan deterministic output (rc=0) ---
+DEFAULT_SHA256_RUN1=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+DEFAULT_SHA256_RUN2=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+PASS: default scan output deterministic
+
+--- T-QUEUE-DRIFT-002: --exit-on-drift returns rc=2 when drift present ---
+RC_EXIT_ON_DRIFT_RUN1=2
+RC_EXIT_ON_DRIFT_RUN2=2
+EXIT_ON_DRIFT_SHA256_RUN1=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+EXIT_ON_DRIFT_SHA256_RUN2=5751012b4496cd00d8dd4881cd2da273be5572d56817e48fcdcb2b22f812e82b
+PASS: --exit-on-drift output deterministic when drift present
+PASS: queue drift scan regression checks complete
+[exit=0]
+
+RUN1_STDOUT_SHA256=6787d976ec17135b03ca575a210bafde4a4b384a95657d85ef4227ebd5639395
+RUN2_STDOUT_SHA256=6787d976ec17135b03ca575a210bafde4a4b384a95657d85ef4227ebd5639395
+PASS: task stdout deterministic across two runs
+
+Implementation note:
+- Added missing task test script and validated direct bash execution.
+- Script includes deterministic ordering/markers and digest checks.
+- No hot files were modified.
+
+--- SALVAGED EVIDENCE (from earlier run) ---
+
+$ bash system/scripts/project-status.sh
+PROJECT STATUS
+Repo:
+  local head:  2de929e
+  origin/main: 2de929e
+  clean: no
+
+
+Work:
+  ready tasks: 35
+  seeds: TASK_SEEDS.md=yes, seed files=2
+
+Codex:
+  batch cap: 4
+  codex tasks in current batch: TASK_075 TASK_076 TASK_077 TASK_078
+  remote codex task branches: 63
+  top 10 most recently updated task branches:
+  - origin/codex/TASK_116|7ab3bc1|2026-02-21 17:49:18 -0500
+  - origin/codex/TASK_144|d02f92c|2026-02-21 17:40:21 -0500
+  - origin/codex/TASK_143|f55403b|2026-02-21 17:37:21 -0500
+  - origin/codex/TASK_142|2937a95|2026-02-21 17:36:51 -0500
+  - origin/codex/TASK_141|bc8bbac|2026-02-21 17:35:50 -0500
+  - origin/codex/TASK_114|b191e76|2026-02-21 17:05:21 -0500
+  - origin/codex/TASK_122|3559209|2026-02-21 17:01:19 -0500
+  - origin/codex/TASK_121|0c0e743|2026-02-21 17:00:48 -0500
+  - origin/codex/TASK_113|52f7928|2026-02-21 16:48:55 -0500
+  - origin/codex/TASK_112|e1a0e68|2026-02-21 16:44:20 -0500
+
+Merge Queue:
+  artifacts (*.md): 0
+  - <none>
+
+Hot Script Drift (vs origin/main, top 50 recent origin/codex/* branches):
+
+  - system/scripts/qt-runner.sh: 11 branch(es) in top-50 codex refs; examples: origin/codex/TASK_116, origin/codex/TASK_144, origin/codex/queue-hardening-20260221173330, origin/codex/queue-phase2-20260221165505, origin/codex/queue-phase2-20260221163552
+  - system/scripts/codex-unattended.sh: 7 branch(es) in top-50 codex refs; examples: origin/codex/queue-hardening-20260221173330, origin/codex/queue-phase2-20260221165505, origin/codex/queue-phase2-20260221163552, origin/codex/TASK_108, origin/codex/queue-attest-phase2-20260221150752
+  - system/scripts/codex-batch.sh: 6 branch(es) in top-50 codex refs; examples: origin/codex/queue-hardening-20260221173330, origin/codex/queue-phase2-20260221165505, origin/codex/TASK_112, origin/codex/queue-phase2-20260221163552, origin/codex/queue-attest-phase2-20260221150752
+  - scripts/task_scaffold.py: 12 branch(es) in top-50 codex refs; examples: origin/codex/queue-hardening-20260221173330, origin/codex/queue-phase2-20260221165505, origin/codex/TASK_113, origin/codex/TASK_112, origin/codex/queue-phase2-20260221163552
+
+Qt:
+  qt runs (TESTS.txt count): 1
+  qt evidence dir: docs/dev/evidence/QT
+
+Cecil:
+  recent merges (last 10):
+    7788114 Merge codex/TASK_095
+    d514945 Merge codex/TASK_094
+    0cecf1e Merge codex/TASK_093
+    9429640 Merge codex/TASK_092
+    3b0cfda Merge codex/promote-20260221065606
+    41591c5 Merge codex/TASK_078
+    586af4e Merge codex/TASK_091
+    f62d0a3 Merge codex/TASK_090
+    fb85828 Merge codex/TASK_071
+    96be406 Merge codex/TASK_077
+
+Forecast (low confidence):
+  merges last 7d: 46  =>  6.57 merges/day
+[exit=0]
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]

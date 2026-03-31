@@ -1,0 +1,85 @@
+OPS_BASELINE_GATE
+BASE_SHA=8e802281804e7398c7e00d911df4f1e457840e5f
+BRANCH=codex/OPS_MERGE_HELPERS_NONINTERACTIVE__work
+HEAD_SHA=c1d04aeec12f4c0f24d631fb4f4388132cb7ea15
+
+## DIFF_NAME_ONLY
+system/scripts/baseline-gate.sh
+system/scripts/cecil-runloop.sh
+system/scripts/codex-unattended.sh
+tests/test_baseline_gate.sh
+tests/test_merge_helpers_noninteractive.sh
+
+## DIFF_STAT
+ system/scripts/baseline-gate.sh            | 138 +++++++++++++++++++++++++++++
+ system/scripts/cecil-runloop.sh            |  41 +++++++--
+ system/scripts/codex-unattended.sh         |   8 ++
+ tests/test_baseline_gate.sh                |  58 ++++++++++++
+ tests/test_merge_helpers_noninteractive.sh |  40 +++++++++
+ 5 files changed, 277 insertions(+), 8 deletions(-)
+
+## TEST_BASELINE_GATE
+COMMAND_RUN_1: bash tests/test_baseline_gate.sh
+RUN1_RC=0
+RUN1_STDOUT_BEGIN
+--- T-BASELINE-GATE-001: baseline gate exists and is executable ---
+PASS: baseline-gate present
+--- T-BASELINE-GATE-002: clean baseline passes ---
+PASS: clean baseline
+--- T-BASELINE-GATE-003: untracked junk (non-out) is auto-cleaned ---
+PASS: untracked junk cleaned
+--- T-BASELINE-GATE-004: tracked modification triggers STOP (exit 3) ---
+PASS: tracked modification STOP (exit=3)
+Summary: baseline gate tests complete
+RUN1_STDOUT_END
+COMMAND_RUN_2: bash tests/test_baseline_gate.sh
+RUN2_RC=0
+RUN2_STDOUT_BEGIN
+--- T-BASELINE-GATE-001: baseline gate exists and is executable ---
+PASS: baseline-gate present
+--- T-BASELINE-GATE-002: clean baseline passes ---
+PASS: clean baseline
+--- T-BASELINE-GATE-003: untracked junk (non-out) is auto-cleaned ---
+PASS: untracked junk cleaned
+--- T-BASELINE-GATE-004: tracked modification triggers STOP (exit 3) ---
+PASS: tracked modification STOP (exit=3)
+Summary: baseline gate tests complete
+RUN2_STDOUT_END
+RUN1_SHA256=b9e1307b99c09d3afff445a161809b1b02747301416c9daaaf00202f86eefd79
+RUN2_SHA256=b9e1307b99c09d3afff445a161809b1b02747301416c9daaaf00202f86eefd79
+DETERMINISTIC=yes
+
+## TEST_MERGE_HELPERS_NONINTERACTIVE
+COMMAND_RUN_1: bash tests/test_merge_helpers_noninteractive.sh
+RUN1_RC=0
+RUN1_STDOUT_BEGIN
+SCAN_FILES_BEGIN
+system/scripts/cecil-runloop.sh
+system/scripts/merge-queue.sh
+system/scripts/queue-claim.sh
+system/scripts/queue-list-next.sh
+system/scripts/task-watermark.sh
+SCAN_FILES_END
+PASS: no interactive prompt patterns in merge helper scripts
+RUN1_STDOUT_END
+COMMAND_RUN_2: bash tests/test_merge_helpers_noninteractive.sh
+RUN2_RC=0
+RUN2_STDOUT_BEGIN
+SCAN_FILES_BEGIN
+system/scripts/cecil-runloop.sh
+system/scripts/merge-queue.sh
+system/scripts/queue-claim.sh
+system/scripts/queue-list-next.sh
+system/scripts/task-watermark.sh
+SCAN_FILES_END
+PASS: no interactive prompt patterns in merge helper scripts
+RUN2_STDOUT_END
+RUN1_SHA256=a9d1f20b1276217b1d95c1b43bab2f3f143c509a28d3a7a455178321c1ec2e60
+RUN2_SHA256=a9d1f20b1276217b1d95c1b43bab2f3f143c509a28d3a7a455178321c1ec2e60
+DETERMINISTIC=yes
+
+## RELEASE_GATE
+COMMAND: GOV_PROFILE=dev bash system/scripts/release-gate.sh
+RELEASE_GATE_PASS_LINES=12
+RELEASE_GATE_FAIL_LINES=
+RELEASE_GATE_EXIT=0

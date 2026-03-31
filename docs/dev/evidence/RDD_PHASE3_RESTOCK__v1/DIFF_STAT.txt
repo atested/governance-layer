@@ -1,0 +1,8 @@
+ docs/dev/WORK_QUEUE.md                             |  9 +++
+ .../RDD_PHASE3_RESTOCK__v1/DIFF_NAME_ONLY.txt      |  7 +++
+ .../evidence/RDD_PHASE3_RESTOCK__v1/DIFF_STAT.txt  |  8 +++
+ .../RDD_PHASE3_RESTOCK__v1/HOTFILE_SCAN.txt        | 16 ++++++
+ .../evidence/RDD_PHASE3_RESTOCK__v1/VALIDATION.txt | 43 +++++++++++++++
+ ...K_323__rdd_chain_verifier_multi_record_rules.md | 64 ++++++++++++++++++++++
+ .../TASK_324__rdd_chain_verifier_test_coverage.md  | 62 +++++++++++++++++++++
+ 7 files changed, 209 insertions(+)

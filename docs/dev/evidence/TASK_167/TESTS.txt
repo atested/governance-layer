@@ -1,0 +1,26 @@
+BASE_SHA=a01abae620e3dee328d813eac9895a74aba4376f
+$ rg -n 'External Validator Usage|validate-proof-bundle\.sh out/proof-bundles/<run-id>/|--summary-json|validate_proof_bundle_summary_v1|validate_proof_bundle_summary\.json|Deterministic exit taxonomy' docs/EXTERNAL_CONTRACTS.md
+[exit=0]
+$ rg -n 'External Validator Usage|validate-proof-bundle\.sh out/proof-bundles/<run-id>/|--summary-json|validate_proof_bundle_summary_v1|validate_proof_bundle_summary\.json|Deterministic exit taxonomy' docs/EXTERNAL_CONTRACTS.md
+[exit=0]
+RUN1_STDOUT_SHA256=40002106cef232e1678f63a95f30da87f38a2349ca548291d456e97d2ab33b23
+RUN2_STDOUT_SHA256=40002106cef232e1678f63a95f30da87f38a2349ca548291d456e97d2ab33b23
+DETERMINISTIC=yes
+
+RUN1_OUTPUT:
+55:### External Validator Usage (`validate-proof-bundle.sh`)
+58:- `bash system/scripts/validate-proof-bundle.sh out/proof-bundles/<run-id>/`
+59:- `bash system/scripts/validate-proof-bundle.sh out/proof-bundles/<run-id>/ --summary-json /tmp/validate_summary.json`
+60:- Optional artifact co-location pattern: `--summary-json out/proof-bundles/<run-id>/validate_proof_bundle_summary.json`
+62:Deterministic exit taxonomy:
+68:- `--summary-json` writes deterministic compact JSON (`validate_proof_bundle_summary_v1`) with additive-only fields within v1.
+69:- Recommended canonical filename when co-located with proof-bundle artifacts: `validate_proof_bundle_summary.json`.
+
+RUN2_OUTPUT:
+55:### External Validator Usage (`validate-proof-bundle.sh`)
+58:- `bash system/scripts/validate-proof-bundle.sh out/proof-bundles/<run-id>/`
+59:- `bash system/scripts/validate-proof-bundle.sh out/proof-bundles/<run-id>/ --summary-json /tmp/validate_summary.json`
+60:- Optional artifact co-location pattern: `--summary-json out/proof-bundles/<run-id>/validate_proof_bundle_summary.json`
+62:Deterministic exit taxonomy:
+68:- `--summary-json` writes deterministic compact JSON (`validate_proof_bundle_summary_v1`) with additive-only fields within v1.
+69:- Recommended canonical filename when co-located with proof-bundle artifacts: `validate_proof_bundle_summary.json`.

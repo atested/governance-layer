@@ -1,0 +1,17 @@
+ .../TASK_329/DIFF_NAME_ONLY.txt                    |   0
+ .../TASK_329/DIFF_STAT.txt                         |   0
+ .../TASK_329/HOTFILE_SCAN.txt                      |   6 +
+ .../TASK_329/TESTS.txt                             |   8 +
+ .../TASK_330/DIFF_NAME_ONLY.txt                    |   0
+ .../TASK_330/DIFF_STAT.txt                         |   0
+ .../TASK_330/HOTFILE_SCAN.txt                      |   6 +
+ .../TASK_330/TESTS.txt                             |  10 +
+ docs/dev/evidence/TASK_329/TESTS.txt               |   8 +
+ docs/dev/evidence/TASK_330/TESTS.txt               |  10 +
+ scripts/attest/rdd_triage_criteria.v1.json         |  36 ++++
+ scripts/triage-eval.py                             |  97 +++++----
+ .../rdd_phase6_triage_criteria_malformed.json      |   4 +
+ .../rdd_phase6_triage_criteria_missing_fields.json |  15 ++
+ .../fixtures/rdd_phase6_triage_criteria_valid.json |  36 ++++
+ tests/test_rdd_triage_criteria_file.sh             | 224 +++++++++++++++++++++
+ 16 files changed, 419 insertions(+), 41 deletions(-)

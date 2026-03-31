@@ -1,0 +1,185 @@
+OPS_BUNDLE_EXTERNAL_READINESS_TESTS
+
+## Repo SHA
+$ git rev-parse --short HEAD
+33a25b5
+
+## TASK_188
+$ bash tests/test_external_locale_invariance.sh
+--- T-EXTERNAL-LOCALE-001: locale invariance for validator + optional scanner ---
+--- C: validator locale invariance checks ---
+C_validator_run1_RC=0
+C_validator_run1_SHA256=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+C_validator_run2_RC=0
+C_validator_run2_SHA256=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+C_VALIDATOR_SHA256_RUN1=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+C_VALIDATOR_SHA256_RUN2=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+PASS: C validator output deterministic
+INFO: tests/test_proof_bundle_dir_contract_scan_contract.sh missing (skip)
+DIRSCAN_SUBCHECK_RC=3
+SKIP: dirscan contract locale check deferred
+--- UTF8: validator locale invariance checks ---
+UTF8_validator_run1_RC=0
+UTF8_validator_run1_SHA256=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+UTF8_validator_run2_RC=0
+UTF8_validator_run2_SHA256=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+UTF8_VALIDATOR_SHA256_RUN1=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+UTF8_VALIDATOR_SHA256_RUN2=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+PASS: UTF8 validator output deterministic
+INFO: tests/test_proof_bundle_dir_contract_scan_contract.sh missing (skip)
+DIRSCAN_SUBCHECK_RC=3
+SKIP: dirscan contract locale check deferred
+CROSS_LOCALE_VALIDATOR_SHA256_C=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+CROSS_LOCALE_VALIDATOR_SHA256_UTF8=256dd5091f05ba0964321d37e6efaf4b841b955d9755f4895dc5602ebbcae825
+PASS: validator output locale-invariant after normalization
+CROSS_LOCALE_DIRSCAN_TOKEN_C=SKIP
+CROSS_LOCALE_DIRSCAN_TOKEN_UTF8=SKIP
+PASS: dirscan locale subcheck deterministically skipped across locales
+Summary: external locale invariance regression checks complete
+[exit=0]
+$ bash tests/test_external_locale_invariance.sh  # run2
+--- T-EXTERNAL-LOCALE-001: locale invariance for validator + optional scanner ---
+--- C: validator locale invariance checks ---
+C_validator_run1_RC=0
+C_validator_run1_SHA256=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+C_validator_run2_RC=0
+C_validator_run2_SHA256=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+C_VALIDATOR_SHA256_RUN1=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+C_VALIDATOR_SHA256_RUN2=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+PASS: C validator output deterministic
+INFO: tests/test_proof_bundle_dir_contract_scan_contract.sh missing (skip)
+DIRSCAN_SUBCHECK_RC=3
+SKIP: dirscan contract locale check deferred
+--- UTF8: validator locale invariance checks ---
+UTF8_validator_run1_RC=0
+UTF8_validator_run1_SHA256=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+UTF8_validator_run2_RC=0
+UTF8_validator_run2_SHA256=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+UTF8_VALIDATOR_SHA256_RUN1=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+UTF8_VALIDATOR_SHA256_RUN2=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+PASS: UTF8 validator output deterministic
+INFO: tests/test_proof_bundle_dir_contract_scan_contract.sh missing (skip)
+DIRSCAN_SUBCHECK_RC=3
+SKIP: dirscan contract locale check deferred
+CROSS_LOCALE_VALIDATOR_SHA256_C=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+CROSS_LOCALE_VALIDATOR_SHA256_UTF8=590a10d3c927682a0467805eb80c7007f11ae6cee15389b75c5e52299e04ed9d
+PASS: validator output locale-invariant after normalization
+CROSS_LOCALE_DIRSCAN_TOKEN_C=SKIP
+CROSS_LOCALE_DIRSCAN_TOKEN_UTF8=SKIP
+PASS: dirscan locale subcheck deterministically skipped across locales
+Summary: external locale invariance regression checks complete
+[exit=0]
+RC_RUN1=0
+RC_RUN2=0
+RUN1_SHA256=454501f12cf99475fc6c562e01a83fe9e2bfbd47cd9f0b043512ff1d552bce04
+RUN2_SHA256=f257f27f463f2b19b8e23997d9b33b2dba6e5e494e10c5327679e1d62bbc9daf
+FAIL: output differs across two runs
+
+## TASK_189
+$ bash tests/test_external_bash_portability_scan.sh
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=95
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=95
+RC_RUN1=0
+RC_RUN2=0
+BASH_PORTABILITY_SHA256_RUN1=d70768fc87c871237ad2dfad71fe04c7ab8b60815a6863ac9efdbc39cd83848c
+BASH_PORTABILITY_SHA256_RUN2=d70768fc87c871237ad2dfad71fe04c7ab8b60815a6863ac9efdbc39cd83848c
+PASS: bash portability scan output deterministic across two runs
+[exit=0]
+$ bash tests/test_external_bash_portability_scan.sh  # run2
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=95
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=95
+RC_RUN1=0
+RC_RUN2=0
+BASH_PORTABILITY_SHA256_RUN1=d70768fc87c871237ad2dfad71fe04c7ab8b60815a6863ac9efdbc39cd83848c
+BASH_PORTABILITY_SHA256_RUN2=d70768fc87c871237ad2dfad71fe04c7ab8b60815a6863ac9efdbc39cd83848c
+PASS: bash portability scan output deterministic across two runs
+[exit=0]
+RC_RUN1=0
+RC_RUN2=0
+RUN1_SHA256=648c93ea472916a74220a543f9b58fc3e9f696ff69c345bf1a2d449db87b702d
+RUN2_SHA256=648c93ea472916a74220a543f9b58fc3e9f696ff69c345bf1a2d449db87b702d
+PASS: output deterministic across two runs
+
+## TASK_190
+$ bash tests/test_external_packaging_meta_runner_ordering_regression.sh
+--- T-EXTERNAL-PACKAGING-META-ORDER-001: meta-runner ordering/rc map deterministic ---
+RC_RUN1=0
+RC_RUN2=0
+PASS: meta-runner ordering and rc markers stable
+META_RUNNER_ORDER_SHA256_RUN1=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+META_RUNNER_ORDER_SHA256_RUN2=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+PASS: meta-runner normalized output deterministic across two runs
+Summary: external packaging meta-runner ordering regression checks complete
+[exit=0]
+$ bash tests/test_external_packaging_meta_runner_ordering_regression.sh  # run2
+--- T-EXTERNAL-PACKAGING-META-ORDER-001: meta-runner ordering/rc map deterministic ---
+RC_RUN1=0
+RC_RUN2=0
+PASS: meta-runner ordering and rc markers stable
+META_RUNNER_ORDER_SHA256_RUN1=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+META_RUNNER_ORDER_SHA256_RUN2=31ef1336aa6a5f2ba01cc11e4cae6c5cd9892889184d350b0b1ad0a71a9cbb07
+PASS: meta-runner normalized output deterministic across two runs
+Summary: external packaging meta-runner ordering regression checks complete
+[exit=0]
+RC_RUN1=0
+RC_RUN2=0
+RUN1_SHA256=763d525ab02740969126fc8ea5efee5ec4d51c3d094b94bd30a56d10fc12f403
+RUN2_SHA256=763d525ab02740969126fc8ea5efee5ec4d51c3d094b94bd30a56d10fc12f403
+PASS: output deterministic across two runs
+
+## TASK_191
+$ bash tests/test_proof_bundle_required_files_parity_scan.sh
+--- T-PROOF-BUNDLE-PARITY-001: required-files parity (docs vs enforcement test) ---
+DOC_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+TEST_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+PASS: docs required-files set matches enforcement test set
+--- T-PROOF-BUNDLE-PARITY-001: required-files parity (docs vs enforcement test) ---
+DOC_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+TEST_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+PASS: docs required-files set matches enforcement test set
+RC_RUN1=0
+RC_RUN2=0
+REQUIRED_PARITY_SHA256_RUN1=3e6a214d562dfba8709f078b91408b1cd4a6a97cbc37740c52f952876209723d
+REQUIRED_PARITY_SHA256_RUN2=3e6a214d562dfba8709f078b91408b1cd4a6a97cbc37740c52f952876209723d
+PASS: required-files parity scan output deterministic across two runs
+[exit=0]
+$ bash tests/test_proof_bundle_required_files_parity_scan.sh  # run2
+--- T-PROOF-BUNDLE-PARITY-001: required-files parity (docs vs enforcement test) ---
+DOC_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+TEST_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+PASS: docs required-files set matches enforcement test set
+--- T-PROOF-BUNDLE-PARITY-001: required-files parity (docs vs enforcement test) ---
+DOC_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+TEST_REQUIRED=proof_packet.sha256,proof_packet.tar,proof_packet_verify_summary.json,release_gate_log.txt,versions.txt
+PASS: docs required-files set matches enforcement test set
+RC_RUN1=0
+RC_RUN2=0
+REQUIRED_PARITY_SHA256_RUN1=3e6a214d562dfba8709f078b91408b1cd4a6a97cbc37740c52f952876209723d
+REQUIRED_PARITY_SHA256_RUN2=3e6a214d562dfba8709f078b91408b1cd4a6a97cbc37740c52f952876209723d
+PASS: required-files parity scan output deterministic across two runs
+[exit=0]
+RC_RUN1=0
+RC_RUN2=0
+RUN1_SHA256=aa1196ce350d46f0e1c5d61734457584facf4183aa91efb35557adb3385535e1
+RUN2_SHA256=aa1196ce350d46f0e1c5d61734457584facf4183aa91efb35557adb3385535e1
+PASS: output deterministic across two runs
+
+BUNDLE_TRANSCRIPT_SHA256_RUN1=a3ff33f956d4bd3608437a9ff8a919e5054e0220c457983bb622dcba10bbfe12
+BUNDLE_TRANSCRIPT_SHA256_RUN2=a3ff33f956d4bd3608437a9ff8a919e5054e0220c457983bb622dcba10bbfe12
+PASS: bundle transcript deterministic across two reads
+
+SUPERSEDED_BRANCHES:
+- origin/codex/TASK_188__9bfb002
+- origin/codex/TASK_189__c321775
+- origin/codex/TASK_190__bd136eb
+- origin/codex/TASK_191__0432bfa
+- origin/codex/TASK_192__ca5c646
+- origin/codex/EXTERNAL_READINESS_REGRESSIONS_BUNDLE_188_192__CLEAN__86a51dd

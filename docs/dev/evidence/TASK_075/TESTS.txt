@@ -1,0 +1,31 @@
+$ ls -1 docs/dev/tasks/ready | grep '^TASK_071__'
+TASK_071__test_task_scaffold_with_executor_field.md
+[exit=0]
+
+$ ls -1 docs/dev/tasks/ready | grep '^TASK_075__'
+TASK_075__test_rc_fs_executable_disallowed.md
+[exit=0]
+
+$ grep -n 'TASK_ID:' docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+3:TASK_ID: TASK_071
+[exit=0]
+
+$ grep -n 'TASK_ID:' docs/dev/tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md
+3:TASK_ID: TASK_075
+[exit=0]
+
+$ git diff --stat origin/main...HEAD
+[exit=0]
+
+$ git status --porcelain
+ M docs/dev/WORK_QUEUE.md
+RM docs/dev/tasks/ready/TASK_071__test_rc_fs_executable_disallowed.md -> docs/dev/tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md
+?? docs/dev/evidence/TASK_075/
+[exit=0]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]

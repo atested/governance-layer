@@ -1,0 +1,13 @@
+BASE_SHA_RESOLVED=b19a7871bb0ed36aa5b5b3637c4e0280dd191587
+BASE7=b19a787
+COMMAND_RUN_1=bash system/tests/test_foundation_v0_bundle_probe.sh
+COMMAND_RUN_2=bash system/tests/test_foundation_v0_bundle_probe.sh
+RUN1_SHA256=0732001f08783c6fb1a91adaa748808f1546942438eb4325c65cfcd9d3f8b734
+RUN2_SHA256=0732001f08783c6fb1a91adaa748808f1546942438eb4325c65cfcd9d3f8b734
+DETERMINISTIC=yes
+--- RUN1 ---
+$ bash system/tests/test_foundation_v0_bundle_probe.sh
+PASS test_foundation_v0_bundle_probe
+--- RUN2 ---
+$ bash system/tests/test_foundation_v0_bundle_probe.sh
+PASS test_foundation_v0_bundle_probe

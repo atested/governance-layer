@@ -1,0 +1,13 @@
+BASE_SHA_RESOLVED=b19a7871bb0ed36aa5b5b3637c4e0280dd191587
+BASE7=b19a787
+COMMAND_RUN_1=bash system/tests/test_foundation_v0_admissibility_normalize.sh
+COMMAND_RUN_2=bash system/tests/test_foundation_v0_admissibility_normalize.sh
+RUN1_SHA256=990221bfb3e0fcd39c8ea04a0e15f3e15b2c379bfa2cd633873a77c8cf97a703
+RUN2_SHA256=990221bfb3e0fcd39c8ea04a0e15f3e15b2c379bfa2cd633873a77c8cf97a703
+DETERMINISTIC=yes
+--- RUN1 ---
+$ bash system/tests/test_foundation_v0_admissibility_normalize.sh
+PASS test_foundation_v0_admissibility_normalize
+--- RUN2 ---
+$ bash system/tests/test_foundation_v0_admissibility_normalize.sh
+PASS test_foundation_v0_admissibility_normalize

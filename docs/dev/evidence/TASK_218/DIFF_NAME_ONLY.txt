@@ -1,0 +1,8 @@
+scripts/attest/canonicalize_manifest.py
+scripts/attest/diff_manifest.py
+scripts/attest/diff_proof_bundle.py
+scripts/attest/summarize_proof_bundle.py
+system/tests/test_canonicalize_manifest.sh
+system/tests/test_diff_manifest.sh
+system/tests/test_diff_proof_bundle.sh
+system/tests/test_summarize_proof_bundle.sh

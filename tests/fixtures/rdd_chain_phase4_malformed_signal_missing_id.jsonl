@@ -1,0 +1,2 @@
+{"record_type":"pass_decision","process_id":"phase4-proc-004","policy_decision":"UNDECIDED","record_hash":"sha256:pass-phase4-004"}
+{"record_type":"triage_decision","process_id":"phase4-proc-004","originating_pass_hash":"sha256:pass-phase4-004","record_hash":"sha256:triage-phase4-004","structural_signals":[{"deficiency_class":"RULE_GAP","surface":"filesystem","description":"Signal is missing id and must fail closed."}]}

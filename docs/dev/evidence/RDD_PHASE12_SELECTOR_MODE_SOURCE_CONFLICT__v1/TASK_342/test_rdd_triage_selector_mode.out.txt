@@ -1,0 +1,30 @@
+PASS: T-RDD-TRIAGE-MODE-001 explicit mode invocation succeeds
+PASS: T-RDD-TRIAGE-MODE-002 triage record emitted in explicit mode
+PASS: T-RDD-TRIAGE-MODE-003 explicit mode wiring marker present
+PASS: T-RDD-TRIAGE-MODE-004 verify-record passes on explicit mode output
+PASS: T-RDD-TRIAGE-MODE-005 compat mode invocation succeeds
+PASS: T-RDD-TRIAGE-MODE-006 compat mode wiring marker present
+PASS: T-RDD-TRIAGE-MODE-006A absent selector mode uses default compatibility path
+PASS: T-RDD-TRIAGE-MODE-006B default selector mode marker present when request omits selector mode
+PASS: T-RDD-TRIAGE-MODE-006C request-bound explicit mode resists ambient override
+PASS: T-RDD-TRIAGE-MODE-006D ambient override suppression marker present
+PASS: T-RDD-TRIAGE-MODE-007 explicit missing selector_map fails closed
+PASS: T-RDD-TRIAGE-MODE-008 explicit missing selector_map marker present
+PASS: T-RDD-TRIAGE-MODE-009 explicit invalid selector_map type fails closed
+PASS: T-RDD-TRIAGE-MODE-010 explicit invalid selector_map marker present
+PASS: T-RDD-TRIAGE-MODE-010A invalid request-bound selector mode fails closed
+PASS: T-RDD-TRIAGE-MODE-010B invalid request mode marker present
+PASS: T-RDD-TRIAGE-MODE-010C legacy rdd selector_mode alias fails closed
+PASS: T-RDD-TRIAGE-MODE-010D legacy rdd alias marker present
+PASS: T-RDD-TRIAGE-MODE-010E legacy top-level selector_mode alias fails closed
+PASS: T-RDD-TRIAGE-MODE-010F legacy top-level alias marker present
+PASS: T-RDD-TRIAGE-MODE-010G canonical+rdd alias source conflict fails closed
+PASS: T-RDD-TRIAGE-MODE-010H canonical+rdd alias source conflict marker present
+PASS: T-RDD-TRIAGE-MODE-010I canonical+top alias source conflict fails closed
+PASS: T-RDD-TRIAGE-MODE-010J canonical+top alias source conflict marker present
+PASS: T-RDD-TRIAGE-MODE-010K canonical+both aliases source conflict fails closed
+PASS: T-RDD-TRIAGE-MODE-010L canonical+both aliases source conflict marker present
+SELECTOR_MODE_MATRIX_HASH_1=a6dc9d12aefdb54569d9df55aa867eee350274a2d2755cc54f70d02b51391c4f
+SELECTOR_MODE_MATRIX_HASH_2=a6dc9d12aefdb54569d9df55aa867eee350274a2d2755cc54f70d02b51391c4f
+PASS: T-RDD-TRIAGE-MODE-012 selector-mode matrix deterministic hash match
+PASS: 27  FAIL: 0

@@ -1,0 +1,19 @@
+PASS: T-RDD-TRIAGE-SEL-001 supported selector succeeds
+PASS: T-RDD-TRIAGE-SEL-002 governing_condition preserved
+PASS: T-RDD-TRIAGE-SEL-003 verify-record passes on selected criteria output
+PASS: T-RDD-TRIAGE-SEL-004 unsupported selector fails closed
+PASS: T-RDD-TRIAGE-SEL-005 unsupported selector reason marker present
+PASS: T-RDD-TRIAGE-SEL-006 missing selector target fails closed
+PASS: T-RDD-TRIAGE-SEL-007 missing selector target reason marker present
+PASS: T-RDD-TRIAGE-SEL-008 malformed selector input fails closed
+PASS: T-RDD-TRIAGE-SEL-009 malformed selector input reason marker present
+PASS: T-RDD-TRIAGE-SEL-010 explicit mode requires selector_map (fail closed)
+PASS: T-RDD-TRIAGE-SEL-011 selector_map required marker present
+PASS: T-RDD-TRIAGE-SEL-012 selector_map wrong-type fails closed
+PASS: T-RDD-TRIAGE-SEL-013 selector_map wrong-type marker present
+PASS: T-RDD-TRIAGE-SEL-014 selector_map non-string entry fails closed
+PASS: T-RDD-TRIAGE-SEL-015 selector_map non-string marker present
+SELECTOR_MATRIX_HASH_1=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+SELECTOR_MATRIX_HASH_2=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+PASS: T-RDD-TRIAGE-SEL-017 selector matrix deterministic hash match
+PASS: 16  FAIL: 0

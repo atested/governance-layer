@@ -1,0 +1,2 @@
+Forbidden-file scan against branch diff (origin/main...HEAD):
+PASS

@@ -1,0 +1,39 @@
+{
+  "criteria_version": "rdd_triage_criteria.v1",
+  "selector_map": {
+    "FS_COPY|filesystem|dest_exists_no_overwrite": "fs_copy_dest_exists_no_overwrite"
+  },
+  "fs_copy_dest_exists_no_overwrite": {
+    "findings": [
+      {
+        "id": "F1",
+        "type": "rule_gap",
+        "basis": "deterministic",
+        "structural_deficiency": true
+      },
+      {
+        "id": "F2",
+        "type": "insufficient_information",
+        "basis": "judgmental",
+        "basis_detail": "Additional operational context is needed to select a safe disposition for an existing destination when overwrite is not requested.",
+        "structural_deficiency": false
+      }
+    ],
+    "governing_condition": "F1",
+    "governing_rationale": "A deterministic rule-gap is present for destination-exists-no-overwrite; this structural deficiency governs immediate disposition.",
+    "disposition": {
+      "type": "DEFER_STRUCTURAL_DEFICIENCY",
+      "signal_ref": "S1",
+      "structural_change_needed": "Define explicit FS_COPY destination-exists-no-overwrite disposition rule."
+    },
+    "structural_signals": [
+      {
+        "id": "S1",
+        "finding_ref": "F1",
+        "deficiency_class": "RULE_GAP",
+        "surface": "filesystem",
+        "description": "No explicit deterministic disposition exists for FS_COPY when destination exists and overwrite is not requested."
+      }
+    ]
+  }
+}

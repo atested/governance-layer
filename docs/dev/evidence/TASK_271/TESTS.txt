@@ -1,0 +1,11 @@
+PASS:bash system/tests/test_export_tool_event_bundle.sh
+PASS:bash system/tests/test_verify_tool_event_bundle.sh
+PASS:bash system/tests/test_tool_event_store_deterministic_root.sh
+PASS:bash system/tests/test_tool_event_receipt_link_index.sh
+PASS:bash system/tests/test_mcp_tool_event_export_returns_bundle_id.sh
+PASS:bash system/tests/test_mcp_tool_event_bundle_verify.sh
+PASS:bash system/tests/test_no_conflict_markers_tracked.sh
+PASS:bash system/tests/test_no_absolute_paths_tracked.sh
+PASS:bash system/tests/test_no_trailing_whitespace.sh
+PASS:bash system/tests/test_shell_scripts_strict_mode.sh
+PASS:bash system/tests/test_dev_scripts_safe_defaults.sh

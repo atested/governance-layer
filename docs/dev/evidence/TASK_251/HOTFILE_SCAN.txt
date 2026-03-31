@@ -1,0 +1,14 @@
+Hot-file scan result: PASS
+No disallowed files were modified:
+- docs/dev/ASSIGNMENTS.md
+- system/scripts/release-gate.sh
+- system/scripts/validate-proof-bundle.sh
+- system/scripts/codex-unattended.sh
+- capabilities/capability-registry.json
+- mcp/server.py
+- mcp/tool_event_store.py
+- mcp/tool_catalog_store.py
+- scripts/attest/*
+- scripts/dev_phase2_regression.sh
+- scripts/dev_generate_verification_catalog.py
+- system/planning/verification_catalog.v1.json

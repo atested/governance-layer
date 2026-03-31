@@ -1,0 +1,29 @@
+{
+  "criteria_version": "rdd_triage_criteria.v1",
+  "fs_copy_dest_exists_no_overwrite": {
+    "findings": [
+      {
+        "id": "F1",
+        "type": "rule_gap",
+        "basis": "deterministic",
+        "structural_deficiency": true
+      }
+    ],
+    "governing_condition": "F1",
+    "governing_rationale": "Fixture for explicit-mode missing selector_map fail-closed behavior.",
+    "disposition": {
+      "type": "DEFER_STRUCTURAL_DEFICIENCY",
+      "signal_ref": "S1",
+      "structural_change_needed": "fixture"
+    },
+    "structural_signals": [
+      {
+        "id": "S1",
+        "finding_ref": "F1",
+        "deficiency_class": "RULE_GAP",
+        "surface": "filesystem",
+        "description": "fixture"
+      }
+    ]
+  }
+}

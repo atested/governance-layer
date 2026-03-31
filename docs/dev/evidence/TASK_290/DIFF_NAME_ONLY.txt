@@ -1,0 +1,4 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/tasks/ready/TASK_290__bfps_v12_capability_map_required_reference.md
+docs/dev/tasks/ready/TASK_291__capability_map_lightweight_maintenance_protocol.md
+docs/dev/tasks/ready/TASK_292__dev_chat_startup_state_wiring.md

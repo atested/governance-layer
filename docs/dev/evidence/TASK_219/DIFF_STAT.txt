@@ -1,0 +1,7 @@
+ system/tests/helpers/attest_contract_common.sh      | 31 +++++++++++++++++++++++++++++++
+ system/tests/test_lint_proof_bundle.sh              | 18 +++++++++---------
+ system/tests/test_classify_proof_bundle_drift.sh    | 18 ++++++++----------
+ system/tests/test_assess_proof_bundle_mergeability.sh | 14 ++++++++------
+ system/tests/test_check_bundle_schema_compat.sh     | 14 ++++++++------
+ system/tests/test_index_attestation_artifacts.sh    | 14 +++++++++-----
+ 6 files changed, 63 insertions(+), 46 deletions(-)

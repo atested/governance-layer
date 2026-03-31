@@ -1,0 +1,7 @@
+$ bash tests/test_proof_packet_contract_enforcement.sh
+--- T-CONTRACT-001: proof-packet manifest/summary/sha contracts enforced and deterministic ---
+CONTRACT_SUMMARY_SHA256_RUN1=eb4c94e019517d47b7da3f05c1936e38511bac64e151586d80abded853d3c865
+CONTRACT_SUMMARY_SHA256_RUN2=eb4c94e019517d47b7da3f05c1936e38511bac64e151586d80abded853d3c865
+PASS: contract summary deterministic across two runs
+PASS: manifest version, summary report_version, and proof_packet.sha256 contract checks enforced
+[exit=0]

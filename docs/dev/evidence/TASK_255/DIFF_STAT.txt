@@ -1,0 +1,7 @@
+ docs/dev/WORK_QUEUE.md                             |  3 +++
+ scripts/attest/export_receipt_bundle.py            | 22 ++++++++++++++++++++--
+ .../helpers/attestation_proof_contract_common.sh   | 22 ++++++++++++++++++++++
+ .../test_export_receipt_attestation_bundle.sh      | 16 ++++++++++++++--
+ ..._export_receipt_bundle_includes_replay_check.sh |  8 ++++----
+ .../test_export_receipt_bundle_signature_parity.sh | 10 +++++-----
+ 6 files changed, 68 insertions(+), 13 deletions(-)

@@ -1,0 +1,17 @@
+HOT_FILES=
+system/scripts/release-gate.sh
+system/scripts/validate-proof-bundle.sh
+system/scripts/codex-unattended.sh
+docs/dev/WORK_QUEUE.md
+docs/dev/ASSIGNMENTS.md
+
+COMMAND: git diff --name-only origin/main..HEAD
+docs/dev/evidence/TASK_AAT_STAGE_K1_ALIGNMENT__42e32fc/DIFF_NAME_ONLY.txt
+docs/dev/evidence/TASK_AAT_STAGE_K1_ALIGNMENT__42e32fc/DIFF_STAT.txt
+docs/dev/evidence/TASK_AAT_STAGE_K1_ALIGNMENT__42e32fc/HOTFILE_SCAN.txt
+docs/dev/evidence/TASK_AAT_STAGE_K1_ALIGNMENT__42e32fc/TESTS.txt
+scripts/aat_stage_into_proof_bundle.py
+system/tests/test_aat_shim_operator_pilot.sh
+system/tests/test_aat_stage_bundle_alignment_k1.sh
+
+HOTFILE_SCAN=PASS

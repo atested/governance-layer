@@ -1,0 +1,3 @@
+TASK_225 TESTS
+- PASS: bash system/tests/test_tool_catalog_store_deterministic_root.sh
+- PASS: bash system/tests/test_export_tool_catalog_bundle.sh

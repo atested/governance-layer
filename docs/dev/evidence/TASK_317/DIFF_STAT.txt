@@ -1,0 +1,5 @@
+ docs/dev/WORK_QUEUE.md                             |  3 ++
+ ..._capability_map_lightweight_state_refresh_v3.md | 58 ++++++++++++++++++++++
+ ..._capability_map_planning_judgment_refresh_v3.md | 52 +++++++++++++++++++
+ ...apability_map_briefing_extraction_refresh_v3.md | 51 +++++++++++++++++++
+ 4 files changed, 164 insertions(+)

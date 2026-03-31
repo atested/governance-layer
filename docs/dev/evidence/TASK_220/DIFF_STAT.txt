@@ -1,0 +1,14 @@
+ scripts/attest/canonicalize_manifest.py             |  8 +++++---
+ scripts/attest/diff_manifest.py                     |  8 +++++---
+ scripts/attest/diff_proof_bundle.py                 |  6 ++++--
+ scripts/attest/summarize_proof_bundle.py            | 12 +++++++-----
+ system/tests/test_canonicalize_manifest.sh          | 18 ++++++++----------
+ system/tests/test_diff_manifest.sh                  |  9 +++++----
+ system/tests/test_diff_proof_bundle.sh              |  8 +++++---
+ system/tests/test_summarize_proof_bundle.sh         | 10 ++++++----
+ system/tests/test_assess_proof_bundle_mergeability.sh | 14 ++++++++------
+ system/tests/test_check_bundle_schema_compat.sh     | 14 ++++++++------
+ system/tests/test_classify_proof_bundle_drift.sh    | 18 ++++++++----------
+ system/tests/test_index_attestation_artifacts.sh    | 14 +++++++++-----
+ system/tests/test_lint_proof_bundle.sh              | 18 +++++++++---------
+ 13 files changed, 87 insertions(+), 70 deletions(-)

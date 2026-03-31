@@ -1,0 +1,9 @@
+BASE_SHA=8b6d4edd2f7b228c47d6ee44b5cb99dc7156ed67
+BRANCH=codex/TASK_343_344__rdd_phase13__v1
+HOTFILE_SCAN_START
+OK system/scripts/release-gate.sh
+OK system/scripts/validate-proof-bundle.sh
+OK system/scripts/codex-unattended.sh
+OK docs/dev/WORK_QUEUE.md
+OK docs/dev/ASSIGNMENTS.md
+HOTFILE_SCAN_END

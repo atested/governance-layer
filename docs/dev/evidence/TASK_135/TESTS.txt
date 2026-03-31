@@ -1,0 +1,17 @@
+$ bash system/scripts/bootstrap-run.sh --dry-run
+BOOTSTRAP_ROOT=/tmp/ext_usability_batch_1772054859
+BOOTSTRAP_VENV_DIR=/tmp/ext_usability_batch_1772054859/.venv
+BOOTSTRAP_PYTHON_BIN=python3
+BOOTSTRAP_RELEASE_GATE_SKIP_BASE=1
+BOOTSTRAP_EXPECTED_OUTPUT_DIR=out/proof-bundles/<run-id>/
+$ python3 -m venv /tmp/ext_usability_batch_1772054859/.venv
+[exit=0]
+$ /tmp/ext_usability_batch_1772054859/.venv/bin/python -m pip install -r /tmp/ext_usability_batch_1772054859/mcp/requirements.txt
+[exit=0]
+$ env RELEASE_GATE_SKIP_BASE=1 bash /tmp/ext_usability_batch_1772054859/system/scripts/release-gate.sh
+[exit=0]
+[exit=0]
+
+$ python3 - <<"PY" /tmp/task135_dryrun_capture.txt
+BOOTSTRAP_DRYRUN_SHA256=cfa8f9ce3d26e736ae5fe826c41897079592920dbb3612801b8649cd59a6ff21
+[exit=0]

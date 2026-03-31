@@ -1,0 +1,62 @@
+TASK_181
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+$ bash tests/test_proof_bundle_dir_contract_scan_contract.sh
+[exit=0]
+$ bash tests/test_proof_bundle_dir_contract_scan_contract.sh  # run2
+[exit=0]
+RUN1_STDOUT_SHA256=2dd839be2d7e921bf462b1b3802e9f72fae5b586a7a7d20fb4c7bc6e302d7921
+RUN2_STDOUT_SHA256=2dd839be2d7e921bf462b1b3802e9f72fae5b586a7a7d20fb4c7bc6e302d7921
+PASS: primary output deterministic across two runs
+$ GOV_PROFILE=dev bash system/scripts/release-gate.sh
+INFO: proof-packet strictness source=profile GOV_PROFILE=dev value=0
+$ python3 -m py_compile scripts/policy-eval.py
+[exit=0]
+$ python3 -m py_compile scripts/verify-record.py
+[exit=0]
+$ python3 -m py_compile scripts/verify-chain.py
+[exit=0]
+$ python3 -m py_compile scripts/replay-record.py
+[exit=0]
+$ bash tests/test_signing_key_loading.sh
+-- A: no key configured
+-- B: GOV_SIGNING_KEY_PATH configured
+-- C: default key exists
+Summary complete
+[exit=0]
+$ bash tests/test_signing_emit.sh
+SIGNING_KEY_ID=ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6
+SIGNATURE=tIbuv4l0gSPh6MWl33u3rWNDaljrMdn1c6ldoQvzXr9LI9YlyiSNOMEDUpjQfBNar6gNsYNTth81SgRxwk8SAw
+RECORD_HASH=sha256:79257f6b3e349fa6b2f6548e0c1990913a1bdc8b0b4df61036e1ccc92e77a38d
+PASS: record_hash + signature verified
+[exit=0]
+$ bash tests/test_verify_signatures.sh
+--- T-SIGVERIFY-001: verify-record accepts valid signed record ---
+PASS: T-SIGVERIFY-001 valid signed record (exit=0)
+PASS: T-SIGVERIFY-001 output
+
+--- T-SIGVERIFY-002: verify-record rejects tampered signature ---
+PASS: T-SIGVERIFY-002 tampered signature (exit=1)
+PASS: T-SIGVERIFY-002 output
+
+--- T-SIGVERIFY-003: verify-record rejects signing_key_id mismatch ---
+PASS: T-SIGVERIFY-003 signing_key_id mismatch (exit=1)
+PASS: T-SIGVERIFY-003 output
+
+--- T-SIGVERIFY-004: verify-chain enforces per-record signature verification ---
+PASS: T-SIGVERIFY-004 chain valid signature (exit=0)
+PASS: T-SIGVERIFY-004 output
+PASS: T-SIGVERIFY-004 chain tampered signature (exit=1)
+PASS: T-SIGVERIFY-004 tampered output
+
+Summary: pass=10 fail=0
+[exit=0]
+## Proof-Packet Check (informational)
+INFO: proof-packet strict=0
+PASS: proof packet manifest + payload hashes verified
+SUMMARY_SHA256=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+INFO: proof-bundle output dir=/tmp/codex_forward8_73429/out/proof-bundles/20260227_050951
+INFO: proof-packet check pass packet_sha=sha256:e5b8ad6446c2822e92ef7437069d1b515964a9da7258149087b1a1c6597ffd9e summary_sha=sha256:5cfa9776c18616dc28338c23f7a2132b8dc3e0eb8c63a1a93f8bdf2838a105bd
+[exit=0]
+RELEASE_GATE_PASS_LINES=12
+RELEASE_GATE_FAIL_LINES=0
+Implementation note: Determinism evidence captured for existing task script; no non-allowlisted files touched.

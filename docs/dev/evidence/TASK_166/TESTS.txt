@@ -1,0 +1,22 @@
+BASE_SHA=a01abae620e3dee328d813eac9895a74aba4376f
+$ rg -n '^## Purpose|^## Required Repository Files \(Ship\)|^## Expected Runtime Outputs \(Generated, Not Committed\)|validate_proof_bundle_summary\.json|^## Canonical Validation Commands' docs/DISTRIBUTION.md
+[exit=0]
+$ rg -n '^## Purpose|^## Required Repository Files \(Ship\)|^## Expected Runtime Outputs \(Generated, Not Committed\)|validate_proof_bundle_summary\.json|^## Canonical Validation Commands' docs/DISTRIBUTION.md
+[exit=0]
+RUN1_STDOUT_SHA256=c28bf1393624df94fff8b672cbdc441ac913349f719df2c199f3c7adb8ce1ca4
+RUN2_STDOUT_SHA256=c28bf1393624df94fff8b672cbdc441ac913349f719df2c199f3c7adb8ce1ca4
+DETERMINISTIC=yes
+
+RUN1_OUTPUT:
+3:## Purpose
+6:## Required Repository Files (Ship)
+15:## Expected Runtime Outputs (Generated, Not Committed)
+26:- Optional: `out/proof-bundles/<run-id>/validate_proof_bundle_summary.json`
+34:## Canonical Validation Commands
+
+RUN2_OUTPUT:
+3:## Purpose
+6:## Required Repository Files (Ship)
+15:## Expected Runtime Outputs (Generated, Not Committed)
+26:- Optional: `out/proof-bundles/<run-id>/validate_proof_bundle_summary.json`
+34:## Canonical Validation Commands

@@ -1,0 +1,4 @@
+TASK_235 TESTS
+- PASS: bash system/tests/test_export_tool_catalog_bundle.sh
+- PASS: bash system/tests/test_verify_tool_catalog_bundle.sh
+- PASS: bash system/tests/test_tool_catalog_store_edge_cases.sh

@@ -1,0 +1,14 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/runtime/tmp/delete-dir",
+    "recursive": true
+  },
+  "intent": {
+    "goal": "Attempt recursive delete with recursive disallowed.",
+    "constraints": { "recursive": true },
+    "requested_action": "FS_DELETE",
+    "inputs": [{ "ref": "file:path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/delete-dir" }],
+    "expected_outputs": []
+  }
+}

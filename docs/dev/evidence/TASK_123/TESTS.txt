@@ -1,0 +1,32 @@
+$ rg -n "^## 4\\. Proof Packet v1|^### 4\\.1 Contents|^### 4\\.4 Canonical Commands" docs/dev/ATTESTATION_SPEC.md
+244:## 4. Proof Packet v1 (Pack + Verify)
+248:### 4.1 Contents (Deterministic Layout)
+277:### 4.4 Canonical Commands (Pack + Verify)
+[exit=0]
+
+$ rg -n "^## Attestation bundle \+ proof-packet / replay audit|^### Attestation bundle|^### Proof packet v1|^### Replay \(core \+ audit report\)" docs/TEST-SUITE.md
+95:## Attestation bundle + proof-packet / replay audit (Phase 3+)
+97:### Attestation bundle (record + artifacts deterministic pack/verify)
+108:### Proof packet v1 (record + replay audit + artifacts)
+127:### Replay (core + audit report)
+[exit=0]
+
+$ rg -n "tests/test_attestation_bundle_(pack|verify|tamper|determinism)\\.sh|tests/test_proof_packet_(build|manifest_verify|tamper_matrix|missing_components|roundtrip_smoke|determinism|replay_report_embed|summary_json)\\.sh|tests/test_replay(_audit_report)?\\.sh" docs/TEST-SUITE.md
+99:- Script: `tests/test_attestation_bundle_pack.sh`
+101:- Script: `tests/test_attestation_bundle_verify.sh`
+103:- Script: `tests/test_attestation_bundle_tamper.sh`
+105:- Script: `tests/test_attestation_bundle_determinism.sh`
+110:- Script: `tests/test_proof_packet_build.sh`
+112:- Script: `tests/test_proof_packet_manifest_verify.sh`
+114:- Script: `tests/test_proof_packet_tamper_matrix.sh`
+116:- Script: `tests/test_proof_packet_missing_components.sh`
+118:- Script: `tests/test_proof_packet_roundtrip_smoke.sh`
+120:- Script: `tests/test_proof_packet_determinism.sh`
+122:- Script: `tests/test_proof_packet_replay_report_embed.sh`
+124:- Script: `tests/test_proof_packet_summary_json.sh`
+129:- Script: `tests/test_replay.sh`
+131:- Script: `tests/test_replay_audit_report.sh`
+[exit=0]
+
+$ sed -n "260,380p" docs/TEST-SUITE.md
+[exit=0]

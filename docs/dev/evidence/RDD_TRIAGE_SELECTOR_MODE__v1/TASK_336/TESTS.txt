@@ -1,0 +1,14 @@
+TASK: TASK_336
+Scope: selector-mode deterministic coverage
+Tests run:
+- tests/test_rdd_triage_selector_mode.sh
+- tests/test_rdd_triage_criteria_selector.sh
+- tests/test_rdd_triage_eval.sh
+- tests/test_signing_emit.sh
+- tests/test_signing_determinism.sh
+
+Determinism run1 hash: 2ee37a581b304710cc8313ff630898bf8cb178fab60d6a6b07c2cfed79ff53f6
+Determinism run2 hash: 2ee37a581b304710cc8313ff630898bf8cb178fab60d6a6b07c2cfed79ff53f6
+Match assertion: PASS
+
+Result: PASS

@@ -1,0 +1,14 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/runtime/tmp/delete-me.txt",
+    "recursive": false
+  },
+  "intent": {
+    "goal": "Delete a file in runtime/tmp allowlisted root.",
+    "constraints": { "recursive": false },
+    "requested_action": "FS_DELETE",
+    "inputs": [{ "ref": "file:path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/delete-me.txt" }],
+    "expected_outputs": [{ "ref": "file:path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/delete-me.txt" }]
+  }
+}

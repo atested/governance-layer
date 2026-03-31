@@ -1,0 +1,22 @@
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+COMMAND_RUN_1=git show --no-patch --oneline 838f0c0 && rg -n "Provenance / Already implemented on origin/main|838f0c0" docs/dev/tasks/ready/TASK_021__signing-phase3-spec.md
+COMMAND_RUN_2=git show --no-patch --oneline 838f0c0 && rg -n "Provenance / Already implemented on origin/main|838f0c0" docs/dev/tasks/ready/TASK_021__signing-phase3-spec.md
+RUN1_EXIT=0
+RUN2_EXIT=0
+RUN1_SHA256=bb3cb4d951d56240c698664bce4255e1569b4dccbab3d6d970eb19428363e584
+RUN2_SHA256=bb3cb4d951d56240c698664bce4255e1569b4dccbab3d6d970eb19428363e584
+DETERMINISTIC=yes
+
+RUN1_OUTPUT:
+838f0c0 docs(signing): add EPIC_SIGNING.md Phase 3 signing spec
+30:Provenance / Already implemented on origin/main
+31:- 838f0c0 docs(signing): add EPIC_SIGNING.md Phase 3 signing spec
+
+RUN2_OUTPUT:
+838f0c0 docs(signing): add EPIC_SIGNING.md Phase 3 signing spec
+30:Provenance / Already implemented on origin/main
+31:- 838f0c0 docs(signing): add EPIC_SIGNING.md Phase 3 signing spec
+
+Implementation note:
+- Evidence-closeout only; no implementation files changed.
+- Verified provenance commit and spec provenance section.

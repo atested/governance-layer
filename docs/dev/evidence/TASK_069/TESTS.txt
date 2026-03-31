@@ -1,0 +1,20 @@
+# TASK_069 Test Evidence
+
+$ bash -n system/scripts/codex-unattended.sh
+[exit_code=0]
+
+$ bash system/scripts/codex-unattended.sh preflight
+WARN: DNS attempt 1/5 failed; retrying in 2s
+WARN: DNS attempt 2/5 failed; retrying in 2s
+WARN: DNS attempt 3/5 failed; retrying in 2s
+WARN: DNS attempt 4/5 failed; retrying in 2s
+ERROR: DNS gate failed after 5 attempts
+[Errno 8] nodename nor servname provided, or not known
+No DNS configuration available
+[exit_code=1]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit_code=0]
+$ bash system/scripts/inventory-snapshot.sh
+[exit_code=0]

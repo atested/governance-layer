@@ -1,0 +1,60 @@
+$ python3 - <<'PY'
+import pathlib, re, subprocess
+root=pathlib.Path('.')
+patterns=[('mapfile', re.compile(r'\bmapfile\b')),('readarray', re.compile(r'\breadarray\b')),('declare-A', re.compile(r'\bdeclare\s+-A\b'))]
+files=subprocess.check_output(['git','-C',str(root),'ls-files','tests/*.sh','system/scripts/*.sh'], text=True).splitlines()
+files=sorted(set([f for f in files if f]+['tests/test_external_bash_portability_scan.sh']))
+for rel in files:
+    p=root/rel
+    if not p.exists():
+        continue
+    for i,line in enumerate(p.read_text(encoding='utf-8', errors='replace').splitlines(),1):
+        for name,rx in patterns:
+            if rx.search(line):
+                print(f'{rel}:{i}:{name}:{line.strip()}')
+PY
+OFFENDER_LIST_BEFORE:
+tests/test_external_bash_portability_scan.sh:17:mapfile:('mapfile', re.compile(r'\bmapfile\b')),
+tests/test_external_bash_portability_scan.sh:18:readarray:('readarray', re.compile(r'\breadarray\b')),
+tests/test_external_bash_portability_scan.sh:36:mapfile:print('PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)')
+tests/test_external_bash_portability_scan.sh:36:readarray:print('PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)')
+tests/test_external_bash_portability_scan.sh:36:declare-A:print('PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)')
+[exit=0]
+
+$ git diff --stat -- tests/test_external_bash_portability_scan.sh
+ tests/test_external_bash_portability_scan.sh | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+[exit=0]
+
+$ bash tests/test_external_bash_portability_scan.sh
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=90
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=90
+RC_RUN1=0
+RC_RUN2=0
+BASH_PORTABILITY_SHA256_RUN1=57604303170825d719ade8486cf9c94dacde07b6e9b7c87b4eff2e2ea2d0c69d
+BASH_PORTABILITY_SHA256_RUN2=57604303170825d719ade8486cf9c94dacde07b6e9b7c87b4eff2e2ea2d0c69d
+PASS: bash portability scan output deterministic across two runs
+[exit=0]
+
+$ bash tests/test_external_bash_portability_scan.sh  # run2
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=90
+--- T-BASH-PORTABILITY-001: tracked shell scripts avoid bash4-only features ---
+PASS: no bash4-only feature patterns found (mapfile/readarray/declare -A)
+SCANNED_FILES_COUNT=90
+RC_RUN1=0
+RC_RUN2=0
+BASH_PORTABILITY_SHA256_RUN1=57604303170825d719ade8486cf9c94dacde07b6e9b7c87b4eff2e2ea2d0c69d
+BASH_PORTABILITY_SHA256_RUN2=57604303170825d719ade8486cf9c94dacde07b6e9b7c87b4eff2e2ea2d0c69d
+PASS: bash portability scan output deterministic across two runs
+[exit=0]
+RC_RUN1=0
+RC_RUN2=0
+BASH_PORTABILITY_REMEDIATION_SHA256_RUN1=67d5059b1195da2c0490a854d80f4e65af2b8c5493da15a62be1c88418175d56
+BASH_PORTABILITY_REMEDIATION_SHA256_RUN2=67d5059b1195da2c0490a854d80f4e65af2b8c5493da15a62be1c88418175d56
+PASS: bash portability remediation scan output deterministic across two runs

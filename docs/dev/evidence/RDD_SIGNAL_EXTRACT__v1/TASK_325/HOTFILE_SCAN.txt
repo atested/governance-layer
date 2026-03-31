@@ -1,0 +1,5 @@
+HOTFILE_SCAN
+base_sha=209ba23b7859090a9962d1195fee777f6de2ab80
+head_sha=a747a4fbc188b7d46570f8dcca2e47d572ba5f5a
+hotfiles_touched=NO
+hotfile_list=system/scripts/release-gate.sh,system/scripts/validate-proof-bundle.sh,system/scripts/codex-unattended.sh,docs/dev/WORK_QUEUE.md,docs/dev/ASSIGNMENTS.md

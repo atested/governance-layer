@@ -1,0 +1,33 @@
+ docs/dev/AAT_SHIM_PROOF_BUNDLE_CONVENTION.md       | 42 ++++++++++
+ docs/dev/HOT_SHIM_VALIDATE_PROOF_BUNDLE__AAT.md    |  8 +-
+ .../DIFF_NAME_ONLY.txt                             |  0
+ .../AAT_SHIM_INPUT_DISCOVERY__v1/DIFF_STAT.txt     |  0
+ .../AAT_SHIM_INPUT_DISCOVERY__v1/HOTFILE_SCAN.txt  |  7 ++
+ .../AAT_SHIM_INPUT_DISCOVERY__v1/TESTS.txt         | 93 ++++++++++++++++++++++
+ system/scripts/validate-proof-bundle.sh            | 49 +++++++++++-
+ .../non_admissible_aat_preferred/README.md         |  1 +
+ .../aat/action_record.json                         |  1 +
+ .../aat/assumptions_unknowns_register.json         |  5 ++
+ .../aat/claims_evidence_map.json                   |  4 +
+ .../aat/constraint_acknowledgment_map.json         | 13 +++
+ .../aat/constraint_set_digest.json                 | 10 +++
+ .../aat/coverage_stamp.json                        |  1 +
+ .../aat/decision_record.json                       |  1 +
+ .../aat/input_manifest.json                        |  4 +
+ .../aat/method_binding.json                        |  5 ++
+ .../aat/proof_manifest.json                        |  1 +
+ .../non_admissible_aat_preferred/aat/rules.json    |  1 +
+ .../pass_aat_preferred/README.md                   |  1 +
+ .../pass_aat_preferred/aat/action_record.json      |  1 +
+ .../aat/assumptions_unknowns_register.json         |  5 ++
+ .../aat/claims_evidence_map.json                   |  4 +
+ .../aat/constraint_acknowledgment_map.json         |  4 +
+ .../aat/constraint_set_digest.json                 |  4 +
+ .../pass_aat_preferred/aat/coverage_stamp.json     |  1 +
+ .../pass_aat_preferred/aat/decision_record.json    |  1 +
+ .../pass_aat_preferred/aat/input_manifest.json     |  4 +
+ .../pass_aat_preferred/aat/method_binding.json     |  5 ++
+ .../pass_aat_preferred/aat/proof_manifest.json     |  1 +
+ .../pass_aat_preferred/aat/rules.json              |  1 +
+ .../tests/test_validate_proof_bundle_aat_shim.sh   | 48 +++++++++--
+ 32 files changed, 316 insertions(+), 10 deletions(-)

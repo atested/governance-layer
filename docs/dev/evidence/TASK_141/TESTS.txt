@@ -1,0 +1,10 @@
+$ bash tests/test_status_bundle_json.sh
+--- T-STATUS-BUNDLE-001: deterministic status_bundle.json across two runs ---
+STATUS_BUNDLE_SHA256_RUN1=4896f1c79368f3d20c0c9abbe37e108da9866349893e6e900a2e45d677621708
+STATUS_BUNDLE_SHA256_RUN2=4896f1c79368f3d20c0c9abbe37e108da9866349893e6e900a2e45d677621708
+PASS: status_bundle.json required keys present
+PASS: status_bundle.json structure matches contract
+PASS: status_bundle_version == status_bundle_v1
+PASS: strictness.value is integer typed
+Summary: status bundle json determinism checks complete
+[exit=0]

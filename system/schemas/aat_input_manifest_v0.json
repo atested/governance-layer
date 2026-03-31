@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Input Manifest v0",
+  "description": "Declares all inputs consumed by an action (files, artifacts, outputs from prior actions)",
+  "type": "object",
+  "required": ["input_manifest_version", "inputs"],
+  "additionalProperties": false,
+  "properties": {
+    "input_manifest_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ref_type", "digest"],
+        "additionalProperties": false,
+        "properties": {
+          "ref_type": {
+            "type": "string",
+            "enum": ["file", "artifact", "output_ref", "tool_event"]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "field_order": ["input_manifest_version", "inputs"]
+}

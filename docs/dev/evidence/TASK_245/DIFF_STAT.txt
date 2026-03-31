@@ -1,0 +1,7 @@
+ docs/dev/WORK_QUEUE.md                             |  3 +++
+ scripts/attest/export_tool_event_bundle.py         | 19 +++++++++++++++++++
+ scripts/attest/verify_tool_event_bundle.py         | 13 +++++++++++--
+ system/tests/helpers/tool_event_contract_common.sh | 13 +++++++++++++
+ system/tests/test_export_tool_event_bundle.sh      | 18 +++++++++++++++---
+ system/tests/test_verify_tool_event_bundle.sh      | 18 ++++++++++++++++--
+ 6 files changed, 77 insertions(+), 7 deletions(-)

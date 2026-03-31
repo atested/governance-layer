@@ -1,0 +1,3 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/tasks/ready/TASK_355__rdd_selector_mode_canonical_request_case_normalization_hardening.md
+docs/dev/tasks/ready/TASK_356__rdd_selector_mode_canonical_request_case_normalization_coverage.md

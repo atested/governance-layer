@@ -1,0 +1,117 @@
+$ python3 - <<"PY"  # eligible tasks discovered + chosen tasks vs origin/main queue baseline
+Eligible tasks (TASK_ID | filename):
+- TASK_071 | docs/dev/tasks/ready/TASK_071__test_rc_fs_executable_disallowed.md
+- TASK_071 | docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+
+Chosen tasks (top N by TASK_ID not already queued in origin/main Next/Now/Done):
+- TASK_071 | docs/dev/tasks/ready/TASK_071__test_rc_fs_executable_disallowed.md | rationale: top N by TASK_ID not already queued
+
+CAP=4
+Promoted IDs now present in current queue: TASK_071
+[exit=0]
+
+$ git diff --stat origin/main...HEAD
+[exit=0]
+
+$ git diff origin/main...HEAD -- docs/dev/WORK_QUEUE.md
+[exit=0]
+
+$ git status --porcelain
+ M docs/dev/WORK_QUEUE.md
+ M ops/CODEX_BATCH.txt
+[exit=0]
+
+$ bash system/scripts/codex-batch.sh
+Codex batch generation (cap: 4)
+
+--- Preflight ---
+Switched to branch 'main'
+M	ops/CODEX_BATCH.txt
+Your branch is up to date with 'origin/main'.
+Already up to date.
+Preflight: OK
+
+CODEX RUN BATCH
+================
+Cap: 4 tasks
+
+Instructions for Codex:
+For each task below, create a branch, implement changes within allowed files only,
+generate evidence bundle, and push to origin.
+
+Tasks:
+
+1. TASK: TASK_071
+   File: docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+   Branch: codex/TASK_071
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_071/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+Total tasks: 1
+Status: Ready for Codex (read-only list, no claims made)
+
+
+Batch written to: ops/CODEX_BATCH.txt
+[exit=0]
+
+$ sed -n '1,200p' ops/CODEX_BATCH.txt
+CODEX RUN BATCH
+================
+Cap: 4 tasks
+
+Instructions for Codex:
+For each task below, create a branch, implement changes within allowed files only,
+generate evidence bundle, and push to origin.
+
+Tasks:
+
+1. TASK: TASK_071
+   File: docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+   Branch: codex/TASK_071
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_071/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+Total tasks: 1
+Status: Ready for Codex (read-only list, no claims made)
+
+[exit=0]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]
+
+$ git diff -- docs/dev/WORK_QUEUE.md | sed -n '1,120p'
+diff --git a/docs/dev/WORK_QUEUE.md b/docs/dev/WORK_QUEUE.md
+index a799f7e..0d930d1 100644
+--- a/docs/dev/WORK_QUEUE.md
++++ b/docs/dev/WORK_QUEUE.md
+@@ -47,6 +47,7 @@ Ready and prioritised for immediate pickup.
+ | TASK_031 | Document canonical venv | Ready | — | none | [→](tasks/ready/TASK_031__document-venv-canonical.md) |
+ | TASK_032 | Add smoke failure-mode test | Ready | — | TASK_030 (recommended) | [→](tasks/ready/TASK_032__add-smoke-failure-mode-test.md) |
+ 
++| TASK_071 | Test RC-FS-EXECUTABLE-DISALLOWED | Ready | Codex | none | [→](tasks/ready/TASK_071__test_rc_fs_executable_disallowed.md) |
+ ---
+ 
+ ## Backlog
+[exit=0]

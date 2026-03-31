@@ -1,0 +1,5 @@
+ docs/dev/WORK_QUEUE.md                             |  3 ++
+ .../TASK_299__bfps_refresh_then_brief_rule.md      | 47 ++++++++++++++++++++++
+ ..._capability_map_briefing_extraction_contract.md | 47 ++++++++++++++++++++++
+ .../TASK_301__new_briefing_operator_sequence.md    | 47 ++++++++++++++++++++++
+ 4 files changed, 144 insertions(+)

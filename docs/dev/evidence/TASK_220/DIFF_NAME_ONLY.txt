@@ -1,0 +1,13 @@
+scripts/attest/canonicalize_manifest.py
+scripts/attest/diff_manifest.py
+scripts/attest/diff_proof_bundle.py
+scripts/attest/summarize_proof_bundle.py
+system/tests/test_canonicalize_manifest.sh
+system/tests/test_diff_manifest.sh
+system/tests/test_diff_proof_bundle.sh
+system/tests/test_summarize_proof_bundle.sh
+system/tests/test_assess_proof_bundle_mergeability.sh
+system/tests/test_check_bundle_schema_compat.sh
+system/tests/test_classify_proof_bundle_drift.sh
+system/tests/test_index_attestation_artifacts.sh
+system/tests/test_lint_proof_bundle.sh

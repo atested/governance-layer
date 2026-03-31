@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Assumptions and Unknowns Register v0",
+  "description": "Documents assumptions and unknowns for an action",
+  "type": "object",
+  "required": ["aur_version", "assumptions", "unknowns"],
+  "additionalProperties": false,
+  "properties": {
+    "aur_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["assumption_id", "description", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "assumption_id": {
+            "type": "string",
+            "pattern": "^a-[0-9]{3,}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          }
+        }
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["unknown_id", "description", "impact"],
+        "additionalProperties": false,
+        "properties": {
+          "unknown_id": {
+            "type": "string",
+            "pattern": "^u-[0-9]{3,}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          }
+        }
+      }
+    }
+  },
+  "field_order": ["aur_version", "assumptions", "unknowns"]
+}

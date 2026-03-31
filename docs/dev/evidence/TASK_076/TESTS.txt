@@ -1,0 +1,22 @@
+$ grep -n "Files allowed to touch" -n docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+15:## Files allowed to touch
+[exit=0]
+
+$ grep -n "docs/dev/evidence/" docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+16:docs/dev/evidence/TASK_071/**
+[exit=0]
+
+$ git diff --stat origin/main...HEAD
+[exit=0]
+
+$ git status --porcelain
+ M docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+?? docs/dev/evidence/TASK_076/
+[exit=0]
+
+$ python3 scripts/verify-ops-canonical.py
+OK
+[exit=0]
+
+$ bash system/scripts/inventory-snapshot.sh
+[exit=0]

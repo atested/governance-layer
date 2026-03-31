@@ -1,0 +1,15 @@
+TASK: TASK_340
+TESTS_RUN:
+- tests/test_rdd_triage_selector_mode.sh
+- tests/test_rdd_triage_criteria_selector.sh
+- tests/test_rdd_triage_eval.sh
+RESULT:
+- tests/test_rdd_triage_selector_mode.sh: PASS
+- tests/test_rdd_triage_criteria_selector.sh: PASS
+- tests/test_rdd_triage_eval.sh: PASS
+DETERMINISM:
+- run1_hash: 63c05118da4512c7fbcdf41f45eb86026a527fd4f1d7717b701107fb2d8ab3e6
+- run2_hash: 63c05118da4512c7fbcdf41f45eb86026a527fd4f1d7717b701107fb2d8ab3e6
+- match: YES
+NORMALIZATION:
+- strictness matrix hash computed across two identical runs in tests/test_rdd_triage_selector_mode.sh

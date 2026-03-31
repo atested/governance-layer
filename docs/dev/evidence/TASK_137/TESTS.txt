@@ -1,0 +1,12 @@
+$ bash tests/test_release_gate_profiles.sh
+--- T-RELEASE-GATE-PROFILE-001: dev profile is informational and non-gating ---
+DEV_PROFILE_SHA256_RUN1=88aa02f94a14d00fb53f5c5e80c0924faa024bc4d44d79b11635da859496206e
+DEV_PROFILE_SHA256_RUN2=88aa02f94a14d00fb53f5c5e80c0924faa024bc4d44d79b11635da859496206e
+PASS: dev profile informational behavior deterministic
+
+--- T-RELEASE-GATE-PROFILE-002: ci profile is gating and fails closed when unavailable ---
+PASS: ci profile fails closed deterministically when proof-packet check unavailable (rc=1)
+
+--- T-RELEASE-GATE-PROFILE-003: explicit env override wins over profile ---
+PASS: explicit RELEASE_GATE_STRICT_PROOF_PACKET overrides GOV_PROFILE
+[exit=0]

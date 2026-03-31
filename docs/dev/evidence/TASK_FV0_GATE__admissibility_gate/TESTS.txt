@@ -1,0 +1,13 @@
+BASE_SHA_RESOLVED=b19a7871bb0ed36aa5b5b3637c4e0280dd191587
+BASE7=b19a787
+COMMAND_RUN_1=system/scripts/foundation-v0-admissibility-gate.sh --help
+COMMAND_RUN_2=system/scripts/foundation-v0-admissibility-gate.sh --help
+RUN1_SHA256=691dbbe3424a2bc1e03edf446779beacfc2b6a0b7d81fc324efca0d6c1878a34
+RUN2_SHA256=691dbbe3424a2bc1e03edf446779beacfc2b6a0b7d81fc324efca0d6c1878a34
+DETERMINISTIC=yes
+--- RUN1 ---
+$ system/scripts/foundation-v0-admissibility-gate.sh --help
+usage: system/scripts/foundation-v0-admissibility-gate.sh --proof-bundle-dir <path> [--ledger-path <path>] [--surface-catalog <path>] [--typed-ref-catalog <path>]
+--- RUN2 ---
+$ system/scripts/foundation-v0-admissibility-gate.sh --help
+usage: system/scripts/foundation-v0-admissibility-gate.sh --proof-bundle-dir <path> [--ledger-path <path>] [--surface-catalog <path>] [--typed-ref-catalog <path>]

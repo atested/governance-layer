@@ -1,0 +1,9 @@
+PASS bash system/tests/test_tool_event_receipt_link_index.sh
+PASS bash system/tests/test_tool_event_receipt_negative_matrix.sh
+PASS bash system/tests/test_mcp_tool_event_receipts_query.sh
+PASS bash system/tests/test_mcp_receipt_tool_events_query.sh
+PASS bash system/tests/test_no_conflict_markers_tracked.sh
+PASS bash system/tests/test_no_absolute_paths_tracked.sh
+PASS bash system/tests/test_no_trailing_whitespace.sh
+PASS bash system/tests/test_shell_scripts_strict_mode.sh
+PASS bash system/tests/test_dev_scripts_safe_defaults.sh

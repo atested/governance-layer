@@ -1,0 +1,16 @@
+INFO: RDD_TRIAGE_SELECTOR_MODE_APPLIED mode=compat_legacy_single_case source=default
+PASS: T-RDD-TRIAGE-001 record_type triage_decision
+PASS: T-RDD-TRIAGE-002 governing_condition F1
+PASS: T-RDD-TRIAGE-003 disposition type
+PASS: T-RDD-TRIAGE-004 findings include F1/F2
+PASS: T-RDD-TRIAGE-005 originating hash linked to prev_record_hash
+PASS: T-RDD-TRIAGE-006 verify-record passes for triage output
+PASS: T-RDD-TRIAGE-007 chain append and linkage validated
+PASS: T-RDD-TRIAGE-008 non-undecided skips triage
+PASS: T-RDD-TRIAGE-009 triage fails closed on non-UNDECIDED input
+INFO: RDD_TRIAGE_SELECTOR_MODE_APPLIED mode=compat_legacy_single_case source=default
+INFO: RDD_TRIAGE_SELECTOR_MODE_APPLIED mode=compat_legacy_single_case source=default
+PASS: T-RDD-TRIAGE-010 deterministic normalized triage output
+DET_HASH_1=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+DET_HASH_2=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+PASS: 10  FAIL: 0

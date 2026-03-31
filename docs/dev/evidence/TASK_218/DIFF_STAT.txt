@@ -1,0 +1,5 @@
+ scripts/attest/canonicalize_manifest.py  |  8 +++++---
+ scripts/attest/diff_manifest.py          |  8 +++++---
+ scripts/attest/diff_proof_bundle.py      |  6 ++++--
+ scripts/attest/summarize_proof_bundle.py | 12 +++++++-----
+ 4 files changed, 21 insertions(+), 13 deletions(-)

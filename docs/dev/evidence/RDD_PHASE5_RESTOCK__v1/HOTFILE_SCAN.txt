@@ -1,0 +1,6 @@
+HOTFILE_SCAN
+base_sha=fc4320e6f9b02e455566ce7efd65fade7afee862
+head_sha=003e80c2261c5d6c6db3bc354506cb1f84efd81a
+hotfiles_touched=YES
+touched_hotfiles=docs/dev/WORK_QUEUE.md
+justification=WORK_QUEUE update required by repo restock convention for newly created ready tasks

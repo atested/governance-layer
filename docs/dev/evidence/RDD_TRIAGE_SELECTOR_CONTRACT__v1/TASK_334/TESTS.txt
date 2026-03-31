@@ -1,0 +1,10 @@
+TASK=TASK_334
+BASE_SHA=1d4b5d2d04cd305fc371293b83fd2c9aa1009888
+TESTS_RUN:
+- tests/test_rdd_triage_criteria_selector.sh
+- tests/test_signing_emit.sh
+- tests/test_signing_determinism.sh
+DETERMINISM:
+- run1_hash=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+- run2_hash=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+- match=YES

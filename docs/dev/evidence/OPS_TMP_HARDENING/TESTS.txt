@@ -1,0 +1,18 @@
+$ FORCE_TASK=TASK_071 NO_PUBLISH=1 SIMULATE_EXEC_STALL=1 EXEC_START_TIMEOUT=1 EXEC_TIMEOUT=5 BASE_REF=proof/gov-hardening-base system/scripts/codex-throughput-loop.sh
+TRACE: cleaned stale temp artifact (start): /var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/codex_timeout_wrapper.staleproof.py
+Already on 'proof/gov-hardening-base'
+== Select newest 4 READY tasks that are NOT already published as codex/TASK_###__* ==
+TRACE: FORCE_TASK bypassing selection
+FORCED TASK: TASK_071
+
+====================
+== RUN TASK_071 ==
+====================
+TRACE: fetching origin/main for TASK_071
+Task spec: docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+TRACE: SPEC_SHA_BASE=1d88e96d8f6e3bafd48ac6e91b5b746de84969c0 SPEC_SHA_TASK=1d88e96d8f6e3bafd48ac6e91b5b746de84969c0 spec_path=docs/dev/tasks/ready/TASK_071__test_task_scaffold_with_executor_field.md
+STOP: EXEC_START_TIMEOUT after 1s for TASK_071
+EXECUTE_EXIT=1
+STOP: execute-task failed and produced no changes for TASK_071
+TRACE: cleaned stale temp artifact (exit): /var/folders/_x/vx5c3l8x33s6jv0_drbcx20w0000gn/T/codex_timeout_wrapper.1772027648.7680.21737.1.py
+[exit=1]

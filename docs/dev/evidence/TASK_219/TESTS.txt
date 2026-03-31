@@ -1,0 +1,7 @@
+COMMANDS:
+- bash system/tests/test_lint_proof_bundle.sh
+- bash system/tests/test_classify_proof_bundle_drift.sh
+- bash system/tests/test_assess_proof_bundle_mergeability.sh
+- bash system/tests/test_check_bundle_schema_compat.sh
+- bash system/tests/test_index_attestation_artifacts.sh
+RESULT=PASS

@@ -1,0 +1,35 @@
+PROJECT STATUS
+Repo:
+  local main:  621fba7
+  origin/main: 621fba7
+  clean: yes
+  
+
+Work:
+  ready tasks: 29
+  seeds: TASK_SEEDS.md=yes, seed files=2
+
+Codex:
+  batch cap: 4
+  codex tasks in current batch: TASK_071 
+  remote codex task branches: 36
+
+Qt:
+  qt runs (TESTS.txt count): 0
+  qt evidence dir: docs/dev/evidence/QT
+
+Cecil:
+  recent merges (last 10):
+    fb85828 Merge codex/TASK_071
+    96be406 Merge codex/TASK_077
+    9699a09 Merge codex/TASK_076
+    611f7cb Merge codex/TASK_075
+    486810f Merge codex/TASK_074
+    7e70034 Merge codex/TASK_073
+    4f28d1e Merge codex/TASK_072
+    a9c8b06 Merge codex/TASK_067
+    b21426b Merge codex/TASK_066
+    90fd35c Merge codex/TASK_065
+
+Forecast (low confidence):
+  merges last 7d: 39  =>  5.57 merges/day

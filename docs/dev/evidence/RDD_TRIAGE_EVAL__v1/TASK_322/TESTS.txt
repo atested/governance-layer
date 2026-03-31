@@ -1,0 +1,59 @@
+TASK_322 TESTS
+=============
+
+run: bash tests/test_rdd_triage_eval.sh
+PASS: T-RDD-TRIAGE-001 record_type triage_decision
+PASS: T-RDD-TRIAGE-002 governing_condition F1
+PASS: T-RDD-TRIAGE-003 disposition type
+PASS: T-RDD-TRIAGE-004 findings include F1/F2
+PASS: T-RDD-TRIAGE-005 originating hash linked to prev_record_hash
+PASS: T-RDD-TRIAGE-006 verify-record passes for triage output
+PASS: T-RDD-TRIAGE-007 chain append and linkage validated
+PASS: T-RDD-TRIAGE-008 non-undecided skips triage
+PASS: T-RDD-TRIAGE-009 triage fails closed on non-UNDECIDED input
+PASS: T-RDD-TRIAGE-010 deterministic normalized triage output
+DET_HASH_1=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+DET_HASH_2=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
+PASS: 10  FAIL: 0
+test_rdd_triage_eval_run1_hash=19e2a37fc43043f41a084b27ec4bb963eda947a94ece98dbfc93e9f85325f04d
+test_rdd_triage_eval_run2_hash=19e2a37fc43043f41a084b27ec4bb963eda947a94ece98dbfc93e9f85325f04d
+test_rdd_triage_eval_match=YES
+
+run: bash tests/test_policy_pass_undecided.sh
+PASS: T-UNDECIDED-001 policy_decision=UNDECIDED
+PASS: T-UNDECIDED-002 policy_reasons empty
+PASS: T-UNDECIDED-003 insufficiency.trigger
+PASS: T-UNDECIDED-004 insufficiency.surface
+PASS: T-UNDECIDED-005 insufficiency.tool
+PASS: T-UNDECIDED-006 insufficiency present
+PASS: T-UNDECIDED-007 record_type=pass_decision
+PASS: T-UNDECIDED-008 process_id is 16-char hex
+PASS: T-REG-001 FS_COPY new destination ALLOW
+SKIP: T-REG-002 Cannot produce FS_COPY overwrite=true ALLOW without changing capability registry or evaluator behavior; skipped per TASK_313 STOP guidance
+PASS: T-REG-003 FS_COPY src outside allowed root DENY
+PASS: T-REG-004 FS_COPY hotfile destination DENY
+PASS: T-REG-005 FS_WRITE allow with record_type
+PASS: T-REG-006 FS_WRITE record_version=0.2
+PASS: T-REG-007 FS_MOVE outside root DENY
+PASS: 14  FAIL: 0  SKIP: 1
+
+run: bash tests/test_signing_emit.sh
+SIGNING_KEY_ID=ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6
+SIGNATURE=1iKKBsTJQZnMd5RBwFeiyhF-Qv5EItiR6xr10grxmw-XCAJLLJHaatAjNXYXiwHRyWZLJA_30IGCzYVSKfsqBQ
+RECORD_HASH=sha256:f244d8d0073865787f91b07abd96bf8f594f733f4beb3a28e63c210adaa143f4
+Coverage Summary
+coverage_stamp_version=coverage_stamp_v1
+overall_status=missing reason_code=COVERAGE_STAMP_MISSING
+PASS: record_hash + signature verified
+
+run: bash tests/test_signing_determinism.sh
+--- T-SIGNDET-001: record_hash stable across repeated runs ---
+PASS: T-SIGNDET-001A verify-record (record_hash verified)
+PASS: T-SIGNDET-001B verify-record (record_hash verified)
+PASS: T-SIGNDET-001 same record_hash across runs
+
+--- T-SIGNDET-002: timestamp/UUID/path metadata not in signed payload ---
+PASS: T-SIGNDET-002 verify mutated metadata still passes (exit=0)
+PASS: T-SIGNDET-002 record_hash unchanged after metadata/path mutations
+
+Summary: pass=5 fail=0

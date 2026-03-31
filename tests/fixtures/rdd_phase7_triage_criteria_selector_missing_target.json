@@ -1,0 +1,32 @@
+{
+  "criteria_version": "rdd_triage_criteria.v1",
+  "selector_map": {
+    "FS_COPY|filesystem|dest_exists_no_overwrite": "missing_case_key"
+  },
+  "fs_copy_dest_exists_no_overwrite": {
+    "findings": [
+      {
+        "id": "F1",
+        "type": "rule_gap",
+        "basis": "deterministic",
+        "structural_deficiency": true
+      }
+    ],
+    "governing_condition": "F1",
+    "governing_rationale": "fixture data not used in this negative case",
+    "disposition": {
+      "type": "DEFER_STRUCTURAL_DEFICIENCY",
+      "signal_ref": "S1",
+      "structural_change_needed": "fixture data not used in this negative case"
+    },
+    "structural_signals": [
+      {
+        "id": "S1",
+        "finding_ref": "F1",
+        "deficiency_class": "RULE_GAP",
+        "surface": "filesystem",
+        "description": "fixture data not used in this negative case"
+      }
+    ]
+  }
+}

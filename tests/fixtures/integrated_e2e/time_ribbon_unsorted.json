@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp_utc": "2026-02-23T10:00:02Z",
+    "record_id": "rec-b",
+    "speculation_tag": "spec-B",
+    "event": "sign"
+  },
+  {
+    "timestamp_utc": "2026-02-23T10:00:01Z",
+    "record_id": "rec-c",
+    "speculation_tag": "spec-C",
+    "event": "records"
+  },
+  {
+    "timestamp_utc": "2026-02-23T10:00:01Z",
+    "record_id": "rec-a",
+    "speculation_tag": "spec-A",
+    "event": "manifest"
+  }
+]

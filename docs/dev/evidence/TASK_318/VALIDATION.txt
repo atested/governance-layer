@@ -1,0 +1,60 @@
+Validation checks:
+- Branch: codex/PRE_BRIEFING_CAPABILITY_MAP_REFRESH__v3
+- Expected origin/main baseline: 09f23d2e2b4d2bd3e5f3d4d750952bad872c370c
+
+Check 1: Required specs exist
+PASS docs/dev/tasks/ready/TASK_317__capability_map_lightweight_state_refresh_v3.md
+PASS docs/dev/tasks/ready/TASK_318__capability_map_planning_judgment_refresh_v3.md
+PASS docs/dev/tasks/ready/TASK_319__capability_map_briefing_extraction_refresh_v3.md
+
+Check 2: WORK_QUEUE rows present
+222:| TASK_317 | [Pre-briefing capability-map refresh v3 lane] Capability-map lightweight state refresh v3 | Ready | Codex | none | [→](tasks/ready/TASK_317__capability_map_lightweight_state_refresh_v3.md) |
+223:| TASK_318 | [Pre-briefing capability-map refresh v3 lane] Capability-map planning judgment refresh v3 | Ready | Codex | TASK_317 | [→](tasks/ready/TASK_318__capability_map_planning_judgment_refresh_v3.md) |
+224:| TASK_319 | [Pre-briefing capability-map refresh v3 lane] Capability-map briefing extraction refresh v3 | Ready | Codex | TASK_317 | [→](tasks/ready/TASK_319__capability_map_briefing_extraction_refresh_v3.md) |
+PASS WORK_QUEUE
+
+Check 3: Capability map refreshed to M81 baseline
+3:Last Updated On Branch: codex/PRE_BRIEFING_CAPABILITY_MAP_REFRESH__v3  
+4:Current Baseline (`origin/main`): `09f23d2e2b4d2bd3e5f3d4d750952bad872c370c`  
+5:Latest Merge Window: `M81` (`b45a56ed`)
+PASS MAP_M81
+
+Check 4: authoritative workfront sources included in map
+53:  `docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md`,
+54:  `docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md`,
+55:  `docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md`,
+56:  `docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md`
+69:  `docs/dev/WORK_QUEUE.md`
+73:- RDD implementation planning package landed on main (`docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md` plus doctrine source path).
+218:### Dual-source refresh contract (authoritative)
+224:   - `docs/dev/WORK_QUEUE.md`
+229:- `docs/dev/WORK_QUEUE.md`
+230:- `docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md`
+232:  - expected legacy path: `docs/dev/RESIDUAL_DISCRETION_DOCTRINE.md`
+233:  - current canonical path on main: `docs/RESIDUAL_DISCRETION_DOCTRINE.md`
+235:- `docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md`
+236:- `docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md`
+237:- `docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md`
+PASS AUTHORITATIVE_SOURCES
+
+Check 5: divergence handling explicit in map
+133:- Divergence note: capability-only seam momentum points to tool-catalog follow-on, but authoritative workfront state on main points to RDD Phase 1 as active implementation lane; this map prioritizes the authoritative lane.
+PASS DIVERGENCE_EXPLICIT
+
+Check 6: briefing extraction block support present
+184:### Standard BRIEFING EXTRACTION BLOCK (required packet payload)
+185:- `CURRENT_ORIGIN_MAIN_SHA`: full `origin/main` SHA from refreshed canonical map state.
+186:- `LATEST_MERGE_WINDOW`: latest merge window marker (for example `M81` with merge short SHA when available).
+187:- `LATEST_LANDED_TASKS`: latest landed task IDs from refreshed canonical map state.
+188:- `PLANNING_JUDGMENT_STATE`: one of `VALID`, `PARTIALLY_CONSUMED`, `EXHAUSTED`, `STALE`, `INSUFFICIENT`.
+189:- `LIVE_SURFACES_SUMMARY`: compact live-surface summary from refreshed canonical map state.
+190:- `PREFERRED_NEXT_LANE`: current preferred bounded lane from refreshed canonical map state.
+191:- `SECONDARY_CANDIDATES`: current secondary candidates from refreshed canonical map state.
+192:- `MAJOR_CONSTRAINTS`: major constraints / sensitive areas from refreshed canonical map state.
+193:- `REFRESH_MARKER`: map-reflects-current-main marker (`yes/no`) with source SHA.
+194:- `CURRENT_PROCESS_STATE`: required BFPS startup process state:
+PASS EXTRACTION_SUPPORT
+
+Check 7: do-not-touch file scan
+Forbidden-file scan against branch diff (origin/main...HEAD):
+PASS

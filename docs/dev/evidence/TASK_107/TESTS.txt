@@ -1,0 +1,12 @@
+$ echo TASK_107\ helper\ smoke\ test
+TASK_107 helper smoke test
+[exit=0]
+
+$ printf no-newline-output
+no-newline-output
+[exit=0]
+
+$ bash -lc echo\ \"intentional\ failure\ example\"\;\ exit\ 3
+intentional failure example
+[exit=3]
+[exit=1]

@@ -1,0 +1,19 @@
+ .../BASELINE/TESTS.txt                             | 11 ++++++
+ .../RESTOCK_IDS/TESTS.txt                          |  7 ++++
+ .../DIFF_NAME_ONLY.txt                             |  0
+ .../RESTOCK_TASK_SPECS__2026-03-02/DIFF_STAT.txt   |  0
+ .../HOTFILE_SCAN.txt                               |  8 +++++
+ .../RESTOCK_TASK_SPECS__2026-03-02/TESTS.txt       | 39 ++++++++++++++++++++++
+ ...ence_bundle_indexer_deterministic_index_json.md | 31 +++++++++++++++++
+ ...le_verifier_diagnostics_missing_invalid_file.md | 31 +++++++++++++++++
+ ...8__merge_tree_forecast_helper_stable_wrapper.md | 31 +++++++++++++++++
+ .../TASK_209__hot_file_policy_regex_guard_test.md  | 30 +++++++++++++++++
+ ...10__release_gate_timing_report_ordering_only.md | 31 +++++++++++++++++
+ ...K_211__deterministic_grep_helper_sorted_logs.md | 31 +++++++++++++++++
+ ...SK_212__evidence_retention_rule_operator_doc.md | 31 +++++++++++++++++
+ ...TASK_213__stop_packet_linter_required_fields.md | 31 +++++++++++++++++
+ ...14__completion_packet_linter_required_fields.md | 31 +++++++++++++++++
+ ...5__evidence_path_audit_task_branch_alignment.md | 31 +++++++++++++++++
+ ...TASK_216__local_ci_command_aggregator_stable.md | 31 +++++++++++++++++
+ ...17__task_spec_self_checker_required_sections.md | 31 +++++++++++++++++
+ 18 files changed, 436 insertions(+)

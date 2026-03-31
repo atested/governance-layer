@@ -1,0 +1,7 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE8_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE8_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE8_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE8_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_333__rdd_triage_selector_contract_strictness.md
+docs/dev/tasks/ready/TASK_334__rdd_triage_selector_contract_coverage.md

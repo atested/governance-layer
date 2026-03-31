@@ -1,0 +1,27 @@
+{
+  "tool": "FS_COPY",
+  "args": {
+    "src_path": "out/rdd/triage-src.txt",
+    "dst_path": "out/rdd/triage-dst-exists.txt",
+    "overwrite": false
+  },
+  "intent": {
+    "goal": "Exercise pass undecided path that should route to triage.",
+    "constraints": {
+      "overwrite": false
+    },
+    "requested_action": "FS_COPY",
+    "inputs": [
+      {
+        "ref": "file:src_path",
+        "value": "out/rdd/triage-src.txt"
+      }
+    ],
+    "expected_outputs": [
+      {
+        "ref": "file:dst_path",
+        "value": "out/rdd/triage-dst-exists.txt"
+      }
+    ]
+  }
+}

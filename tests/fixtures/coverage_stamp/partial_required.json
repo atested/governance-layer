@@ -1,0 +1,15 @@
+{
+  "coverage_stamp_version": "coverage_stamp_v1",
+  "generated_by": "phase2d-test",
+  "generated_from": ["intent"],
+  "surfaces": [
+    {"capability_surface":"web","surface_id":"web","coverage":{"observation":true,"enforcement":false,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"filesystem","surface_id":"filesystem","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["capability-registry"]},
+    {"capability_surface":"shell","surface_id":"shell","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"routing","surface_id":"routing","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"model","surface_id":"model","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"memory","surface_id":"memory","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"network","surface_id":"network","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]},
+    {"capability_surface":"toolchain","surface_id":"toolchain","coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]}
+  ]
+}

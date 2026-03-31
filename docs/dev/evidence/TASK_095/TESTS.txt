@@ -1,0 +1,87 @@
+$ git diff --stat origin/main...HEAD
+[exit=0]
+
+$ git status --porcelain
+?? docs/dev/evidence/TASK_095/
+[exit=0]
+
+$ git ls-files -m -o --exclude-standard
+docs/dev/evidence/TASK_095/TESTS.txt
+[exit=0]
+
+$ bash tests/test_rc_fs_not_a_file.sh
+--- TASK_065: RC-FS-NOT-A-FILE ---
+$ python3 /Users/gregkeeter/codex-workspaces/governance-layer/scripts/policy-eval.py /Users/gregkeeter/codex-workspaces/governance-layer/capabilities/capability-registry.json /Users/gregkeeter/codex-workspaces/governance-layer/tests/fixtures/fs_read_not_a_file.json
+{
+  "record_version": "0.1",
+  "cap_registry_hash": "sha256:74d5e671f9fb8584946bb3db9f5854a80a161e8db31a34ca983c6d0a30818dda",
+  "request_hash": "sha256:14e99b91ecd1bc6e19fe1e7f3d3e522a757ee55a2e27136e23a317c00c50b76e",
+  "request_bytes_b64": "ewogICJ0b29sIjogIkZTX1JFQUQiLAogICJhcmdzIjogewogICAgInBhdGgiOiAiL1ZvbHVtZXMvU1NEL2FyY2hpdmUvZ292L2dvdmVybmFuY2UtbGF5ZXIvZG9jcyIsCiAgICAibWF4X2J5dGVzIjogNDA5NiwKICAgICJvZmZzZXQiOiAwLAogICAgImFzX3RleHQiOiB0cnVlCiAgfSwKICAiaW50ZW50IjogewogICAgImdvYWwiOiAiQXR0ZW1wdCBGU19SRUFEIG9uIGEgZGlyZWN0b3J5IHBhdGguIiwKICAgICJjb25zdHJhaW50cyI6IHt9LAogICAgInJlcXVlc3RlZF9hY3Rpb24iOiAiRlNfUkVBRCIsCiAgICAiaW5wdXRzIjogW10sCiAgICAiZXhwZWN0ZWRfb3V0cHV0cyI6IFsKICAgICAgewogICAgICAgICJyZWYiOiAiZmlsZTpwYXRoIiwKICAgICAgICAidmFsdWUiOiAiL1ZvbHVtZXMvU1NEL2FyY2hpdmUvZ292L2dvdmVybmFuY2UtbGF5ZXIvZG9jcyIKICAgICAgfQogICAgXQogIH0KfQo=",
+  "timestamp_utc": "2026-02-21T12:10:44Z",
+  "session_id": "sess-8adf252f-2a41-4f7c-aaad-6cc3553959d0",
+  "request_id": "2dad7ff1-3cef-4fef-a617-ab32c534c69a",
+  "actor": "unknown",
+  "tool": "FS_READ",
+  "capability_class": "FS_READ",
+  "intent": {
+    "goal": "Attempt FS_READ on a directory path.",
+    "constraints": {},
+    "requested_action": "FS_READ",
+    "expected_outputs": [
+      {
+        "ref": "file:path",
+        "value": "/Volumes/SSD/archive/gov/governance-layer/docs"
+      }
+    ]
+  },
+  "policy_inputs": {
+    "canonical_path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "allow_base_dirs": [
+      "/Volumes/SSD/archive/gov/governance-layer/",
+      "/Volumes/SSD/archive/gov/runtime"
+    ],
+    "deny_hidden_paths": true,
+    "deny_overwrite_by_default": true,
+    "deny_executable_outputs": true,
+    "overwrite_intent": false,
+    "overwrite_requested": false,
+    "request_executable": false
+  },
+  "normalized_args": {
+    "canonical_path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "max_bytes": 4096,
+    "max_bytes_hard": 65536,
+    "offset": 0,
+    "as_text": true
+  },
+  "policy_decision": "DENY",
+  "policy_reasons": [
+    {
+      "code": "RC-FS-NOT-A-FILE",
+      "detail": "Path is not a file: /Volumes/SSD/archive/gov/governance-layer/docs"
+    }
+  ],
+  "tool_args_redacted": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "canonical_path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "content_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "overwrite": false,
+    "request_executable": false
+  },
+  "untrusted_inputs": [
+    {
+      "cap_registry_path_arg": "/Users/gregkeeter/codex-workspaces/governance-layer/capabilities/capability-registry.json",
+      "note": "ignored; enforcement uses internal registry only"
+    }
+  ],
+  "evidence_refs": [],
+  "prev_record_hash": null,
+  "record_hash": "sha256:4882d3c2aee795c5adec45128ed6d9f8dc19814d5da3f614502642095ac7d77f",
+  "signature": null,
+  "signing_key_id": null
+}
+PASS: decision DENY with RC-FS-NOT-A-FILE
+[exit=0]
+$ bash -lc "bash -lc '/opt/homebrew/bin/codex exec --dangerously-bypass-approvals-and-sandbox - < "$0"'" "docs/dev/tasks/ready/TASK_095__test_rc_fs_not_a_file.md"
+[exit=1]
+$ bash -lc "bash -lc '/opt/homebrew/bin/codex exec --dangerously-bypass-approvals-and-sandbox - < "$0"'" "docs/dev/tasks/ready/TASK_095__test_rc_fs_not_a_file.md"

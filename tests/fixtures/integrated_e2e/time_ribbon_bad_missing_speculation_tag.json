@@ -1,0 +1,7 @@
+[
+  {
+    "timestamp_utc": "2026-02-23T10:00:00Z",
+    "record_id": "rec-001",
+    "event": "manifest_built"
+  }
+]

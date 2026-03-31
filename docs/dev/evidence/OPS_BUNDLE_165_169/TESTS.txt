@@ -1,0 +1,45 @@
+## TASK_165 repo packaging check
+$ bash tests/test_repo_packaging_check.sh
+[exit=0]
+$ bash tests/test_repo_packaging_check.sh  # run2
+[exit=0]
+RUN1_SHA256=d5c75a6679177bbda0649e0cdef31ea886350f689f2fab79ba7690eb53d6658c
+RUN2_SHA256=d5c75a6679177bbda0649e0cdef31ea886350f689f2fab79ba7690eb53d6658c
+PASS: output deterministic across two runs
+
+## TASK_168 external packaging smoke
+$ bash tests/test_external_packaging_smoke.sh
+[exit=0]
+$ bash tests/test_external_packaging_smoke.sh  # run2
+[exit=0]
+RUN1_SHA256=289bead43a5bce7f6a4c9f6d928d9f1ce07cb5262d39c3b5fa8ebd8f32ed7452
+RUN2_SHA256=289bead43a5bce7f6a4c9f6d928d9f1ce07cb5262d39c3b5fa8ebd8f32ed7452
+PASS: output deterministic across two runs
+
+## TASK_169 GHA artifact completeness sanity
+$ bash tests/test_github_actions_release_gate_artifacts_completeness.sh
+[exit=0]
+$ bash tests/test_github_actions_release_gate_artifacts_completeness.sh  # run2
+[exit=0]
+RUN1_SHA256=800e3cc013d33eb1e007d3401f527a22ae5b1400e9837db9371ef7cab0ad4d9f
+RUN2_SHA256=800e3cc013d33eb1e007d3401f527a22ae5b1400e9837db9371ef7cab0ad4d9f
+PASS: output deterministic across two runs
+
+## TASK_167 validator usage doc anchors present
+$ rg -n "External Validator Usage|validate-proof-bundle\\.sh out/proof-bundles/<run-id>/|--summary-json|Deterministic exit taxonomy|validate_proof_bundle_summary_v1" docs/EXTERNAL_CONTRACTS.md
+[exit=0]
+$ rg -n "External Validator Usage|validate-proof-bundle\\.sh out/proof-bundles/<run-id>/|--summary-json|Deterministic exit taxonomy|validate_proof_bundle_summary_v1" docs/EXTERNAL_CONTRACTS.md  # run2
+[exit=0]
+RUN1_SHA256=f994b6aac072158df1c81e0845fe9fb04f607a8b3bcf596c23ecd3ee89b5ad4f
+RUN2_SHA256=f994b6aac072158df1c81e0845fe9fb04f607a8b3bcf596c23ecd3ee89b5ad4f
+PASS: output deterministic across two runs
+
+## TASK_166 distribution manifest anchors present
+$ rg -n "^## Files to Ship|^## Expected Runtime Outputs|^## Do Not Commit|^## Canonical Validation Commands" docs/DISTRIBUTION.md
+[exit=0]
+$ rg -n "^## Files to Ship|^## Expected Runtime Outputs|^## Do Not Commit|^## Canonical Validation Commands" docs/DISTRIBUTION.md  # run2
+[exit=0]
+RUN1_SHA256=7a766821209b0783ecc4769f87d5cefae4e430e97064745a876860067f1a3fa4
+RUN2_SHA256=7a766821209b0783ecc4769f87d5cefae4e430e97064745a876860067f1a3fa4
+PASS: output deterministic across two runs
+

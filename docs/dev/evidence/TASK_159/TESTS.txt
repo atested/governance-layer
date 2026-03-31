@@ -1,0 +1,12 @@
+$ bash tests/test_release_gate_versions_and_log_ordering.sh
+--- T-KV-ORDER-001: versions.txt and release_gate_log.txt canonical ordering deterministic ---
+PASS: versions.txt canonical key ordering
+PASS: versions.txt duplicate keys absent
+PASS: release_gate_log.txt canonical key ordering
+PASS: release_gate_log.txt duplicate keys absent
+VERSIONS_ORDER_SHA256_RUN1=f1f22c0b0edb5a43d730979a6b603eb81101a5eedd0aa1a3daf31966dc301687
+VERSIONS_ORDER_SHA256_RUN2=f1f22c0b0edb5a43d730979a6b603eb81101a5eedd0aa1a3daf31966dc301687
+RELEASE_GATE_LOG_ORDER_SHA256_RUN1=234b341da50d4c46b185e27c0e547287b15e1ec6b7bc8560371f3f6c6e728677
+RELEASE_GATE_LOG_ORDER_SHA256_RUN2=234b341da50d4c46b185e27c0e547287b15e1ec6b7bc8560371f3f6c6e728677
+PASS: canonical ordering outputs deterministic across two runs
+[exit=0]

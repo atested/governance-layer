@@ -1,0 +1,22 @@
+Hot files touched scan
+======================
+
+Scanned against hot files:
+- system/scripts/release-gate.sh
+- system/scripts/validate-proof-bundle.sh
+- system/scripts/codex-unattended.sh
+- docs/dev/WORK_QUEUE.md
+- docs/dev/ASSIGNMENTS.md
+
+Touched files (BASE..HEAD):
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE2_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+
+Matched hot files:
+docs/dev/WORK_QUEUE.md

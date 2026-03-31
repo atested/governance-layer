@@ -1,0 +1,4 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/tasks/ready/TASK_287__current_main_capability_map_create.md
+docs/dev/tasks/ready/TASK_288__current_main_capability_map_seed.md
+docs/dev/tasks/ready/TASK_289__current_main_capability_map_protocol.md

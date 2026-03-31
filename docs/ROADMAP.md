@@ -1,6 +1,10 @@
 # Roadmap (v0.1)
 Updated: 2026-02-15
 
+## Current Position
+- Phase 2C.2 is complete.
+- Next focus: Phase 2D scoping work (planning only; no implementation start).
+
 ## Tracks
 1. Governance Layer (primary product)
 2. Cecil (harness + test-pilot/engineer)

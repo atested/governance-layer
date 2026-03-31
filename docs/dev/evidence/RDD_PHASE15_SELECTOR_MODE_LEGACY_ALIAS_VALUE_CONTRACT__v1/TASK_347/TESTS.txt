@@ -1,0 +1,26 @@
+TASK: TASK_347 — RDD selector-mode legacy dual-alias value-contract hardening
+
+Implementation scope:
+- scripts/rdd-pass-triage.sh
+- tests/fixtures/rdd_phase15_selector_mode_intent_legacy_both_aliases_invalid_rdd_empty.json
+- tests/fixtures/rdd_phase15_selector_mode_intent_legacy_both_aliases_invalid_top_non_string.json
+
+Tests run:
+1) bash tests/test_rdd_triage_selector_mode.sh
+   - Result: PASS
+   - New checks covered:
+     - T-RDD-TRIAGE-MODE-010Q legacy-only dual-alias empty-string value fails closed
+     - T-RDD-TRIAGE-MODE-010R legacy-only dual-alias empty-string value-invalid marker present
+     - T-RDD-TRIAGE-MODE-010S legacy-only dual-alias non-string value fails closed
+     - T-RDD-TRIAGE-MODE-010T legacy-only dual-alias non-string value-invalid marker present
+
+2) bash tests/test_rdd_triage_criteria_selector.sh
+   - Result: PASS
+
+3) bash tests/test_rdd_triage_eval.sh
+   - Result: PASS
+
+Determinism evidence (selector-mode matrix):
+- run1: SELECTOR_MODE_MATRIX_HASH_1=01a26ddd1337aa0334a2da5b2882716ff24d35fdc8959d54bbb43a462227db94
+- run2: SELECTOR_MODE_MATRIX_HASH_2=01a26ddd1337aa0334a2da5b2882716ff24d35fdc8959d54bbb43a462227db94
+- match: YES

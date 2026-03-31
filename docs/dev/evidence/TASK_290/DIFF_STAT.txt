@@ -1,0 +1,5 @@
+ docs/dev/WORK_QUEUE.md                             |  3 ++
+ ...__bfps_v12_capability_map_required_reference.md | 47 +++++++++++++++++++++
+ ...ability_map_lightweight_maintenance_protocol.md | 48 +++++++++++++++++++++
+ .../TASK_292__dev_chat_startup_state_wiring.md     | 49 ++++++++++++++++++++++
+ 4 files changed, 147 insertions(+)

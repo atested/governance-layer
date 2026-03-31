@@ -1,0 +1,35 @@
+RDD Phase 5 restock validation
+base_sha=fc4320e6f9b02e455566ce7efd65fade7afee862
+branch=codex/RDD_PHASE5_RESTOCK__v1
+
+files_inspected:
+- docs/dev/OPS_PROCESS__CHATGPT_CODEX_CECIL__v1.md
+- docs/dev/WORK_QUEUE.md
+- docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md
+- docs/RESIDUAL_DISCRETION_DOCTRINE.md
+- docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md
+- docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md
+- docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md
+- docs/dev/tasks/ready/TASK_320__rdd_triage_eval_emission_and_chain_append.md
+- docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md
+- docs/dev/tasks/ready/TASK_322__rdd_triage_eval_test_coverage.md
+- docs/dev/tasks/ready/TASK_323__rdd_chain_verifier_multi_record_rules.md
+- docs/dev/tasks/ready/TASK_324__rdd_chain_verifier_test_coverage.md
+- docs/dev/tasks/ready/TASK_325__rdd_signal_extractor_minimal_plumbing.md
+- docs/dev/tasks/ready/TASK_326__rdd_signal_extractor_test_coverage.md
+
+findings:
+- No existing RDD Phase 5 ready-task specs were present on current main.
+- Authoritative impl-plan lists 'Replay check extension for Triage and Terminal Judgment record types' as high-value deferred beyond v1.
+- Next seam is bounded to replay verifier + focused tests, with explicit allowlists and stop rules.
+
+existing_next_ready_rdd_tasks_found=NO
+new_restock_specs_created=YES
+work_queue_changed=YES
+lightweight_bounded_scope=PASS
+
+recommended_next_lane_order:
+1. docs/dev/tasks/ready/TASK_327__rdd_replay_extension_for_triage_terminal_records.md
+2. docs/dev/tasks/ready/TASK_328__rdd_replay_extension_test_coverage.md
+
+implementation_files_changed=NO

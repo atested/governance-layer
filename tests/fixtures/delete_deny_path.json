@@ -1,0 +1,14 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/tmp/delete-outside.txt",
+    "recursive": false
+  },
+  "intent": {
+    "goal": "Attempt delete outside allowlisted roots.",
+    "constraints": { "recursive": false },
+    "requested_action": "FS_DELETE",
+    "inputs": [{ "ref": "file:path", "value": "/tmp/delete-outside.txt" }],
+    "expected_outputs": []
+  }
+}

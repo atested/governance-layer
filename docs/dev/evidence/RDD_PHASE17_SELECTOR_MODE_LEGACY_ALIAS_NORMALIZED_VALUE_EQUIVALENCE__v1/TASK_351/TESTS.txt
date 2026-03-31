@@ -1,0 +1,26 @@
+TASK: TASK_351 — RDD selector-mode legacy dual-alias normalized-value equivalence hardening
+
+Implementation scope:
+- scripts/rdd-pass-triage.sh
+- tests/fixtures/rdd_phase17_selector_mode_intent_legacy_both_aliases_normalized_equal_whitespace.json
+- tests/fixtures/rdd_phase17_selector_mode_intent_legacy_both_aliases_normalized_mismatch_whitespace.json
+
+Tests run:
+1) bash tests/test_rdd_triage_selector_mode.sh
+   - Result: PASS
+   - New checks covered:
+     - T-RDD-TRIAGE-MODE-010Y legacy-only dual-alias equal normalized allowed values fail closed as conflict
+     - T-RDD-TRIAGE-MODE-010Z legacy-only dual-alias normalized-equal conflict marker present
+     - T-RDD-TRIAGE-MODE-011A legacy-only dual-alias different normalized allowed values fail closed as mismatch
+     - T-RDD-TRIAGE-MODE-011B legacy-only dual-alias normalized-mismatch marker present
+
+2) bash tests/test_rdd_triage_criteria_selector.sh
+   - Result: PASS
+
+3) bash tests/test_rdd_triage_eval.sh
+   - Result: PASS
+
+Determinism evidence (selector-mode matrix):
+- run1: SELECTOR_MODE_MATRIX_HASH_1=beeeea0f1f25e408140d2081283fde15246aaf76a3b6654afd1134a54df55a9d
+- run2: SELECTOR_MODE_MATRIX_HASH_2=beeeea0f1f25e408140d2081283fde15246aaf76a3b6654afd1134a54df55a9d
+- match: YES

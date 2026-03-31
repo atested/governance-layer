@@ -1,0 +1,13 @@
+TASK=TASK_345
+BASE_SHA=8d074ef46074cc5e4d2e13578134458d1bfa3d4d
+
+tests_run:
+- bash tests/test_rdd_triage_selector_mode.sh
+- bash tests/test_rdd_triage_criteria_selector.sh
+- bash tests/test_rdd_triage_eval.sh
+- bash tests/test_signing_emit.sh
+- bash tests/test_signing_determinism.sh
+
+selector_mode_matrix_hash_run1=db01bf94db6fad183fa8ca40c2970dd6fc75c6fbf1fe318f51e4458b8df09a96
+selector_mode_matrix_hash_run2=db01bf94db6fad183fa8ca40c2970dd6fc75c6fbf1fe318f51e4458b8df09a96
+selector_mode_matrix_hash_match=YES

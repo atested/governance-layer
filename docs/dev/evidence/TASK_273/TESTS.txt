@@ -1,0 +1,11 @@
+PASS:bash system/tests/test_export_tool_catalog_bundle.sh
+PASS:bash system/tests/test_verify_tool_catalog_bundle.sh
+PASS:bash system/tests/test_verify_tool_catalog_bundle_edge_cases.sh
+PASS:bash system/tests/test_tool_catalog_negative_matrix.sh
+PASS:bash system/tests/test_tool_catalog_store_edge_cases.sh
+PASS:bash system/tests/test_tool_catalog_store_deterministic_root.sh
+PASS:bash system/tests/test_no_conflict_markers_tracked.sh
+PASS:bash system/tests/test_no_absolute_paths_tracked.sh
+PASS:bash system/tests/test_no_trailing_whitespace.sh
+PASS:bash system/tests/test_shell_scripts_strict_mode.sh
+PASS:bash system/tests/test_dev_scripts_safe_defaults.sh

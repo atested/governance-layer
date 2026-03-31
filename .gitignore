@@ -26,3 +26,8 @@ LOGS/decision-chain.jsonl
 mcp/.venv
 venv/
 __pycache__/
+.gov_runtime/
+.claude/commands/
+.codex/
+
+out/

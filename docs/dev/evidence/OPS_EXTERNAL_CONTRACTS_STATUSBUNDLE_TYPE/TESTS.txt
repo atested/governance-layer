@@ -1,0 +1,9 @@
+$ rg -n "^### Optional Files|status_bundle\.json|strictness\.value|ADDITIVE-ONLY within v1|All 5 required files are present" docs/EXTERNAL_CONTRACTS.md
+42:### Optional Files
+46:- **`status_bundle.json`**: Optional machine-readable release-gate status summary
+47:  - Schema: `status_bundle_v1` (ADDITIVE-ONLY within v1)
+48:  - `strictness.value`: integer `0|1` (not string)
+49:  - Guarantee: Existing fields remain stable; new fields may be added without renaming/removing/retyping existing fields
+143:3. All 5 required files are present
+156:- `status_bundle.json` presence (optional) and additive fields within `status_bundle_v1`
+[exit=0]

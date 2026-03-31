@@ -1,0 +1,32 @@
+{
+  "tool": "FS_COPY",
+  "args": {
+    "src_path": "out/rdd/phase14-selector-src.txt",
+    "dst_path": "out/rdd/phase14-selector-dst-exists.txt",
+    "overwrite": false
+  },
+  "intent": {
+    "goal": "Exercise canonical invalid selector_mode precedence over legacy source conflict.",
+    "requested_action": "FS_COPY",
+    "constraints": {
+      "overwrite": false,
+      "selector_mode": " ExPeRiMeNtAl_MoDe "
+    },
+    "rdd": {
+      "selector_mode": "compat_legacy_single_case"
+    },
+    "selector_mode": "explicit",
+    "inputs": [
+      {
+        "ref": "file:src_path",
+        "value": "out/rdd/phase14-selector-src.txt"
+      }
+    ],
+    "expected_outputs": [
+      {
+        "ref": "file:dst_path",
+        "value": "out/rdd/phase14-selector-dst-exists.txt"
+      }
+    ]
+  }
+}

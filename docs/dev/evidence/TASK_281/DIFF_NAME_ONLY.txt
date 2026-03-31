@@ -1,0 +1,12 @@
+docs/dev/BRIEFING_FORMAT__BFPS_v12.md
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/TASK_281/DIFF_NAME_ONLY.txt
+docs/dev/evidence/TASK_281/DIFF_STAT.txt
+docs/dev/evidence/TASK_281/HOTFILE_SCAN.txt
+docs/dev/evidence/TASK_281/VALIDATION.txt
+docs/dev/evidence/TASK_282/DIFF_NAME_ONLY.txt
+docs/dev/evidence/TASK_282/DIFF_STAT.txt
+docs/dev/evidence/TASK_282/HOTFILE_SCAN.txt
+docs/dev/evidence/TASK_282/VALIDATION.txt
+docs/dev/tasks/ready/TASK_281__bfps_v12_codex_dispatch_shape_update.md
+docs/dev/tasks/ready/TASK_282__bfps_v12_dispatch_pointer_seam_resolution.md

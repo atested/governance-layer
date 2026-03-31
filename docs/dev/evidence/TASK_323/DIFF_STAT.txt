@@ -1,0 +1,19 @@
+ .../TASK_323/DIFF_NAME_ONLY.txt                    |  1 +
+ .../RDD_CHAIN_VERIFY__v1/TASK_323/DIFF_STAT.txt    |  2 +
+ .../RDD_CHAIN_VERIFY__v1/TASK_323/HOTFILE_SCAN.txt |  6 ++
+ .../RDD_CHAIN_VERIFY__v1/TASK_323/TESTS.txt        | 18 ++++
+ .../TASK_324/DIFF_NAME_ONLY.txt                    |  1 +
+ .../RDD_CHAIN_VERIFY__v1/TASK_324/DIFF_STAT.txt    |  2 +
+ .../RDD_CHAIN_VERIFY__v1/TASK_324/HOTFILE_SCAN.txt |  6 ++
+ .../RDD_CHAIN_VERIFY__v1/TASK_324/TESTS.txt        | 44 ++++++++++
+ docs/dev/evidence/TASK_323/DIFF_NAME_ONLY.txt      |  1 +
+ docs/dev/evidence/TASK_323/DIFF_STAT.txt           |  2 +
+ docs/dev/evidence/TASK_323/HOTFILE_SCAN.txt        |  6 ++
+ docs/dev/evidence/TASK_323/TESTS.txt               | 18 ++++
+ docs/dev/evidence/TASK_324/DIFF_NAME_ONLY.txt      |  1 +
+ docs/dev/evidence/TASK_324/DIFF_STAT.txt           |  2 +
+ docs/dev/evidence/TASK_324/HOTFILE_SCAN.txt        |  6 ++
+ docs/dev/evidence/TASK_324/TESTS.txt               | 44 ++++++++++
+ scripts/verify-chain.py                            | 57 +++++++++++++
+ tests/test_rdd_chain_verify.sh                     | 95 ++++++++++++++++++++++
+ 18 files changed, 312 insertions(+)

@@ -21,8 +21,11 @@ This is not an OpenClaw specific project. OpenClaw may become a later stage appl
    1. Cecil is a test pilot engineer: generates, runs, verifies, and interprets execution evidence
    2. Cecil is not the source of truth; the governance repo is
 
-## Current architecture
-### Core objects
+## Current architecture (transitioning to Foundation v0)
+
+**Note**: The system is transitioning from the current decision-chain architecture to Foundation v0 (process ledger + capability binding + verifier checks). See [Foundation v0 Implementation Plan](design/foundation-v0-implementation-plan.md) for the target architecture.
+
+### Current objects (pre-Foundation v0)
 1. Intent record
    1. Normalized args
    2. Capability
@@ -42,11 +45,10 @@ This is not an OpenClaw specific project. OpenClaw may become a later stage appl
 ### Evidence storage
 1. Repo evidence (versioned)
    1. docs, scripts, tests, reports in LOGS/report-*.md
-2. Runtime evidence (not in git)
-   1. /Volumes/SSD/archive/gov/runtime/LOGS/
-   2. decision-chain.jsonl
-   3. records/ and intents/
-   4. quarantine/ for broken chains + reasons
+2. Runtime evidence (not in git; controlled by `GOV_RUNTIME_DIR`)
+   1. `$GOV_RUNTIME_DIR/LOGS/decision-chain.jsonl` — append-only tamper-evident chain
+   2. `$GOV_RUNTIME_DIR/LOGS/quarantine/` — broken chains preserved on integrity failure
+   3. `$GOV_RUNTIME_DIR/tmp/` — scratch space for governed tool operations
 
 ### Integration surface
 MCP broker provides governed tools with a common wrapper:
@@ -138,4 +140,25 @@ Latest known milestone:
 2. FS_WRITE, FS_LIST, FS_READ are implemented and covered by MCP smoke tests
 3. Chain verification is fail closed with quarantine rotation
 4. Tests passing at last verification checkpoint
+
+## Foundation v0 Roadmap
+
+The system is evolving toward **Foundation v0**: a process ledger with minimal capability binding and verifier checks. This represents a more rigorous governance substrate than the current decision-chain architecture.
+
+**Key documents**:
+- [Foundation v0 Implementation Plan](design/foundation-v0-implementation-plan.md) — detailed technical plan
+
+**Decision gate**: Foundation v0 required **13 governance decisions** (D1–D13) to be explicitly resolved. These are not implementation details—they determine verification correctness.
+
+**Decision areas**:
+- Hash algorithm, encoding, and prefix convention (D1–D2)
+- Genesis sentinel and sequence numbering (D3–D4)
+- Coverage strictness and binding mechanism (D6–D7)
+- Hash basis rules per typed reference type (D9)
+- Recovery and failure handling mappings (D11–D12)
+- Typed reference type governance (D13)
+
+See the [Resolved Decisions section](design/foundation-v0-implementation-plan.md#resolved-governance-decisions-d1d13) in the Foundation v0 plan for the complete list.
+
+**Status**: All decisions resolved (2026-03-02). Implementation unblocked.
 

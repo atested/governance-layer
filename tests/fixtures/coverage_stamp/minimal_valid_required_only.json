@@ -1,0 +1,33 @@
+{
+  "coverage_stamp_version": "coverage_stamp_v1",
+  "generated_by": "phase2d-test",
+  "generated_from": [
+    "intent"
+  ],
+  "surfaces": [
+    {
+      "capability_surface": "web",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "web"
+    },
+    {
+      "capability_surface": "filesystem",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "capability-registry"
+      ],
+      "surface_id": "filesystem"
+    }
+  ]
+}

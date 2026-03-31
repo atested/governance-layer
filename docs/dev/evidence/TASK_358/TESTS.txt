@@ -1,0 +1,27 @@
+TASK: TASK_358
+DATE_UTC: 2026-03-11T15:06:04Z
+
+Coverage scope:
+- tests/test_rdd_triage_selector_mode.sh expanded with Phase 20 matrix cases
+- new fixtures under tests/fixtures/rdd_phase20_selector_mode_*.json
+
+Coverage assertions added:
+- canonical non-string selector_mode fails closed with RDD_TRIAGE_SELECTOR_MODE_INVALID mode=<non_string_or_empty>
+- canonical empty-string selector_mode fails closed with RDD_TRIAGE_SELECTOR_MODE_INVALID mode=<non_string_or_empty>
+- canonical invalid selector_mode + legacy aliases fails closed with canonical invalid marker
+- canonical invalid selector_mode + legacy aliases does not emit SOURCE_CONFLICT marker
+
+Validation run:
+1) tests/test_rdd_triage_selector_mode.sh
+- Result: PASS
+- Determinism:
+  - SELECTOR_MODE_MATRIX_HASH_1=000f130002f8898c374f6128bc50319c3e271692d84e43f004f24992b2605d2f
+  - SELECTOR_MODE_MATRIX_HASH_2=000f130002f8898c374f6128bc50319c3e271692d84e43f004f24992b2605d2f
+  - MATCH=YES
+
+2) tests/test_rdd_triage_criteria_selector.sh
+- Result: PASS
+- Determinism:
+  - SELECTOR_MATRIX_HASH_1=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+  - SELECTOR_MATRIX_HASH_2=c55a75f054b348106005b0064d32858d3ef6f53cc34f059c950421e98503617c
+  - MATCH=YES

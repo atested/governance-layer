@@ -1,0 +1,4 @@
+docs/dev/AAT_SHIM_OPERATOR_PILOT.md
+scripts/aat_stage_into_proof_bundle.py
+scripts/run_validate_proof_bundle_with_aat_shim.sh
+system/tests/test_aat_shim_operator_pilot.sh

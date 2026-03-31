@@ -1,0 +1,26 @@
+TASK: TASK_349 — RDD selector-mode legacy dual-alias allowed-value contract hardening
+
+Implementation scope:
+- scripts/rdd-pass-triage.sh
+- tests/fixtures/rdd_phase16_selector_mode_intent_legacy_both_aliases_unsupported_equal.json
+- tests/fixtures/rdd_phase16_selector_mode_intent_legacy_both_aliases_unsupported_mixed.json
+
+Tests run:
+1) bash tests/test_rdd_triage_selector_mode.sh
+   - Result: PASS
+   - New checks covered:
+     - T-RDD-TRIAGE-MODE-010U legacy-only dual-alias equal unsupported values fail closed
+     - T-RDD-TRIAGE-MODE-010V legacy-only dual-alias equal unsupported value marker present
+     - T-RDD-TRIAGE-MODE-010W legacy-only dual-alias mixed allowed/unsupported values fail closed
+     - T-RDD-TRIAGE-MODE-010X legacy-only dual-alias mixed unsupported value marker present
+
+2) bash tests/test_rdd_triage_criteria_selector.sh
+   - Result: PASS
+
+3) bash tests/test_rdd_triage_eval.sh
+   - Result: PASS
+
+Determinism evidence (selector-mode matrix):
+- run1: SELECTOR_MODE_MATRIX_HASH_1=ac8dfae2817ab8854b91be44f6c4ba972e7e8e36344f5275b6c2ca832337d107
+- run2: SELECTOR_MODE_MATRIX_HASH_2=ac8dfae2817ab8854b91be44f6c4ba972e7e8e36344f5275b6c2ca832337d107
+- match: YES

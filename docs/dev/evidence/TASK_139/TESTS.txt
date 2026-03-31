@@ -1,0 +1,13 @@
+$ rg -n "^### 4\.5 Versioning and Compatibility|proof_packet_v1|proof_packet_verify_summary_v1|record_bytes_sha256|replay_report_hash" docs/dev/ATTESTATION_SPEC.md docs/TEST-SUITE.md
+docs/TEST-SUITE.md:119:  - Locks pack→verify roundtrip, replay audit report path contract, and linkage invariants (`replay_report_hash`, `record_bytes_sha256`).
+docs/TEST-SUITE.md:128:- Proof-packet manifest schema marker: `proof_packet_v1`
+docs/TEST-SUITE.md:129:- Verifier summary JSON schema marker: `proof_packet_verify_summary_v1`
+docs/TEST-SUITE.md:130:- Replay audit report linkage is validated via `source_summary.replay_report_hash` and `record_bytes_sha256` invariants in proof-packet tests.
+docs/dev/ATTESTATION_SPEC.md:259:- `record_bytes_sha256`: SHA256 of `payload/record.json` bytes (must match `manifest.files["record.json"].sha256`)
+docs/dev/ATTESTATION_SPEC.md:261:- `replay_report_hash`: SHA256 of `payload/replay_audit_report.json` bytes (must match manifest hash entry)
+docs/dev/ATTESTATION_SPEC.md:296:### 4.5 Versioning and Compatibility (Proof Packet / Replay Audit Reports)
+docs/dev/ATTESTATION_SPEC.md:298:- Proof packet manifest schema version: `proof_packet_v1` (`manifest.json.proof_packet_version`)
+docs/dev/ATTESTATION_SPEC.md:299:- Proof-packet verifier summary JSON schema version: `proof_packet_verify_summary_v1` (`report_version`)
+docs/dev/ATTESTATION_SPEC.md:300:- Replay audit report JSON is expected to remain deterministic and versioned by its report payload shape; proof-packet pack/verify treat it as a hashed payload member referenced by `source_summary.replay_report_hash`.
+docs/dev/ATTESTATION_SPEC.md:304:- `record_bytes_sha256` and `replay_report_hash` linkage fields are fail-closed invariants for proof-packet verify.
+[exit=0]

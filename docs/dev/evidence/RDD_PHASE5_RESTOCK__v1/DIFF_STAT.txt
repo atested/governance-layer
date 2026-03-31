@@ -1,0 +1,8 @@
+ docs/dev/WORK_QUEUE.md                             |  9 ++++
+ .../RDD_PHASE5_RESTOCK__v1/DIFF_NAME_ONLY.txt      |  0
+ .../evidence/RDD_PHASE5_RESTOCK__v1/DIFF_STAT.txt  |  0
+ .../RDD_PHASE5_RESTOCK__v1/HOTFILE_SCAN.txt        |  6 +++
+ .../evidence/RDD_PHASE5_RESTOCK__v1/VALIDATION.txt | 35 +++++++++++++
+ ...replay_extension_for_triage_terminal_records.md | 61 ++++++++++++++++++++++
+ ...TASK_328__rdd_replay_extension_test_coverage.md | 60 +++++++++++++++++++++
+ 7 files changed, 171 insertions(+)

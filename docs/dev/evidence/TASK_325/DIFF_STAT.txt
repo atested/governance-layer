@@ -1,0 +1,23 @@
+ .../TASK_325/DIFF_NAME_ONLY.txt                    |   0
+ .../RDD_SIGNAL_EXTRACT__v1/TASK_325/DIFF_STAT.txt  |   0
+ .../TASK_325/HOTFILE_SCAN.txt                      |   5 +
+ .../RDD_SIGNAL_EXTRACT__v1/TASK_325/TESTS.txt      |  26 +++++
+ .../TASK_326/DIFF_NAME_ONLY.txt                    |   0
+ .../RDD_SIGNAL_EXTRACT__v1/TASK_326/DIFF_STAT.txt  |   0
+ .../TASK_326/HOTFILE_SCAN.txt                      |   5 +
+ .../RDD_SIGNAL_EXTRACT__v1/TASK_326/TESTS.txt      |  26 +++++
+ docs/dev/evidence/TASK_325/DIFF_NAME_ONLY.txt      |   0
+ docs/dev/evidence/TASK_325/DIFF_STAT.txt           |   0
+ docs/dev/evidence/TASK_325/HOTFILE_SCAN.txt        |   5 +
+ docs/dev/evidence/TASK_325/TESTS.txt               |  26 +++++
+ docs/dev/evidence/TASK_326/DIFF_NAME_ONLY.txt      |   0
+ docs/dev/evidence/TASK_326/DIFF_STAT.txt           |   0
+ docs/dev/evidence/TASK_326/HOTFILE_SCAN.txt        |   5 +
+ docs/dev/evidence/TASK_326/TESTS.txt               |  26 +++++
+ scripts/extract-rdd-signals.py                     | 114 +++++++++++++++++++++
+ ..._chain_phase4_malformed_signal_missing_id.jsonl |   2 +
+ .../rdd_chain_phase4_non_triage_only.jsonl         |   2 +
+ .../rdd_chain_phase4_triage_no_signals.jsonl       |   2 +
+ .../fixtures/rdd_chain_phase4_valid_signals.jsonl  |   2 +
+ tests/test_rdd_signal_extract.sh                   | 101 ++++++++++++++++++
+ 22 files changed, 347 insertions(+)

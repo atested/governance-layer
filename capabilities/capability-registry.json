@@ -6,8 +6,8 @@
       "capability_class": "FS_WRITE",
       "risk_level": "HIGH",
       "allow_base_dirs": [
-        "/Volumes/SSD/archive/gov/governance-layer/",
-        "/Volumes/SSD/archive/gov/runtime"
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
       ],
       "deny_hidden_paths": true,
       "deny_overwrite_by_default": true,
@@ -31,8 +31,8 @@
       "capability_class": "FS_LIST",
       "risk_level": "MEDIUM",
       "allow_base_dirs": [
-        "/Volumes/SSD/archive/gov/governance-layer/",
-        "/Volumes/SSD/archive/gov/runtime"
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
       ],
       "deny_hidden_paths": true,
       "deny_traversal": true,
@@ -56,8 +56,8 @@
       "capability_class": "FS_READ",
       "risk_level": "MEDIUM",
       "allow_base_dirs": [
-        "/Volumes/SSD/archive/gov/governance-layer/",
-        "/Volumes/SSD/archive/gov/runtime"
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
       ],
       "deny_hidden_paths": true,
       "deny_traversal": true,
@@ -85,8 +85,8 @@
       "capability_class": "FS_MKDIR",
       "risk_level": "HIGH",
       "allow_base_dirs": [
-        "/Volumes/SSD/archive/gov/governance-layer/",
-        "/Volumes/SSD/archive/gov/runtime"
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
       ],
       "deny_hidden_paths": true,
       "deny_traversal": true,
@@ -110,8 +110,8 @@
       "capability_class": "FS_MOVE",
       "risk_level": "HIGH",
       "allow_base_dirs": [
-        "/Volumes/SSD/archive/gov/governance-layer/",
-        "/Volumes/SSD/archive/gov/runtime"
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
       ],
       "deny_hidden_paths": true,
       "deny_traversal": true,
@@ -123,6 +123,139 @@
         "overwrite_allowed": false,
         "cross_root_allowed": false,
         "dst_must_be_within_allowlist": true
+      }
+    },
+    {
+      "tool": "FS_DELETE",
+      "capability_class": "FS_DELETE",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": ["path"],
+        "optional": ["recursive"]
+      },
+      "caps": {
+        "recursive_allowed": false,
+        "dry_run_supported": false
+      }
+    },
+    {
+      "tool": "FS_DELETE_NONEXEC",
+      "capability_class": "FS_DELETE_NONEXEC",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": ["path"],
+        "optional": []
+      },
+      "caps": {
+        "require_non_executable": true
+      }
+    },
+    {
+      "tool": "FS_COPY",
+      "capability_class": "FS_COPY",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": ["src_path", "dst_path"],
+        "optional": ["overwrite", "recursive"]
+      },
+      "caps": {
+        "overwrite_allowed": false,
+        "recursive_dir_copy_allowed": true
+      }
+    },
+    {
+      "tool": "INGEST_ARTIFACT",
+      "capability_class": "INGEST_ARTIFACT",
+      "risk_level": "MEDIUM",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": [
+          "provenance"
+        ],
+        "optional": [
+          "artifact_path",
+          "payload_b64"
+        ]
+      },
+      "caps": {
+        "max_artifact_bytes": 4096,
+        "allow_inline_payload": true,
+        "allow_out_path_reference": true
+      }
+    },
+    {
+      "tool": "INGEST_TOOL_EVENT",
+      "capability_class": "INGEST_TOOL_EVENT",
+      "risk_level": "MEDIUM",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": [
+          "tool_event_version",
+          "tool_name",
+          "tool_params_digest",
+          "exit_code",
+          "outputs",
+          "policy_context_used",
+          "provenance"
+        ],
+        "optional": []
+      },
+      "caps": {
+        "max_event_bytes": 16384,
+        "max_outputs": 64
+      }
+    },
+    {
+      "tool": "TOOL_REGISTER",
+      "capability_class": "TOOL_REGISTER",
+      "risk_level": "MEDIUM",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": [
+          "tool_name",
+          "tool_version",
+          "schema_json",
+          "declared_capabilities"
+        ],
+        "optional": [
+          "created_from"
+        ]
+      },
+      "caps": {
+        "max_doc_bytes": 32768
       }
     }
   ]

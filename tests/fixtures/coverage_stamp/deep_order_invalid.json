@@ -1,0 +1,107 @@
+{
+  "coverage_stamp_version": "coverage_stamp_v1",
+  "generated_by": "phase2d-test",
+  "generated_from": [
+    "policy-eval",
+    "intent"
+  ],
+  "surfaces": [
+    {
+      "capability_surface": "web",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "zeta",
+        "alpha"
+      ],
+      "surface_id": "web"
+    },
+    {
+      "capability_surface": "filesystem",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "capability-registry"
+      ],
+      "surface_id": "filesystem"
+    },
+    {
+      "capability_surface": "shell",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "shell"
+    },
+    {
+      "capability_surface": "routing",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "routing"
+    },
+    {
+      "capability_surface": "model",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "model"
+    },
+    {
+      "capability_surface": "memory",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "memory"
+    },
+    {
+      "capability_surface": "network",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "network"
+    },
+    {
+      "capability_surface": "toolchain",
+      "coverage": {
+        "enforcement": true,
+        "observation": true,
+        "provenance": true
+      },
+      "evidence_sources": [
+        "none"
+      ],
+      "surface_id": "toolchain"
+    }
+  ]
+}

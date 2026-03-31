@@ -1,0 +1,31 @@
+{
+  "tool": "FS_COPY",
+  "args": {
+    "src_path": "out/rdd/phase14-selector-src.txt",
+    "dst_path": "out/rdd/phase14-selector-dst-exists.txt",
+    "overwrite": false
+  },
+  "intent": {
+    "goal": "Exercise legacy-only dual-alias source conflict fail-closed behavior.",
+    "requested_action": "FS_COPY",
+    "constraints": {
+      "overwrite": false
+    },
+    "rdd": {
+      "selector_mode": "compat_legacy_single_case"
+    },
+    "selector_mode": "compat_legacy_single_case",
+    "inputs": [
+      {
+        "ref": "file:src_path",
+        "value": "out/rdd/phase14-selector-src.txt"
+      }
+    ],
+    "expected_outputs": [
+      {
+        "ref": "file:dst_path",
+        "value": "out/rdd/phase14-selector-dst-exists.txt"
+      }
+    ]
+  }
+}

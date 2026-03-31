@@ -1,0 +1,7 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/evidence/RDD_PHASE18_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE18_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE18_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE18_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_353__rdd_selector_mode_legacy_dual_alias_case_normalization_hardening.md
+docs/dev/tasks/ready/TASK_354__rdd_selector_mode_legacy_dual_alias_case_normalization_coverage.md

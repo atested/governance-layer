@@ -1,0 +1,9 @@
+BASE_SHA=62ef2a3f1283b6b102911dc8df751d49fa5bbb12
+BRANCH=codex/RDD_PHASE14_RESTOCK__v1
+HOTFILE_SCAN_START
+OK system/scripts/release-gate.sh
+OK system/scripts/validate-proof-bundle.sh
+OK system/scripts/codex-unattended.sh
+OK docs/dev/WORK_QUEUE.md
+OK docs/dev/ASSIGNMENTS.md
+HOTFILE_SCAN_END

@@ -1,0 +1,6 @@
+docs/dev/evidence/RDD_PHASE12_RESTOCK__v1/DIFF_NAME_ONLY.txt
+docs/dev/evidence/RDD_PHASE12_RESTOCK__v1/DIFF_STAT.txt
+docs/dev/evidence/RDD_PHASE12_RESTOCK__v1/HOTFILE_SCAN.txt
+docs/dev/evidence/RDD_PHASE12_RESTOCK__v1/VALIDATION.txt
+docs/dev/tasks/ready/TASK_341__rdd_selector_mode_source_conflict_fail_closed.md
+docs/dev/tasks/ready/TASK_342__rdd_selector_mode_source_conflict_coverage.md

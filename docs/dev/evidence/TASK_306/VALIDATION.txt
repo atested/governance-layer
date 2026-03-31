@@ -1,0 +1,38 @@
+Validation checks:
+- Branch: codex/PRE_BRIEFING_REFRESH_PACKET_EXTRACTION__v1
+- HEAD: a38429f4f712e5506320dc75c706334425b02169
+- origin/main: 0cdd4707eadc72d79ef988577e2804bc55acb368
+
+Check 1: Required task specs exist
+PASS TASK_305
+PASS TASK_306
+PASS TASK_307
+
+Check 2: WORK_QUEUE rows present
+201:| TASK_305 | [Pre-briefing refresh packet extraction lane] Pre-briefing refresh packet extraction block | Ready | Codex | none | [→](tasks/ready/TASK_305__pre_briefing_refresh_packet_block.md) |
+202:| TASK_306 | [Pre-briefing refresh packet extraction lane] Capability-map extraction support | Ready | Codex | TASK_305 | [→](tasks/ready/TASK_306__capability_map_extraction_support.md) |
+203:| TASK_307 | [Pre-briefing refresh packet extraction lane] Pre-briefing workflow packet rule | Ready | Codex | TASK_305 | [→](tasks/ready/TASK_307__pre_briefing_workflow_packet_rule.md) |
+PASS WORK_QUEUE
+
+Check 3: Extraction block contract present in capability map
+154:### Pre-briefing refresh completion packet contract (required)
+159:### Standard BRIEFING EXTRACTION BLOCK (required packet payload)
+169:- `CURRENT_PROCESS_STATE`: required BFPS startup process state:
+200:7. Require full `BRIEFING EXTRACTION BLOCK` in refresh packet; if missing/incomplete, STOP.
+PASS EXTRACTION_CONTRACT
+
+Check 4: Baseline refreshed to post-M78
+4:Current Baseline (`origin/main`): `0cdd4707eadc72d79ef988577e2804bc55acb368`  
+5:Latest Merge Window: `M78` (`7266a005`)
+11:- Latest landed tasks: `TASK_299`, `TASK_300`, `TASK_301`
+23:- `TASK_299` BFPS refresh-then-brief rule (M78)
+24:- `TASK_300` capability-map briefing extraction contract (M78)
+25:- `TASK_301` new briefing operator sequence (M78)
+73:- BFPS now requires refresh-then-brief sequencing with canonical extraction contract (TASK_299-301).
+PASS BASELINE_REFRESH
+
+Check 5: BFPS untouched in this run
+PASS BFPS_UNTOUCHED
+
+Hot-file scan (must be clean):
+PASS HOTFILE_SCAN

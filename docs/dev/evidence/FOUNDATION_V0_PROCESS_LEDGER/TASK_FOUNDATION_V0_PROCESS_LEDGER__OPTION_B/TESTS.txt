@@ -1,0 +1,44 @@
+BASE_SHA_RESOLVED=a3d11efa871396c36816c6433900d4c1113e0854
+BASE7=a3d11ef
+TASK_ID=TASK_FOUNDATION_V0_PROCESS_LEDGER__OPTION_B
+
+COMMANDS
+1) bash system/tests/test_foundation_v0_process_ledger.sh
+2) bash system/tests/test_foundation_v0_process_ledger.sh
+
+RUN1_SHA256=f48ce815bba9eece2810ff7af71d896e4371c164098bbf273651fa323422988b
+RUN2_SHA256=f48ce815bba9eece2810ff7af71d896e4371c164098bbf273651fa323422988b
+DETERMINISM=PASS
+
+RUN1_OUTPUT
+COMMAND: bash system/tests/test_foundation_v0_process_ledger.sh
+PASS TEST1 deterministic_entry_hash
+PASS TEST2A entry_hash_mismatch
+PASS TEST2B chain_break
+PASS TEST3 missing_artifact
+PASS TEST4 no_refetch_enforcement
+PASS TEST5 coverage_subset_mismatch
+PASS ALL foundation_v0_process_ledger
+
+RUN2_OUTPUT
+COMMAND: bash system/tests/test_foundation_v0_process_ledger.sh
+PASS TEST1 deterministic_entry_hash
+PASS TEST2A entry_hash_mismatch
+PASS TEST2B chain_break
+PASS TEST3 missing_artifact
+PASS TEST4 no_refetch_enforcement
+PASS TEST5 coverage_subset_mismatch
+PASS ALL foundation_v0_process_ledger
+
+TEST_SUMMARY
+deterministic_entry_hash | PASS
+tamper_ENTRY_HASH_MISMATCH | PASS
+tamper_CHAIN_BREAK | PASS
+missing_artifact_HASH_NOT_FOUND | PASS
+no_refetch_enforcement | PASS
+coverage_subset_mismatch_SILENT_SURFACES | PASS
+
+COVERAGE_BINDING_CONFIRMATION
+- proof bundle manifest field: coverage_stamp_ref
+- representation: sha256 hash string marker (format: sha256:<64 lowercase hex>), not a typed-ref object
+- verifier enforcement location: scripts/foundation_v0_process_ledger.py in verify(), block that reads resolved proof manifest coverage_stamp_ref, validates the stamp object with validate_coverage_stamp(required=True), checks stamp hash equality, and enforces subset rule ledger_surfaces ⊆ stamp_surfaces (emits SILENT_SURFACES on mismatch).

@@ -1,0 +1,25 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/tmp/delete-poison.txt",
+    "recursive": false
+  },
+  "intent": {
+    "goal": "Attempt delete in /tmp by injecting cap_cfg allowlist widening.",
+    "constraints": { "recursive": false },
+    "requested_action": "FS_DELETE",
+    "inputs": [{ "ref": "file:path", "value": "/tmp/delete-poison.txt" }],
+    "expected_outputs": []
+  },
+  "cap_cfg": {
+    "tools": [{
+      "tool": "FS_DELETE",
+      "capability_class": "FS_DELETE",
+      "allow_base_dirs": ["/"],
+      "deny_hidden_paths": false,
+      "deny_traversal": false,
+      "args": { "required": ["path"], "optional": ["recursive"] },
+      "caps": { "recursive_allowed": true }
+    }]
+  }
+}

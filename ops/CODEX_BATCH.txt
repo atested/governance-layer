@@ -1,0 +1,73 @@
+CODEX RUN BATCH
+================
+Cap: 4 tasks
+
+Instructions for Codex:
+For each task below, create a branch, implement changes within allowed files only,
+generate evidence bundle, and push to origin.
+
+Tasks:
+
+1. TASK: TASK_075
+   File: docs/dev/tasks/ready/TASK_075__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_075
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_075/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+2. TASK: TASK_076
+   File: docs/dev/tasks/ready/TASK_076__test_rc_fs_executable_disallowed.md
+   Branch: codex/TASK_076
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_076/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+3. TASK: TASK_077
+   File: docs/dev/tasks/ready/TASK_077__test_rc_fs_not_a_directory.md
+   Branch: codex/TASK_077
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_077/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+4. TASK: TASK_078
+   File: docs/dev/tasks/ready/TASK_078__test_rc_fs_include_hidden_disallowed.md
+   Branch: codex/TASK_078
+   
+   Requirements:
+   - Only modify files in task's "Files allowed to touch" section
+   - FORBIDDEN: docs/dev/ASSIGNMENTS.md (Cecil updates this at merge time)
+   - Generate complete evidence bundle in docs/dev/evidence/TASK_078/
+     * SUMMARY.md
+     * DIFFSTAT.txt
+     * DIFF.patch
+     * TESTS.txt
+     * RISK.md
+   - Push to origin when complete
+
+Total tasks: 4
+Status: Ready for Codex (read-only list, no claims made)
+

@@ -1,0 +1,16 @@
+$ bash tests/test_proof_bundle_contract_required_files.sh
+--- T-PROOF-BUNDLE-CONTRACT-001: required files + checksum pass deterministically ---
+PASS: required proof-bundle files present
+PASS: proof_packet.sha256 format valid
+PASS: proof_packet.sha256 matches proof_packet.tar bytes
+PASS: required proof-bundle files present
+PASS: proof_packet.sha256 format valid
+PASS: proof_packet.sha256 matches proof_packet.tar bytes
+VALIDATOR_OUT_SHA256_RUN1=b83fc2076a1b671c5292af20d0775c35cc0c52712aeb81874d7261357059aaeb
+VALIDATOR_OUT_SHA256_RUN2=b83fc2076a1b671c5292af20d0775c35cc0c52712aeb81874d7261357059aaeb
+PASS: validator output deterministic across two runs
+--- T-PROOF-BUNDLE-CONTRACT-002: missing required file fails deterministically ---
+FAIL: missing required file: proof_packet_verify_summary.json
+PASS: missing required file negative control fails with stable marker (exit=1)
+Summary: proof-bundle required-files contract checks complete
+[exit=0]

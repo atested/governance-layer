@@ -1,0 +1,33 @@
+BASE_SHA_RESOLVED=a3d11efa871396c36816c6433900d4c1113e0854
+BASE7=a3d11ef
+COMMAND_RUN_1=bash system/tests/test_foundation_v0_process_ledger.sh
+EXIT_RUN_1=1
+COMMAND_RUN_2=bash system/tests/test_foundation_v0_process_ledger.sh
+EXIT_RUN_2=1
+RUN1_SHA256=2b712825319aebed5c88672b718e598dc723cc32a5f1033f7fab5683a392ddad
+RUN2_SHA256=2b712825319aebed5c88672b718e598dc723cc32a5f1033f7fab5683a392ddad
+DETERMINISTIC=yes
+
+TEST_SUMMARY_TABLE
+| Test | Result |
+|---|---|
+| deterministic entry hash | PASS |
+| tamper ENTRY_HASH_MISMATCH | PASS |
+| tamper CHAIN_BREAK | PASS |
+| missing artifact HASH_NOT_FOUND | PASS |
+| no-refetch enforcement | PASS |
+| coverage subset mismatch | PASS |
+
+--- RUN1 OUTPUT ---
+PASS TEST1 deterministic_entry_hash
+PASS TEST2A entry_hash_mismatch
+PASS TEST2B chain_break
+PASS TEST3 missing_artifact
+PASS TEST4 no_refetch_enforcement
+
+--- RUN2 OUTPUT ---
+PASS TEST1 deterministic_entry_hash
+PASS TEST2A entry_hash_mismatch
+PASS TEST2B chain_break
+PASS TEST3 missing_artifact
+PASS TEST4 no_refetch_enforcement

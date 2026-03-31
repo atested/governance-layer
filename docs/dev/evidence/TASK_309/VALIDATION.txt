@@ -1,0 +1,52 @@
+Validation checks:
+- Branch: codex/PRE_BRIEFING_CAPABILITY_MAP_REFRESH__v2
+- HEAD: 228e257aaeb7ea753a20619e868be39af1f638b2
+- origin/main: 327fc857aae66d8a82b0653c7c1eb268247ebcfe
+
+Check 1: Required v2 specs exist
+PASS TASK_308
+PASS TASK_309
+PASS TASK_310
+
+Check 2: WORK_QUEUE rows present
+204:| TASK_308 | [Pre-briefing capability-map refresh v2 lane] Capability-map lightweight state refresh v2 | Ready | Codex | none | [→](tasks/ready/TASK_308__capability_map_lightweight_state_refresh_v2.md) |
+205:| TASK_309 | [Pre-briefing capability-map refresh v2 lane] Capability-map planning judgment refresh v2 | Ready | Codex | TASK_308 | [→](tasks/ready/TASK_309__capability_map_planning_judgment_refresh_v2.md) |
+206:| TASK_310 | [Pre-briefing capability-map refresh v2 lane] Capability-map briefing extraction refresh v2 | Ready | Codex | TASK_308 | [→](tasks/ready/TASK_310__capability_map_briefing_extraction_refresh_v2.md) |
+PASS WORK_QUEUE
+
+Check 3: post-M79 map refresh fields present
+4:Current Baseline (`origin/main`): `327fc857aae66d8a82b0653c7c1eb268247ebcfe`  
+5:Latest Merge Window: `M79` (`af1e8935`)
+11:- Latest landed tasks: `TASK_305`, `TASK_306`, `TASK_307`
+15:- Refresh marker: `map_reflects_current_main=yes` (source SHA `327fc857aae66d8a82b0653c7c1eb268247ebcfe`)
+PASS LIGHTWEIGHT_REFRESH
+
+Check 4: planning judgment fields present
+13:- Preferred next lane: tool-catalog continued inspectability seam
+14:- Secondary candidates: tool-event receipt/replay seam; attestation/proof utility seam
+102:- Judgment State: `VALID`
+105:- Preferred next lane: tool-catalog continued inspectability seam.
+106:- Secondary candidates:
+109:- Major constraints / sensitive areas:
+PASS JUDGMENT_REFRESH
+
+Check 5: extraction contract remains explicit/sufficient
+161:- If the extraction block is missing or incomplete, STOP before briefing generation.
+163:### Standard BRIEFING EXTRACTION BLOCK (required packet payload)
+164:- `CURRENT_ORIGIN_MAIN_SHA`: full `origin/main` SHA from refreshed canonical map state.
+165:- `LATEST_MERGE_WINDOW`: latest merge window marker (for example `M79` with merge short SHA when available).
+166:- `LATEST_LANDED_TASKS`: latest landed task IDs from refreshed canonical map state.
+167:- `PLANNING_JUDGMENT_STATE`: one of `VALID`, `PARTIALLY_CONSUMED`, `EXHAUSTED`, `STALE`, `INSUFFICIENT`.
+168:- `LIVE_SURFACES_SUMMARY`: compact live-surface summary from refreshed canonical map state.
+169:- `PREFERRED_NEXT_LANE`: current preferred bounded lane from refreshed canonical map state.
+170:- `SECONDARY_CANDIDATES`: current secondary candidates from refreshed canonical map state.
+171:- `MAJOR_CONSTRAINTS`: major constraints / sensitive areas from refreshed canonical map state.
+172:- `REFRESH_MARKER`: map-reflects-current-main marker (`yes/no`) with source SHA.
+173:- `CURRENT_PROCESS_STATE`: required BFPS startup process state:
+PASS EXTRACTION_BLOCK
+
+Check 6: BFPS untouched in this run
+PASS BFPS_UNTOUCHED
+
+Hot-file scan (must be clean):
+PASS HOTFILE_SCAN

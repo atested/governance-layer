@@ -1,0 +1,9 @@
+ docs/dev/WORK_QUEUE.md                             |   3 +
+ .../TASK_284__tool_event_filtered_slice_support.md |  52 +++++++++
+ .../ready/TASK_285__tool_event_summary_report.md   |  52 +++++++++
+ ...SK_286__tool_event_negative_matrix_expansion.md |  52 +++++++++
+ mcp/tool_event_store.py                            |  34 ++++++
+ scripts/attest/summarize_tool_event_slice.py       | 126 +++++++++++++++++++++
+ .../tests/test_tool_event_slice_negative_matrix.sh |  53 +++++++++
+ system/tests/test_tool_event_slice_summary.sh      |  72 ++++++++++++
+ 8 files changed, 444 insertions(+)

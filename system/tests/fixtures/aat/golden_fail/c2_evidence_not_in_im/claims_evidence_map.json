@@ -1,0 +1,15 @@
+{
+  "cem_version": "v0",
+  "claims": [
+    {
+      "claim_id": "cl-001",
+      "claim_type": "analysis_completed",
+      "evidence_refs": [
+        {
+          "ref_type": "file_digest",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ]
+}

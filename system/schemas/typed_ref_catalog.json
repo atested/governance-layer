@@ -1,0 +1,20 @@
+{
+  "version": "typed_ref_catalog_v0",
+  "types": {
+    "decision_record": {
+      "hash_basis_rule_id": "canonical_json_single_entry"
+    },
+    "proof_bundle": {
+      "hash_basis_rule_id": "canonical_json_manifest"
+    },
+    "rules_version": {
+      "hash_basis_rule_id": "canonical_json_snapshot"
+    },
+    "input_file": {
+      "hash_basis_rule_id": "raw_bytes"
+    },
+    "action_decision_record": {
+      "hash_basis_rule_id": "canonical_json_single_entry"
+    }
+  }
+}

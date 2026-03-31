@@ -1,0 +1,9 @@
+BASE_SHA=020951cef34cee354980c635a12c1be8a20383c3
+BRANCH=codex/RDD_PHASE13_RESTOCK__v1
+HOTFILE_SCAN_START
+OK system/scripts/release-gate.sh
+OK system/scripts/validate-proof-bundle.sh
+OK system/scripts/codex-unattended.sh
+OK docs/dev/WORK_QUEUE.md
+OK docs/dev/ASSIGNMENTS.md
+HOTFILE_SCAN_END

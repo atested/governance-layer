@@ -1,0 +1,10 @@
+--- T-SIGNDET-001: record_hash stable across repeated runs ---
+PASS: T-SIGNDET-001A verify-record (record_hash verified)
+PASS: T-SIGNDET-001B verify-record (record_hash verified)
+PASS: T-SIGNDET-001 same record_hash across runs
+
+--- T-SIGNDET-002: timestamp/UUID/path metadata not in signed payload ---
+PASS: T-SIGNDET-002 verify mutated metadata still passes (exit=0)
+PASS: T-SIGNDET-002 record_hash unchanged after metadata/path mutations
+
+Summary: pass=5 fail=0

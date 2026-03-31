@@ -1,0 +1,228 @@
+OPS_BUNDLE_175_178
+
+## Picked commits
+- b1b71a0 READY: restock TASK_175-178 external validator hardening checks
+- d4dd9e3 TASK_175: add validator negative-controls matrix test
+- 9dd408c TASK_176: add validator aux parser hardening regression tests
+- 25676d4 TASK_177: enforce validator summary json contract tests
+- 03d040a TASK_178: add external packaging meta-runner determinism test
+
+## tests/test_validate_proof_bundle_negative_controls.sh
+$ bash tests/test_validate_proof_bundle_negative_controls.sh
+--- T-VALIDATE-NEG-001: missing required files fail deterministically ---
+PASS: MISSING_PROOF_PACKET_TAR rc run1=1 run2=1
+MISSING_PROOF_PACKET_TAR_SHA256_RUN1=56b0f84c2f6137fa86db3b431d223f01992aec56fd7ed567ddb99339abdba473
+MISSING_PROOF_PACKET_TAR_SHA256_RUN2=56b0f84c2f6137fa86db3b431d223f01992aec56fd7ed567ddb99339abdba473
+PASS: MISSING_PROOF_PACKET_TAR deterministic failure output
+PASS: MISSING_SHA_FILE rc run1=1 run2=1
+MISSING_SHA_FILE_SHA256_RUN1=3f5bce9e4dd35497179152ceea5c7ac0e5b110601cb19e3a3d89a73536342c0d
+MISSING_SHA_FILE_SHA256_RUN2=3f5bce9e4dd35497179152ceea5c7ac0e5b110601cb19e3a3d89a73536342c0d
+PASS: MISSING_SHA_FILE deterministic failure output
+PASS: MISSING_SUMMARY_FILE rc run1=1 run2=1
+MISSING_SUMMARY_FILE_SHA256_RUN1=decf9dd5a857ad6b5b1d948cf5a3112eadc837ec3a3a7c91dda7933f42a308a5
+MISSING_SUMMARY_FILE_SHA256_RUN2=decf9dd5a857ad6b5b1d948cf5a3112eadc837ec3a3a7c91dda7933f42a308a5
+PASS: MISSING_SUMMARY_FILE deterministic failure output
+PASS: MISSING_RELEASE_GATE_LOG rc run1=1 run2=1
+MISSING_RELEASE_GATE_LOG_SHA256_RUN1=9f0b5465f688b08b93fd6444a06495d22b9afee49015965ceb66f24f41794045
+MISSING_RELEASE_GATE_LOG_SHA256_RUN2=9f0b5465f688b08b93fd6444a06495d22b9afee49015965ceb66f24f41794045
+PASS: MISSING_RELEASE_GATE_LOG deterministic failure output
+PASS: MISSING_VERSIONS rc run1=1 run2=1
+MISSING_VERSIONS_SHA256_RUN1=a7d17c2dfc7abe32710dc717bf7c2a5d8d6b726ceb696c511cf80e7ec0d74b06
+MISSING_VERSIONS_SHA256_RUN2=a7d17c2dfc7abe32710dc717bf7c2a5d8d6b726ceb696c511cf80e7ec0d74b06
+PASS: MISSING_VERSIONS deterministic failure output
+--- T-VALIDATE-NEG-002: checksum mismatch fails deterministically ---
+PASS: SHA_MISMATCH rc run1=1 run2=1
+SHA_MISMATCH_SHA256_RUN1=e5fad1618034f0633f7db6869cf238a8a7eb47894058e7ea881e17255bcd95a5
+SHA_MISMATCH_SHA256_RUN2=e5fad1618034f0633f7db6869cf238a8a7eb47894058e7ea881e17255bcd95a5
+PASS: SHA_MISMATCH deterministic failure output
+--- T-VALIDATE-NEG-003: malformed sha file formats fail deterministically ---
+PASS: SHA_UPPERCASE rc run1=1 run2=1
+SHA_UPPERCASE_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_UPPERCASE_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_UPPERCASE deterministic failure output
+PASS: SHA_WRONGLEN rc run1=1 run2=1
+SHA_WRONGLEN_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_WRONGLEN_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_WRONGLEN deterministic failure output
+PASS: SHA_MISSING_FILENAME rc run1=1 run2=1
+SHA_MISSING_FILENAME_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_MISSING_FILENAME_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_MISSING_FILENAME deterministic failure output
+PASS: SHA_EXTRA_FIELDS rc run1=1 run2=1
+SHA_EXTRA_FIELDS_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_EXTRA_FIELDS_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_EXTRA_FIELDS deterministic failure output
+Summary: validator negative-controls matrix complete
+[exit=0]
+$ bash tests/test_validate_proof_bundle_negative_controls.sh  # run2
+--- T-VALIDATE-NEG-001: missing required files fail deterministically ---
+PASS: MISSING_PROOF_PACKET_TAR rc run1=1 run2=1
+MISSING_PROOF_PACKET_TAR_SHA256_RUN1=56b0f84c2f6137fa86db3b431d223f01992aec56fd7ed567ddb99339abdba473
+MISSING_PROOF_PACKET_TAR_SHA256_RUN2=56b0f84c2f6137fa86db3b431d223f01992aec56fd7ed567ddb99339abdba473
+PASS: MISSING_PROOF_PACKET_TAR deterministic failure output
+PASS: MISSING_SHA_FILE rc run1=1 run2=1
+MISSING_SHA_FILE_SHA256_RUN1=3f5bce9e4dd35497179152ceea5c7ac0e5b110601cb19e3a3d89a73536342c0d
+MISSING_SHA_FILE_SHA256_RUN2=3f5bce9e4dd35497179152ceea5c7ac0e5b110601cb19e3a3d89a73536342c0d
+PASS: MISSING_SHA_FILE deterministic failure output
+PASS: MISSING_SUMMARY_FILE rc run1=1 run2=1
+MISSING_SUMMARY_FILE_SHA256_RUN1=decf9dd5a857ad6b5b1d948cf5a3112eadc837ec3a3a7c91dda7933f42a308a5
+MISSING_SUMMARY_FILE_SHA256_RUN2=decf9dd5a857ad6b5b1d948cf5a3112eadc837ec3a3a7c91dda7933f42a308a5
+PASS: MISSING_SUMMARY_FILE deterministic failure output
+PASS: MISSING_RELEASE_GATE_LOG rc run1=1 run2=1
+MISSING_RELEASE_GATE_LOG_SHA256_RUN1=9f0b5465f688b08b93fd6444a06495d22b9afee49015965ceb66f24f41794045
+MISSING_RELEASE_GATE_LOG_SHA256_RUN2=9f0b5465f688b08b93fd6444a06495d22b9afee49015965ceb66f24f41794045
+PASS: MISSING_RELEASE_GATE_LOG deterministic failure output
+PASS: MISSING_VERSIONS rc run1=1 run2=1
+MISSING_VERSIONS_SHA256_RUN1=a7d17c2dfc7abe32710dc717bf7c2a5d8d6b726ceb696c511cf80e7ec0d74b06
+MISSING_VERSIONS_SHA256_RUN2=a7d17c2dfc7abe32710dc717bf7c2a5d8d6b726ceb696c511cf80e7ec0d74b06
+PASS: MISSING_VERSIONS deterministic failure output
+--- T-VALIDATE-NEG-002: checksum mismatch fails deterministically ---
+PASS: SHA_MISMATCH rc run1=1 run2=1
+SHA_MISMATCH_SHA256_RUN1=e5fad1618034f0633f7db6869cf238a8a7eb47894058e7ea881e17255bcd95a5
+SHA_MISMATCH_SHA256_RUN2=e5fad1618034f0633f7db6869cf238a8a7eb47894058e7ea881e17255bcd95a5
+PASS: SHA_MISMATCH deterministic failure output
+--- T-VALIDATE-NEG-003: malformed sha file formats fail deterministically ---
+PASS: SHA_UPPERCASE rc run1=1 run2=1
+SHA_UPPERCASE_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_UPPERCASE_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_UPPERCASE deterministic failure output
+PASS: SHA_WRONGLEN rc run1=1 run2=1
+SHA_WRONGLEN_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_WRONGLEN_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_WRONGLEN deterministic failure output
+PASS: SHA_MISSING_FILENAME rc run1=1 run2=1
+SHA_MISSING_FILENAME_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_MISSING_FILENAME_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_MISSING_FILENAME deterministic failure output
+PASS: SHA_EXTRA_FIELDS rc run1=1 run2=1
+SHA_EXTRA_FIELDS_SHA256_RUN1=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+SHA_EXTRA_FIELDS_SHA256_RUN2=411618ec8609f6afc1e26823479795b88696f464453f966dce9add11b3267f12
+PASS: SHA_EXTRA_FIELDS deterministic failure output
+Summary: validator negative-controls matrix complete
+[exit=0]
+
+## tests/test_validate_proof_bundle_aux_parser_hardening.sh
+$ bash tests/test_validate_proof_bundle_aux_parser_hardening.sh
+--- T-VALIDATE-AUX-001: duplicate/malformed versions.txt and release_gate_log.txt fail deterministically ---
+PASS: DUP_VERSIONS rc run1=1 run2=1
+DUP_VERSIONS_SHA256_RUN1=f00a8cb140a6fc48a96f7c5c45c8c306e096e9b09f2c229e63fc1141f9fb17ad
+DUP_VERSIONS_SHA256_RUN2=f00a8cb140a6fc48a96f7c5c45c8c306e096e9b09f2c229e63fc1141f9fb17ad
+PASS: DUP_VERSIONS deterministic taxonomy output
+PASS: MALFORMED_VERSIONS rc run1=1 run2=1
+MALFORMED_VERSIONS_SHA256_RUN1=63db74bcd481e3f4930c2d1989a871f0a17bb6218c09f54d2b536145638c90ef
+MALFORMED_VERSIONS_SHA256_RUN2=63db74bcd481e3f4930c2d1989a871f0a17bb6218c09f54d2b536145638c90ef
+PASS: MALFORMED_VERSIONS deterministic taxonomy output
+PASS: EMPTYKEY_VERSIONS rc run1=1 run2=1
+EMPTYKEY_VERSIONS_SHA256_RUN1=4536957c517b154d97e592786f3c2d22bf3b3b1d16322f87d38cf0a8ec2b94d8
+EMPTYKEY_VERSIONS_SHA256_RUN2=4536957c517b154d97e592786f3c2d22bf3b3b1d16322f87d38cf0a8ec2b94d8
+PASS: EMPTYKEY_VERSIONS deterministic taxonomy output
+PASS: DUP_RELEASE_GATE_LOG rc run1=1 run2=1
+DUP_RELEASE_GATE_LOG_SHA256_RUN1=9be81df88476ac60345744dd003bcaf03f6969158914519f495562e95f409cfc
+DUP_RELEASE_GATE_LOG_SHA256_RUN2=9be81df88476ac60345744dd003bcaf03f6969158914519f495562e95f409cfc
+PASS: DUP_RELEASE_GATE_LOG deterministic taxonomy output
+PASS: MALFORMED_RELEASE_GATE_LOG rc run1=1 run2=1
+MALFORMED_RELEASE_GATE_LOG_SHA256_RUN1=f28c9381cc1bbecde74b911b82cc201a95d35ea7024a630251f68bd420d0b72a
+MALFORMED_RELEASE_GATE_LOG_SHA256_RUN2=f28c9381cc1bbecde74b911b82cc201a95d35ea7024a630251f68bd420d0b72a
+PASS: MALFORMED_RELEASE_GATE_LOG deterministic taxonomy output
+--- T-VALIDATE-AUX-002: runtime error taxonomy deterministic (missing bundle dir) ---
+PASS: RUNTIME_MISSING_DIR rc run1=1 run2=1
+RUNTIME_MISSING_DIR_SHA256_RUN1=8b1110c4cd15fac3ffa375116376f94d2f6eaf3518316cba01cee943f4391da1
+RUNTIME_MISSING_DIR_SHA256_RUN2=8b1110c4cd15fac3ffa375116376f94d2f6eaf3518316cba01cee943f4391da1
+PASS: runtime taxonomy deterministic output
+Summary: validator aux parser hardening checks complete
+[exit=0]
+$ bash tests/test_validate_proof_bundle_aux_parser_hardening.sh  # run2
+--- T-VALIDATE-AUX-001: duplicate/malformed versions.txt and release_gate_log.txt fail deterministically ---
+PASS: DUP_VERSIONS rc run1=1 run2=1
+DUP_VERSIONS_SHA256_RUN1=f00a8cb140a6fc48a96f7c5c45c8c306e096e9b09f2c229e63fc1141f9fb17ad
+DUP_VERSIONS_SHA256_RUN2=f00a8cb140a6fc48a96f7c5c45c8c306e096e9b09f2c229e63fc1141f9fb17ad
+PASS: DUP_VERSIONS deterministic taxonomy output
+PASS: MALFORMED_VERSIONS rc run1=1 run2=1
+MALFORMED_VERSIONS_SHA256_RUN1=63db74bcd481e3f4930c2d1989a871f0a17bb6218c09f54d2b536145638c90ef
+MALFORMED_VERSIONS_SHA256_RUN2=63db74bcd481e3f4930c2d1989a871f0a17bb6218c09f54d2b536145638c90ef
+PASS: MALFORMED_VERSIONS deterministic taxonomy output
+PASS: EMPTYKEY_VERSIONS rc run1=1 run2=1
+EMPTYKEY_VERSIONS_SHA256_RUN1=4536957c517b154d97e592786f3c2d22bf3b3b1d16322f87d38cf0a8ec2b94d8
+EMPTYKEY_VERSIONS_SHA256_RUN2=4536957c517b154d97e592786f3c2d22bf3b3b1d16322f87d38cf0a8ec2b94d8
+PASS: EMPTYKEY_VERSIONS deterministic taxonomy output
+PASS: DUP_RELEASE_GATE_LOG rc run1=1 run2=1
+DUP_RELEASE_GATE_LOG_SHA256_RUN1=9be81df88476ac60345744dd003bcaf03f6969158914519f495562e95f409cfc
+DUP_RELEASE_GATE_LOG_SHA256_RUN2=9be81df88476ac60345744dd003bcaf03f6969158914519f495562e95f409cfc
+PASS: DUP_RELEASE_GATE_LOG deterministic taxonomy output
+PASS: MALFORMED_RELEASE_GATE_LOG rc run1=1 run2=1
+MALFORMED_RELEASE_GATE_LOG_SHA256_RUN1=f28c9381cc1bbecde74b911b82cc201a95d35ea7024a630251f68bd420d0b72a
+MALFORMED_RELEASE_GATE_LOG_SHA256_RUN2=f28c9381cc1bbecde74b911b82cc201a95d35ea7024a630251f68bd420d0b72a
+PASS: MALFORMED_RELEASE_GATE_LOG deterministic taxonomy output
+--- T-VALIDATE-AUX-002: runtime error taxonomy deterministic (missing bundle dir) ---
+PASS: RUNTIME_MISSING_DIR rc run1=1 run2=1
+RUNTIME_MISSING_DIR_SHA256_RUN1=67eb276b4a759f4bfcb436e455c084339e720447e757fae8282c108f2eae532a
+RUNTIME_MISSING_DIR_SHA256_RUN2=67eb276b4a759f4bfcb436e455c084339e720447e757fae8282c108f2eae532a
+PASS: runtime taxonomy deterministic output
+Summary: validator aux parser hardening checks complete
+[exit=0]
+
+## tests/test_validate_proof_bundle_summary_json_contract.sh
+$ bash tests/test_validate_proof_bundle_summary_json_contract.sh
+--- T-VALIDATE-SUMMARY-CONTRACT-001: PASS summary json deterministic across two runs ---
+PASS: summary json contract keys/types/schema version present
+PASS_JSON_SHA256_RUN1=76570c698f7d7c1cc389b0a30a6ffe374d27e05af388f6ca18bd72967f49b2fc
+PASS_JSON_SHA256_RUN2=76570c698f7d7c1cc389b0a30a6ffe374d27e05af388f6ca18bd72967f49b2fc
+PASS: PASS summary json deterministic across two runs
+--- T-VALIDATE-SUMMARY-CONTRACT-002: FAIL summary json deterministic across two runs ---
+PASS: FAIL-path rc run1=1 run2=1
+PASS: summary json contract keys/types/schema version present
+FAIL_JSON_SHA256_RUN1=92f8d4c0fa5e345a96068d4013ca8388e3b9617bbb0f23f7f1dd085dfd15a79a
+FAIL_JSON_SHA256_RUN2=92f8d4c0fa5e345a96068d4013ca8388e3b9617bbb0f23f7f1dd085dfd15a79a
+PASS: FAIL summary json deterministic across two runs
+--- T-VALIDATE-SUMMARY-CONTRACT-003: ERROR summary json deterministic across two runs ---
+PASS: ERROR-path rc run1=2 run2=2
+PASS: summary json contract keys/types/schema version present
+ERROR_JSON_SHA256_RUN1=fed6638790224a82d50b610cd7eadd8da3120a4783d38119d055a31f2920c0b7
+ERROR_JSON_SHA256_RUN2=fed6638790224a82d50b610cd7eadd8da3120a4783d38119d055a31f2920c0b7
+PASS: ERROR summary json deterministic across two runs
+Summary: validator summary json contract enforcement tests complete
+[exit=0]
+$ bash tests/test_validate_proof_bundle_summary_json_contract.sh  # run2
+--- T-VALIDATE-SUMMARY-CONTRACT-001: PASS summary json deterministic across two runs ---
+PASS: summary json contract keys/types/schema version present
+PASS_JSON_SHA256_RUN1=76570c698f7d7c1cc389b0a30a6ffe374d27e05af388f6ca18bd72967f49b2fc
+PASS_JSON_SHA256_RUN2=76570c698f7d7c1cc389b0a30a6ffe374d27e05af388f6ca18bd72967f49b2fc
+PASS: PASS summary json deterministic across two runs
+--- T-VALIDATE-SUMMARY-CONTRACT-002: FAIL summary json deterministic across two runs ---
+PASS: FAIL-path rc run1=1 run2=1
+PASS: summary json contract keys/types/schema version present
+FAIL_JSON_SHA256_RUN1=92f8d4c0fa5e345a96068d4013ca8388e3b9617bbb0f23f7f1dd085dfd15a79a
+FAIL_JSON_SHA256_RUN2=92f8d4c0fa5e345a96068d4013ca8388e3b9617bbb0f23f7f1dd085dfd15a79a
+PASS: FAIL summary json deterministic across two runs
+--- T-VALIDATE-SUMMARY-CONTRACT-003: ERROR summary json deterministic across two runs ---
+PASS: ERROR-path rc run1=2 run2=2
+PASS: summary json contract keys/types/schema version present
+ERROR_JSON_SHA256_RUN1=fed6638790224a82d50b610cd7eadd8da3120a4783d38119d055a31f2920c0b7
+ERROR_JSON_SHA256_RUN2=fed6638790224a82d50b610cd7eadd8da3120a4783d38119d055a31f2920c0b7
+PASS: ERROR summary json deterministic across two runs
+Summary: validator summary json contract enforcement tests complete
+[exit=0]
+
+## tests/test_external_packaging_meta_runner_determinism.sh
+$ bash tests/test_external_packaging_meta_runner_determinism.sh
+--- T-EXTERNAL-PACKAGING-META-001: meta-runner deterministic ordering/rc output ---
+PASS: meta-runner ordering and rc markers stable
+PASS: meta-runner ordering and rc markers stable
+META_RUNNER_NORM_SHA256_RUN1=66d071a05cf0c47538fbbbe204322fd1401216a6f9dd58b7a5ef386986e177bc
+META_RUNNER_NORM_SHA256_RUN2=66d071a05cf0c47538fbbbe204322fd1401216a6f9dd58b7a5ef386986e177bc
+PASS: meta-runner normalized output deterministic across two runs
+Summary: external packaging meta-runner determinism checks complete
+[exit=0]
+$ bash tests/test_external_packaging_meta_runner_determinism.sh  # run2
+--- T-EXTERNAL-PACKAGING-META-001: meta-runner deterministic ordering/rc output ---
+PASS: meta-runner ordering and rc markers stable
+PASS: meta-runner ordering and rc markers stable
+META_RUNNER_NORM_SHA256_RUN1=66d071a05cf0c47538fbbbe204322fd1401216a6f9dd58b7a5ef386986e177bc
+META_RUNNER_NORM_SHA256_RUN2=66d071a05cf0c47538fbbbe204322fd1401216a6f9dd58b7a5ef386986e177bc
+PASS: meta-runner normalized output deterministic across two runs
+Summary: external packaging meta-runner determinism checks complete
+[exit=0]
+
+BUNDLE_TRANSCRIPT_SHA256_RUN1=479efab8f6e129aacb697a5a87347076829cd0d17201857eea0450cad55a0c42
+BUNDLE_TRANSCRIPT_SHA256_RUN2=479efab8f6e129aacb697a5a87347076829cd0d17201857eea0450cad55a0c42
+PASS: bundle transcript deterministic across two reads

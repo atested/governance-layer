@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Constraint Set Digest v0",
+  "description": "Canonical list of applicable constraints for an action (no acknowledgments)",
+  "type": "object",
+  "required": ["csd_version", "constraints"],
+  "additionalProperties": false,
+  "properties": {
+    "csd_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["constraint_id", "constraint_version", "constraint_type"],
+        "additionalProperties": false,
+        "properties": {
+          "constraint_id": {
+            "type": "string",
+            "pattern": "^c-[0-9]{3,}$"
+          },
+          "constraint_version": {
+            "type": "string",
+            "pattern": "^v[0-9]+$"
+          },
+          "constraint_type": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "field_order": ["csd_version", "constraints"]
+}

@@ -1,0 +1,50 @@
+TASK_113 tamper evidence
+BASE_SHA=16e74795d40fae96d267975bb0c060b71e74ffbf
+
+$ bash tests/test_attestation_bundle_pack.sh  # run1
+[exit=0]
+$ bash tests/test_attestation_bundle_pack.sh  # run2
+[exit=0]
+PACK_TEST_STDOUT_SHA256_RUN1=bbead615eb489cf6458c916dcf8de88db229a3a4ca55b7d5af3fe9e2c479e023
+PACK_TEST_STDOUT_SHA256_RUN2=bb63d71544baa71b110c72f6b21e6cc70c6bd9439d8f05d20a4fc288c226c337
+FAIL: pack test stdout digest mismatch
+
+$ bash tests/test_attestation_bundle_tamper.sh
+--- T-BUNDLE-TAMPER-001: valid bundle passes (control) ---
+PASS: attestation bundle manifest + payload hashes verified
+PASS: valid bundle (exit=0)
+
+--- T-BUNDLE-TAMPER-002: payload tamper fails ---
+FAIL: hash mismatch for artifacts/request.txt (got=sha256:494dafc46aa5f1f49817d727138e4aa504231101326fd03af8a648dc9365c5e1 expected=sha256:7cf9a0e8538cb3ebdf69b73c9a72351d429580eb59055b1e7a43a37beddca55b)
+PASS: payload tamper (exit=1)
+
+--- T-BUNDLE-TAMPER-003: manifest hash tamper fails ---
+FAIL: hash mismatch for artifacts/request.txt (got=sha256:7cf9a0e8538cb3ebdf69b73c9a72351d429580eb59055b1e7a43a37beddca55b expected=sha256:0000000000000000000000000000000000000000000000000000000000000000)
+PASS: manifest hash tamper (exit=1)
+
+--- T-BUNDLE-TAMPER-004: missing manifest-listed payload member fails ---
+FAIL: manifest references missing bundle member: artifacts/request.txt
+PASS: missing file (exit=1)
+
+--- T-BUNDLE-TAMPER-005: extra unexpected payload member fails ---
+FAIL: unexpected payload member not in manifest: artifacts/extra.txt
+PASS: extra file (exit=1)
+
+--- T-BUNDLE-TAMPER-006A: malformed manifest JSON fails ---
+FAIL: malformed manifest json: Expecting value: line 2 column 1 (char 73)
+PASS: malformed manifest json (exit=1)
+
+--- T-BUNDLE-TAMPER-006B: manifest missing hash_algo fails ---
+FAIL: manifest hash_algo mismatch
+PASS: missing hash_algo (exit=1)
+
+--- T-BUNDLE-TAMPER-007: duplicate manifest entry fails ---
+FAIL: duplicate manifest path: artifacts/request.txt
+PASS: duplicate manifest entry (exit=1)
+
+Summary: tamper matrix complete
+[exit=0]
+
+Implementation note:
+- Tamper matrix now runs against the same canonical layout used by pack+verify.
+- Negative controls remain fail-closed with stable markers.

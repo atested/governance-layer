@@ -1,0 +1,24 @@
+{
+  "record_version": "0.2",
+  "timestamp_utc": "2026-03-10T00:00:00Z",
+  "session_id": "sess-rdd-phase5",
+  "request_id": "req-rdd-phase5",
+  "cap_registry_hash": "sha256:1b6d4f6d992fb1b73c5ea5b6e8d59062e1348b21de21c595773894f41bdc71d4",
+  "policy_reasons": [],
+  "policy_decision": "TRIAGE",
+  "tool": "FS_COPY",
+  "intent": {
+    "intent": "FS_COPY"
+  },
+  "policy_inputs": {},
+  "normalized_args": {},
+  "evidence_refs": [],
+  "untrusted_inputs": [],
+  "coverage_stamp": null,
+  "record_type": "signal_index",
+  "process_id": "phase5-proc-unsupported",
+  "prev_record_hash": null,
+  "record_hash": "sha256:2d53c686d110d1ff24d30d2adc9014a131d79b54588c5a79b7582395a13c1ab5",
+  "signature": "w0ghWJH7ZtpcB8YphK6-bTm3Q9Rdj8k93B10sRxK-7B_sZU7ic8U4K3IhaEWHYjHKLS3w0EG3GrF8gzwitDbDw",
+  "signing_key_id": "ed25519:349cff8df2c3908f68276e458b663ebe643141cea803a98e7d3812778bdaa7b6"
+}

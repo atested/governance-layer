@@ -1,0 +1,38 @@
+name: Guard ASSIGNMENTS.md
+
+on:
+  push:
+    branches:
+      - 'codex/**'
+  pull_request:
+
+jobs:
+  check-assignments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine diff base
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.base.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "sha=${{ github.event.before }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for ASSIGNMENTS.md changes
+        run: |
+          BASE_SHA="${{ steps.base.outputs.sha }}"
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$GITHUB_SHA")
+          
+          if echo "$CHANGED_FILES" | grep -q "^docs/dev/ASSIGNMENTS.md$"; then
+            echo "ERROR: Codex branches must not modify docs/dev/ASSIGNMENTS.md"
+            echo "Cecil updates ASSIGNMENTS on main at merge time."
+            exit 1
+          fi
+          
+          echo "OK: ASSIGNMENTS.md not modified"

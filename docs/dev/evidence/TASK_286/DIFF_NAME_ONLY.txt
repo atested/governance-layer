@@ -1,0 +1,8 @@
+docs/dev/WORK_QUEUE.md
+docs/dev/tasks/ready/TASK_284__tool_event_filtered_slice_support.md
+docs/dev/tasks/ready/TASK_285__tool_event_summary_report.md
+docs/dev/tasks/ready/TASK_286__tool_event_negative_matrix_expansion.md
+mcp/tool_event_store.py
+scripts/attest/summarize_tool_event_slice.py
+system/tests/test_tool_event_slice_negative_matrix.sh
+system/tests/test_tool_event_slice_summary.sh

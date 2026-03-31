@@ -1,0 +1,57 @@
+# Sample ADR Outputs
+
+## PASS Case (CORE_GENERIC)
+{
+    "action_kind": "CORE_GENERIC",
+    "adr_version": "v0",
+    "decision": "PASS",
+    "enforcement_mode": "ENFORCING",
+    "kernel_status": "PASS",
+    "profile_status": "PASS",
+    "reason_codes": [],
+    "version_bindings": {
+        "aat_suite_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "criteria_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "policy_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "validator_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+}
+
+## FAIL_HARD_STOP Case (K1 Phantom Action)
+{
+    "action_kind": "CORE_GENERIC",
+    "adr_version": "v0",
+    "decision": "FAIL_HARD_STOP",
+    "enforcement_mode": "ENFORCING",
+    "kernel_status": "FAIL",
+    "profile_status": "PASS",
+    "reason_codes": [
+        "AAT_K1_PHANTOM_ACTION",
+        "AAT_C3_FORBIDDEN_CLAIM_NO_EVIDENCE"
+    ],
+    "version_bindings": {
+        "aat_suite_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "criteria_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "policy_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "validator_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+}
+
+## FAIL_NON_ADMISSIBLE Case (M1 Schema Invalid)
+{
+    "action_kind": "CORE_GENERIC",
+    "adr_version": "v0",
+    "decision": "FAIL_NON_ADMISSIBLE",
+    "enforcement_mode": "ENFORCING",
+    "kernel_status": "PASS",
+    "profile_status": "FAIL",
+    "reason_codes": [
+        "AAT_M1_SCHEMA_INVALID"
+    ],
+    "version_bindings": {
+        "aat_suite_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "criteria_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "policy_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "validator_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+}

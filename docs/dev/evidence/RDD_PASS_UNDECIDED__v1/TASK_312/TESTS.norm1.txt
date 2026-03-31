@@ -1,0 +1,145 @@
+TASK_312 TEST RUN
+{
+  "record_version": "0.2",
+  "record_type": "pass_decision",
+  "cap_registry_hash": "sha256:1b6d4f6d992fb1b73c5ea5b6e8d59062e1348b21de21c595773894f41bdc71d4",
+  "request_hash": "sha256:a16deb89fb7825b75bc54e981877a791c5cc9b83279d77711a1aa45004559f35",
+  "request_bytes_b64": "ewogICJ0b29sIjogIkZTX0NPUFkiLAogICJhcmdzIjogewogICAgInNyY19wYXRoIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Bhc3MtdW5kZWNpZGVkLXNyYy50eHQiLAogICAgImRzdF9wYXRoIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Bhc3MtdW5kZWNpZGVkLWRzdC50eHQiLAogICAgIm92ZXJ3cml0ZSI6IGZhbHNlCiAgfSwKICAiaW50ZW50IjogewogICAgImdvYWwiOiAiQ29weSBmaWxlIHdoZW4gZGVzdGluYXRpb24gYWxyZWFkeSBleGlzdHMgYW5kIG92ZXJ3cml0ZSBpcyBub3QgcmVxdWVzdGVkLiIsCiAgICAiY29uc3RyYWludHMiOiB7CiAgICAgICJvdmVyd3JpdGUiOiBmYWxzZQogICAgfSwKICAgICJyZXF1ZXN0ZWRfYWN0aW9uIjogIkZTX0NPUFkiLAogICAgImlucHV0cyI6IFsKICAgICAgewogICAgICAgICJyZWYiOiAiZmlsZTpzcmNfcGF0aCIsCiAgICAgICAgInZhbHVlIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Bhc3MtdW5kZWNpZGVkLXNyYy50eHQiCiAgICAgIH0KICAgIF0sCiAgICAiZXhwZWN0ZWRfb3V0cHV0cyI6IFsKICAgICAgewogICAgICAgICJyZWYiOiAiZmlsZTpkc3RfcGF0aCIsCiAgICAgICAgInZhbHVlIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Bhc3MtdW5kZWNpZGVkLWRzdC50eHQiCiAgICAgIH0KICAgIF0KICB9Cn0K",
+  "timestamp_utc": "NORMALIZED",
+  "session_id": "sess-NORMALIZED",
+  "request_id": "NORMALIZED",
+  "process_id": "NORMALIZED",
+  "actor": "unknown",
+  "tool": "FS_COPY",
+  "capability_class": "FS_COPY",
+  "intent": {
+    "goal": "Copy file when destination already exists and overwrite is not requested.",
+    "constraints": {
+      "overwrite": false
+    },
+    "requested_action": "FS_COPY",
+    "expected_outputs": [
+      {
+        "ref": "file:dst_path",
+        "value": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/pass-undecided-dst.txt"
+      }
+    ]
+  },
+  "policy_inputs": {
+    "canonical_path": null,
+    "allow_base_dirs": [
+      "/Users/gregkeeter/codex-workspaces/governance-layer",
+      "/Users/gregkeeter/codex-workspaces/governance-layer/out/runtime"
+    ],
+    "deny_hidden_paths": true,
+    "deny_overwrite_by_default": true,
+    "deny_executable_outputs": true,
+    "overwrite_intent": false,
+    "overwrite_requested": false,
+    "request_executable": false
+  },
+  "normalized_args": {
+    "canonical_src_path": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/pass-undecided-src.txt",
+    "canonical_dst_path": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/pass-undecided-dst.txt",
+    "overwrite_requested": false,
+    "recursive_requested": false
+  },
+  "policy_decision": "UNDECIDED",
+  "policy_reasons": [],
+  "coverage_stamp_summary": {
+    "coverage_stamp_version": "coverage_stamp_v1",
+    "overall_status": "missing",
+    "reason_code": "COVERAGE_STAMP_MISSING",
+    "required": false
+  },
+  "tool_args_redacted": {
+    "path": "",
+    "canonical_path": null,
+    "content_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "overwrite": false,
+    "request_executable": false
+  },
+  "untrusted_inputs": [],
+  "evidence_refs": [],
+  "prev_record_hash": null,
+  "record_hash": "sha256:NORMALIZED",
+  "signature": null,
+  "signing_key_id": null,
+  "insufficiency": {
+    "trigger": "dest_exists_no_overwrite",
+    "surface": "filesystem",
+    "tool": "FS_COPY",
+    "condition": "Destination path exists and overwrite was not requested",
+    "rules_consulted": [
+      "FS_COPY.caps.overwrite_allowed"
+    ],
+    "gap": "No rule specifies disposition when destination exists and overwrite is not requested. The overwrite policy governs whether overwrite is permitted when requested, not what to do when it is not requested and the destination exists."
+  }
+}
+{
+  "record_version": "0.2",
+  "record_type": "pass_decision",
+  "cap_registry_hash": "sha256:1b6d4f6d992fb1b73c5ea5b6e8d59062e1348b21de21c595773894f41bdc71d4",
+  "request_hash": "sha256:f976c812b5af97b3ac1640af86d08d9a3423e39b84aa7e9245e24a702c974907",
+  "request_bytes_b64": "ewogICJ0b29sIjogIkZTX0NPUFkiLAogICJhcmdzIjogewogICAgInNyY19wYXRoIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Rhc2szMTItc3JjLnR4dCIsCiAgICAiZHN0X3BhdGgiOiAiL1VzZXJzL2dyZWdrZWV0ZXIvY29kZXgtd29ya3NwYWNlcy9nb3Zlcm5hbmNlLWxheWVyL291dC9yZGQvdGFzazMxMi1kc3QtbmV3LnR4dCIsCiAgICAib3ZlcndyaXRlIjogZmFsc2UKICB9LAogICJpbnRlbnQiOiB7CiAgICAiZ29hbCI6ICJGU19DT1BZIHVuYWZmZWN0ZWQgQUxMT1cgY2FzZSIsCiAgICAiY29uc3RyYWludHMiOiB7Im92ZXJ3cml0ZSI6IGZhbHNlfSwKICAgICJyZXF1ZXN0ZWRfYWN0aW9uIjogIkZTX0NPUFkiLAogICAgImlucHV0cyI6IFt7InJlZiI6ICJmaWxlOnNyY19wYXRoIiwgInZhbHVlIjogIi9Vc2Vycy9ncmVna2VldGVyL2NvZGV4LXdvcmtzcGFjZXMvZ292ZXJuYW5jZS1sYXllci9vdXQvcmRkL3Rhc2szMTItc3JjLnR4dCJ9XSwKICAgICJleHBlY3RlZF9vdXRwdXRzIjogW3sicmVmIjogImZpbGU6ZHN0X3BhdGgiLCAidmFsdWUiOiAiL1VzZXJzL2dyZWdrZWV0ZXIvY29kZXgtd29ya3NwYWNlcy9nb3Zlcm5hbmNlLWxheWVyL291dC9yZGQvdGFzazMxMi1kc3QtbmV3LnR4dCJ9XQogIH0KfQo=",
+  "timestamp_utc": "NORMALIZED",
+  "session_id": "sess-NORMALIZED",
+  "request_id": "NORMALIZED",
+  "process_id": "NORMALIZED",
+  "actor": "unknown",
+  "tool": "FS_COPY",
+  "capability_class": "FS_COPY",
+  "intent": {
+    "goal": "FS_COPY unaffected ALLOW case",
+    "constraints": {
+      "overwrite": false
+    },
+    "requested_action": "FS_COPY",
+    "expected_outputs": [
+      {
+        "ref": "file:dst_path",
+        "value": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/task312-dst-new.txt"
+      }
+    ]
+  },
+  "policy_inputs": {
+    "canonical_path": null,
+    "allow_base_dirs": [
+      "/Users/gregkeeter/codex-workspaces/governance-layer",
+      "/Users/gregkeeter/codex-workspaces/governance-layer/out/runtime"
+    ],
+    "deny_hidden_paths": true,
+    "deny_overwrite_by_default": true,
+    "deny_executable_outputs": true,
+    "overwrite_intent": false,
+    "overwrite_requested": false,
+    "request_executable": false
+  },
+  "normalized_args": {
+    "canonical_src_path": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/task312-src.txt",
+    "canonical_dst_path": "/Users/gregkeeter/codex-workspaces/governance-layer/out/rdd/task312-dst-new.txt",
+    "overwrite_requested": false,
+    "recursive_requested": false
+  },
+  "policy_decision": "ALLOW",
+  "policy_reasons": [],
+  "coverage_stamp_summary": {
+    "coverage_stamp_version": "coverage_stamp_v1",
+    "overall_status": "missing",
+    "reason_code": "COVERAGE_STAMP_MISSING",
+    "required": false
+  },
+  "tool_args_redacted": {
+    "path": "",
+    "canonical_path": null,
+    "content_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "overwrite": false,
+    "request_executable": false
+  },
+  "untrusted_inputs": [],
+  "evidence_refs": [],
+  "prev_record_hash": null,
+  "record_hash": "sha256:NORMALIZED",
+  "signature": null,
+  "signing_key_id": null
+}

@@ -1,0 +1,10 @@
+{
+  "cem_version": "v0",
+  "claims": [
+    {
+      "claim_id": "cl-001",
+      "claim_type": "test_passed",
+      "evidence_refs": []
+    }
+  ]
+}
