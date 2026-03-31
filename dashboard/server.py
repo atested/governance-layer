@@ -124,6 +124,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/observe":
             self._handle_observe()
+        elif parsed.path == "/api/health/acknowledge":
+            self._handle_acknowledge()
         elif parsed.path.startswith("/api/"):
             _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -192,6 +194,32 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_acknowledge(self):
+        """POST /api/health/acknowledge — acknowledge a health alert."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        alert_source = str(data.get("source", "")).strip()
+        if not alert_source:
+            _json_response(self, {"error": "source required"}, 400)
+            return
+
+        from chain_health import append_stability_event
+        stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
+        evt = append_stability_event(stability_log, "alert_acknowledged", {
+            "source": alert_source,
+            "message": str(data.get("message", "")),
+        })
+        _json_response(self, {"acknowledged": True, "event_id": evt["stability_event_id"]})
 
     def log_message(self, format, *args):
         pass  # Silence request logs
@@ -288,6 +316,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 end_time=qs("end_time") or None,
             )
             _json_response(self, data)
+
+        elif path == "/api/health":
+            from chain_health import collect_health_signals
+            stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
+            chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
+            data = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
+            _json_response(self, data)
+
+        elif path == "/api/health/acknowledge":
+            # POST-only, but handle GET gracefully
+            _json_response(self, {"error": "use POST"}, 405)
 
         elif path == "/api/users":
             from readout import load_chain_rows

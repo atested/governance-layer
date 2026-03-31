@@ -817,3 +817,61 @@ pre {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 }
+
+/* Health alerts */
+
+.health-alert {
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  border-left: 4px solid var(--line);
+}
+
+.health-alert:last-child {
+  margin-bottom: 0;
+}
+
+.health-alert--critical {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.health-alert--attention {
+  background: var(--warn-soft);
+  border-left-color: var(--warn);
+}
+
+.health-alert--info {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.health-alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.health-alert-severity {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.health-alert--critical .health-alert-severity {
+  color: var(--danger);
+}
+
+.health-alert--attention .health-alert-severity {
+  color: var(--warn);
+}
+
+.health-alert p {
+  margin: 4px 0;
+}
+
+.status-danger {
+  color: var(--danger);
+}
