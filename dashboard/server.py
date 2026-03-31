@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Atested Governance Dashboard — lightweight HTTP server.
+Atested Dashboard — lightweight HTTP server.
 
 Serves the dashboard UI files and JSON API endpoints backed by the
 governance chain readout functions.  Started by the governance_dashboard

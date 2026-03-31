@@ -3189,8 +3189,8 @@ def _is_dashboard_alive() -> bool:
 
 
 @mcp.tool()
-def governance_dashboard() -> Dict[str, Any]:
-    """Start the Atested Governance Dashboard and return the URL.
+def atested_dashboard() -> Dict[str, Any]:
+    """Start the Atested Dashboard and return the URL.
 
     Launches a local web server serving the dashboard UI. If the
     dashboard is already running, returns the existing URL. The
