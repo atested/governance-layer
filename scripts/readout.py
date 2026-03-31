@@ -184,6 +184,7 @@ def assemble_governance_status_record(
             "opaque_path_encounter_frequency": opacity_metrics["opaque_path_encounter_frequency"],
             "opaque_resolution_distribution": opacity_metrics["resolution_distribution"],
         },
+        "transparency_metric": compute_transparency_metric(metrics_rows),
     }
 
 
@@ -237,6 +238,7 @@ EVENT_CATEGORIES = frozenset([
     "opaque_approval",
     "opaque_revocation",
     "opaque_invocation_decision",
+    "ungoverned_observation",
 ])
 
 _EVENT_TYPE_TO_CATEGORY = {
@@ -244,6 +246,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "opaque_artifact_approval": "opaque_approval",
     "opaque_artifact_revocation": "opaque_revocation",
     "opaque_invocation_decision": "opaque_invocation_decision",
+    "ungoverned_operation_observed": "ungoverned_observation",
 }
 
 
@@ -354,6 +357,21 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "record_hash": rec.get("record_hash", ""),
         }
 
+    elif category == "ungoverned_observation":
+        op_type = rec.get("operation_type", "")
+        target = rec.get("target", "")
+        source = rec.get("source", "")
+        summary = f"ungoverned {op_type}" + (f" on {target}" if target else "")
+        detail = {
+            "operation_type": op_type,
+            "target": target,
+            "source": source,
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
     return {
         "sequence_position": sequence_position,
         "timestamp_utc": rec.get("timestamp_utc", ""),
@@ -426,6 +444,54 @@ def governance_activity_view(
             "event_category": event_category,
             "resolution": resolution,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Transparency metric
+# ---------------------------------------------------------------------------
+
+
+def compute_transparency_metric(
+    rows: list[dict],
+    *,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+) -> dict:
+    """Compute the transparency metric from chain rows.
+
+    Transparency = governed_operations / (governed_operations + ungoverned_observations).
+    If no ungoverned observations exist, returns observation_data=False so the
+    dashboard can show "No observation data" instead of a misleading 100%.
+    """
+    governed_count = 0
+    ungoverned_count = 0
+
+    for row in rows:
+        ts = row.get("timestamp_utc", "")
+        if not _in_time_range(ts, start_time, end_time):
+            continue
+        event_type = row.get("event_type")
+        if event_type == "ungoverned_operation_observed":
+            ungoverned_count += 1
+        elif event_type is None:
+            # Action records (governed operations) have no event_type field
+            governed_count += 1
+
+    has_observation_data = ungoverned_count > 0
+    total = governed_count + ungoverned_count
+
+    if total == 0:
+        transparency_pct = None
+    else:
+        transparency_pct = round(governed_count / total, 6)
+
+    return {
+        "observation_data": has_observation_data,
+        "governed_operations": governed_count,
+        "ungoverned_observations": ungoverned_count,
+        "total_observed": total,
+        "transparency_pct": transparency_pct,
     }
 
 

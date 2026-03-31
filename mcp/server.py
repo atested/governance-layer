@@ -1589,6 +1589,60 @@ def usage_attestation() -> Dict[str, Any]:
 
 
 @mcp.tool()
+def observe_ungoverned_operation(
+    operation_type: str,
+    target: str = "",
+    source: str = "",
+    observed_at: str = "",
+) -> Dict[str, Any]:
+    """Record an observation that an ungoverned operation occurred.
+
+    This is NOT a policy evaluation — there is no ALLOW/DENY.  It simply
+    records in the governance chain that an operation outside the governed
+    tool boundary was observed.  Used to compute the Transparency metric.
+
+    Args:
+        operation_type: One of read, write, edit, delete, move, execute,
+                        glob, grep, list, other.
+        target: Optional path or resource identifier.
+        source: Optional identifier for the reporting tool (e.g. "claude_code_hook").
+        observed_at: Optional ISO-8601 timestamp of when the operation occurred.
+                     Defaults to current time if empty.
+    """
+    from event_model import UNGOVERNED_OPERATION_TYPES
+
+    op = str(operation_type).strip().lower()
+    if op not in UNGOVERNED_OPERATION_TYPES:
+        return {"error": "INVALID_OPERATION_TYPE", "valid_types": sorted(UNGOVERNED_OPERATION_TYPES)}
+
+    payload = {
+        "operation_type": op,
+    }
+    if target:
+        payload["target"] = str(target).strip()
+    if source:
+        payload["source"] = str(source).strip()
+    if observed_at:
+        payload["observed_at"] = str(observed_at).strip()
+
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            "ungoverned_operation_observed",
+            payload,
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        rec = _append_non_action_event(event)
+        _verify_chain()
+
+    return {
+        "recorded": True,
+        "event_id": rec.get("event_id"),
+        "operation_type": op,
+    }
+
+
+@mcp.tool()
 def fs_write(path: str, content: str, overwrite: bool = False, request_executable: bool = False) -> Dict[str, Any]:
     """
     Governed file write. Returns DENY with a full decision record on policy failure.
