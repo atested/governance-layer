@@ -68,6 +68,9 @@ from verification import (
 )
 from readout import (
     assemble_governance_status_record,
+    audit_query as _audit_query,
+    audit_record_detail as _audit_record_detail,
+    audit_report as _audit_report,
     governance_activity_view,
     governance_approvals_view,
     governance_verification_view,
@@ -3078,6 +3081,164 @@ def capabilities_export_attestation(
                 break
         return {"ok": False, "reason_token": token or "EXPORT_FAILED", "bundle_dir": ""}
     return {"ok": True, "reason_token": "NONE", "bundle_dir": out_rel}
+
+
+# ---------------------------------------------------------------------------
+# Audit Query Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def audit_query(
+    start_time: str = "",
+    end_time: str = "",
+    user_identity: str = "",
+    tool_name: str = "",
+    policy_decision: str = "",
+    event_category: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    """Query the governance chain for audit purposes.
+
+    Filter by time range (ISO-8601), user identity, tool name,
+    policy decision (ALLOW/DENY), or event category.
+    Returns matching entries in reverse chronological order.
+    """
+    return _audit_query(
+        CHAIN,
+        RECORDS_DIR,
+        start_time=str(start_time).strip() or None,
+        end_time=str(end_time).strip() or None,
+        user_identity=str(user_identity).strip() or None,
+        tool_name=str(tool_name).strip() or None,
+        policy_decision=str(policy_decision).strip() or None,
+        event_category=str(event_category).strip() or None,
+        limit=max(int(limit), 1) if limit else 100,
+        offset=max(int(offset), 0) if offset else 0,
+    )
+
+
+@mcp.tool()
+def audit_record_detail(record_id: str) -> Dict[str, Any]:
+    """Retrieve a single governance record in full detail.
+
+    Look up by request_id, event_id, or record_hash. Returns the chain
+    record and any matching sidecar record.
+    """
+    rid = str(record_id).strip()
+    if not rid:
+        return {"found": False, "record_id": "", "error": "record_id is required"}
+    return _audit_record_detail(CHAIN, RECORDS_DIR, record_id=rid)
+
+
+@mcp.tool()
+def audit_report(
+    start_time: str = "",
+    end_time: str = "",
+    group_by: str = "tool",
+) -> Dict[str, Any]:
+    """Generate an audit summary report over a time period.
+
+    group_by options: "tool", "user", "decision", "category".
+    Returns counts grouped by the specified dimension plus a
+    decision summary (ALLOW/DENY counts).
+    """
+    gb = str(group_by).strip() or "tool"
+    if gb not in ("tool", "user", "decision", "category"):
+        gb = "tool"
+    return _audit_report(
+        CHAIN,
+        RECORDS_DIR,
+        start_time=str(start_time).strip() or None,
+        end_time=str(end_time).strip() or None,
+        group_by=gb,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Governance Dashboard Tool
+# ---------------------------------------------------------------------------
+
+_DASHBOARD_PROCESS: Optional[subprocess.Popen] = None
+_DASHBOARD_PORT: Optional[int] = None
+_DASHBOARD_LOCK = threading.Lock()
+
+
+def _find_free_port(preferred: int = 9700) -> int:
+    """Find a free TCP port, preferring the given port."""
+    import socket
+    for port in (preferred, preferred + 1, preferred + 2):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    # Fallback: let OS assign
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _is_dashboard_alive() -> bool:
+    global _DASHBOARD_PROCESS
+    if _DASHBOARD_PROCESS is None:
+        return False
+    return _DASHBOARD_PROCESS.poll() is None
+
+
+@mcp.tool()
+def governance_dashboard() -> Dict[str, Any]:
+    """Start the Atested Governance Dashboard and return the URL.
+
+    Launches a local web server serving the dashboard UI. If the
+    dashboard is already running, returns the existing URL. The
+    operator can open this URL in any browser.
+    """
+    global _DASHBOARD_PROCESS, _DASHBOARD_PORT
+
+    with _DASHBOARD_LOCK:
+        if _is_dashboard_alive() and _DASHBOARD_PORT:
+            url = f"http://localhost:{_DASHBOARD_PORT}"
+            return {"status": "already_running", "url": url, "port": _DASHBOARD_PORT}
+
+        dashboard_dir = REPO / "dashboard"
+        if not dashboard_dir.exists():
+            return {"status": "error", "error": "Dashboard directory not found"}
+
+        port = _find_free_port()
+        server_script = dashboard_dir / "server.py"
+        if not server_script.exists():
+            return {"status": "error", "error": "Dashboard server script not found"}
+
+        env = {
+            **os.environ,
+            "GOV_RUNTIME_DIR": str(RUNTIME),
+            "GOV_CANONICAL_REPO_PATH": str(REPO),
+            "GOV_RUNTIME_PATH": str(RUNTIME),
+            "DASHBOARD_PORT": str(port),
+        }
+
+        _DASHBOARD_PROCESS = subprocess.Popen(
+            [sys.executable, str(server_script)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _DASHBOARD_PORT = port
+
+        # Brief wait to let the server bind
+        import time
+        time.sleep(0.5)
+
+        if not _is_dashboard_alive():
+            _DASHBOARD_PROCESS = None
+            _DASHBOARD_PORT = None
+            return {"status": "error", "error": "Dashboard server failed to start"}
+
+        url = f"http://localhost:{port}"
+        return {"status": "started", "url": url, "port": port}
 
 
 if __name__ == "__main__":
