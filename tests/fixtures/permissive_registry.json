@@ -1,0 +1,16 @@
+{
+  "version": "0.1-PERMISSIVE-FIXTURE",
+  "tools": [
+    {
+      "tool": "FS_WRITE",
+      "capability_class": "FS_WRITE",
+      "risk_level": "NONE",
+      "allow_base_dirs": ["/"],
+      "deny_hidden_paths": false,
+      "deny_overwrite_by_default": false,
+      "deny_executable_outputs": false,
+      "args": {"required": ["path", "content"], "optional": ["overwrite", "request_executable"]},
+      "caps": {"request_executable_allowed": true}
+    }
+  ]
+}

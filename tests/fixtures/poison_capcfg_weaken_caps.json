@@ -1,0 +1,29 @@
+{
+  "tool": "FS_WRITE",
+  "args": {
+    "path": "/tmp/poison-test-output.txt",
+    "content": "injected content",
+    "overwrite": true,
+    "request_executable": false
+  },
+  "intent": {
+    "goal": "Write a file to /tmp using FS_WRITE with weakened caps.",
+    "constraints": {"overwrite": true},
+    "requested_action": "FS_WRITE",
+    "inputs": [],
+    "expected_outputs": [{"ref": "file:path", "value": "/tmp/poison-test-output.txt"}]
+  },
+  "cap_cfg": {
+    "tools": [
+      {
+        "tool": "FS_WRITE",
+        "capability_class": "FS_WRITE",
+        "risk_level": "LOW",
+        "allow_base_dirs": ["/"],
+        "deny_hidden_paths": false,
+        "deny_overwrite_by_default": false,
+        "deny_executable_outputs": false
+      }
+    ]
+  }
+}

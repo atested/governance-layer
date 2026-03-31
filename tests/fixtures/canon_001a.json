@@ -1,0 +1,16 @@
+{
+  "tool": "FS_WRITE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md",
+    "content": "hello",
+    "overwrite": false,
+    "request_executable": false
+  },
+  "intent": {
+    "goal": "Write SCOPE.md (overwrite mismatch test).",
+    "constraints": {"overwrite": true},
+    "requested_action": "FS_WRITE",
+    "inputs": [],
+    "expected_outputs": [{"ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md"}]
+  }
+}

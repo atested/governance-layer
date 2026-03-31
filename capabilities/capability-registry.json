@@ -1,0 +1,129 @@
+{
+  "version": "0.1",
+  "tools": [
+    {
+      "tool": "FS_WRITE",
+      "capability_class": "FS_WRITE",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "/Volumes/SSD/archive/gov/governance-layer/",
+        "/Volumes/SSD/archive/gov/runtime"
+      ],
+      "deny_hidden_paths": true,
+      "deny_overwrite_by_default": true,
+      "deny_executable_outputs": true,
+      "args": {
+        "required": [
+          "path",
+          "content"
+        ],
+        "optional": [
+          "overwrite",
+          "request_executable"
+        ]
+      },
+      "caps": {
+        "request_executable_allowed": false
+      }
+    },
+    {
+      "tool": "FS_LIST",
+      "capability_class": "FS_LIST",
+      "risk_level": "MEDIUM",
+      "allow_base_dirs": [
+        "/Volumes/SSD/archive/gov/governance-layer/",
+        "/Volumes/SSD/archive/gov/runtime"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": [
+          "path"
+        ],
+        "optional": [
+          "max_entries",
+          "include_hidden"
+        ]
+      },
+      "caps": {
+        "max_entries_default": 100,
+        "max_entries_hard": 500,
+        "include_hidden_allowed": false
+      }
+    },
+    {
+      "tool": "FS_READ",
+      "capability_class": "FS_READ",
+      "risk_level": "MEDIUM",
+      "allow_base_dirs": [
+        "/Volumes/SSD/archive/gov/governance-layer/",
+        "/Volumes/SSD/archive/gov/runtime"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "max_bytes_default": 4096,
+      "max_bytes_hard": 65536,
+      "args": {
+        "required": [
+          "path"
+        ],
+        "optional": [
+          "max_bytes",
+          "offset",
+          "as_text"
+        ]
+      },
+      "caps": {
+        "max_bytes_default": 4096,
+        "max_bytes_hard": 65536,
+        "offset_min": 0
+      }
+    }
+  ,
+    {
+      "tool": "FS_MKDIR",
+      "capability_class": "FS_MKDIR",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "/Volumes/SSD/archive/gov/governance-layer/",
+        "/Volumes/SSD/archive/gov/runtime"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "deny_overwrite_by_default": false,
+      "args": {
+        "required": [
+          "path"
+        ],
+        "optional": [
+          "parents",
+          "exist_ok"
+        ]
+      },
+      "caps": {
+        "parents_allowed": true,
+        "exist_ok_allowed": true
+      }
+    },
+    {
+      "tool": "FS_MOVE",
+      "capability_class": "FS_MOVE",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "/Volumes/SSD/archive/gov/governance-layer/",
+        "/Volumes/SSD/archive/gov/runtime"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": ["src_path", "dst_path"],
+        "optional": ["overwrite"]
+      },
+      "caps": {
+        "overwrite_allowed": false,
+        "cross_root_allowed": false,
+        "dst_must_be_within_allowlist": true
+      }
+    }
+  ]
+}

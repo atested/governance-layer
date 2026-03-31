@@ -1,0 +1,15 @@
+{
+  "tool": "FS_MOVE",
+  "args": {
+    "src_path": "/Volumes/SSD/archive/gov/runtime/tmp/move-src.txt",
+    "dst_path": "/tmp/move-dst-outside.txt",
+    "overwrite": false
+  },
+  "intent": {
+    "goal": "Attempt to move file to /tmp which is outside allowed roots.",
+    "constraints": {"overwrite": false},
+    "requested_action": "FS_MOVE",
+    "inputs": [{"ref": "file:src_path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/move-src.txt"}],
+    "expected_outputs": [{"ref": "file:dst_path", "value": "/tmp/move-dst-outside.txt"}]
+  }
+}
