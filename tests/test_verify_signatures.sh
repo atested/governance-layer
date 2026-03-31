@@ -48,7 +48,7 @@ run_capture() {
   return "$rc"
 }
 
-python3 "$EVAL" "$FIXTURE" >"$tmpdir/unsigned.json"
+GOV_SIGNING_DEV_MODE=1 python3 "$EVAL" "$FIXTURE" >"$tmpdir/unsigned.json"
 
 python3 - <<'PY' "$ROOT" "$tmpdir/unsigned.json" "$tmpdir"
 import base64

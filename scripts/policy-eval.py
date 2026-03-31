@@ -56,7 +56,15 @@ def signing_dev_mode_enabled() -> bool:
 
 
 def signing_required_mode_enabled() -> bool:
-    return _env_flag("GOV_SIGNING_REQUIRED")
+    # H3: Signing is required by default.  Set GOV_SIGNING_DEV_MODE=1 to
+    # explicitly allow unsigned records during development.
+    if signing_dev_mode_enabled():
+        return False
+    # Explicit override still works
+    explicit = os.environ.get("GOV_SIGNING_REQUIRED", "").strip().lower()
+    if explicit in {"0", "false", "no", "off"}:
+        return False
+    return True
 
 
 def validate_signing_mode_flags() -> None:
@@ -304,6 +312,23 @@ SIGNING_EXCLUDE_TOP_LEVEL = frozenset([
     "session_id",
     "request_id",
     "process_id",
+    # H1: prev_record_hash is NOW included in the signing preimage so that
+    # chain linkage is cryptographically bound.  Old records (record_version
+    # "0.2") are verified with the legacy preimage that excludes it.
+    "record_hash",
+    "signature",
+    "signing_key_id",
+    "request_bytes_b64",
+    "evidence_refs",
+    "untrusted_inputs",
+])
+
+# Legacy set for verifying pre-H1 records that excluded prev_record_hash.
+SIGNING_EXCLUDE_TOP_LEVEL_LEGACY = frozenset([
+    "timestamp_utc",
+    "session_id",
+    "request_id",
+    "process_id",
     "prev_record_hash",
     "record_hash",
     "signature",
@@ -386,6 +411,21 @@ def under_base(path: Path, base: Path) -> bool:
         return False
 
 
+def _sanitize_base_dir(value: str) -> str:
+    """H4: Reject paths containing injection vectors."""
+    if "\x00" in value:
+        raise ValueError(f"null byte in base dir: {value!r}")
+    # Reject obvious shell metacharacters that could indicate injection
+    for ch in (";", "|", "&", "`", "$", "\n", "\r"):
+        if ch in value:
+            raise ValueError(f"shell metacharacter in base dir: {value!r}")
+    # Reject root (/) as a base dir — it would allow all paths
+    canon = Path(value).resolve(strict=False)
+    if str(canon) == "/":
+        raise ValueError(f"base dir resolves to filesystem root: {value!r}")
+    return value
+
+
 def resolve_allow_base_dirs(base_dirs: list) -> list:
     resolved = []
     for base in base_dirs:
@@ -398,6 +438,11 @@ def resolve_allow_base_dirs(base_dirs: list) -> list:
             "__GOV_RUNTIME_PATH__",
             os.environ.get("GOV_RUNTIME_PATH", "__GOV_RUNTIME_PATH__"),
         )
+        try:
+            value = _sanitize_base_dir(value)
+        except ValueError:
+            # H4: skip dangerous base dirs rather than crash
+            continue
         resolved.append(value)
     return resolved
 
@@ -613,11 +658,10 @@ def main():
 
     # Start building decision record
     record = {
-        "record_version": "0.2",
+        "record_version": "0.3",
         "record_type": "pass_decision",
         "cap_registry_hash": cap_registry_hash,
         "request_hash": request_hash,
-        "request_bytes_b64": request_bytes_b64,
         "timestamp_utc": now_utc_z(),
         "session_id": session_id,
         "request_id": request_id,

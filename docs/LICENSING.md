@@ -76,7 +76,7 @@ Call the `license_activate` tool with a valid key:
 
 ```
 Tool: license_activate
-Arguments: { "license_key": "GOV-team-20271231-a1b2c3d4", "organization_id": "acme-corp" }
+Arguments: { "license_key": "<Ed25519-signed-v2-token>", "organization_id": "acme-corp" }
 ```
 
 All subsequent governance records show `license_status: licensed` with the
@@ -102,19 +102,44 @@ Every governance record (action and non-action) includes:
 
 ## License key format
 
+### v2 tokens (current)
+
+License tokens are Ed25519-signed JSON payloads. The signing private key is
+held by the license issuer and is **not** shipped with the client code. The
+client embeds only the public verification key.
+
+Token format: `base64url(JSON-payload).base64url(Ed25519-signature)`
+
+Payload fields: `{"tier": "team", "exp": "20271231", "org": "acme", "v": 2}`
+
+### v1 keys (legacy, deprecated)
+
 Keys follow the pattern: `GOV-<tier>-<expiry-YYYYMMDD>-<check8>`
 
 Example: `GOV-team-20271231-a1b2c3d4`
 
 The check suffix is a SHA-256 prefix derived from the tier and expiry.
-This is a deterministic scheme — enforcement is evidentiary, not
-cryptographic.
+v1 keys are accepted for backward compatibility but new activations should
+use v2 tokens.
 
 ## Configuration file
 
 License state is persisted in `$GOV_RUNTIME_DIR/license.json`.
 This file is created automatically on first operation and updated
 on activation.  It is gitignored (inside the runtime directory).
+
+## Multi-user identity limitation (bearer mode)
+
+In HTTP deployments using bearer token authentication, user identity is derived
+from a SHA-256 prefix of the token. All clients sharing the same bearer token
+are counted as one unique user. This affects:
+
+- **Unique user counts** — will under-count if multiple people share a token.
+- **Trial-to-personal transition** — checks unique users ≤ 1; may incorrectly
+  trigger for multi-user deployments sharing a single token.
+
+For accurate per-user tracking, issue distinct bearer tokens per user or use
+OIDC mode.
 
 ## Design principles
 

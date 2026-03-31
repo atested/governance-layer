@@ -36,12 +36,12 @@ assert_eq () {
 
 verify_hash () {
   local name="$1" json_file="$2"
-  if "$VERIFY" "$json_file" >/dev/null 2>&1; then
+  if GOV_SIGNING_DEV_MODE=1 "$VERIFY" "$json_file" >/dev/null 2>&1; then
     echo "PASS: $name (record_hash verified)"
     pass=$((pass+1))
   else
     echo "FAIL: $name (record_hash verify failed)"
-    "$VERIFY" "$json_file" || true
+    GOV_SIGNING_DEV_MODE=1 "$VERIFY" "$json_file" || true
     fail=$((fail+1))
   fi
 }
@@ -57,8 +57,8 @@ PY
 mkdir -p "$LOG_DIR"
 
 echo "--- T-SIGNDET-001: record_hash stable across repeated runs ---"
-python3 "$EVAL" "$FIXTURE" > "$LOG_DIR/t-signdet-001-a.record.json"
-python3 "$EVAL" "$FIXTURE" > "$LOG_DIR/t-signdet-001-b.record.json"
+GOV_SIGNING_DEV_MODE=1 python3 "$EVAL" "$FIXTURE" > "$LOG_DIR/t-signdet-001-a.record.json"
+GOV_SIGNING_DEV_MODE=1 python3 "$EVAL" "$FIXTURE" > "$LOG_DIR/t-signdet-001-b.record.json"
 
 verify_hash "T-SIGNDET-001A verify-record" "$LOG_DIR/t-signdet-001-a.record.json"
 verify_hash "T-SIGNDET-001B verify-record" "$LOG_DIR/t-signdet-001-b.record.json"
@@ -79,7 +79,7 @@ with open(src, "r", encoding="utf-8") as f:
 rec["timestamp_utc"] = "2099-12-31T23:59:59Z"
 rec["session_id"] = "sess-mutated"
 rec["request_id"] = "00000000-0000-0000-0000-000000000000"
-rec["prev_record_hash"] = "sha256:" + ("0" * 64)
+# H1: prev_record_hash is now included in signing preimage, so do NOT mutate it here
 
 if isinstance(rec.get("tool_args_redacted"), dict):
     rec["tool_args_redacted"]["path"] = "/tmp/machine-a/secret.txt"
@@ -108,7 +108,7 @@ with open(dst, "w", encoding="utf-8") as f:
 PY
 
 rc_002=0
-"$VERIFY" "$LOG_DIR/t-signdet-002-mutated.record.json" >/tmp/t-signdet-verify.out 2>&1 || rc_002=$?
+GOV_SIGNING_DEV_MODE=1 "$VERIFY" "$LOG_DIR/t-signdet-002-mutated.record.json" >"$LOG_DIR/t-signdet-verify.out" 2>&1 || rc_002=$?
 check_exit "T-SIGNDET-002 verify mutated metadata still passes" "$rc_002" "0"
 mut_hash="$(read_hash "$LOG_DIR/t-signdet-002-mutated.record.json")"
 assert_eq "T-SIGNDET-002 record_hash unchanged after metadata/path mutations" "$mut_hash" "$hash_a"

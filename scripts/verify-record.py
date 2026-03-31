@@ -39,7 +39,13 @@ def _signing_dev_mode_enabled() -> bool:
 
 
 def _signing_required_mode_enabled() -> bool:
-    return _env_flag("GOV_SIGNING_REQUIRED")
+    # H3: Signing is required by default.
+    if _signing_dev_mode_enabled():
+        return False
+    explicit = os.environ.get("GOV_SIGNING_REQUIRED", "").strip().lower()
+    if explicit in {"0", "false", "no", "off"}:
+        return False
+    return True
 
 
 def _validate_signing_mode_flags():
@@ -61,6 +67,21 @@ def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 SIGNING_EXCLUDE_TOP_LEVEL = frozenset([
+    "timestamp_utc",
+    "session_id",
+    "request_id",
+    "process_id",
+    # H1: prev_record_hash is NOW included in the signing preimage.
+    "record_hash",
+    "signature",
+    "signing_key_id",
+    "request_bytes_b64",
+    "evidence_refs",
+    "untrusted_inputs",
+])
+
+# Legacy set for verifying pre-H1 records (record_version "0.2").
+SIGNING_EXCLUDE_TOP_LEVEL_LEGACY = frozenset([
     "timestamp_utc",
     "session_id",
     "request_id",
@@ -89,9 +110,11 @@ def _sanitize_expected_outputs_for_signing(expected_outputs):
     return sanitized
 
 
-def signing_preimage_payload(rec: dict) -> str:
+def signing_preimage_payload(rec: dict, exclude_set: frozenset = None) -> str:
+    if exclude_set is None:
+        exclude_set = SIGNING_EXCLUDE_TOP_LEVEL
     unsigned = copy.deepcopy(rec)
-    for key in SIGNING_EXCLUDE_TOP_LEVEL:
+    for key in exclude_set:
         unsigned.pop(key, None)
 
     if isinstance(unsigned.get("policy_reasons"), list):
@@ -398,11 +421,11 @@ def verify_record_dict(
             return 2, [f"FAIL: cap_registry_hash mismatch (got={got_cap_hash}, expected={expected_cap_hash})"]
 
     # Verify request_hash against embedded request bytes (if present — older records omit it).
+    # C4: record_version 0.3+ omits request_bytes_b64 but retains request_hash.
     got_request_hash = rec.get("request_hash")
     got_b64 = rec.get("request_bytes_b64")
-    if got_request_hash is not None or got_b64 is not None:
-        if not got_request_hash or not got_b64:
-            return 2, ["FAIL: request_hash/request_bytes_b64 present but incomplete"]
+    if got_b64 is not None and got_request_hash is not None:
+        # Both present: verify consistency (v0.2 records).
         if not got_request_hash.startswith("sha256:"):
             return 2, ["FAIL: request_hash has unexpected format"]
         try:
@@ -412,6 +435,8 @@ def verify_record_dict(
         recomputed = "sha256:" + hashlib.sha256(raw).hexdigest()
         if recomputed != got_request_hash:
             return 2, [f"FAIL: request_hash mismatch (got={got_request_hash}, recomputed={recomputed})"]
+    elif got_b64 is not None and got_request_hash is None:
+        return 2, ["FAIL: request_bytes_b64 present without request_hash"]
 
     order_rc, order_lines = _verify_reason_code_order(rec)
     if order_rc != 0:
@@ -423,8 +448,11 @@ def verify_record_dict(
 
     actual = "sha256:" + sha256_hex(signing_preimage_payload(rec))
     if actual != expected:
+        # H1 backward compat: try legacy preimage that excluded prev_record_hash
+        legacy_h1 = "sha256:" + sha256_hex(
+            signing_preimage_payload(rec, exclude_set=SIGNING_EXCLUDE_TOP_LEVEL_LEGACY))
         legacy_actual = "sha256:" + sha256_hex(legacy_record_hash_payload(rec))
-        if legacy_actual != expected:
+        if legacy_h1 != expected and legacy_actual != expected:
             return 1, [
                 "FAIL: record_hash mismatch",
                 f" expected: {expected}",

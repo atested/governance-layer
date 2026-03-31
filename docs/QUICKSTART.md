@@ -205,6 +205,14 @@ mcp/.venv/bin/python3 mcp/remote_server.py
 
 The server listens on `http://0.0.0.0:8000/mcp` and requires a Bearer token.
 
+> **Security: proxy-only deployment (H9)**
+>
+> The HTTP transport provides **no TLS**. You **must** deploy it behind a
+> TLS-terminating reverse proxy (nginx, Caddy, AWS ALB, etc.) before exposing
+> it to any network. Bearer tokens sent over plain HTTP are visible to network
+> observers. The server emits a startup warning when binding to `0.0.0.0` or
+> `::` as a reminder.
+
 ### Connect clients
 
 Each MCP client connects over HTTP with an `Authorization: Bearer <token>` header.
@@ -220,6 +228,20 @@ Every governance record includes a `user_identity` field derived from the auth t
 
 Subagents using the same auth token are attributed to the same user identity.
 Call `governance_user_report` to see unique user counts and per-user action totals.
+
+> **Limitation: bearer token user collapsing (H10)**
+>
+> In bearer mode, user identity is derived from a SHA-256 prefix of the token.
+> All clients sharing the same bearer token are collapsed into a single user
+> identity (`bearer:<hash-prefix>`). This means:
+>
+> - **Unique user counts** will under-count if multiple people share one token.
+> - **Trial-to-personal transition** (which checks unique user count ≤ 1) may
+>   incorrectly trigger for multi-user deployments sharing a token.
+> - **Per-user audit trails** cannot distinguish between individuals sharing a token.
+>
+> For accurate per-user tracking, issue distinct bearer tokens per user or use
+> OIDC mode, which derives identity from the JWT `sub` claim.
 
 ### Deployment modes summary
 
