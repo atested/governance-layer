@@ -42,6 +42,7 @@ from tool_event_store import (
 from tool_event_link_store import upsert_receipt_tool_event_links
 from tool_event_link_store import get_receipts_for_tool_event, get_tool_events_for_receipt
 from capabilities import build_registry
+from licensing import resolve_posture, activate_license, trial_days_remaining, load_license
 from storage_contract import describe_storage_contract, runtime_root
 
 REPO = Path(__file__).resolve().parents[1]
@@ -654,6 +655,11 @@ def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
     identity = _current_user_identity.get(None)
     if identity is not None:
         event["user_identity"] = identity
+    posture = resolve_posture(RUNTIME)
+    event["license_status"] = posture["license_status"]
+    event["license_tier"] = posture["license_tier"]
+    event["organization_id"] = posture["organization_id"]
+    event["license_expiry"] = posture["license_expiry"]
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
     with open(CHAIN, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
@@ -908,6 +914,14 @@ def governed_tool(
     if identity is not None:
         rec["user_identity"] = identity
 
+    # Enrich record with licensing posture (additive metadata — does not
+    # affect policy decisions, only records the truth about license state).
+    posture = resolve_posture(RUNTIME)
+    rec["license_status"] = posture["license_status"]
+    rec["license_tier"] = posture["license_tier"]
+    rec["organization_id"] = posture["organization_id"]
+    rec["license_expiry"] = posture["license_expiry"]
+
     # Persist a pretty record copy (optional convenience, not part of the chain)
     record_path = RECORDS_DIR / f"{req_id}.record.json"
     _write_json(record_path, rec)
@@ -1129,6 +1143,45 @@ def governance_user_report(window: Optional[int] = None) -> Dict[str, Any]:
         "users": [{"identity": k, "action_count": v} for k, v in users.most_common()],
         "total_records": total,
     }
+
+
+@mcp.tool()
+def license_status() -> Dict[str, Any]:
+    """Report current licensing state: status, tier, trial days remaining, unique users."""
+    posture = resolve_posture(RUNTIME)
+    remaining = trial_days_remaining(RUNTIME)
+    config = load_license(RUNTIME)
+
+    # Count unique users from sidecar records
+    unique_users = 0
+    if RECORDS_DIR.exists():
+        seen: set[str] = set()
+        for rfile in RECORDS_DIR.glob("*.record.json"):
+            try:
+                rec = json.loads(rfile.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            uid = rec.get("user_identity")
+            if uid:
+                seen.add(uid)
+        unique_users = len(seen)
+
+    return {
+        "license_status": posture["license_status"],
+        "license_tier": posture["license_tier"],
+        "organization_id": posture["organization_id"],
+        "license_expiry": posture["license_expiry"],
+        "trial_days_remaining": remaining,
+        "trial_started": config.get("trial_started", ""),
+        "unique_users_detected": unique_users,
+    }
+
+
+@mcp.tool()
+def license_activate(license_key: str, organization_id: str = "") -> Dict[str, Any]:
+    """Activate a license key. Memorializes the activation as a governance record."""
+    result = activate_license(RUNTIME, license_key, organization_id)
+    return result
 
 
 @mcp.tool()
