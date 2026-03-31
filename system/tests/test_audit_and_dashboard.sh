@@ -239,7 +239,7 @@ try:
     # Test index.html is served
     resp = urllib.request.urlopen("http://localhost:9799/index.html")
     html = resp.read().decode("utf-8")
-    assert "Atested Governance Dashboard" in html, "Expected dashboard title in HTML"
+    assert "Atested Dashboard" in html, "Expected dashboard title in HTML"
 
     # Test API endpoints
     resp = urllib.request.urlopen("http://localhost:9799/api/status")
@@ -304,14 +304,14 @@ sys.path.insert(0, str(root))
 
 from mcp import server
 
-result = server.governance_dashboard()
+result = server.atested_dashboard()
 assert result["status"] == "started", f"Expected started, got {result}"
 assert "url" in result
 assert result["url"].startswith("http://localhost:")
 port = result["port"]
 
 # Second call should return already_running
-result2 = server.governance_dashboard()
+result2 = server.atested_dashboard()
 assert result2["status"] == "already_running", f"Expected already_running, got {result2}"
 assert result2["port"] == port
 

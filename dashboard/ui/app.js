@@ -1,4 +1,4 @@
-// Atested Governance Dashboard — live API-backed UI
+// Atested Dashboard — live API-backed UI
 
 const API = "";  // relative to current origin
 const pageSize = 20;
@@ -496,7 +496,7 @@ async function render() {
     <div class="shell">
       <header class="topbar">
         <div class="brand">
-          <h1>Atested Governance Dashboard</h1>
+          <h1>Atested Dashboard</h1>
         </div>
         ${globalNav(context.path)}
       </header>
