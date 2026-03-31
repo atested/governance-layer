@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
+
+from storage_contract import runtime_root as contract_runtime_root
+from storage_contract import tool_event_bundle_store_root as contract_tool_event_bundle_store_root
+from storage_contract import tool_event_store_root as contract_tool_event_store_root
 
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -28,14 +31,11 @@ def _canonical_json(value: Any) -> str:
 
 
 def runtime_root(repo_root: Path) -> Path:
-    raw = str(os.environ.get("GOV_RUNTIME_DIR", "")).strip()
-    if raw:
-        return Path(raw)
-    return repo_root / "runtime"
+    return contract_runtime_root(repo_root)
 
 
 def tool_event_store_root(repo_root: Path) -> Path:
-    return runtime_root(repo_root) / "TOOL_EVENTS"
+    return contract_tool_event_store_root(repo_root)
 
 
 def _index_path(repo_root: Path) -> Path:
@@ -43,7 +43,7 @@ def _index_path(repo_root: Path) -> Path:
 
 
 def tool_event_bundle_store_root(repo_root: Path) -> Path:
-    return tool_event_store_root(repo_root) / "BUNDLES"
+    return contract_tool_event_bundle_store_root(repo_root)
 
 
 def _bundle_index_path(repo_root: Path) -> Path:

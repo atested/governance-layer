@@ -25,8 +25,23 @@ The following files are **guaranteed to be present** in the proof-bundle directo
    - Guarantee: Byte-stable for same inputs
 
 2. **`proof_packet_verify_summary.json`** - Verifier summary
-   - Schema: `proof_packet_verify_summary_v1` (ADDITIVE-ONLY within v1)
-   - Guarantee: Existing fields stable, new fields may be added
+   - Schema: `proof_packet_verify_summary_v2` (ADDITIVE-ONLY within v2)
+   - Compatibility: `validate-proof-bundle.sh` accepts legacy `proof_packet_verify_summary_v1` during the bounded migration window, but current `release-gate.sh` emits `proof_packet_verify_summary_v2`
+   - Guarantee: Existing `v2` fields stable, new `v2` fields may be added
+   - Constitutive machine-readable fields:
+     - `report_version`
+     - `result`
+     - `packet_hash`
+     - `manifest_sha256`
+     - `packet_id`
+     - `counts`
+     - `strictness`
+     - `key_linkage`
+   - `key_linkage` includes stable linkage fields used by external reviewers:
+     - `record_hash`
+     - `record_bytes_sha256`
+     - `replay_report_hash`
+     - `signing_key_id`
 
 3. **`proof_packet.sha256`** - SHA256 checksum
    - Format: `<hex-sha256>  proof_packet.tar\n` (RFC 3174 lowercase hex)
@@ -68,6 +83,21 @@ Notes:
 - `--summary-json` writes deterministic compact JSON (`validate_proof_bundle_summary_v1`) with additive-only fields within v1.
 - Recommended canonical filename when co-located with proof-bundle artifacts: `validate_proof_bundle_summary.json`.
 - The validator checks required proof-bundle files and optional output contracts when present.
+- Constitutive machine-readable fields in `validate_proof_bundle_summary_v1`:
+  - `report_version`
+  - `result`
+  - `exit_code`
+  - `bundle_dir_basename`
+  - `packet_hash`
+  - `summary_hash`
+  - `counts`
+  - `queue_drift_scan.status`
+  - `queue_drift_scan_json_present`
+  - `status_bundle.status`
+  - `status_bundle_present`
+- Conditional failure fields:
+  - `contract_failures` appears on `FAIL`
+  - `runtime_error` appears on `ERROR`
 
 ---
 
@@ -119,6 +149,12 @@ Explicit `RELEASE_GATE_STRICT_PROOF_PACKET` setting overrides `GOV_PROFILE`.
 - New fields may be added (documented in changelog)
 - Existing fields cannot be removed, renamed, or changed type
 - Breaking changes require v2
+
+**`proof_packet_verify_summary_v2`:**
+- **ADDITIVE-ONLY** within v2
+- New fields may be added (documented in changelog)
+- Existing fields cannot be removed, renamed, or changed type
+- `packet_hash` shape: `{"algo":"sha256","value":"<lowercase-hex>"}`
 
 ### Auxiliary Files (STANDARD)
 

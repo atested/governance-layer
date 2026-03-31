@@ -12,7 +12,7 @@ if [ -z "$REPO_ROOT" ]; then
 fi
 cd "$REPO_ROOT"
 
-LOCAL_ONLY_STATUS_ALLOW_RE='^(\?\? \.codex/.*|\?\? \.codex/| M ops/CODEX_BATCH\.txt|\?\? ops/CODEX_BATCH\.txt)$'
+LOCAL_ONLY_STATUS_ALLOW_RE='^(\?\? \.codex/.*|\?\? \.codex/| M ops/CODEX_BATCH\.txt|\?\? ops/CODEX_BATCH\.txt|\?\? docs/dev/evidence/TASK_[0-9]{3}/COMPLETION_PACKET\.json| M docs/dev/evidence/TASK_[0-9]{3}/COMPLETION_PACKET\.json)$'
 
 err() {
   echo "ERROR: $*" >&2
@@ -182,6 +182,12 @@ ensure_not_main_branch() {
   fi
 }
 
+ensure_base_ref_visible() {
+  if ! git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null; then
+    err "Base ref not visible: ${BASE_REF}"
+  fi
+}
+
 get_task_spec_path() {
   local task_id="$1"
   local matches=()
@@ -278,7 +284,124 @@ collect_changed_files() {
     git diff --name-only
     git diff --name-only --cached
     git status --porcelain | awk '/^\?\? /{print substr($0,4)}'
-  } | awk 'NF{print}' | sort -u | grep -Ev '^(\.codex/|ops/CODEX_BATCH\.txt$)' || true
+  } | awk 'NF{print}' | sort -u | grep -Ev '^(\.codex/|ops/CODEX_BATCH\.txt$|docs/dev/evidence/TASK_[0-9]{3}/COMPLETION_PACKET\.json$)' || true
+}
+
+emit_completion_packet() {
+  local task_id="$1"
+  local status="$2"
+  local evidence_dir="docs/dev/evidence/${task_id}"
+  local packet_path="${evidence_dir}/COMPLETION_PACKET.json"
+  local tests_file="${evidence_dir}/TESTS.txt"
+  local branch head_sha base_sha tmp_changed evidence_present wall_clock routing_decision
+
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  head_sha="$(git rev-parse HEAD)"
+  base_sha="$(git merge-base HEAD "$BASE_REF")"
+  evidence_present="false"
+  if [ -d "$evidence_dir" ] && [ -f "$tests_file" ]; then
+    evidence_present="true"
+  fi
+
+  tmp_changed="$(safe_mktemp codex_unattended_commit_changed)"
+  git show --pretty='' --name-only HEAD | awk 'NF{print}' | sort -u > "$tmp_changed"
+
+  wall_clock=""
+  if [[ "${CODEX_RUN_START_EPOCH:-}" =~ ^[0-9]+$ ]]; then
+    wall_clock="$(( $(date +%s) - CODEX_RUN_START_EPOCH ))"
+  fi
+
+  routing_decision="${CODEX_ROUTING_DECISION:-}"
+
+  python3 - "$packet_path" "$task_id" "$branch" "$status" "$tmp_changed" "$evidence_dir" "$evidence_present" "$base_sha" "$head_sha" "$wall_clock" "$routing_decision" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+packet_path = Path(sys.argv[1])
+task_id = sys.argv[2]
+branch = sys.argv[3]
+status = sys.argv[4]
+changed_file = Path(sys.argv[5])
+evidence_path = sys.argv[6]
+evidence_present = sys.argv[7].lower() == "true"
+base_sha = sys.argv[8]
+head_sha = sys.argv[9]
+wall_clock = sys.argv[10]
+routing_decision = sys.argv[11]
+
+files_changed = [
+    line.strip()
+    for line in changed_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    if line.strip()
+]
+
+payload = {
+    "task_id": task_id,
+    "branch": branch,
+    "status": status,
+    "files_changed": files_changed,
+    "evidence_path": evidence_path,
+    "evidence_present": evidence_present,
+    "allowed_files_compliant": True,
+    "forbidden_files_clean": True,
+    "base_sha": base_sha,
+    "head_sha": head_sha,
+}
+
+if wall_clock:
+    payload["wall_clock_seconds"] = int(wall_clock)
+if routing_decision:
+    payload["routing_decision"] = routing_decision
+
+packet_path.parent.mkdir(parents=True, exist_ok=True)
+packet_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
+  rm -f "$tmp_changed"
+  echo "completion-packet: OK ($packet_path)"
+}
+
+cmd_reception_check() {
+  local task_id="$1"
+  local mode="${2:-execute}"
+  require_task_id "$task_id"
+
+  case "$mode" in
+    execute|investigate) ;;
+    *) err "Unsupported reception-check mode: $mode" ;;
+  esac
+
+  check_clean_tree_allow_local
+  ensure_not_main_branch
+  ensure_base_ref_visible
+
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if ! git merge-base --is-ancestor "$BASE_REF" HEAD; then
+    err "Current branch ${branch} does not contain ${BASE_REF}"
+  fi
+
+  local spec
+  spec="$(get_task_spec_path "$task_id")"
+  [ -f "$spec" ] || err "Missing task spec: $spec"
+
+  local tmp_allowed
+  tmp_allowed="$(safe_mktemp codex_unattended_allowed)"
+  parse_allowed_files "$spec" > "$tmp_allowed"
+  if [ ! -s "$tmp_allowed" ]; then
+    err "Allowed Files unresolved for $task_id"
+  fi
+
+  if [ "$mode" = "execute" ]; then
+    local evidence_dir="docs/dev/evidence/${task_id}"
+    local tests_file="${evidence_dir}/TESTS.txt"
+    [ -d "$evidence_dir" ] || err "Missing evidence directory: $evidence_dir"
+    [ -f "$tests_file" ] || err "Missing evidence file: $tests_file"
+  fi
+
+  rm -f "$tmp_allowed"
+  echo "reception-check: OK ($task_id)"
 }
 
 check_forbidden_changed_files() {
@@ -422,6 +545,8 @@ cmd_finalize_task() {
   git push -u origin "codex/${task_id}"
 
   check_clean_tree_allow_local
+  emit_completion_packet "$task_id" "published"
+  check_clean_tree_allow_local
   echo "finalize-task: OK ($task_id)"
 }
 
@@ -437,6 +562,8 @@ cmd_execute_task() {
   if [[ -z "$task_id" ]]; then
     err "execute-task requires TASK_###"
   fi
+
+  cmd_reception_check "$task_id" "execute"
 
   # Resolve spec path using existing helper if present
   local spec_path=""
@@ -569,6 +696,8 @@ cmd_run_one() {
     err "--no-op and --verify-only are mutually exclusive"
   fi
 
+  export CODEX_RUN_START_EPOCH="${CODEX_RUN_START_EPOCH:-$(date +%s)}"
+
   if [ "$verify_only" -eq 1 ]; then
     cmd_verify_task "$task_id"
     return
@@ -613,6 +742,7 @@ usage() {
 Usage:
   bash system/scripts/codex-unattended.sh preflight
   bash system/scripts/codex-unattended.sh begin-task TASK_###
+  bash system/scripts/codex-unattended.sh reception-check TASK_### [execute|investigate]
   bash system/scripts/codex-unattended.sh verify-task TASK_###
   bash system/scripts/codex-unattended.sh finalize-task TASK_### "TASK_###: <title>"
   bash system/scripts/codex-unattended.sh check-publish-branch-name codex/TASK_###__deadbee
@@ -659,6 +789,10 @@ main() {
     begin-task)
       [ "$#" -eq 1 ] || err "begin-task requires TASK_###"
       cmd_begin_task "$1"
+      ;;
+    reception-check)
+      [ "$#" -ge 1 ] && [ "$#" -le 2 ] || err "reception-check requires TASK_### and optional mode"
+      cmd_reception_check "$1" "${2:-execute}"
       ;;
     verify-task)
       [ "$#" -eq 1 ] || err "verify-task requires TASK_###"

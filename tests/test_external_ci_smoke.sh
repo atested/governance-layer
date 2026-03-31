@@ -30,7 +30,7 @@ packet_hex = hashlib.sha256((d / "proof_packet.tar").read_bytes()).hexdigest()
 if packet_hex != m.group(1):
     raise SystemExit("FAIL: proof_packet.sha256 checksum mismatch")
 summary = json.loads((d / "proof_packet_verify_summary.json").read_text(encoding="utf-8"))
-if summary.get("report_version") != "proof_packet_verify_summary_v1":
+if summary.get("report_version") != "proof_packet_verify_summary_v2":
     raise SystemExit("FAIL: summary report_version mismatch")
 out = {
     "proof_packet_sha256": packet_hex,
@@ -68,6 +68,6 @@ C2="$(sha256_file "$TMPDIR_LOCAL/run2.contract.json")"
 echo "EXTERNAL_CI_SMOKE_SHA256_RUN1=$C1"
 echo "EXTERNAL_CI_SMOKE_SHA256_RUN2=$C2"
 echo "PASS: external CI smoke contract digest deterministic across two runs"
-echo "PASS: proof-bundle required files exist and summary report_version is proof_packet_verify_summary_v1"
+echo "PASS: proof-bundle required files exist and summary report_version is proof_packet_verify_summary_v2"
 
 echo "Summary: external CI single-command smoke checks complete"

@@ -28,7 +28,7 @@ bash "$ROOT/system/scripts/validate-proof-bundle.sh" "$bundle_dir" > "$TMPDIR_LO
 bash "$ROOT/system/scripts/validate-proof-bundle.sh" "$bundle_dir" > "$TMPDIR_LOCAL/validate2.out"
 
 grep -q 'PASS: proof-bundle external contract valid' "$TMPDIR_LOCAL/validate1.out"
-grep -q 'SUMMARY_REPORT_VERSION=proof_packet_verify_summary_v1' "$TMPDIR_LOCAL/validate1.out"
+grep -q 'SUMMARY_REPORT_VERSION=proof_packet_verify_summary_v2' "$TMPDIR_LOCAL/validate1.out"
 grep -q 'MANIFEST_PROOF_PACKET_VERSION=proof_packet_v1' "$TMPDIR_LOCAL/validate1.out"
 D1="$(sha256_file "$TMPDIR_LOCAL/validate1.out")"
 D2="$(sha256_file "$TMPDIR_LOCAL/validate2.out")"
@@ -48,4 +48,3 @@ set -e
 [[ "$rc" == "1" ]] || { echo "FAIL: expected validator rc=1 got $rc"; exit 1; }
 grep -q 'FAIL: missing required file: proof_packet_verify_summary.json' "$TMPDIR_LOCAL/bad.out"
 echo "PASS: missing required file negative control fails with stable marker (exit=$rc)"
-

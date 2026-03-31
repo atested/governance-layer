@@ -6,6 +6,9 @@ err() {
   exit 1
 }
 
+RUN_START_EPOCH="$(date +%s)"
+QT_USAGE_LEDGER_PATH="${QT_USAGE_LEDGER_PATH:-system/logs/qt-usage.jsonl}"
+
 [ "$#" -eq 1 ] || err "Usage: $0 <job_file>"
 JOB_FILE="$1"
 [ -f "$JOB_FILE" ] || err "Job file not found: $JOB_FILE"
@@ -37,6 +40,46 @@ mkdir -p "$OUT_DIR"
 
 PASS=true
 FAILURES=()
+
+emit_qt_usage_event() {
+  local status="$1"
+  local end_epoch wall_clock
+  end_epoch="$(date +%s)"
+  wall_clock="$(( end_epoch - RUN_START_EPOCH ))"
+
+  mkdir -p "$(dirname "$QT_USAGE_LEDGER_PATH")"
+  python3 - "$QT_USAGE_LEDGER_PATH" "$TASK_ID" "$JOB_ID" "$JOB_TYPE" "$status" "$wall_clock" "$TARGET_BRANCH" "$REPORT_FILE" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ledger_path = Path(sys.argv[1])
+task_id = sys.argv[2]
+job_id = sys.argv[3]
+job_type = sys.argv[4]
+status = sys.argv[5]
+wall_clock = int(sys.argv[6])
+branch = sys.argv[7]
+report_path = sys.argv[8]
+
+payload = {
+    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+    "task_id": task_id,
+    "qt_job_id": job_id,
+    "qt_job_type": job_type,
+    "status": status,
+    "wall_clock_seconds": wall_clock,
+}
+if branch:
+    payload["branch"] = branch
+if report_path:
+    payload["report_path"] = report_path
+
+with ledger_path.open("a", encoding="utf-8") as fh:
+    fh.write(json.dumps(payload, sort_keys=True) + "\n")
+PY
+}
 
 run_check() {
   local desc="$1"
@@ -243,9 +286,11 @@ PY
 } > "$REPORT_FILE"
 
 if [ "$PASS" = true ]; then
+  emit_qt_usage_event "PASS"
   echo "qt-runner: PASS ($JOB_ID)"
   exit 0
 fi
 
+emit_qt_usage_event "FAIL"
 echo "qt-runner: FAIL ($JOB_ID)" >&2
 exit 1

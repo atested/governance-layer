@@ -75,6 +75,10 @@ printf '%s' "$PUBLIC_PEM" > "$PUBKEY_FILE"
 
 make_bundle "$OUT_A"
 PASS1="$(python3 scripts/verify-attestation-bundle.py "$OUT_A" --receipt-pubkey "$PUBKEY_FILE" 2>&1 | normalize_output)"
+echo "$PASS1" | rg '^ATTESTATION_BUNDLE_VERIFY ok=yes reason=OK ' >/dev/null
+echo "$PASS1" | rg ' bundle_version=attestation_bundle_v1 ' >/dev/null
+echo "$PASS1" | rg ' receipt_bundle_version=receipt_attestation_bundle_v0 ' >/dev/null
+echo "$PASS1" | rg ' signature_verified=not_required$' >/dev/null
 echo "$PASS1" | rg '^PASS: attestation bundle manifest \+ payload hashes verified$' >/dev/null
 
 python3 - <<'PY'
@@ -90,6 +94,7 @@ BAD1_RC=$?
 set -e
 BAD1="$(echo "$BAD1_RAW" | normalize_output)"
 [[ $BAD1_RC -ne 0 ]] || { echo "FAIL:NOPE_EXPECTED_FAIL"; exit 1; }
+echo "$BAD1" | rg '^ATTESTATION_BUNDLE_VERIFY ok=no reason=HASH_MISMATCH ' >/dev/null
 echo "$BAD1" | rg '^FAIL: hash mismatch for record\.json' >/dev/null
 
 # Rebuild and re-run second pass for determinism.
@@ -110,6 +115,7 @@ BAD2_RC=$?
 set -e
 BAD2="$(echo "$BAD2_RAW" | normalize_output)"
 [[ $BAD2_RC -ne 0 ]] || { echo "FAIL:NOPE_EXPECTED_FAIL_2"; exit 1; }
+echo "$BAD2" | rg '^ATTESTATION_BUNDLE_VERIFY ok=no reason=HASH_MISMATCH ' >/dev/null
 
 N1="$TMP_ROOT/norm1.txt"
 N2="$TMP_ROOT/norm2.txt"

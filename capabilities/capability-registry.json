@@ -257,6 +257,90 @@
       "caps": {
         "max_doc_bytes": 32768
       }
+    },
+    {
+      "tool": "FS_PROMOTE",
+      "capability_class": "FS_PROMOTE",
+      "risk_level": "HIGH",
+      "allow_base_dirs": [
+        "__GOV_CANONICAL_REPO_PATH__",
+        "__GOV_RUNTIME_PATH__"
+      ],
+      "deny_hidden_paths": true,
+      "deny_traversal": true,
+      "args": {
+        "required": ["src_path", "dst_path"],
+        "optional": ["overwrite"]
+      },
+      "caps": {
+        "cross_root_allowed": true,
+        "overwrite_allowed": false,
+        "root_id_map": {
+          "canonical_repo": "__GOV_CANONICAL_REPO_PATH__",
+          "runtime": "__GOV_RUNTIME_PATH__"
+        },
+        "root_pair_allowlist": [
+          {"src_root_id": "runtime", "dst_root_id": "canonical_repo"}
+        ],
+        "allowed_artifact_classes": ["vetted_output", "build_artifact"]
+      }
+    },
+    {
+      "tool": "MSG_SEND",
+      "capability_class": "MSG_SEND",
+      "risk_level": "HIGH",
+      "args": {
+        "required": [
+          "surface_binding_id",
+          "mapping_version",
+          "canonical_destination",
+          "raw_destination_input",
+          "opaque_payload"
+        ],
+        "optional": [
+          "audit_scope"
+        ]
+      },
+      "caps": {
+        "decision_alphabet": [
+          "ALLOW",
+          "DENY"
+        ],
+        "content_visible_to_evaluator": false,
+        "canonical_destination_required": true,
+        "raw_destination_audit_required": true,
+        "opaque_payload_required": true,
+        "reply_context_required": false
+      }
+    },
+    {
+      "tool": "MSG_REPLY",
+      "capability_class": "MSG_REPLY",
+      "risk_level": "HIGH",
+      "args": {
+        "required": [
+          "surface_binding_id",
+          "mapping_version",
+          "canonical_destination",
+          "raw_destination_input",
+          "opaque_payload",
+          "reply_context"
+        ],
+        "optional": [
+          "audit_scope"
+        ]
+      },
+      "caps": {
+        "decision_alphabet": [
+          "ALLOW",
+          "DENY"
+        ],
+        "content_visible_to_evaluator": false,
+        "canonical_destination_required": true,
+        "raw_destination_audit_required": true,
+        "opaque_payload_required": true,
+        "reply_context_required": true
+      }
     }
   ]
 }

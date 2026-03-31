@@ -19,6 +19,8 @@ PROOF_PACKET_VERSION = "proof_packet_v1"
 MANIFEST_NAME = "manifest.json"
 FIXED_MTIME = 0
 FILE_MODE = 0o644
+PACK_PREFIX = "PROOF_PACKET_PACK"
+VERIFY_PREFIX = "PROOF_PACKET_VERIFY"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -41,6 +43,66 @@ def _strict_object_pairs_hook(pairs):
 def _fail(msg: str, rc: int = 1) -> int:
     print(f"FAIL: {msg}")
     return rc
+
+
+def _packet_id(manifest_sha256: str) -> str:
+    if not isinstance(manifest_sha256, str) or not manifest_sha256.startswith("sha256:"):
+        return "NONE"
+    return "ppb_" + manifest_sha256.split(":", 1)[1]
+
+
+def _pack_status(
+    ok: bool,
+    reason: str,
+    packet_sha256: str = "NONE",
+    manifest_sha256: str = "NONE",
+    files_count: int = 0,
+    replay_report_hash: str = "NONE",
+    record_bytes_sha256: str = "NONE",
+    signing_key_id: str = "NONE",
+) -> None:
+    print(
+        f"{PACK_PREFIX} "
+        f"ok={'yes' if ok else 'no'} "
+        f"reason={reason} "
+        f"proof_packet_version={PROOF_PACKET_VERSION if ok else 'NONE'} "
+        f"packet_id={_packet_id(manifest_sha256) if ok else 'NONE'} "
+        f"packet_sha256={packet_sha256} "
+        f"manifest_sha256={manifest_sha256} "
+        f"files_count={files_count} "
+        f"replay_report_hash={replay_report_hash} "
+        f"record_bytes_sha256={record_bytes_sha256} "
+        f"signing_key_id={signing_key_id}"
+    )
+
+
+def _verify_status(
+    ok: bool,
+    reason: str,
+    packet_sha256: str = "NONE",
+    manifest_sha256: str = "NONE",
+    files_checked: int = 0,
+    replay_report_hash: str = "NONE",
+    record_bytes_sha256: str = "NONE",
+    signing_key_id: str = "NONE",
+    summary_report_version: str = "NONE",
+    summary_sha256: str = "NONE",
+) -> None:
+    print(
+        f"{VERIFY_PREFIX} "
+        f"ok={'yes' if ok else 'no'} "
+        f"reason={reason} "
+        f"proof_packet_version={PROOF_PACKET_VERSION if ok else 'NONE'} "
+        f"packet_id={_packet_id(manifest_sha256) if ok else 'NONE'} "
+        f"packet_sha256={packet_sha256} "
+        f"manifest_sha256={manifest_sha256} "
+        f"files_checked={files_checked} "
+        f"replay_report_hash={replay_report_hash} "
+        f"record_bytes_sha256={record_bytes_sha256} "
+        f"signing_key_id={signing_key_id} "
+        f"summary_report_version={summary_report_version} "
+        f"summary_sha256={summary_sha256}"
+    )
 
 
 def _load_manifest(raw: bytes):
@@ -194,19 +256,39 @@ def cmd_pack(args: argparse.Namespace) -> int:
     replay_report_path = Path(args.replay_audit_report)
     out_path = Path(args.out)
 
-    payload_entries = collect_payload_entries(record_path, artifacts_dir, replay_report_path)
-    manifest = manifest_bytes(payload_entries)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        payload_entries = collect_payload_entries(record_path, artifacts_dir, replay_report_path)
+        manifest = manifest_bytes(payload_entries)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(out_path, mode="w:", format=tarfile.USTAR_FORMAT) as tf:
-        add_bytes(tf, MANIFEST_NAME, manifest)
-        for rel, data in payload_entries:
-            add_bytes(tf, f"payload/{rel}", data)
+        with tarfile.open(out_path, mode="w:", format=tarfile.USTAR_FORMAT) as tf:
+            add_bytes(tf, MANIFEST_NAME, manifest)
+            for rel, data in payload_entries:
+                add_bytes(tf, f"payload/{rel}", data)
+    except SystemExit as e:
+        if isinstance(e.code, str) and e.code:
+            print(e.code)
+        _pack_status(False, "PACK_FAILED")
+        return e.code if isinstance(e.code, int) else 1
 
     packet = out_path.read_bytes()
+    packet_sha = sha256_bytes(packet)
+    manifest_sha = sha256_bytes(manifest)
+    manifest_doc = json.loads(manifest.decode("utf-8"))
+    src = manifest_doc["source_summary"]
+    _pack_status(
+        True,
+        "OK",
+        packet_sha256=packet_sha,
+        manifest_sha256=manifest_sha,
+        files_count=len(payload_entries),
+        replay_report_hash=src["replay_report_hash"],
+        record_bytes_sha256=src["record_bytes_sha256"],
+        signing_key_id=src.get("signing_key_id", "NONE"),
+    )
     print(f"WROTE={out_path}")
-    print(f"PROOF_PACKET_SHA256={sha256_bytes(packet)}")
-    print(f"MANIFEST_SHA256={sha256_bytes(manifest)}")
+    print(f"PROOF_PACKET_SHA256={packet_sha}")
+    print(f"MANIFEST_SHA256={manifest_sha}")
     print("PROOF_PACKET_FILES=" + ",".join(rel for rel, _ in payload_entries))
     return 0
 
@@ -214,6 +296,7 @@ def cmd_pack(args: argparse.Namespace) -> int:
 def cmd_verify(args: argparse.Namespace) -> int:
     bundle_path = Path(args.bundle)
     if not bundle_path.is_file():
+        _verify_status(False, "BUNDLE_NOT_FOUND")
         return _fail(f"bundle not found: {bundle_path}", rc=2)
     packet_bytes = bundle_path.read_bytes()
     packet_hash = sha256_bytes(packet_bytes)
@@ -223,6 +306,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             members = [m for m in tf.getmembers() if m.isfile()]
             names = [m.name for m in members]
             if MANIFEST_NAME not in names:
+                _verify_status(False, "MANIFEST_MISSING")
                 return _fail("missing manifest.json")
 
             payload_files = {}
@@ -230,45 +314,109 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 if m.name == MANIFEST_NAME:
                     continue
                 if not m.name.startswith("payload/"):
+                    _verify_status(False, "UNEXPECTED_MEMBER")
                     return _fail(f"unexpected top-level member: {m.name}")
                 rel = m.name[len("payload/"):]
                 payload_files[rel] = tf.extractfile(m).read()
 
             manifest_raw = tf.extractfile(MANIFEST_NAME).read()
     except tarfile.TarError as e:
+        _verify_status(False, "TAR_PARSE_ERROR")
         return _fail(f"tar parse error: {e}", rc=2)
     except OSError as e:
+        _verify_status(False, "BUNDLE_READ_ERROR")
         return _fail(f"bundle read error: {e}", rc=2)
 
-    manifest = _load_manifest(manifest_raw)
-    _check_manifest_schema(manifest)
+    try:
+        manifest = _load_manifest(manifest_raw)
+        _check_manifest_schema(manifest)
+    except SystemExit as e:
+        _verify_status(False, "MANIFEST_INVALID")
+        return e.code if isinstance(e.code, int) else 1
 
     manifest_files = manifest["files"]
+    manifest_sha = sha256_bytes(manifest_raw)
+    src = manifest["source_summary"]
     for rel in sorted(manifest_files.keys()):
         if rel not in payload_files:
+            _verify_status(
+                False,
+                "MISSING_PAYLOAD_MEMBER",
+                packet_sha256=packet_hash,
+                manifest_sha256=manifest_sha,
+                replay_report_hash=src.get("replay_report_hash", "NONE"),
+                record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+                signing_key_id=src.get("signing_key_id", "NONE"),
+            )
             return _fail(f"manifest references missing payload member: {rel}")
         data = payload_files[rel]
         got_sha = sha256_bytes(data)
         exp_sha = manifest_files[rel]["sha256"]
         if got_sha != exp_sha:
+            _verify_status(
+                False,
+                "HASH_MISMATCH",
+                packet_sha256=packet_hash,
+                manifest_sha256=manifest_sha,
+                replay_report_hash=src.get("replay_report_hash", "NONE"),
+                record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+                signing_key_id=src.get("signing_key_id", "NONE"),
+            )
             return _fail(f"hash mismatch for {rel} (got={got_sha} expected={exp_sha})")
         got_size = len(data)
         exp_size = manifest_files[rel]["size_bytes"]
         if got_size != exp_size:
+            _verify_status(
+                False,
+                "SIZE_MISMATCH",
+                packet_sha256=packet_hash,
+                manifest_sha256=manifest_sha,
+                replay_report_hash=src.get("replay_report_hash", "NONE"),
+                record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+                signing_key_id=src.get("signing_key_id", "NONE"),
+            )
             return _fail(f"size mismatch for {rel} (got={got_size} expected={exp_size})")
 
     extra = sorted(set(payload_files.keys()) - set(manifest_files.keys()))
     if extra:
+        _verify_status(
+            False,
+            "UNEXPECTED_PAYLOAD_MEMBER",
+            packet_sha256=packet_hash,
+            manifest_sha256=manifest_sha,
+            replay_report_hash=src.get("replay_report_hash", "NONE"),
+            record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+            signing_key_id=src.get("signing_key_id", "NONE"),
+        )
         return _fail(f"unexpected payload member not in manifest: {extra[0]}")
 
     if manifest["source_summary"]["replay_report_hash"] != manifest_files["replay_audit_report.json"]["sha256"]:
+        _verify_status(
+            False,
+            "REPLAY_LINKAGE_MISMATCH",
+            packet_sha256=packet_hash,
+            manifest_sha256=manifest_sha,
+            replay_report_hash=src.get("replay_report_hash", "NONE"),
+            record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+            signing_key_id=src.get("signing_key_id", "NONE"),
+        )
         return _fail("source_summary replay_report_hash mismatch vs manifest file hash")
     if manifest["source_summary"]["record_bytes_sha256"] != manifest_files["record.json"]["sha256"]:
+        _verify_status(
+            False,
+            "RECORD_LINKAGE_MISMATCH",
+            packet_sha256=packet_hash,
+            manifest_sha256=manifest_sha,
+            replay_report_hash=src.get("replay_report_hash", "NONE"),
+            record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+            signing_key_id=src.get("signing_key_id", "NONE"),
+        )
         return _fail("source_summary record_bytes_sha256 mismatch vs manifest file hash")
 
     print("PASS: proof packet manifest + payload hashes verified")
+    summary_report_version = "NONE"
+    summary_sha = "NONE"
     if args.summary_json:
-        src = manifest["source_summary"]
         coverage = validate_coverage_stamp(manifest.get("coverage_stamp"), required=False)
         summary = {
             "counts": {
@@ -285,8 +433,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 "replay_report_hash": src.get("replay_report_hash"),
                 "signing_key_id": src.get("signing_key_id"),
             },
-            "packet_hash": packet_hash,
-            "report_version": "proof_packet_verify_summary_v1",
+            "manifest_sha256": manifest_sha,
+            "packet_id": _packet_id(manifest_sha),
+            "packet_hash": {"algo": HASH_ALGO, "value": packet_hash.split(":", 1)[1]},
+            "report_version": "proof_packet_verify_summary_v2",
             "result": "pass",
             "strictness": {
                 "extra": "error",
@@ -300,9 +450,51 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 "overall_status": coverage.overall_status,
                 "reason_code": coverage.reason_code,
             }
+        _replay_bytes = payload_files.get("replay_audit_report.json")
+        if _replay_bytes is not None:
+            try:
+                _replay_doc = json.loads(_replay_bytes.decode("utf-8"))
+                if (
+                    _replay_doc.get("report_version") == "replay_audit_summary_v1"
+                    and isinstance(_replay_doc.get("record_counts"), dict)
+                ):
+                    _rc = _replay_doc["record_counts"]
+                    if _rc.get("mismatched", 1) == 0 and _rc.get("fatal", 1) == 0:
+                        _replay_outcome = "pass"
+                    else:
+                        _replay_outcome = "fail"
+                else:
+                    _replay_outcome = "unavailable"
+            except Exception:
+                _replay_outcome = "unavailable"
+        else:
+            _replay_outcome = "unavailable"
+        governance_evidence = {
+            "packet_id": summary["packet_id"],
+            "manifest_sha256": summary["manifest_sha256"],
+            "record_bytes_sha256": summary["key_linkage"]["record_bytes_sha256"],
+            "replay_report_hash": summary["key_linkage"]["replay_report_hash"],
+            "replay_outcome": _replay_outcome,
+            "result": summary["result"],
+        }
+        summary["governance_evidence"] = governance_evidence
         payload = (json.dumps(summary, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
         Path(args.summary_json).write_bytes(payload)
-        print(f"SUMMARY_SHA256={sha256_bytes(payload)}")
+        summary_report_version = summary["report_version"]
+        summary_sha = sha256_bytes(payload)
+        print(f"SUMMARY_SHA256={summary_sha}")
+    _verify_status(
+        True,
+        "OK",
+        packet_sha256=packet_hash,
+        manifest_sha256=manifest_sha,
+        files_checked=len(manifest_files),
+        replay_report_hash=src.get("replay_report_hash", "NONE"),
+        record_bytes_sha256=src.get("record_bytes_sha256", "NONE"),
+        signing_key_id=src.get("signing_key_id", "NONE"),
+        summary_report_version=summary_report_version,
+        summary_sha256=summary_sha,
+    )
     return 0
 
 

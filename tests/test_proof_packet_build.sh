@@ -24,6 +24,15 @@ python3 "$PACKER" pack \
   --replay-audit-report "$FIXTURE/replay_audit_report.json" \
   --out "$OUT2" > "$LOG2"
 
+grep -q '^PROOF_PACKET_PACK ok=yes reason=OK ' "$LOG1"
+grep -q ' proof_packet_version=proof_packet_v1 ' "$LOG1"
+grep -q ' packet_id=ppb_' "$LOG1"
+grep -q ' manifest_sha256=sha256:' "$LOG1"
+grep -q ' packet_sha256=sha256:' "$LOG1"
+grep -q ' replay_report_hash=sha256:' "$LOG1"
+grep -q ' record_bytes_sha256=sha256:' "$LOG1"
+echo "PASS: proof-packet pack emits machine-readable handoff line"
+
 SHA1="$(python3 - <<'PY' "$OUT1"
 import hashlib, sys
 print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())

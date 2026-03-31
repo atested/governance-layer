@@ -48,7 +48,7 @@ run_once() {
     cat "$tmp_dir/docs_scan.tmp"
     echo "PASS: docs proof-bundle references present"
 
-    rg -n "queue_drift_scan\\.txt|queue_drift_scan\\.json|status_bundle\\.json" \
+    rg -n "queue_drift_scan\\.txt|queue_drift_scan\\.json|status_bundle\\.json|validate_proof_bundle_summary\\.json|proof_packet_verify_summary_v1|validate_proof_bundle_summary_v1" \
       "$ROOT/docs/EXTERNAL_CONTRACTS.md" "$ROOT/docs/DISTRIBUTION.md" \
       | LC_ALL=C sort > "$tmp_dir/docs_optional_scan.tmp"
     if [[ ! -s "$tmp_dir/docs_optional_scan.tmp" ]]; then

@@ -1,0 +1,58 @@
+{
+  "mapping_schema_version": "messaging_tool_map.v1",
+  "entries": [
+    {
+      "mapping_id": "msg.slack.chat_post_message",
+      "mapping_version": "1",
+      "capability_class": "MSG_SEND",
+      "surface_binding_id": "msg.slack.chat.postMessage.v1",
+      "provider": "slack",
+      "external_operation": "chat.postMessage",
+      "canonical_destination_kind": "slack_channel",
+      "allowed_raw_destination_kinds": [
+        "channel_alias",
+        "channel_id"
+      ],
+      "allowed_canonical_destination_prefixes": [
+        "slack://workspace/default/channel/"
+      ],
+      "allowed_transports": [
+        "opaque_file_handle.v1"
+      ],
+      "max_payload_bytes": 65536,
+      "max_rate_window_count": 5,
+      "allowed_decisions": [
+        "ALLOW",
+        "DENY"
+      ],
+      "content_visible_to_evaluator": false,
+      "fail_closed_on_mapping_miss": true
+    },
+    {
+      "mapping_id": "msg.smtp.reply_to_message",
+      "mapping_version": "1",
+      "capability_class": "MSG_REPLY",
+      "surface_binding_id": "msg.smtp.reply.v1",
+      "provider": "smtp_email",
+      "external_operation": "reply",
+      "canonical_destination_kind": "email_reply_target",
+      "allowed_raw_destination_kinds": [
+        "message_id_header"
+      ],
+      "allowed_canonical_destination_prefixes": [
+        "email://account/support@example.com/thread/"
+      ],
+      "allowed_transports": [
+        "opaque_file_handle.v1"
+      ],
+      "max_payload_bytes": 65536,
+      "max_rate_window_count": 5,
+      "allowed_decisions": [
+        "ALLOW",
+        "DENY"
+      ],
+      "content_visible_to_evaluator": false,
+      "fail_closed_on_mapping_miss": true
+    }
+  ]
+}

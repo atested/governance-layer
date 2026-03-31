@@ -60,6 +60,19 @@ if result == "FAIL":
     payload["contract_failures"] = [reason] if reason else []
 elif result == "ERROR":
     payload["runtime_error"] = reason or "runtime error"
+if bundle_dir:
+    try:
+        vsum_path = Path(bundle_dir) / "proof_packet_verify_summary.json"
+        vsum = json.loads(vsum_path.read_text(encoding="utf-8"))
+        gov_ev = vsum.get("governance_evidence")
+        if isinstance(gov_ev, dict):
+            replay_outcome = gov_ev.get("replay_outcome")
+            if replay_outcome not in ("pass", "fail", "unavailable"):
+                gov_ev = dict(gov_ev)
+                gov_ev["replay_outcome"] = "unavailable"
+            payload["governance_evidence"] = gov_ev
+    except Exception:
+        pass
 out.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 PY
 }
@@ -266,14 +279,27 @@ declared_packet_sha="${BASH_REMATCH[1]}"
 actual_packet_sha="$(sha256_file "$bundle_dir/proof_packet.tar")"
 [[ "$declared_packet_sha" == "$actual_packet_sha" ]] || fail_contract "proof_packet.sha256 mismatch"
 
-summary_checks="$(python3 - <<'PY' "$bundle_dir/proof_packet_verify_summary.json"
+summary_checks="$(python3 - <<'PY' "$bundle_dir/proof_packet_verify_summary.json" "$actual_packet_sha"
 import json, sys
 from pathlib import Path
 j = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+actual_packet_sha = sys.argv[2]
 rv = j.get("report_version")
-if rv != "proof_packet_verify_summary_v1":
+if rv not in ("proof_packet_verify_summary_v1", "proof_packet_verify_summary_v2"):
     print("FAIL:summary report_version mismatch")
     raise SystemExit(1)
+packet_hash = j.get("packet_hash")
+if rv == "proof_packet_verify_summary_v1":
+    if packet_hash != f"sha256:{actual_packet_sha}":
+        print("FAIL:summary packet_hash mismatch")
+        raise SystemExit(1)
+else:
+    if not isinstance(packet_hash, dict):
+        print("FAIL:summary packet_hash shape invalid")
+        raise SystemExit(1)
+    if packet_hash.get("algo") != "sha256" or packet_hash.get("value") != actual_packet_sha:
+        print("FAIL:summary packet_hash mismatch")
+        raise SystemExit(1)
 print(f"SUMMARY_REPORT_VERSION={rv}")
 print(f"SUMMARY_RESULT={j.get('result')}")
 PY

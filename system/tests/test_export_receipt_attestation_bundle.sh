@@ -95,6 +95,11 @@ EXP_B="$(python3 scripts/attest/export_receipt_bundle.py --receipt-run-id RID_EX
 attestation_proof_require_contains "$EXP_A" "RECEIPT_ATTESTATION_BUNDLE_EXPORT ok=yes reason=OK " "FAIL:EXPORT_CONTRACT_A"
 attestation_proof_require_contains "$EXP_B" "RECEIPT_ATTESTATION_BUNDLE_EXPORT ok=yes reason=OK " "FAIL:EXPORT_CONTRACT_B"
 attestation_proof_require_kv_equal "$EXP_A" signature_present "yes" "FAIL:EXPORT_SIG_FLAG_A"
+attestation_proof_require_kv_equal "$EXP_A" bundle_version "attestation_bundle_v1" "FAIL:EXPORT_BUNDLE_VERSION_A"
+attestation_proof_require_kv_equal "$EXP_A" receipt_bundle_version "receipt_attestation_bundle_v0" "FAIL:EXPORT_RECEIPT_BUNDLE_VERSION_A"
+attestation_proof_require_kv_present "$EXP_A" bundle_id "FAIL:EXPORT_BUNDLE_ID_A"
+attestation_proof_require_kv_present "$EXP_A" manifest_sha256 "FAIL:EXPORT_MANIFEST_SHA_A"
+attestation_proof_require_kv_present "$EXP_A" files_count "FAIL:EXPORT_FILES_COUNT_A"
 attestation_proof_require_kv_equal "$EXP_A" bundle_dir "$OUT_A" "FAIL:EXPORT_DIR_A"
 
 [[ -f "$OUT_A/manifest.json" ]] || { echo "FAIL:MANIFEST_MISSING"; exit 1; }
@@ -105,14 +110,21 @@ attestation_proof_require_kv_equal "$EXP_A" bundle_dir "$OUT_A" "FAIL:EXPORT_DIR
 
 python3 - "$OUT_A/manifest.json" <<'PY'
 import json
+import hashlib
 import sys
 m = json.load(open(sys.argv[1], encoding='utf-8'))
 if m.get('receipt_bundle_version') != 'receipt_attestation_bundle_v0':
     raise SystemExit('FAIL:BUNDLE_VERSION')
+if m.get('bundle_version') != 'attestation_bundle_v1':
+    raise SystemExit('FAIL:ATTESTATION_BUNDLE_VERSION')
 if not str(m.get('receipt_digest', '')).startswith('sha256:'):
     raise SystemExit('FAIL:RECEIPT_DIGEST_MISSING')
 if m.get('signature_present') is not True:
     raise SystemExit('FAIL:SIGNATURE_PRESENT_FALSE')
+files = m.get('files', [])
+if not isinstance(files, list) or len(files) < 3:
+    raise SystemExit('FAIL:FILES_COUNT')
+print('MANIFEST_SHA256=' + 'sha256:' + hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())
 print('MANIFEST_PARSE=PASS')
 PY
 
@@ -123,14 +135,18 @@ H2="$(hash_bundle "$OUT_B")"
 BAD_RUN_ID="$(python3 scripts/attest/export_receipt_bundle.py --receipt-run-id 'bad run id' --out-dir "$OUT_A" || true)"
 attestation_proof_require_contains "$BAD_RUN_ID" "RECEIPT_ATTESTATION_BUNDLE_EXPORT ok=no reason=RECEIPT_RUN_ID_INVALID " "FAIL:BAD_RUN_ID_REASON"
 attestation_proof_require_kv_equal "$BAD_RUN_ID" bundle_dir "NONE" "FAIL:BAD_RUN_ID_BUNDLE_DIR"
+attestation_proof_require_kv_equal "$BAD_RUN_ID" bundle_id "NONE" "FAIL:BAD_RUN_ID_BUNDLE_ID"
+attestation_proof_require_kv_equal "$BAD_RUN_ID" manifest_sha256 "NONE" "FAIL:BAD_RUN_ID_MANIFEST_SHA"
 
 BAD_DIGEST="$(python3 scripts/attest/export_receipt_bundle.py --receipt-digest 'sha256:not-a-digest' --out-dir "$OUT_A" || true)"
 attestation_proof_require_contains "$BAD_DIGEST" "RECEIPT_ATTESTATION_BUNDLE_EXPORT ok=no reason=RECEIPT_DIGEST_INVALID " "FAIL:BAD_DIGEST_REASON"
 attestation_proof_require_kv_equal "$BAD_DIGEST" receipt_digest "NONE" "FAIL:BAD_DIGEST_FIELD"
+attestation_proof_require_kv_equal "$BAD_DIGEST" bundle_id "NONE" "FAIL:BAD_DIGEST_BUNDLE_ID"
 
 BAD_OUT_DIR="$(python3 scripts/attest/export_receipt_bundle.py --receipt-run-id RID_EXPORT_BUNDLE --out-dir ../bad_export_dir || true)"
 attestation_proof_require_contains "$BAD_OUT_DIR" "RECEIPT_ATTESTATION_BUNDLE_EXPORT ok=no reason=OUT_DIR_INVALID " "FAIL:BAD_OUT_DIR_REASON"
 attestation_proof_require_kv_equal "$BAD_OUT_DIR" bundle_dir "NONE" "FAIL:BAD_OUT_DIR_FIELD"
+attestation_proof_require_kv_equal "$BAD_OUT_DIR" manifest_sha256 "NONE" "FAIL:BAD_OUT_DIR_MANIFEST_SHA"
 
 echo "EXPORT_RECEIPT_ATTESTATION_BUNDLE=PASS"
 echo "DETERMINISTIC=YES"

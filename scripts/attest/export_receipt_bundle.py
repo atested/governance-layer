@@ -98,6 +98,11 @@ def _out_dir_token(repo_root: Path, out_dir: Path) -> str:
 def _final(
     ok: bool,
     reason: str,
+    bundle_version: str = "NONE",
+    receipt_bundle_version: str = "NONE",
+    bundle_id: str = "NONE",
+    manifest_sha256: str = "NONE",
+    files_count: int = 0,
     bundle_dir: str = "NONE",
     receipt_run_id: str = "NONE",
     receipt_digest: str = "NONE",
@@ -108,6 +113,11 @@ def _final(
         f"{EXPORT_PREFIX} "
         f"ok={'yes' if ok else 'no'} "
         f"reason={reason} "
+        f"bundle_version={bundle_version} "
+        f"receipt_bundle_version={receipt_bundle_version} "
+        f"bundle_id={bundle_id} "
+        f"manifest_sha256={manifest_sha256} "
+        f"files_count={files_count} "
         f"bundle_dir={bundle_dir} "
         f"receipt_run_id={receipt_run_id} "
         f"receipt_digest={receipt_digest} "
@@ -123,7 +133,7 @@ def export_bundle(
     out_dir: Path,
     include_signature: bool,
     include_replay_check: bool,
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, str, str, int]:
     run_id = row["run_id"]
     digest = row["digest"]
     src_dir = repo_root / "out" / "mcp_exec" / run_id
@@ -206,8 +216,11 @@ def export_bundle(
         "outcome": row.get("outcome", ""),
         "files": files,
     }
-    (out_dir / "manifest.json").write_text(canonical_json(manifest), encoding="utf-8")
-    return signature_present, replay_present
+    manifest_path = out_dir / "manifest.json"
+    manifest_path.write_text(canonical_json(manifest), encoding="utf-8")
+    manifest_sha = sha256_bytes(manifest_path.read_bytes())
+    bundle_id = "rab_" + manifest_sha.split(":", 1)[1]
+    return signature_present, replay_present, bundle_id, manifest_sha, len(files)
 
 
 def main() -> int:
@@ -236,7 +249,7 @@ def main() -> int:
             return _final(False, "OUT_DIR_INVALID")
     try:
         row = select_receipt(repo_root, args.receipt_run_id.strip(), args.receipt_digest.strip())
-        signature_present, replay_present = export_bundle(
+        signature_present, replay_present, bundle_id, manifest_sha, files_count = export_bundle(
             repo_root,
             row,
             out_dir,
@@ -250,6 +263,11 @@ def main() -> int:
     return _final(
         True,
         "OK",
+        bundle_version="attestation_bundle_v1",
+        receipt_bundle_version="receipt_attestation_bundle_v0",
+        bundle_id=bundle_id,
+        manifest_sha256=manifest_sha,
+        files_count=files_count,
         bundle_dir=_out_dir_token(repo_root, out_dir),
         receipt_run_id=row["run_id"],
         receipt_digest=row["digest"],
