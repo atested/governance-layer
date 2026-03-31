@@ -54,10 +54,10 @@ python3 - <<'PY' "$RPT_OK1"
 import json, sys
 doc = json.load(open(sys.argv[1], encoding="utf-8"))
 assert doc["report_version"] == "replay_audit_summary_v1"
-assert doc["record_counts"] == {"fatal": 0, "matched": 1, "mismatched": 0, "total": 1}
+assert doc["record_counts"] == {"fatal": 0, "matched": 1, "mismatched": 0, "skipped": 0, "total": 1}
 assert doc["invariant_counts"]["mismatched"] == 0
-assert doc["invariant_counts"]["matched"] == 6
-assert doc["invariant_counts"]["total_checked"] == 6
+assert doc["invariant_counts"]["matched"] == 7
+assert doc["invariant_counts"]["total_checked"] == 7
 assert doc["records"][0]["kind"] == "pass"
 assert doc["records"][0]["mismatches"] == []
 print("PASS: no-mismatch report shape deterministic and clean")
@@ -120,8 +120,8 @@ assert doc["record_counts"]["mismatched"] == 1
 assert doc["record_counts"]["matched"] == 0
 assert doc["record_counts"]["fatal"] == 0
 assert doc["invariant_counts"]["mismatched"] == 1
-assert doc["invariant_counts"]["matched"] == 5
-assert doc["invariant_counts"]["total_checked"] == 6
+assert doc["invariant_counts"]["matched"] == 6
+assert doc["invariant_counts"]["total_checked"] == 7
 fields = [m["field"] for m in doc["records"][0]["mismatches"]]
 assert fields == sorted(fields)
 assert fields == ["cap_registry_hash"], fields

@@ -1,7 +1,7 @@
 # RUNBOOK
 
 ## What this is
-Single operational entrypoint for running the system: Codex, Cecil, Qt.
+Single operational entrypoint for running the system: Cecil, Sonnet-worker, Qt, and the sisters.
 
 ## Session Start Protocol (Cecil REQUIRED)
 
@@ -29,6 +29,7 @@ See [AGENT_CONTRACT.md](AGENT_CONTRACT.md) for detailed command-level confirmati
 ---
 
 ## Sources of truth
+- `docs/dev/OPS_PROCESS__DISPATCH_CECIL__v2.md` - Canonical ops process (dispatch architecture)
 - `docs/dev/OPS_CANONICAL.md` - Canonical ops record, lanes, invariants, script registry
 - `docs/dev/PLANNER_SNAPSHOT.md` - Current system state and planning context
 - `docs/dev/inventory/INVENTORY_LATEST.md` - Deterministic inventory snapshot
@@ -37,37 +38,36 @@ See [AGENT_CONTRACT.md](AGENT_CONTRACT.md) for detailed command-level confirmati
 
 ## System lanes
 
-### Codex lane
+### Codex lane [shelved]
+**Status**: Shelved as of ops process v2. Build functions absorbed by Cecil. Test functions absorbed by Sonnet-worker and Qt. Scripts remain available if Codex returns.
 **Executor**: Codex CLI only
 **Branches**: `codex/*` topic branches only
-**Constraints**:
-- Touch only Allowed Files specified by task spec
-- Must produce evidence bundles when required
-- Must push branch to origin
-- Never merges to main
-- Never modifies ASSIGNMENTS.md or WORK_QUEUE
-
-**Tools**:
+**Tools** (retained for reference):
 - `system/scripts/codex-batch.sh` - Generate read-only task list
-- `system/scripts/codex-unattended.sh` - Unattended task runner with preflight, Allowed Files enforcement, evidence validation
-
-**Typical flow**:
-```bash
-bash system/scripts/codex-batch.sh           # Generate ops/CODEX_BATCH.txt
-bash system/scripts/codex-unattended.sh run-one TASK_XXX
-```
+- `system/scripts/codex-unattended.sh` - Unattended task runner
 
 ### Cecil lane
-**Executor**: Cecil (governance-authorized operator)
+**Executor**: Cecil (governance-authorized operator, primary builder)
 **Authority**:
 - Sole merger to main
 - Sole writer of docs/dev/ASSIGNMENTS.md on main at merge time
 - Enforces invariants and resolves conflicts per governance rules
+- Receives work via formal dispatches from Tier 0
+
+**Subagents**:
+- Sonnet-worker: Test verification, merge mechanics, structured validation
+- Sisters (Lq, Qt, Bq): Supervised mechanical work via Ollama
 
 **Tools**:
 - `system/scripts/cecil-runloop.sh` - Cecil execution loop (may claim tasks)
 - `system/scripts/queue-claim.sh` - Task claiming (Cecil only)
 - `scripts/verify-ops-canonical.py` - Canonical ops verification
+
+**Typical dispatch-driven flow**:
+1. Receive dispatch from Tier 0 (via Cowork or Greg paste)
+2. Execute build tasks per dispatch scope
+3. Delegate test verification to Sonnet-worker
+4. Report results in formal Results format
 
 **Typical merge flow**:
 ```bash
@@ -76,7 +76,7 @@ git switch main
 git reset --hard origin/main
 bash system/scripts/inventory-snapshot.sh
 python3 scripts/verify-ops-canonical.py
-git merge --no-ff origin/codex/TASK_XXX -m "Merge codex/TASK_XXX"
+git merge --no-ff origin/<branch> -m "Merge <branch>"
 # Update docs/dev/ASSIGNMENTS.md (Cecil sole writer on main)
 git push origin main
 ```
@@ -160,48 +160,44 @@ python3 scripts/task_scaffold.py --seed docs/dev/task-seeds/<seed_file>.md
 3. **Missing evidence**: `TESTS.txt` must exist in evidence directory
 4. **Allowed Files violation**: Changes outside permitted paths trigger verification failure
 
-## Normal run loop
+## Normal run loop (dispatch-driven)
 
-### 1) Generate batch list
-```bash
-cd /Volumes/SSD/archive/gov/governance-layer
-bash system/scripts/codex-batch.sh
-# Outputs: ops/CODEX_BATCH.txt (deterministic, read-only)
-```
-Selection rule (enforced by `codex-batch.sh`): only include task specs that contain
-`Executor: Codex`, do not declare `Branch: n/a`, and include an allowlist header
-(`## Allowed Files` or `## Files allowed to touch`, case-insensitive).
+### 1) Tier 0 produces dispatch
+Tier 0 and Greg plan work. Tier 0 produces a formal dispatch per the Dispatch Format specification in [OPS_PROCESS v2](OPS_PROCESS__DISPATCH_CECIL__v2.md#91-dispatch-format-tier-0--cecil).
 
-### 2) Codex executes tasks
-**Unattended mode** (recommended):
-```bash
-bash system/scripts/codex-unattended.sh run-one TASK_XXX
-```
+### 2) Cecil executes dispatch
+Cecil receives the dispatch via Cowork or Greg paste, executes per scope, delegates to Sonnet-worker for test verification and sisters for mechanical work.
 
-**Manual mode**:
-```bash
-# In Codex workspace: ~/codex-workspaces/governance-layer
-codex run --task TASK_XXX
-```
-
-### 3) Cecil merges
-For each completed Codex branch:
+### 3) Cecil merges (when dispatch includes merge)
 ```bash
 git fetch origin --prune
 git switch main
 git reset --hard origin/main
 bash system/scripts/inventory-snapshot.sh
 python3 scripts/verify-ops-canonical.py
-git merge --no-ff origin/codex/TASK_XXX -m "Merge codex/TASK_XXX"
+git merge --no-ff origin/<branch> -m "Merge <branch>"
 bash system/scripts/inventory-snapshot.sh
 python3 scripts/verify-ops-canonical.py
 # Update docs/dev/ASSIGNMENTS.md
 git add docs/dev/ASSIGNMENTS.md docs/dev/inventory/INVENTORY_LATEST.md
-git commit -m "Update ASSIGNMENTS.md and inventory for TASK_XXX merge"
+git commit -m "Update ASSIGNMENTS.md and inventory for merge"
 git push origin main
 ```
 
-### 4) Verification gates
+### 4) Cecil reports results
+Results are written in formal Results format and delivered to Tier 0 via Cowork or Greg upload.
+
+### 5) Tier 0 reviews and produces next dispatch
+Failures go to front of line. Tier 0 reviews results, triages, and dispatches next work.
+
+### Codex batch mode [shelved]
+When Codex returns, the batch/unattended workflow resumes:
+```bash
+bash system/scripts/codex-batch.sh           # Generate ops/CODEX_BATCH.txt
+bash system/scripts/codex-unattended.sh run-one TASK_XXX
+```
+
+### 6) Verification gates
 All gates must pass before push:
 - `python3 scripts/verify-ops-canonical.py` returns OK
 - `bash system/scripts/inventory-snapshot.sh` generates clean inventory
@@ -285,7 +281,7 @@ Enable full mode with canonical repo-local interpreter:
 ```bash
 python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
-GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-.gov_runtime} bash tests/run-mcp-smoke.sh
+GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-gov_runtime} bash tests/run-mcp-smoke.sh
 ```
 
 When recording evidence, include `[exit=...]` markers and two-run SHA256 digest equality.
@@ -546,4 +542,5 @@ This policy aligns with the ingestion workflow documented in [INGESTION_WORKFLOW
 - To enable full mode, install the project MCP requirements into the same interpreter/venv used by the runner (see `mcp/requirements.txt`, or use `system/scripts/bootstrap-run.sh` when available).
 
 ## Revision history
+- 2026-03-26: Updated for ops process v2 (dispatch architecture). Codex lane shelved. Normal run loop rewritten for dispatch-driven flow. Sources of truth updated.
 - 2026-02-20: Initial runbook created with seeds and task generation mapping

@@ -67,7 +67,7 @@ The review did not find broad method redesign, feature expansion, or unrelated s
 No material contract/doc mismatch was found inside the reviewed scope.
 
 The implemented mixed-root contract in `mcp/storage_contract.py` matches the updated `mcp/README.md` on the key points:
-- repo-local `.gov_runtime/` default when `GOV_RUNTIME_DIR` is unset
+- repo-local `gov_runtime/` default when `GOV_RUNTIME_DIR` is unset
 - receipts and receipt/tool-event links under `out/mcp_exec`
 - tool-event indexes and bundles under `$GOV_RUNTIME_DIR/TOOL_EVENTS`
 - tool-catalog under `out/mcp_tool_catalog` as supporting state

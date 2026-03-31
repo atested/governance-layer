@@ -252,7 +252,7 @@ This posture ensures that policy violations cannot occur due to implementation b
 
 ## Runtime Directory Structure
 
-All runtime artifacts are written outside the repo to `$GOV_RUNTIME_DIR` (default: `.gov_runtime/`):
+All runtime artifacts are written outside the repo to `$GOV_RUNTIME_DIR` (default: `gov_runtime/`):
 
 ```
 $GOV_RUNTIME_DIR/

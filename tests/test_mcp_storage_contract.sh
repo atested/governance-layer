@@ -33,7 +33,7 @@ assert tool_event_link_index_path(repo) == repo / "out" / "mcp_exec" / "tool_eve
 assert tool_event_store_root(repo) == expected_runtime / "TOOL_EVENTS"
 assert tool_catalog_store_root(repo) == repo / "out" / "mcp_tool_catalog"
 assert contract["version"] == STORAGE_CONTRACT_VERSION
-assert contract["runtime_root_source"] == "repo_default:.gov_runtime"
+assert contract["runtime_root_source"] == "repo_default:gov_runtime"
 assert contract["authoritative_artifacts"]["receipts"] == "out/mcp_exec"
 assert contract["authoritative_artifacts"]["tool_events"] == "$GOV_RUNTIME_DIR/TOOL_EVENTS"
 print("PASS: GovMCP storage contract defaults and roots are explicit")

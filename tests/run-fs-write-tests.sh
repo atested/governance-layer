@@ -152,7 +152,8 @@ assert_contains "T-FS-002 reason hidden path" "$j2" 'RC-FS-HIDDEN-PATH'
 verify_hash "T-FS-002 hash" "$ROOT/LOGS/t-fs-002.record.json"
 
 assert_contains "T-FS-003 decision DENY" "$j3" '"policy_decision": "DENY"'
-assert_order_first_two_codes "T-FS-003 precedence traversal then hidden" "$j3" "RC-FS-PATH-TRAVERSAL" "RC-FS-HIDDEN-PATH"
+assert_order_first_two_codes "T-FS-003 precedence traversal then disallowed" "$j3" "RC-FS-PATH-TRAVERSAL" "RC-FS-PATH-DISALLOWED"
+assert_contains "T-FS-003 also reports hidden path" "$j3" 'RC-FS-HIDDEN-PATH'
 verify_hash "T-FS-003 hash" "$ROOT/LOGS/t-fs-003.record.json"
 
 assert_contains "T-FS-004 decision DENY" "$j4" '"policy_decision": "DENY"'

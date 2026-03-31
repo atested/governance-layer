@@ -285,7 +285,7 @@ Enable full mode with canonical repo-local interpreter:
 ```bash
 python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
-GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-.gov_runtime} bash tests/run-mcp-smoke.sh
+GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-gov_runtime} bash tests/run-mcp-smoke.sh
 ```
 
 When recording evidence, include `[exit=...]` markers and two-run SHA256 digest equality.

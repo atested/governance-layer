@@ -6,7 +6,7 @@ from typing import Any
 
 
 STORAGE_CONTRACT_VERSION = "govmcp_storage_contract_v1"
-DEFAULT_RUNTIME_ROOT_RELPATH = ".gov_runtime"
+DEFAULT_RUNTIME_ROOT_RELPATH = "gov_runtime"
 
 
 def runtime_root(repo_root: Path) -> Path:
@@ -49,7 +49,7 @@ def describe_storage_contract(repo_root: Path) -> dict[str, Any]:
     return {
         "version": STORAGE_CONTRACT_VERSION,
         "runtime_root": str(runtime).replace("\\", "/"),
-        "runtime_root_source": "env:GOV_RUNTIME_DIR" if os.environ.get("GOV_RUNTIME_DIR") else "repo_default:.gov_runtime",
+        "runtime_root_source": "env:GOV_RUNTIME_DIR" if os.environ.get("GOV_RUNTIME_DIR") else "repo_default:gov_runtime",
         "receipt_store_root": str(receipt_store_root(repo_root)).replace("\\", "/"),
         "receipt_index_path": str(receipt_index_path(repo_root)).replace("\\", "/"),
         "tool_event_store_root": str(tool_event_store_root(repo_root)).replace("\\", "/"),

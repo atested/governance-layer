@@ -88,12 +88,12 @@ ALLOWED_FILES: |
 
 FORBIDDEN_FILES: |
   docs/dev/ASSIGNMENTS.md
-  .gov_runtime/
+  gov_runtime/
 
 DEPENDENCIES: none
 
 PROCEDURE: |
-  1. Audit current .gov_runtime/ structure in governance-layer repo
+  1. Audit current gov_runtime/ structure in governance-layer repo
   2. Document each subdirectory purpose and contents
   3. Create RUNTIME_STRUCTURE.md with clear examples
   4. Add cross-references from PLANNING.md and README.md
