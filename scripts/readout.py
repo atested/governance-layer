@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-readout.py — Governed Action Status Record assembly and Governance Activity
-Projection for operator readout.
+readout.py — Governed Action Status Record assembly, Governance Activity
+Projection, and Audit Query/Report functions for operator readout.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -425,4 +426,264 @@ def governance_activity_view(
             "event_category": event_category,
             "resolution": resolution,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Audit Query and Report Functions
+# ---------------------------------------------------------------------------
+
+
+def _load_sidecar_records(records_dir: Path) -> list[dict]:
+    """Load all sidecar .record.json files from the records directory."""
+    if not records_dir.exists():
+        return []
+    records = []
+    for rfile in sorted(records_dir.glob("*.record.json")):
+        try:
+            rec = json.loads(rfile.read_text(encoding="utf-8"))
+            records.append(rec)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return records
+
+
+def _parse_timestamp(ts: str) -> Optional[datetime]:
+    """Parse an ISO-8601 UTC timestamp string."""
+    if not ts:
+        return None
+    try:
+        ts_clean = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(ts_clean)
+    except (ValueError, TypeError):
+        return None
+
+
+def _in_time_range(
+    ts_str: str,
+    start: Optional[str],
+    end: Optional[str],
+) -> bool:
+    """Check if a timestamp falls within the given range (inclusive)."""
+    if not start and not end:
+        return True
+    ts = _parse_timestamp(ts_str)
+    if ts is None:
+        return False
+    if start:
+        ts_start = _parse_timestamp(start)
+        if ts_start and ts < ts_start:
+            return False
+    if end:
+        ts_end = _parse_timestamp(end)
+        if ts_end and ts > ts_end:
+            return False
+    return True
+
+
+def audit_query(
+    chain_path: Path,
+    records_dir: Path,
+    *,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    user_identity: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    policy_decision: Optional[str] = None,
+    event_category: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Query the governance chain with filters for audit purposes.
+
+    Supports filtering by time range, user, tool, policy decision, and
+    event category. Returns matching entries in reverse chronological order.
+    """
+    rows = load_chain_rows(chain_path)
+    sidecar_by_request_id: dict[str, dict] = {}
+    for rec in _load_sidecar_records(records_dir):
+        rid = rec.get("request_id")
+        if rid:
+            sidecar_by_request_id[rid] = rec
+
+    entries: list[dict] = []
+    for i, rec in enumerate(rows):
+        entry = _normalize_activity_entry(rec, sequence_position=i + 1)
+        if entry is None:
+            continue
+
+        # Time range filter
+        if not _in_time_range(entry["timestamp_utc"], start_time, end_time):
+            continue
+
+        # User filter: check chain record and sidecar
+        if user_identity:
+            rec_user = rec.get("user_identity", "")
+            sidecar = sidecar_by_request_id.get(rec.get("request_id", ""), {})
+            sidecar_user = sidecar.get("user_identity", "")
+            if user_identity not in (rec_user, sidecar_user):
+                continue
+
+        # Tool filter
+        if tool_name:
+            rec_tool = rec.get("tool", rec.get("capability_class", ""))
+            if rec_tool != tool_name:
+                continue
+
+        # Policy decision filter
+        if policy_decision:
+            rec_decision = rec.get("policy_decision", "")
+            if rec_decision != policy_decision:
+                continue
+
+        # Event category filter
+        if event_category:
+            if entry["event_category"] != event_category:
+                continue
+
+        # Enrich with sidecar user_identity if available
+        sidecar = sidecar_by_request_id.get(rec.get("request_id", ""), {})
+        if sidecar.get("user_identity"):
+            entry["user_identity"] = sidecar["user_identity"]
+        elif rec.get("user_identity"):
+            entry["user_identity"] = rec["user_identity"]
+
+        entries.append(entry)
+
+    entries.reverse()
+    total_matching = len(entries)
+
+    if offset > 0:
+        entries = entries[offset:]
+    entries = entries[:limit]
+
+    return {
+        "timestamp_utc": _now_utc_z(),
+        "entries": entries,
+        "total_matching": total_matching,
+        "chain_event_count": len(rows),
+        "window": {"limit": limit, "offset": offset},
+        "filters": {
+            "start_time": start_time,
+            "end_time": end_time,
+            "user_identity": user_identity,
+            "tool_name": tool_name,
+            "policy_decision": policy_decision,
+            "event_category": event_category,
+        },
+    }
+
+
+def audit_record_detail(
+    chain_path: Path,
+    records_dir: Path,
+    *,
+    record_id: str,
+) -> dict:
+    """Retrieve a single governance record by request_id, event_id, or record_hash.
+
+    Returns the full chain record plus any matching sidecar record.
+    """
+    rows = load_chain_rows(chain_path)
+    match: Optional[dict] = None
+    for rec in rows:
+        if record_id in (
+            rec.get("request_id", ""),
+            rec.get("event_id", ""),
+            rec.get("record_hash", ""),
+        ):
+            match = rec
+            break
+
+    if match is None:
+        return {"found": False, "record_id": record_id}
+
+    sidecar: Optional[dict] = None
+    rid = match.get("request_id")
+    if rid and records_dir.exists():
+        sidecar_path = records_dir / f"{rid}.record.json"
+        if sidecar_path.exists():
+            try:
+                sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    return {
+        "found": True,
+        "record_id": record_id,
+        "chain_record": match,
+        "sidecar_record": sidecar,
+    }
+
+
+def audit_report(
+    chain_path: Path,
+    records_dir: Path,
+    *,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    group_by: str = "tool",
+) -> dict:
+    """Generate an audit summary report over a time period.
+
+    group_by: "tool", "user", "decision", or "category".
+    Returns counts grouped by the specified dimension.
+    """
+    rows = load_chain_rows(chain_path)
+    sidecar_by_request_id: dict[str, dict] = {}
+    for rec in _load_sidecar_records(records_dir):
+        rid = rec.get("request_id")
+        if rid:
+            sidecar_by_request_id[rid] = rec
+
+    groups: Counter[str] = Counter()
+    decision_counts: Counter[str] = Counter()
+    total = 0
+
+    for rec in rows:
+        ts = rec.get("timestamp_utc", "")
+        if not _in_time_range(ts, start_time, end_time):
+            continue
+        total += 1
+
+        pd = rec.get("policy_decision", "")
+        if pd:
+            decision_counts[pd] += 1
+
+        if group_by == "tool":
+            key = rec.get("tool", rec.get("capability_class", ""))
+            event_type = rec.get("event_type", "")
+            if not key and event_type:
+                key = event_type
+            groups[key or "unknown"] += 1
+
+        elif group_by == "user":
+            uid = rec.get("user_identity", "")
+            if not uid:
+                sidecar = sidecar_by_request_id.get(rec.get("request_id", ""), {})
+                uid = sidecar.get("user_identity", "")
+            groups[uid or "anonymous"] += 1
+
+        elif group_by == "decision":
+            key = rec.get("policy_decision", "")
+            event_type = rec.get("event_type", "")
+            if not key and event_type:
+                key = event_type
+            groups[key or "event"] += 1
+
+        elif group_by == "category":
+            entry = _normalize_activity_entry(rec, sequence_position=0)
+            cat = entry["event_category"] if entry else "unknown"
+            groups[cat] += 1
+
+    return {
+        "timestamp_utc": _now_utc_z(),
+        "report_type": "audit_summary",
+        "group_by": group_by,
+        "time_range": {"start": start_time, "end": end_time},
+        "total_records": total,
+        "decision_summary": dict(decision_counts.most_common()),
+        "groups": [
+            {"key": k, "count": v} for k, v in groups.most_common()
+        ],
     }
