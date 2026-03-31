@@ -1,0 +1,26 @@
+{
+  "attestation_version": "1.0",
+  "attestation_id": "att_example_trlic001",
+  "generated_at": "2026-04-20T16:00:00Z",
+  "unique_users": 3,
+  "unique_sessions": 28,
+  "total_operations": 512,
+  "operations_by_category": {
+    "FS_READ": 198,
+    "FS_WRITE": 134,
+    "FS_LIST": 87,
+    "FS_DELETE": 23,
+    "FS_MKDIR": 19,
+    "FS_MOVE": 11,
+    "verification_state_transition": 22,
+    "opaque_artifact_approval": 12,
+    "usage_attestation": 6
+  },
+  "license_status": "licensed",
+  "license_tier": "team",
+  "organization_id": "startup-co",
+  "license_expiry": "2027-04-20T00:00:00Z",
+  "trial_days_remaining": null,
+  "recommended_tier": "team",
+  "artifact_hash": "sha256:c5d3e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5"
+}

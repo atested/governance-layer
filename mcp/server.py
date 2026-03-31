@@ -1185,6 +1185,126 @@ def license_activate(license_key: str, organization_id: str = "") -> Dict[str, A
 
 
 @mcp.tool()
+def usage_attestation() -> Dict[str, Any]:
+    """Generate a signed usage attestation artifact.
+
+    Produces a summary of governance usage: unique users, total operations,
+    operations by category, licensing posture, and a tier recommendation.
+    The attestation is SHA-256 hashed and appended to the decision chain
+    as a non-action event.
+    """
+    from collections import Counter
+
+    # Gather usage statistics
+    users: set[str] = set()
+    categories: Counter[str] = Counter()
+    total_ops = 0
+    sessions: set[str] = set()
+
+    # Scan chain
+    if CHAIN.exists():
+        for line in CHAIN.read_text(encoding="utf-8").strip().splitlines():
+            if not line.strip():
+                continue
+            total_ops += 1
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            uid = rec.get("user_identity")
+            if uid:
+                users.add(uid)
+            sid = rec.get("session_id")
+            if sid:
+                sessions.add(sid)
+            # Categorize
+            cap_class = rec.get("capability_class", "")
+            event_type = rec.get("event_type", "")
+            if cap_class:
+                categories[cap_class] += 1
+            elif event_type:
+                categories[event_type] += 1
+
+    # Scan sidecar records
+    if RECORDS_DIR.exists():
+        for rfile in RECORDS_DIR.glob("*.record.json"):
+            try:
+                rec = json.loads(rfile.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            uid = rec.get("user_identity")
+            if uid:
+                users.add(uid)
+            sid = rec.get("session_id")
+            if sid:
+                sessions.add(sid)
+            cap_class = rec.get("capability_class", "")
+            if cap_class:
+                categories[cap_class] += 1
+
+    # Licensing posture
+    posture = resolve_posture(RUNTIME, unique_user_count=len(users))
+    remaining = trial_days_remaining(RUNTIME)
+
+    # Tier recommendation
+    n_users = len(users)
+    if n_users <= 1:
+        recommended_tier = "personal"
+    elif n_users <= 10:
+        recommended_tier = "team"
+    elif n_users <= 50:
+        recommended_tier = "business"
+    else:
+        recommended_tier = "enterprise"
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    attestation_id = f"att_{uuid.uuid4().hex[:16]}"
+
+    artifact = {
+        "attestation_version": "1.0",
+        "attestation_id": attestation_id,
+        "generated_at": now,
+        "unique_users": n_users,
+        "unique_sessions": len(sessions),
+        "total_operations": total_ops,
+        "operations_by_category": dict(categories.most_common()),
+        "license_status": posture["license_status"],
+        "license_tier": posture["license_tier"],
+        "organization_id": posture["organization_id"],
+        "license_expiry": posture["license_expiry"],
+        "trial_days_remaining": remaining,
+        "recommended_tier": recommended_tier,
+    }
+
+    # Hash the artifact
+    artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    artifact_hash = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
+    artifact["artifact_hash"] = artifact_hash
+
+    # Write attestation file to runtime
+    att_dir = RUNTIME / "LOGS" / "attestations"
+    att_dir.mkdir(parents=True, exist_ok=True)
+    att_file = att_dir / f"{attestation_id}.json"
+    att_file.write_text(
+        json.dumps(artifact, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    # Record in chain
+    with _CHAIN_LOCK:
+        _append_non_action_event({
+            "event_type": "usage_attestation",
+            "attestation_id": attestation_id,
+            "artifact_hash": artifact_hash,
+            "unique_users": n_users,
+            "recommended_tier": recommended_tier,
+            "timestamp_utc": now,
+        })
+
+    return artifact
+
+
+@mcp.tool()
 def fs_write(path: str, content: str, overwrite: bool = False, request_executable: bool = False) -> Dict[str, Any]:
     """
     Governed file write. Returns DENY with a full decision record on policy failure.

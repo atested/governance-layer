@@ -1,0 +1,25 @@
+{
+  "attestation_version": "1.0",
+  "attestation_id": "att_example_personal1",
+  "generated_at": "2026-05-15T10:00:00Z",
+  "unique_users": 1,
+  "unique_sessions": 12,
+  "total_operations": 347,
+  "operations_by_category": {
+    "FS_WRITE": 89,
+    "FS_READ": 142,
+    "FS_LIST": 78,
+    "FS_DELETE": 15,
+    "FS_MKDIR": 8,
+    "FS_MOVE": 5,
+    "verification_state_transition": 7,
+    "opaque_artifact_approval": 3
+  },
+  "license_status": "personal",
+  "license_tier": "personal",
+  "organization_id": "",
+  "license_expiry": "2026-04-15T00:00:00Z",
+  "trial_days_remaining": null,
+  "recommended_tier": "personal",
+  "artifact_hash": "sha256:a3b1c4d5e6f708192a3b4c5d6e7f80910a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
+}
