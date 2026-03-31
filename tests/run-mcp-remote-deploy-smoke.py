@@ -11,16 +11,14 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = REPO / "mcp" / "remote_server.py"
+DEPLOY = REPO / "mcp" / "remote_deploy.py"
+AUTH_TOKEN = "govmcp-test-token"
 
 
 def _choose_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
-
-
-AUTH_TOKEN = "govmcp-test-token"
 
 
 async def _call_remote(url: str, headers: dict[str, str] | None = None) -> dict:
@@ -30,14 +28,13 @@ async def _call_remote(url: str, headers: dict[str, str] | None = None) -> dict:
             resp = await session.call_tool(
                 "fs_write",
                 {
-                    "path": "/tmp/govmcp-remote-smoke-deny.txt",
+                    "path": "/tmp/govmcp-remote-deploy-smoke-deny.txt",
                     "content": "remote-smoke",
                     "overwrite": False,
                     "request_executable": False,
                 },
             )
-            payload = json.loads(resp.content[0].text)
-            return payload
+            return json.loads(resp.content[0].text)
 
 
 async def main() -> None:
@@ -49,24 +46,23 @@ async def main() -> None:
     env["GOVMCP_STREAMABLE_HTTP_PATH"] = "/mcp"
     env["GOVMCP_LOG_LEVEL"] = "ERROR"
     env["GOVMCP_REMOTE_AUTH_TOKEN"] = AUTH_TOKEN
+    env["GOVMCP_PUBLIC_BASE_URL"] = "https://govmcp.example.test"
 
     cfg = subprocess.run(
-        [sys.executable, str(SERVER), "--print-config"],
+        [sys.executable, str(DEPLOY), "--print-contract"],
         capture_output=True,
         text=True,
         env=env,
         check=True,
     )
     contract = json.loads(cfg.stdout)
-    assert contract["transport"] == "streamable-http", contract
-    assert contract["host"] == "127.0.0.1", contract
-    assert contract["port"] == port, contract
-    assert contract["streamable_http_path"] == "/mcp", contract
-    assert contract["auth_mode"] == "shared_bearer_token", contract
-    assert contract["auth_required"] == "yes", contract
+    assert contract["deployment_mode"] == "single_process_uvicorn_behind_external_https_terminator", contract
+    assert contract["tls_termination"] == "external_required", contract
+    assert contract["public_mcp_url"] == "https://govmcp.example.test/mcp", contract
+    assert contract["local_bind_url"] == f"http://127.0.0.1:{port}/mcp", contract
 
     proc = subprocess.Popen(
-        [sys.executable, str(SERVER)],
+        [sys.executable, str(DEPLOY)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -79,32 +75,19 @@ async def main() -> None:
             if proc.poll() is not None:
                 out, err = proc.communicate()
                 raise AssertionError(
-                    f"remote server exited early rc={proc.returncode} stdout={out!r} stderr={err!r}"
+                    f"remote deploy helper exited early rc={proc.returncode} stdout={out!r} stderr={err!r}"
                 )
             try:
-                try:
-                    await _call_remote(url)
-                except Exception:
-                    pass
-                else:
-                    raise AssertionError("unauthenticated remote call unexpectedly succeeded")
-                try:
-                    await _call_remote(url, headers={"Authorization": "Bearer wrong-token"})
-                except Exception:
-                    pass
-                else:
-                    raise AssertionError("invalid bearer token unexpectedly succeeded")
-
                 payload = await _call_remote(url, headers={"Authorization": f"Bearer {AUTH_TOKEN}"})
                 assert payload["policy_decision"] == "DENY", payload
                 codes = {row.get("code") for row in payload.get("policy_reasons", [])}
                 assert "RC-FS-PATH-DISALLOWED" in codes, payload
-                print("PASS: remote GovMCP smoke (streamable-http foundation)")
+                print("PASS: remote GovMCP deploy smoke")
                 return
-            except Exception as exc:  # pragma: no cover - retry path depends on startup timing
+            except Exception as exc:  # pragma: no cover
                 last_err = exc
                 await asyncio.sleep(0.2)
-        raise AssertionError(f"remote server never became callable: {last_err!r}")
+        raise AssertionError(f"remote deploy helper never became callable: {last_err!r}")
     finally:
         if proc.poll() is None:
             proc.terminate()

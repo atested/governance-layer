@@ -57,7 +57,7 @@ import json,sys,pathlib
 src = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
 doc = json.loads(src.read_text(encoding='utf-8'))
-for key in ["timestamp_utc", "session_id", "request_id", "record_hash", "signature"]:
+for key in ["timestamp_utc", "session_id", "request_id", "record_hash", "signature", "process_id"]:
     doc.pop(key, None)
 if isinstance(doc.get("normalized_args"), dict):
     for k in ["canonical_path", "canonical_src_path", "canonical_dst_path"]:

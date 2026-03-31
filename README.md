@@ -1,12 +1,14 @@
 # Governance Layer
 
-Deterministic policy enforcement system for tool execution with tamper-evident audit trails.
+Policy enforcement for AI tool execution. Every tool call is evaluated against a capability registry, producing an ALLOW or DENY decision with a tamper-evident audit record. The system exposes 42 governed tools via the Model Context Protocol (MCP), covering filesystem operations, messaging, capability management, attestation, and surface certification.
 
 ---
 
 ## Quick Start
 
-**New to the project?** Start here:
+**First time?** Follow the **[Quickstart Guide](docs/QUICKSTART.md)** — clone to governed operations in under 5 minutes.
+
+**Already set up?** Jump to:
 1. [Governance Overview](docs/GOVERNANCE_OVERVIEW.md) - What the system does and guarantees
 2. [Attestation Spec](docs/dev/ATTESTATION_SPEC.md) - How attestation and replay work
 3. [Runbook](docs/dev/RUNBOOK.md) - How to operate the system
@@ -49,21 +51,20 @@ Deterministic policy enforcement system for tool execution with tamper-evident a
 
 ---
 
-## Core Capabilities
+## Governed Tool Surface (42 tools)
 
-The governance layer enforces policy for these filesystem operations:
-- **FS_READ**: Read file contents with path and size restrictions
-- **FS_WRITE**: Write files with overwrite control and executable restrictions
-- **FS_LIST**: List directories with hidden file filtering
-- **FS_MOVE**: Move/rename files with cross-root restrictions
-- **FS_DELETE**: Delete files with recursive operation restrictions
+| Category | Tools | Purpose |
+|---|---|---|
+| **Filesystem** (6) | `fs_read`, `fs_write`, `fs_list`, `fs_mkdir`, `fs_move`, `fs_delete` | Policy-governed file operations with path, size, and overwrite controls |
+| **Messaging** (2) | `msg_send`, `msg_reply` | Governed message dispatch |
+| **Capabilities** (16) | `capabilities_list`, `capabilities_describe`, `capabilities_execute`, `capabilities_receipt`, `capabilities_replay_check`, ... | Capability registry, execution, attestation, replay verification |
+| **Tool catalog** (12) | `capabilities_tool_register`, `capabilities_tool_get`, `capabilities_tool_catalog_*`, `capabilities_tool_event_*` | Tool registration, event tracking, bundle export and verification |
+| **Governance** (4) | `governance_status`, `governance_approvals`, `governance_verification`, `governance_activity` | System status, approval state, audit activity |
+| **Surface management** (6) | `approve_artifact`, `revoke_artifact`, `certify_surface`, `recertify_surface`, `report_drift`, `run_probe_and_apply` | Artifact approval, surface certification, drift detection |
 
-**Phase 3 Signing** `[IN_PROGRESS]`:
-- **Ed25519 Signatures**: Every policy record is cryptographically signed for non-repudiation
-- **Key Management**: Automatic key loading from `GOV_SIGNING_KEY_PATH` or `~/.config/gov-layer/signing.key`
-- **Third-Party Verification**: Signatures enable independent verification without runtime access
-- **Status**: Emit and key loading implemented. Verification tooling pending.
-- **See**: [SIGNING_GUIDE.md](docs/dev/SIGNING_GUIDE.md) for practical usage
+Every tool call produces a policy decision record appended to a tamper-evident decision chain.
+
+**Ed25519 Signing** `[IN_PROGRESS]`: Every record is cryptographically signed for non-repudiation. See [SIGNING_GUIDE.md](docs/dev/SIGNING_GUIDE.md).
 
 See [Applications Index](docs/dev/APPLICATIONS_INDEX.md) for detailed feature status and evidence.
 
@@ -155,7 +156,7 @@ MCP smoke checks may report deterministic `SKIP` when the canonical interpreter 
 Enable full mode deterministically:
 1. `python3 -m venv mcp/.venv`
 2. `mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt`
-3. `GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-.gov_runtime} bash tests/run-mcp-smoke.sh`
+3. `GOV_RUNTIME_DIR=${GOV_RUNTIME_DIR:-gov_runtime} bash tests/run-mcp-smoke.sh`
 
 Interpretation:
 - `SKIP`: missing MCP dependency in the selected interpreter (environment setup gap)
@@ -178,7 +179,7 @@ See [EXTERNAL_CONTRACTS.md](docs/EXTERNAL_CONTRACTS.md) for full contract detail
 ## Runtime directory
 
 All runtime artifacts (decision chain, quarantine, scratch files) are written outside the repo.
-Set `GOV_RUNTIME_DIR` to control the location. Default when unset: `.gov_runtime/` (gitignored).
+Set `GOV_RUNTIME_DIR` to control the location. Default when unset: `gov_runtime/` (gitignored).
 
 ```
 $GOV_RUNTIME_DIR/

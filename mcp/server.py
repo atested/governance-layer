@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import base64
+import contextvars
 import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 from datetime import datetime, timezone
 import uuid
 from pathlib import Path
@@ -83,6 +85,18 @@ _APPROVAL_STORE: Optional[ApprovalStore] = None
 _REMOTE_TRANSPORT = "streamable-http"
 _VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
+# Chain-append lock: prevents concurrent verify-append-verify sequences from
+# interleaving when multiple clients share one server process (HTTP transport).
+# threading.Lock is correct here because FastMCP runs sync @mcp.tool() handlers
+# in a thread pool — asyncio.Lock cannot be acquired from sync thread context.
+_CHAIN_LOCK = threading.Lock()
+
+# Per-request user identity, set by remote_server.py middleware for HTTP
+# transport.  Defaults to None for stdio (single-user) transport.
+_current_user_identity: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "_current_user_identity", default=None
+)
+
 
 def _tool_catalog_bundle_store_root() -> Path:
     return REPO / "out" / "mcp_tool_catalog_bundles"
@@ -145,7 +159,7 @@ def remote_runtime_contract() -> Dict[str, Any]:
         "port": _env_port(),
         "streamable_http_path": _env_streamable_http_path(),
         "runtime_root": str(RUNTIME).replace("\\", "/"),
-        "runtime_root_source": "env:GOV_RUNTIME_DIR" if os.environ.get("GOV_RUNTIME_DIR") else "repo_default:.gov_runtime",
+        "runtime_root_source": "env:GOV_RUNTIME_DIR" if os.environ.get("GOV_RUNTIME_DIR") else "repo_default:gov_runtime",
         "auth_state": "not_configured_in_remote_foundation",
         "deployment_state": "not_packaged_in_remote_foundation",
     }
@@ -637,6 +651,9 @@ def _chain_head_record_hash() -> Optional[str]:
 
 
 def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    identity = _current_user_identity.get(None)
+    if identity is not None:
+        event["user_identity"] = identity
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
     with open(CHAIN, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
@@ -688,14 +705,15 @@ def _append_scoped_artifact_event(
     else:
         raise ValueError(f"unsupported event_type: {event_type}")
 
-    _verify_chain()
-    event = build_non_action_event(
-        event_type,
-        payload,
-        prev_record_hash=_chain_head_record_hash(),
-    )
-    rec = _append_non_action_event(event)
-    _verify_chain()
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            event_type,
+            payload,
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        rec = _append_non_action_event(event)
+        _verify_chain()
     return rec
 
 
@@ -704,14 +722,15 @@ def _transition_verification_surface(
     to_state: str,
 ) -> Dict[str, Any]:
     tracker = _verification_tracker()
-    _verify_chain()
-    event = tracker.transition(
-        governed_family,
-        to_state,
-        prev_record_hash=_chain_head_record_hash(),
-    )
-    rec = _append_non_action_event(event)
-    _verify_chain()
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = tracker.transition(
+            governed_family,
+            to_state,
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        rec = _append_non_action_event(event)
+        _verify_chain()
     return rec
 
 
@@ -807,20 +826,21 @@ def governed_tool(
     # loading. Transparent actions normalize against the capability spec.
     if transparency == "opaque":
         norm_args = dict(args)
-        _verify_chain()
-        store = _approval_store()
-        rec = _append_non_action_event(
-            handle_opaque_action(
-                request=request,
-                artifact_bytes=_load_opaque_artifact_bytes(norm_args),
-                governed_family=governed_family,
-                deployment_context=_deployment_context(),
-                policy_version=_policy_version(),
-                approval_lookup_fn=store.lookup,
-                prev_record_hash=_chain_head_record_hash(),
-            )["event"]
-        )
-        _verify_chain()
+        with _CHAIN_LOCK:
+            _verify_chain()
+            store = _approval_store()
+            rec = _append_non_action_event(
+                handle_opaque_action(
+                    request=request,
+                    artifact_bytes=_load_opaque_artifact_bytes(norm_args),
+                    governed_family=governed_family,
+                    deployment_context=_deployment_context(),
+                    policy_version=_policy_version(),
+                    approval_lookup_fn=store.lookup,
+                    prev_record_hash=_chain_head_record_hash(),
+                )["event"]
+            )
+            _verify_chain()
 
         if rec.get("resolution") != "approved_lookup":
             return {
@@ -861,11 +881,14 @@ def governed_tool(
             "decision_record": None,
         }
 
+    identity = _current_user_identity.get(None)
     intent_obj = {
         "tool": tool_name,
         "args": norm_args,
         "intent": intent,
     }
+    if identity is not None:
+        intent_obj["user_identity"] = identity
 
     INTENTS_DIR.mkdir(parents=True, exist_ok=True)
     RECORDS_DIR.mkdir(parents=True, exist_ok=True)
@@ -873,14 +896,17 @@ def governed_tool(
     intent_path = INTENTS_DIR / f"{req_id}.intent.json"
     _write_json(intent_path, intent_obj)
 
-    # Verify chain integrity BEFORE appending (fail closed)
-    _verify_chain()
+    # Locked verify→append→verify: prevents interleaving under concurrent
+    # HTTP clients.  For stdio (single-client) the lock is uncontended.
+    with _CHAIN_LOCK:
+        _verify_chain()
+        rec = _append_decision(intent_path)
+        _verify_chain()
 
-    # Append decision record to runtime chain (tamper-evident sequence)
-    rec = _append_decision(intent_path)
-
-    # Verify chain integrity AFTER appending (fail closed)
-    _verify_chain()
+    # Enrich record with user identity (additive — included in sidecar
+    # record and API response for attribution).
+    if identity is not None:
+        rec["user_identity"] = identity
 
     # Persist a pretty record copy (optional convenience, not part of the chain)
     record_path = RECORDS_DIR / f"{req_id}.record.json"
@@ -1058,6 +1084,51 @@ def governance_activity(
         event_category=cat,
         resolution=res,
     )
+
+
+@mcp.tool()
+def governance_user_report(window: Optional[int] = None) -> Dict[str, Any]:
+    """Return unique user identity statistics from governance records.
+
+    Scans both the decision chain and sidecar record files for user_identity
+    fields.  Chain records (non-action events written by server.py) embed
+    user_identity directly.  Action records (produced by policy-eval.py) have
+    user_identity in the sidecar .record.json files.
+    """
+    from collections import Counter
+    users: Counter[str] = Counter()
+    total = 0
+
+    # 1. Scan chain for non-action events with user_identity
+    if CHAIN.exists():
+        for line in CHAIN.read_text(encoding="utf-8").strip().splitlines():
+            if not line.strip():
+                continue
+            total += 1
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            uid = rec.get("user_identity")
+            if uid:
+                users[uid] += 1
+
+    # 2. Scan sidecar record files for action records with user_identity
+    if RECORDS_DIR.exists():
+        for rfile in RECORDS_DIR.glob("*.record.json"):
+            try:
+                rec = json.loads(rfile.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            uid = rec.get("user_identity")
+            if uid:
+                users[uid] += 1
+
+    return {
+        "unique_users": len(users),
+        "users": [{"identity": k, "action_count": v} for k, v in users.most_common()],
+        "total_records": total,
+    }
 
 
 @mcp.tool()

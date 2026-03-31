@@ -17,16 +17,7 @@ mkdir -p "$ROOT/LOGS"
 prev=""
 if [[ -f "$CHAIN" ]]; then
   # get last record_hash from last non-empty line
-  prev="$(tail -n 1 "$CHAIN" | python3 - <<'PY'
-import json,sys
-line=sys.stdin.read().strip()
-if not line:
-  print("")
-  raise SystemExit(0)
-obj=json.loads(line)
-print(obj.get("record_hash",""))
-PY
-)"
+  prev="$(tail -n 1 "$CHAIN" | python3 -c 'import json,sys; line=sys.stdin.read().strip(); print(json.loads(line).get("record_hash","") if line else "")')"
 fi
 
 if [[ -n "$prev" ]]; then
@@ -35,11 +26,6 @@ fi
 
 # Emit record and append as single-line canonical JSON for stable chaining
 rec="$("$EVAL" "$REG" "$INTENT")"
-one_line="$(echo "$rec" | python3 - <<'PY'
-import json,sys
-obj=json.load(sys.stdin)
-print(json.dumps(obj, sort_keys=True, separators=(",",":"), ensure_ascii=False))
-PY
-)"
+one_line="$(echo "$rec" | python3 -c 'import json,sys; obj=json.load(sys.stdin); print(json.dumps(obj, sort_keys=True, separators=(",",":"), ensure_ascii=False))')"
 echo "$one_line" >> "$CHAIN"
 echo "$one_line"

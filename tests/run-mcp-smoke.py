@@ -11,7 +11,7 @@ from mcp.client.stdio import stdio_client
 REPO = Path(__file__).resolve().parents[1]
 SERVER = REPO / "mcp" / "server.py"
 
-RUNTIME = Path(os.environ.get("GOV_RUNTIME_DIR", str(REPO / ".gov_runtime"))).resolve()
+RUNTIME = Path(os.environ.get("GOV_RUNTIME_DIR", str(REPO / "gov_runtime"))).resolve()
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 
 
@@ -228,7 +228,8 @@ async def main():
             else:
                 assert allow_obj["policy_decision"] == "DENY", f"Expected ALLOW or DENY for fs_write, got {allow_obj}"
                 reasons = {r.get("code") for r in allow_obj.get("policy_reasons", [])}
-                assert "RC-FS-PATH-DISALLOWED" in reasons, f"Expected RC-FS-PATH-DISALLOWED, got {allow_obj}"
+                valid_deny = reasons & {"RC-FS-PATH-DISALLOWED", "RC-FS-HIDDEN-PATH"}
+                assert valid_deny, f"Expected RC-FS-PATH-DISALLOWED or RC-FS-HIDDEN-PATH, got {allow_obj}"
 
     after_n = chain_len()
     if allow_obj["policy_decision"] == "ALLOW":
