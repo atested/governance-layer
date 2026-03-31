@@ -171,7 +171,7 @@ cat > "$REG004_FIX" <<JSON
   "tool": "FS_COPY",
   "args": {
     "src_path": "$SRC_PATH",
-    "dst_path": "$ROOT/docs/dev/WORK_QUEUE.md",
+    "dst_path": "$ROOT/system/scripts/release-gate.sh",
     "overwrite": false
   },
   "intent": {
@@ -179,7 +179,7 @@ cat > "$REG004_FIX" <<JSON
     "constraints": {"overwrite": false},
     "requested_action": "FS_COPY",
     "inputs": [{"ref": "file:src_path", "value": "$SRC_PATH"}],
-    "expected_outputs": [{"ref": "file:dst_path", "value": "$ROOT/docs/dev/WORK_QUEUE.md"}]
+    "expected_outputs": [{"ref": "file:dst_path", "value": "$ROOT/system/scripts/release-gate.sh"}]
   }
 }
 JSON

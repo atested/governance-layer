@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test: Hardening — Unregistered/Unknown Tool Opaque Path (CECIL-T9)
+# Test: Hardening — Unregistered/Unknown Tool Opaque Path 
 #
 # Validates:
 #   1. Unknown/unregistered tools reach the opaque slow path

@@ -21,7 +21,7 @@ root = pathlib.Path(sys.argv[1])
 out_file = pathlib.Path(sys.argv[2])
 
 cases = [
-    ("HOT_FILE_TARGET", "FS_MOVE", {"src_path": "out/test_mcp_capabilities_execute_blocked/fixtures/src.txt", "dst_path": "docs/dev/ASSIGNMENTS.md"}, "TARGET_IS_HOT_FILE"),
+    ("HOT_FILE_TARGET", "FS_MOVE", {"src_path": "out/test_mcp_capabilities_execute_blocked/fixtures/src.txt", "dst_path": "system/scripts/release-gate.sh"}, "TARGET_IS_HOT_FILE"),
     ("TRAVERSAL_TARGET", "FS_MOVE", {"src_path": "out/test_mcp_capabilities_execute_blocked/fixtures/../src.txt", "dst_path": "out/test_mcp_capabilities_execute_blocked/fixtures/dst.txt"}, "PATH_TRAVERSAL"),
 ]
 

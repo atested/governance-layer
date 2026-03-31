@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How it works — Atested</title>
+  <meta name="description" content="A walk-through of how Atested evaluates every AI action against policy, signs it into an immutable chain, and produces verifiable proof.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <header>
+    <nav class="container">
+      <a href="/" class="nav-brand">atested</a>
+      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      <ul class="nav-links">
+        <li><a href="how-it-works.html" class="active">How it works</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="explainer.html">Why governance</a></li>
+        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: var(--space-xl);">
+      <div class="container">
+        <h1>How Atested works</h1>
+        <p class="lead">
+          From action request to auditable proof, in six steps. Every step produces
+          a verifiable artifact. Nothing is taken on trust.
+        </p>
+      </div>
+    </section>
+
+    <!-- Flow steps -->
+    <section style="padding-top: 0;">
+      <div class="container narrow">
+        <div class="flow-steps">
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Action request</h3>
+              <p>
+                An AI agent requests an action through the Model Context Protocol. This could be
+                writing a file, sending a message, reading data, or invoking any governed tool.
+                The request includes the tool name, arguments, and the operator's stated intent.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Policy evaluation</h3>
+              <p>
+                The governance layer evaluates the action against your policy. Policies are defined
+                in a capability registry that specifies which actions are allowed, under what
+                constraints, and with what arguments. The evaluation produces a decision: ALLOW or DENY.
+              </p>
+              <p>
+                The evaluation is deterministic. The same action, with the same policy, always
+                produces the same decision. This is what makes governance records replayable.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Decision record</h3>
+              <p>
+                Whether allowed or denied, the decision is recorded. The record captures the tool,
+                the arguments, the policy decision, the timestamp, the operator identity, and a
+                SHA-256 hash of the record contents.
+              </p>
+              <div class="record-visual">
+                <div class="record-visual-header">
+                  <span>decision record</span>
+                  <span class="badge badge-allow">ALLOW</span>
+                </div>
+                <pre><code>{
+  <span class="json-key">"tool"</span>:             <span class="json-string">"fs_write"</span>,
+  <span class="json-key">"policy_decision"</span>:  <span class="json-string">"ALLOW"</span>,
+  <span class="json-key">"timestamp_utc"</span>:    <span class="json-string">"2026-05-28T09:12:00Z"</span>,
+  <span class="json-key">"user_identity"</span>:    <span class="json-string">"bearer:e1f2a3b4c5d67890"</span>,
+  <span class="json-key">"record_hash"</span>:      <span class="json-string">"sha256:0a1b2c3d..."</span>,
+  <span class="json-key">"prev_record_hash"</span>: <span class="json-string">"sha256:f0e1d2c3..."</span>
+}</code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Chain append</h3>
+              <p>
+                The record is appended to an immutable decision chain. Each record's hash includes
+                the previous record's hash, creating a tamper-evident linked structure. If any
+                record is modified or removed after the fact, the chain verification fails.
+              </p>
+              <p>
+                The chain is cryptographically signed with Ed25519 keys. An independent verifier
+                can validate the entire chain without access to the governance system that produced it.
+              </p>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Attestation</h3>
+              <p>
+                At any point, the system can generate an attestation artifact that summarizes
+                the governance activity: how many users, how many operations, which tool categories,
+                the license status, and a hash binding the attestation to the chain.
+              </p>
+              <div class="record-visual">
+                <div class="record-visual-header">
+                  <span>attestation.json</span>
+                  <span class="badge badge-signed">ATTESTATION</span>
+                </div>
+                <pre><code>{
+  <span class="json-key">"attestation_version"</span>: <span class="json-string">"1.0"</span>,
+  <span class="json-key">"unique_users"</span>:        <span class="json-number">5</span>,
+  <span class="json-key">"total_operations"</span>:    <span class="json-number">2104</span>,
+  <span class="json-key">"operations_by_category"</span>: {
+    <span class="json-key">"FS_READ"</span>:  <span class="json-number">612</span>,
+    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">489</span>,
+    <span class="json-key">"FS_LIST"</span>:  <span class="json-number">301</span>,
+    <span class="json-key">"MSG_SEND"</span>: <span class="json-number">187</span>,
+    <span class="json-key">"MSG_REPLY"</span>:<span class="json-number"> 142</span>
+  },
+  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
+  <span class="json-key">"organization_id"</span>:  <span class="json-string">"acme-engineering"</span>,
+  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
+  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:b4c2d5e6..."</span>
+}</code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="flow-step-content">
+              <h3>Proof packet</h3>
+              <p>
+                A proof packet bundles everything into a single verifiable deliverable: the decision
+                records, the policy that produced them, the attestation, and a manifest with
+                cryptographic hashes of every component. An external verifier can validate the
+                entire packet independently.
+              </p>
+              <p>
+                This is what you hand to an auditor, a customer, or a compliance review. It is
+                not a report you wrote. It is evidence your system produced.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Example proof packets -->
+    <section>
+      <div class="container">
+        <h2 class="text-center">Example proof packets</h2>
+        <p class="text-center" style="margin: 0 auto var(--space-xl); max-width: 36em;">
+          Real attestation artifacts from three scenarios. These are examples of what
+          your Atested deployment produces.
+        </p>
+
+        <div class="tab-group" style="margin: 0 auto var(--space-lg);">
+          <button class="tab-btn active" data-tab="personal">personal</button>
+          <button class="tab-btn" data-tab="trial">trial-to-licensed</button>
+          <button class="tab-btn" data-tab="team">team</button>
+        </div>
+
+        <!-- Personal -->
+        <div class="tab-panel active" id="tab-personal">
+          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+            <div>
+              <h4>Scenario</h4>
+              <p>
+                A single developer using Atested locally. After the 30-day trial, the system
+                generated an attestation showing one user and 347 operations. The recommended
+                tier: Personal (free).
+              </p>
+            </div>
+            <div class="record-visual">
+              <div class="record-visual-header">
+                <span>attestation.json</span>
+                <span class="badge badge-signed">PERSONAL</span>
+              </div>
+              <pre><code>{
+  <span class="json-key">"unique_users"</span>:     <span class="json-number">1</span>,
+  <span class="json-key">"total_operations"</span>: <span class="json-number">347</span>,
+  <span class="json-key">"operations_by_category"</span>: {
+    <span class="json-key">"FS_READ"</span>:  <span class="json-number">142</span>,
+    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">89</span>,
+    <span class="json-key">"FS_LIST"</span>:  <span class="json-number">78</span>,
+    <span class="json-key">"FS_DELETE"</span>:<span class="json-number"> 15</span>
+  },
+  <span class="json-key">"license_status"</span>:   <span class="json-string">"personal"</span>,
+  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"personal"</span>,
+  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:a1b2c3d4..."</span>
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trial to licensed -->
+        <div class="tab-panel" id="tab-trial">
+          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+            <div>
+              <h4>Scenario</h4>
+              <p>
+                A startup team of 3 developers. On day 25 of the trial, they activated a
+                Team license. The decision chain shows the exact moment the license status
+                transitioned from <code>trial</code> to <code>licensed</code>, with the
+                organization ID populated.
+              </p>
+            </div>
+            <div class="record-visual">
+              <div class="record-visual-header">
+                <span>attestation.json</span>
+                <span class="badge badge-signed">TEAM</span>
+              </div>
+              <pre><code>{
+  <span class="json-key">"unique_users"</span>:     <span class="json-number">3</span>,
+  <span class="json-key">"total_operations"</span>: <span class="json-number">512</span>,
+  <span class="json-key">"license_status"</span>:   <span class="json-string">"licensed"</span>,
+  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
+  <span class="json-key">"organization_id"</span>:  <span class="json-string">"startup-co"</span>,
+  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
+  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:e2f3a4b5..."</span>
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Team -->
+        <div class="tab-panel" id="tab-team">
+          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+            <div>
+              <h4>Scenario</h4>
+              <p>
+                An established engineering team of 5 developers sharing a governed HTTP
+                deployment. 2,104 operations across filesystem, messaging, and governance
+                categories. The attestation confirms the Team tier matches actual usage.
+              </p>
+            </div>
+            <div class="record-visual">
+              <div class="record-visual-header">
+                <span>attestation.json</span>
+                <span class="badge badge-signed">TEAM</span>
+              </div>
+              <pre><code>{
+  <span class="json-key">"unique_users"</span>:     <span class="json-number">5</span>,
+  <span class="json-key">"total_operations"</span>: <span class="json-number">2104</span>,
+  <span class="json-key">"operations_by_category"</span>: {
+    <span class="json-key">"FS_READ"</span>:  <span class="json-number">612</span>,
+    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">489</span>,
+    <span class="json-key">"MSG_SEND"</span>: <span class="json-number">187</span>,
+    <span class="json-key">"MSG_REPLY"</span>:<span class="json-number"> 142</span>
+  },
+  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
+  <span class="json-key">"organization_id"</span>:  <span class="json-string">"acme-engineering"</span>,
+  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
+  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:b4c2d5e6..."</span>
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-copy">&copy; 2026 Atested</span>
+        <ul class="footer-links">
+          <li><a href="terms.html">Terms</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/nav.js"></script>
+  <script src="assets/js/tabs.js"></script>
+</body>
+</html>

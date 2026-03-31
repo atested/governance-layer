@@ -27,7 +27,10 @@ mcp/.venv
 venv/
 __pycache__/
 gov_runtime/
+.gov_runtime/
+.mcp.json
 .claude/commands/
-.codex/
+.agent-workspaces/
 
 out/
+.claude/

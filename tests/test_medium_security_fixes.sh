@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Tests for D-2026-0330-024 medium-severity security fixes (M1–M7).
+# Tests for medium-severity security fixes (M1–M7).
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pass=0
