@@ -35,6 +35,7 @@ PY
 
   local out_ok
   out_ok="$(python3 "$VERIFY" "$bundle" --require-signature 1 --pubkey "$KEY_PUB")"
+  echo "$out_ok" | rg '^ATTESTATION_BUNDLE_VERIFY ok=yes reason=OK ' >/dev/null
   echo "$out_ok" | rg '^PASS: attestation bundle signature verified$' >/dev/null
   echo "$out_ok" | rg '^PASS: attestation bundle manifest \+ payload hashes verified$' >/dev/null
   echo "VERIFY_OK=YES"
@@ -53,6 +54,7 @@ PY
   rc_bad=$?
   set -e
   [[ $rc_bad -ne 0 ]]
+  echo "$out_bad" | rg '^ATTESTATION_BUNDLE_VERIFY ok=no reason=SIGNATURE_INVALID ' >/dev/null
   echo "$out_bad" | rg '^FAIL: SIGNATURE_VERIFICATION_FAILED$' >/dev/null
   echo "VERIFY_TAMPER_FAIL=YES"
 }

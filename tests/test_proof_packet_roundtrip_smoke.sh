@@ -76,6 +76,8 @@ PROOF_VERIFY1="$(cat /tmp/run1.proof_verify.log)"
 REPLAY_OUT1="$(cat /tmp/replay.seed.log)"
 assert_contains "attestation bundle verify pass" "$ATT_VERIFY1" "PASS: attestation bundle manifest + payload hashes verified"
 assert_contains "proof-packet verify pass" "$PROOF_VERIFY1" "PASS: proof packet manifest + payload hashes verified"
+assert_contains "proof-packet verify machine contract" "$PROOF_VERIFY1" "PROOF_PACKET_VERIFY ok=yes reason=OK "
+assert_contains "proof-packet verify summary contract" "$PROOF_VERIFY1" " summary_report_version=proof_packet_verify_summary_v2 "
 
 python3 - <<'PY' "$PP1" "$SEED_RPT"
 import hashlib, json, sys, tarfile

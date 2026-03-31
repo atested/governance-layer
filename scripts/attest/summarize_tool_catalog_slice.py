@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 import sys
 
 sys.path.insert(0, str(REPO_ROOT / "mcp"))
-from tool_catalog_store import list_slice  # noqa: E402
+from tool_catalog_store import summarize_slice  # noqa: E402
 
 PREFIX = "TOOL_CATALOG_SLICE_SUMMARY"
 
@@ -66,54 +66,14 @@ def main() -> int:
         return _fail(str(exc))
 
     try:
-        rows = list_slice(
+        summary = summarize_slice(
             REPO_ROOT,
             created_from=str(args.created_from or "any"),
             capability=str(args.capability or ""),
-            limit=str(args.limit or "25"),
+            limit=int(args.limit),
         )
     except ValueError:
         return _fail("FILTER_INVALID")
-
-    by_created_from: dict[str, int] = {}
-    by_capability: dict[str, int] = {}
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        created_from = str(row.get("created_from", "")).strip()
-        by_created_from[created_from] = by_created_from.get(created_from, 0) + 1
-        caps = row.get("declared_capabilities", [])
-        if isinstance(caps, list):
-            for cap in caps:
-                token = str(cap).strip()
-                if token:
-                    by_capability[token] = by_capability.get(token, 0) + 1
-        items.append(
-            {
-                "tool_id": str(row.get("tool_id", "")),
-                "tool_name": str(row.get("tool_name", "")),
-                "tool_version": str(row.get("tool_version", "")),
-                "created_from": created_from,
-                "schema_sha256": str(row.get("schema_sha256", "")),
-                "declared_capabilities": list(row.get("declared_capabilities", [])) if isinstance(row.get("declared_capabilities", []), list) else [],
-                "index_seq": int(row.get("index_seq", 0)),
-            }
-        )
-
-    summary = {
-        "summary_version": "tool_catalog_slice_summary_v1",
-        "filters": {
-            "created_from": str(args.created_from or "any").strip().lower() or "any",
-            "capability": str(args.capability or "").strip().upper(),
-            "limit": max(1, min(int(args.limit), 500)),
-        },
-        "selected_count": len(items),
-        "selected_tool_ids": [item["tool_id"] for item in items],
-        "counts": {
-            "by_created_from": {k: by_created_from[k] for k in sorted(by_created_from)},
-            "by_declared_capability": {k: by_capability[k] for k in sorted(by_capability)},
-        },
-        "items": items,
-    }
 
     summary_raw = _canonical_json(summary).encode("utf-8")
     summary_sha = _sha256_bytes(summary_raw)
@@ -126,7 +86,7 @@ def main() -> int:
 
     print(
         f"{PREFIX} ok=yes reason=OK "
-        f"selected_count={len(items)} "
+        f"selected_count={int(summary.get('selected_count', 0))} "
         f"summary_sha256={summary_sha} "
         f"report_path={report_path}"
     )

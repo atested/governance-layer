@@ -126,7 +126,7 @@ T-008 Replay: same inputs must produce same decision.
 
 Versioning/compat notes:
 - Proof-packet manifest schema marker: `proof_packet_v1`
-- Verifier summary JSON schema marker: `proof_packet_verify_summary_v1`
+- Verifier summary JSON schema marker: `proof_packet_verify_summary_v2`
 - Replay audit report linkage is validated via `source_summary.replay_report_hash` and `record_bytes_sha256` invariants in proof-packet tests.
 
 ### Replay (core + audit report)

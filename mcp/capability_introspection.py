@@ -14,6 +14,13 @@ from receipt_signing import (
     verify_digest_signature_with_key_input,
     write_signature_artifacts_with_key_input,
 )
+from inspectability_contract import (
+    build_receipt_payload,
+    build_recent_receipts_payload,
+    build_replay_payload,
+    canonical_tool_event_digests,
+)
+from storage_contract import receipt_index_path, receipt_run_root
 
 
 HOT_FILES = frozenset(
@@ -356,7 +363,7 @@ def emit_action_record(
         rec["tool_event_digests"] = cleaned_tool_event_digests
     body = _canonical_json(rec) + "\n"
     digest = "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
-    out_dir = repo_root / "out" / "mcp_exec" / run_id
+    out_dir = receipt_run_root(repo_root, run_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "action_record.json").write_text(body, encoding="utf-8")
     (out_dir / "action_record.sha256").write_text(digest + "\n", encoding="utf-8")
@@ -380,9 +387,9 @@ def emit_action_record(
 
 
 def _update_receipt_index(repo_root: Path, run_id: str, digest: str, action_name: str, outcome: str) -> None:
-    out_root = repo_root / "out" / "mcp_exec"
+    index_path = receipt_index_path(repo_root)
+    out_root = index_path.parent
     out_root.mkdir(parents=True, exist_ok=True)
-    index_path = out_root / "index.v1.json"
     entries = []
     if index_path.exists():
         try:
@@ -417,7 +424,7 @@ def _update_receipt_index(repo_root: Path, run_id: str, digest: str, action_name
 
 
 def _index_rows(repo_root: Path) -> list[dict[str, str]]:
-    index_path = repo_root / "out" / "mcp_exec" / "index.v1.json"
+    index_path = receipt_index_path(repo_root)
     if not index_path.exists():
         return []
     try:
@@ -450,17 +457,18 @@ def load_receipt(
     row = next((r for r in rows if r["run_id"] == run_id), None)
     if row is None:
         raise ValueError("RECEIPT_NOT_FOUND")
-    rec_path = repo_root / "out" / "mcp_exec" / run_id / "action_record.json"
+    rec_path = receipt_run_root(repo_root, run_id) / "action_record.json"
     if not rec_path.exists():
         raise ValueError("RECEIPT_NOT_FOUND")
     body = rec_path.read_text(encoding="utf-8")
     record = json.loads(body)
     computed = "sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
-    sig_path = repo_root / "out" / "mcp_exec" / run_id / "action_record.sig"
-    sigmeta_path = repo_root / "out" / "mcp_exec" / run_id / "action_record.sigmeta.json"
+    sig_path = receipt_run_root(repo_root, run_id) / "action_record.sig"
+    sigmeta_path = receipt_run_root(repo_root, run_id) / "action_record.sigmeta.json"
     signature_present = sig_path.exists() and sigmeta_path.exists()
     signature_valid = False
     signature_reason = "NONE"
+    tool_event_digests = canonical_tool_event_digests(record.get("tool_event_digests", []))
     if verify_signature:
         if not signature_present:
             signature_reason = "SIGNATURE_MISSING"
@@ -480,23 +488,36 @@ def load_receipt(
                     signature_reason = "SIGNATURE_INVALID"
             except Exception:
                 signature_reason = "SIGNATURE_INVALID"
-    return {
-        "receipt_version": "v0",
-        "run_id": run_id,
-        "digest": row["digest"],
-        "action_record": record,
-        "digest_valid": row["digest"] == computed,
-        "signature_present": signature_present,
-        "signature_valid": signature_valid,
-        "signature_reason_token": signature_reason,
-    }
+    return build_receipt_payload(
+        repo_root=repo_root,
+        run_id=run_id,
+        digest=row["digest"],
+        action_record=record,
+        digest_valid=row["digest"] == computed,
+        signature_present=signature_present,
+        signature_valid=signature_valid,
+        signature_reason_token=signature_reason,
+    )
 
 
 def list_recent_receipts(repo_root: Path, limit: int) -> dict[str, Any]:
     n = max(1, min(int(limit), 50))
     rows = _index_rows(repo_root)
     selected = rows[-n:]
-    return {"receipt_version": "v0", "receipts": selected}
+    linked_counts: dict[str, int] = {}
+    for row in selected:
+        run_id = str(row.get("run_id", ""))
+        rec_path = receipt_run_root(repo_root, run_id) / "action_record.json"
+        if not rec_path.is_file():
+            linked_counts[run_id] = 0
+            continue
+        try:
+            record = json.loads(rec_path.read_text(encoding="utf-8"))
+        except Exception:
+            linked_counts[run_id] = 0
+            continue
+        linked_counts[run_id] = len(canonical_tool_event_digests(record.get("tool_event_digests", [])))
+    return build_recent_receipts_payload(repo_root, selected, linked_counts)
 
 
 def replay_check(
@@ -562,20 +583,21 @@ def replay_check(
     check = admissibility_check(
         registry_path, repo_root, action_name, norm_params, policy_context=used_context
     )
-    response = {
-        "replay_version": "v0",
-        "run_id": run_id,
-        "digest": receipt.get("digest", ""),
-        "digest_valid": True,
-        "admissible_now": bool(check.get("admissible", False)),
-        "reason_token": str(check.get("reason_token", "UNKNOWN")),
-        "action_name": action_name,
-        "normalized_params": check.get("normalized_params", {}),
-        "signature_present": bool(receipt.get("signature_present", False)),
-        "signature_valid": bool(receipt.get("signature_valid", False)),
-        "signature_reason_token": str(receipt.get("signature_reason_token", "NONE")),
-        "policy_context_used": str(check.get("policy_context_used", used_context)),
-    }
+    response = build_replay_payload(
+        repo_root=repo_root,
+        run_id=run_id,
+        digest=str(receipt.get("digest", "")),
+        digest_valid=True,
+        admissible_now=bool(check.get("admissible", False)),
+        reason_token=str(check.get("reason_token", "UNKNOWN")),
+        action_name=action_name,
+        normalized_params=check.get("normalized_params", {}),
+        signature_present=bool(receipt.get("signature_present", False)),
+        signature_valid=bool(receipt.get("signature_valid", False)),
+        signature_reason_token=str(receipt.get("signature_reason_token", "NONE")),
+        tool_event_digests=receipt.get("tool_event_digests", []),
+        policy_context_used=str(check.get("policy_context_used", used_context)),
+    )
     if emit_artifact:
         artifact = {
             "replay_check_version": "v0",
@@ -586,7 +608,7 @@ def replay_check(
             "admissible_now": bool(response.get("admissible_now", False)),
             "reason_token": str(response.get("reason_token", "UNKNOWN")),
         }
-        digest_list = receipt.get("action_record", {}).get("tool_event_digests")
+        digest_list = receipt.get("tool_event_digests", [])
         if isinstance(digest_list, list):
             vals: list[str] = []
             for item in digest_list:
@@ -596,7 +618,7 @@ def replay_check(
             vals = sorted(set(vals))
             if vals:
                 artifact["tool_event_digests"] = vals
-        out_dir = repo_root / "out" / "mcp_exec" / run_id
+        out_dir = receipt_run_root(repo_root, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "replay_check.v0.json").write_text(
             _canonical_json(artifact) + "\n",

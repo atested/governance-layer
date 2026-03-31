@@ -29,11 +29,18 @@ j=json.load(open(sys.argv[1], encoding='utf-8'))
 assert j["report_version"] == "validate_proof_bundle_summary_v1"
 assert j["result"] == sys.argv[2]
 assert j["exit_code"] == int(sys.argv[3])
+assert isinstance(j["bundle_dir_basename"], str)
 assert isinstance(j["counts"], dict)
 assert isinstance(j["queue_drift_scan_json_present"], bool)
 assert isinstance(j["status_bundle_present"], bool)
 assert isinstance(j["packet_hash"], dict) and j["packet_hash"]["algo"] == "sha256"
 assert isinstance(j["summary_hash"], dict) and j["summary_hash"]["algo"] == "sha256"
+assert isinstance(j["queue_drift_scan"], dict) and isinstance(j["queue_drift_scan"]["status"], str)
+assert isinstance(j["status_bundle"], dict) and isinstance(j["status_bundle"]["status"], str)
+if j["result"] == "FAIL":
+    assert isinstance(j["contract_failures"], list) and j["contract_failures"]
+if j["result"] == "ERROR":
+    assert isinstance(j["runtime_error"], str) and j["runtime_error"]
 print("PASS: summary json contract keys/types/schema version present")
 PY
 }

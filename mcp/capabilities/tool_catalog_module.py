@@ -6,7 +6,9 @@ from typing import Any, Dict
 from capabilities.base import CapabilityDescribe, CapabilityModule
 from tool_catalog_store import get as store_get
 from tool_catalog_store import list_recent as store_list_recent
+from tool_catalog_store import list_slice as store_list_slice
 from tool_catalog_store import normalize_tool_doc, put as store_put
+from tool_catalog_store import summarize_slice as store_summarize_slice
 
 
 class ToolCatalogCapabilityModule(CapabilityModule):
@@ -125,3 +127,92 @@ class ToolCatalogCapabilityModule(CapabilityModule):
             "POLICY_BYPASS": "READ_ONLY_QUERY",
         }
 
+    def query_list_slice(
+        self,
+        repo_root: Path,
+        created_from: str = "any",
+        capability: str = "",
+        limit: int = 25,
+        policy_context: str = "DEFAULT",
+    ) -> Dict[str, Any]:
+        used = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
+        try:
+            tools = store_list_slice(
+                repo_root,
+                created_from=created_from,
+                capability=capability,
+                limit=limit,
+            )
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "reason_token": str(exc),
+                "tool_catalog_slice_version": "tool_catalog_slice_v1",
+                "filters": {
+                    "created_from": str(created_from or "any").strip().lower() or "any",
+                    "capability": str(capability or "").strip().upper(),
+                    "limit": str(limit),
+                },
+                "selected_count": 0,
+                "tools": [],
+                "policy_context_used": used,
+                "POLICY_BYPASS": "READ_ONLY_QUERY",
+            }
+        return {
+            "ok": True,
+            "reason_token": "OK",
+            "tool_catalog_slice_version": "tool_catalog_slice_v1",
+            "filters": {
+                "created_from": str(created_from or "any").strip().lower() or "any",
+                "capability": str(capability or "").strip().upper(),
+                "limit": max(1, min(int(limit), 500)),
+            },
+            "selected_count": len(tools),
+            "tools": tools,
+            "policy_context_used": used,
+            "POLICY_BYPASS": "READ_ONLY_QUERY",
+        }
+
+    def query_summarize_slice(
+        self,
+        repo_root: Path,
+        created_from: str = "any",
+        capability: str = "",
+        limit: int = 25,
+        policy_context: str = "DEFAULT",
+    ) -> Dict[str, Any]:
+        used = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
+        try:
+            summary = store_summarize_slice(
+                repo_root,
+                created_from=created_from,
+                capability=capability,
+                limit=limit,
+            )
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "reason_token": str(exc),
+                "summary_version": "tool_catalog_slice_summary_v1",
+                "filters": {
+                    "created_from": str(created_from or "any").strip().lower() or "any",
+                    "capability": str(capability or "").strip().upper(),
+                    "limit": str(limit),
+                },
+                "selected_count": 0,
+                "selected_tool_ids": [],
+                "counts": {
+                    "by_created_from": {},
+                    "by_declared_capability": {},
+                },
+                "items": [],
+                "policy_context_used": used,
+                "POLICY_BYPASS": "READ_ONLY_QUERY",
+            }
+        return {
+            "ok": True,
+            "reason_token": "OK",
+            **summary,
+            "policy_context_used": used,
+            "POLICY_BYPASS": "READ_ONLY_QUERY",
+        }

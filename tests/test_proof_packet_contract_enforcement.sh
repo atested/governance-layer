@@ -39,7 +39,7 @@ calc_hex = hashlib.sha256(tar_path.read_bytes()).hexdigest()
 assert sha_hex == calc_hex, (sha_hex, calc_hex)
 
 summary = json.loads(summary_path.read_text(encoding="utf-8"))
-assert summary["report_version"] == "proof_packet_verify_summary_v1", summary.get("report_version")
+assert summary["report_version"] == "proof_packet_verify_summary_v2", summary.get("report_version")
 
 with tarfile.open(tar_path, "r:") as tf:
     manifest = json.load(tf.extractfile("manifest.json"))
@@ -67,6 +67,6 @@ echo "CONTRACT_SUMMARY_SHA256_RUN1=$H1"
 echo "CONTRACT_SUMMARY_SHA256_RUN2=$H2"
 echo "PASS: contract summary deterministic across two runs"
 grep -q '\"manifest_proof_packet_version\":\"proof_packet_v1\"' "$C1"
-grep -q '\"summary_report_version\":\"proof_packet_verify_summary_v1\"' "$C1"
+grep -q '\"summary_report_version\":\"proof_packet_verify_summary_v2\"' "$C1"
 grep -q '\"proof_packet_sha256_matches_tar\":true' "$C1"
 echo "PASS: manifest version, summary report_version, and proof_packet.sha256 contract checks enforced"

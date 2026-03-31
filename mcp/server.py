@@ -21,28 +21,143 @@ from capability_introspection import (
     load_receipt,
     replay_check,
 )
+from inspectability_contract import (
+    describe_inspectability_contract,
+    build_receipt_tool_events_payload,
+    build_tool_event_list_for_receipt_payload,
+    build_tool_event_list_recent_payload,
+    build_tool_event_row_payload,
+    build_tool_event_receipts_payload,
+)
 from tool_event_store import (
     get_tool_event_bundle,
     get_tool_event_by_digest,
     list_all_tool_events,
     tool_event_bundle_store_root,
     upsert_tool_event_bundle,
-    list_tool_events_for_receipt,
     list_tool_events_recent,
 )
 from tool_event_link_store import upsert_receipt_tool_event_links
 from tool_event_link_store import get_receipts_for_tool_event, get_tool_events_for_receipt
 from capabilities import build_registry
+from storage_contract import describe_storage_contract, runtime_root
 
 REPO = Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = REPO / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+from messaging_surface import (
+    FORWARD_RECEIPT_FILENAME,
+    FORWARD_RECEIPT_VERSION,
+    find_mapping_entry,
+    load_messaging_map,
+    resolve_repo_relative_payload_handle,
+    sha256_prefixed_bytes,
+)
+from approval_store import ApprovalStore, load_approval_store_from_chain
+from event_model import build_non_action_event
+from transparency import classify_action_transparency, handle_opaque_action
+from verification import (
+    VerificationStateTracker,
+    check_verification_state,
+    evaluate_probe_result,
+    load_verification_state_from_chain,
+)
+from readout import (
+    assemble_governance_status_record,
+    governance_activity_view,
+    governance_approvals_view,
+    governance_verification_view,
+)
+
 APPEND = REPO / "scripts" / "append-record-runtime.sh"
 CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
 
 VERIFY_CHAIN = REPO / "scripts" / "verify-chain.py"
-RUNTIME = Path(os.environ.get("GOV_RUNTIME_DIR", "/Volumes/SSD/archive/gov/runtime")).resolve()
+RUNTIME = runtime_root(REPO)
 INTENTS_DIR = RUNTIME / "LOGS" / "intents"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
+_VERIFICATION_TRACKER: Optional[VerificationStateTracker] = None
+_APPROVAL_STORE: Optional[ApprovalStore] = None
+_REMOTE_TRANSPORT = "streamable-http"
+_VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+
+def _tool_catalog_bundle_store_root() -> Path:
+    return REPO / "out" / "mcp_tool_catalog_bundles"
+
+
+def _tool_catalog_module():
+    mod = _cap_registry().get("TOOL_REGISTER")
+    if mod is None:
+        raise RuntimeError("TOOL_REGISTER_CAPABILITY_MISSING")
+    return mod
+
+
+def _parse_machine_line(prefix: str, text: str) -> Dict[str, str]:
+    for line in text.splitlines():
+        if not line.startswith(prefix):
+            continue
+        out: Dict[str, str] = {}
+        for part in line.split()[1:]:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            out[key] = value
+        return out
+    return {}
+
+
+def _env_host() -> str:
+    return str(os.environ.get("GOVMCP_HOST", "127.0.0.1")).strip() or "127.0.0.1"
+
+
+def _env_port() -> int:
+    raw = str(os.environ.get("GOVMCP_PORT", "8000")).strip() or "8000"
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"GOVMCP_PORT_INVALID:{raw}") from exc
+    if port <= 0 or port > 65535:
+        raise RuntimeError(f"GOVMCP_PORT_INVALID:{raw}")
+    return port
+
+
+def _env_log_level() -> str:
+    level = str(os.environ.get("GOVMCP_LOG_LEVEL", "INFO")).strip().upper() or "INFO"
+    if level not in _VALID_LOG_LEVELS:
+        raise RuntimeError(f"GOVMCP_LOG_LEVEL_INVALID:{level}")
+    return level
+
+
+def _env_streamable_http_path() -> str:
+    path = str(os.environ.get("GOVMCP_STREAMABLE_HTTP_PATH", "/mcp")).strip() or "/mcp"
+    if not path.startswith("/"):
+        path = "/" + path
+    return path
+
+
+def remote_runtime_contract() -> Dict[str, Any]:
+    return {
+        "transport": _REMOTE_TRANSPORT,
+        "host": _env_host(),
+        "port": _env_port(),
+        "streamable_http_path": _env_streamable_http_path(),
+        "runtime_root": str(RUNTIME).replace("\\", "/"),
+        "runtime_root_source": "env:GOV_RUNTIME_DIR" if os.environ.get("GOV_RUNTIME_DIR") else "repo_default:.gov_runtime",
+        "auth_state": "not_configured_in_remote_foundation",
+        "deployment_state": "not_packaged_in_remote_foundation",
+    }
+
+
+def _mcp_settings_kwargs() -> Dict[str, Any]:
+    return {
+        "host": _env_host(),
+        "port": _env_port(),
+        "log_level": _env_log_level(),
+        "streamable_http_path": _env_streamable_http_path(),
+    }
 
 if FastMCP is None:
     class _FallbackMCP:
@@ -54,13 +169,21 @@ if FastMCP is None:
                 return fn
             return _decorator
 
-        def run(self) -> None:
+        def run(self, _transport: str = "stdio") -> None:
             print("MCP_RUNTIME_UNAVAILABLE=YES")
             raise SystemExit(2)
 
     mcp = _FallbackMCP("governance-broker")
 else:
-    mcp = FastMCP("governance-broker")
+    mcp = FastMCP("governance-broker", **_mcp_settings_kwargs())
+
+
+def run_local_stdio() -> None:
+    mcp.run("stdio")
+
+
+def run_remote_streamable_http() -> None:
+    mcp.run(_REMOTE_TRANSPORT)
 
 
 def _run_stdio_capabilities_execute() -> int:
@@ -87,6 +210,13 @@ def _run_stdio_capabilities_execute() -> int:
         "capabilities.normalize_action",
         "capabilities.execute",
         "capabilities.admissibility_check",
+        "capabilities.tool_register",
+        "capabilities.tool_get",
+        "capabilities.tool_list_recent",
+        "capabilities.tool_catalog_list_slice",
+        "capabilities.tool_catalog_summarize_slice",
+        "capabilities.tool_catalog_export_bundle",
+        "capabilities.tool_catalog_verify_bundle",
         "capabilities.receipt",
         "capabilities.list_recent",
         "capabilities.replay_check",
@@ -118,6 +248,13 @@ def _run_stdio_capabilities_execute() -> int:
         "capabilities.normalize_action",
         "capabilities.execute",
         "capabilities.admissibility_check",
+        "capabilities.tool_register",
+        "capabilities.tool_get",
+        "capabilities.tool_list_recent",
+        "capabilities.tool_catalog_list_slice",
+        "capabilities.tool_catalog_summarize_slice",
+        "capabilities.tool_catalog_export_bundle",
+        "capabilities.tool_catalog_verify_bundle",
         "capabilities.receipt",
         "capabilities.list_recent",
         "capabilities.replay_check",
@@ -164,6 +301,64 @@ def _run_stdio_capabilities_execute() -> int:
         action_params = action.get("params", {})
         policy_context = str(params.get("policy_context", "DEFAULT"))
         result = capabilities_admissibility_check(name, action_params, policy_context=policy_context)
+    elif method == "capabilities.tool_register":
+        action = params.get("action", {})
+        if not isinstance(action, dict):
+            print("CAPABILITIES_PROTOCOL_ERROR=INVALID_ACTION")
+            return 2
+        result = capabilities_tool_register(action)
+    elif method == "capabilities.tool_get":
+        tool_id = str(params.get("tool_id", ""))
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_get(tool_id, policy_context=policy_context)
+    elif method == "capabilities.tool_list_recent":
+        limit = int(params.get("limit", 10))
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_list_recent(limit, policy_context=policy_context)
+    elif method == "capabilities.tool_catalog_list_slice":
+        created_from = str(params.get("created_from", "any"))
+        capability = str(params.get("capability", ""))
+        limit = params.get("limit", 25)
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_catalog_list_slice(
+            created_from=created_from,
+            capability=capability,
+            limit=limit,
+            policy_context=policy_context,
+        )
+    elif method == "capabilities.tool_catalog_summarize_slice":
+        created_from = str(params.get("created_from", "any"))
+        capability = str(params.get("capability", ""))
+        limit = params.get("limit", 25)
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_catalog_summarize_slice(
+            created_from=created_from,
+            capability=capability,
+            limit=limit,
+            policy_context=policy_context,
+        )
+    elif method == "capabilities.tool_catalog_export_bundle":
+        tool_ids = params.get("tool_ids", [])
+        sign = bool(params.get("sign", False))
+        private_key_ref = str(params.get("private_key_ref", ""))
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_catalog_export_bundle(
+            tool_ids=tool_ids,
+            sign=sign,
+            private_key_ref=private_key_ref,
+            policy_context=policy_context,
+        )
+    elif method == "capabilities.tool_catalog_verify_bundle":
+        bundle_id = str(params.get("bundle_id", ""))
+        require_signature = bool(params.get("require_signature", False))
+        pubkey = str(params.get("pubkey", ""))
+        policy_context = str(params.get("policy_context", "DEFAULT"))
+        result = capabilities_tool_catalog_verify_bundle(
+            bundle_id=bundle_id,
+            require_signature=require_signature,
+            pubkey=pubkey,
+            policy_context=policy_context,
+        )
     elif method == "capabilities.receipt":
         run_id = str(params.get("run_id", ""))
         verify_signature = bool(params.get("verify_signature", False))
@@ -386,6 +581,152 @@ def _write_json(path: Path, obj: Any) -> None:
     path.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _governed_family() -> str:
+    return str(os.environ.get("GOV_GOVERNED_FAMILY", "mcp_tools_v1")).strip() or "mcp_tools_v1"
+
+
+def _deployment_context() -> str:
+    return str(os.environ.get("GOV_DEPLOYMENT_CONTEXT", "default")).strip() or "default"
+
+
+def _policy_version() -> str:
+    return str(os.environ.get("GOV_POLICY_VERSION", "baseline-v1")).strip() or "baseline-v1"
+
+
+def _verification_tracker() -> VerificationStateTracker:
+    global _VERIFICATION_TRACKER
+    if _VERIFICATION_TRACKER is None:
+        if CHAIN.exists():
+            _VERIFICATION_TRACKER = load_verification_state_from_chain(str(CHAIN))
+        else:
+            _VERIFICATION_TRACKER = VerificationStateTracker()
+    return _VERIFICATION_TRACKER
+
+
+def _approval_store() -> ApprovalStore:
+    global _APPROVAL_STORE
+    if _APPROVAL_STORE is None:
+        if CHAIN.exists():
+            _APPROVAL_STORE = load_approval_store_from_chain(str(CHAIN))
+        else:
+            _APPROVAL_STORE = ApprovalStore()
+    return _APPROVAL_STORE
+
+
+def _chain_head_record_hash() -> Optional[str]:
+    if not CHAIN.exists():
+        return None
+    last_line = ""
+    with open(CHAIN, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped:
+                last_line = stripped
+    if not last_line:
+        return None
+    try:
+        record = json.loads(last_line)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"CHAIN_HEAD_INVALID_JSON: {exc}") from exc
+    record_hash = record.get("record_hash")
+    if record_hash is None:
+        return None
+    if not isinstance(record_hash, str) or not record_hash:
+        raise RuntimeError("CHAIN_HEAD_MISSING_RECORD_HASH")
+    return record_hash
+
+
+def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    CHAIN.parent.mkdir(parents=True, exist_ok=True)
+    with open(CHAIN, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+    # Incrementally update runtime singletons so they stay consistent
+    # with the chain without requiring a full re-parse.
+    event_type = event.get("event_type")
+    if event_type == "verification_state_transition":
+        _verification_tracker().ingest_transition_event(event)
+    elif event_type == "opaque_artifact_approval":
+        _approval_store().ingest_approval(event)
+    elif event_type == "opaque_artifact_revocation":
+        _approval_store().ingest_revocation(event)
+    return event
+
+
+def _load_opaque_artifact_bytes(args: Dict[str, Any]) -> bytes:
+    artifact_path = str(args.get("opaque_artifact_path", "")).strip()
+    if artifact_path:
+        candidate = Path(artifact_path)
+        if not candidate.is_absolute():
+            candidate = (REPO / candidate).resolve()
+        return candidate.read_bytes()
+
+    if bool(args.get("opaque_executable")):
+        content = args.get("content")
+        if isinstance(content, str):
+            return content.encode("utf-8")
+        if isinstance(content, (bytes, bytearray)):
+            return bytes(content)
+
+    raise RuntimeError("OPAQUE_ARTIFACT_UNRESOLVABLE")
+
+
+def _append_scoped_artifact_event(
+    event_type: str,
+    artifact_identity: str,
+    operator_identity: str,
+) -> Dict[str, Any]:
+    payload = {
+        "artifact_identity": str(artifact_identity),
+        "governed_family": _governed_family(),
+        "deployment_context": _deployment_context(),
+        "policy_version": _policy_version(),
+    }
+    if event_type == "opaque_artifact_approval":
+        payload["approving_operator"] = str(operator_identity)
+    elif event_type == "opaque_artifact_revocation":
+        payload["revoking_operator"] = str(operator_identity)
+    else:
+        raise ValueError(f"unsupported event_type: {event_type}")
+
+    _verify_chain()
+    event = build_non_action_event(
+        event_type,
+        payload,
+        prev_record_hash=_chain_head_record_hash(),
+    )
+    rec = _append_non_action_event(event)
+    _verify_chain()
+    return rec
+
+
+def _transition_verification_surface(
+    governed_family: str,
+    to_state: str,
+) -> Dict[str, Any]:
+    tracker = _verification_tracker()
+    _verify_chain()
+    event = tracker.transition(
+        governed_family,
+        to_state,
+        prev_record_hash=_chain_head_record_hash(),
+    )
+    rec = _append_non_action_event(event)
+    _verify_chain()
+    return rec
+
+
+
+def _invalidate_runtime_state() -> None:
+    """Reset all chain-derived runtime singletons.
+
+    Called after chain quarantine to ensure stale state from the old
+    chain cannot leak into subsequent operations. The next access to
+    any singleton will rebuild it from the (now-empty or new) chain.
+    """
+    global _VERIFICATION_TRACKER, _APPROVAL_STORE
+    _VERIFICATION_TRACKER = None
+    _APPROVAL_STORE = None
+
 
 def _quarantine_chain(reason: str) -> str:
     # Move the current chain to a quarantine folder with timestamp.
@@ -399,6 +740,7 @@ def _quarantine_chain(reason: str) -> str:
     CHAIN.rename(dst)
     # Write a small marker file alongside for operator context
     (qdir / f"decision-chain.{ts}.reason.txt").write_text(reason + "\n", encoding="utf-8")
+    _invalidate_runtime_state()
     return str(dst)
 
 def _verify_chain() -> None:
@@ -449,8 +791,68 @@ def governed_tool(
         Dict with policy_decision, policy_reasons, decision_record, and optional action results.
     """
     req_id = str(uuid.uuid4())
+    governed_family = _governed_family()
+    verification_state = check_verification_state(governed_family, _verification_tracker())
+    request = {
+        "tool": tool_name,
+        "capability_class": tool_name,
+        "args": dict(args),
+    }
+    transparency = classify_action_transparency(request, _CAP_REG)
 
-    # Normalize args from capability spec
+    # Classification timing invariant: classify_action_transparency() runs
+    # before normalize_args() because unregistered tools (opaque by default)
+    # have no capability spec to normalize against. Opaque actions skip
+    # normalization entirely — the raw args are sufficient for artifact
+    # loading. Transparent actions normalize against the capability spec.
+    if transparency == "opaque":
+        norm_args = dict(args)
+        _verify_chain()
+        store = _approval_store()
+        rec = _append_non_action_event(
+            handle_opaque_action(
+                request=request,
+                artifact_bytes=_load_opaque_artifact_bytes(norm_args),
+                governed_family=governed_family,
+                deployment_context=_deployment_context(),
+                policy_version=_policy_version(),
+                approval_lookup_fn=store.lookup,
+                prev_record_hash=_chain_head_record_hash(),
+            )["event"]
+        )
+        _verify_chain()
+
+        if rec.get("resolution") != "approved_lookup":
+            return {
+                "policy_decision": "DENY",
+                "policy_reasons": [
+                    {
+                        "code": "OPAQUE_ACTION_DENIED",
+                        "detail": {
+                            "resolution": rec.get("resolution", "denied"),
+                            "artifact_identity": rec.get("artifact_identity", ""),
+                        },
+                    }
+                ],
+                "decision_record": {**rec, "verification_state": verification_state},
+            }
+
+        action_result = action(rec, norm_args)
+        if action_result.get("policy_decision") == "DENY":
+            return {
+                "policy_decision": "DENY",
+                "policy_reasons": action_result.get("policy_reasons", []),
+                "decision_record": {**rec, "verification_state": verification_state},
+            }
+
+        return {
+            "policy_decision": "ALLOW",
+            "policy_reasons": [],
+            "decision_record": {**rec, "verification_state": verification_state},
+            **action_result,
+        }
+
+    # Transparent path: normalize args against capability spec.
     norm_args, norm_constraints = normalize_args(tool_name, args)
     if isinstance(norm_constraints, dict) and norm_constraints.get("_missing"):
         return {
@@ -483,13 +885,15 @@ def governed_tool(
     # Persist a pretty record copy (optional convenience, not part of the chain)
     record_path = RECORDS_DIR / f"{req_id}.record.json"
     _write_json(record_path, rec)
+    rec_with_verification = dict(rec)
+    rec_with_verification["verification_state"] = verification_state
 
     decision = rec.get("policy_decision")
     if decision != "ALLOW":
         return {
             "policy_decision": decision,
             "policy_reasons": rec.get("policy_reasons", []),
-            "decision_record": rec,
+            "decision_record": rec_with_verification,
         }
 
     # Execute the action
@@ -498,9 +902,163 @@ def governed_tool(
     return {
         "policy_decision": "ALLOW",
         "policy_reasons": rec.get("policy_reasons", []),
-        "decision_record": rec,
+        "decision_record": rec_with_verification,
         **action_result
     }
+
+
+@mcp.tool()
+def approve_artifact(artifact_identity: str, operator_identity: str) -> Dict[str, Any]:
+    """Record an opaque artifact approval event in the active governance scope."""
+    return _append_scoped_artifact_event(
+        "opaque_artifact_approval",
+        artifact_identity,
+        operator_identity,
+    )
+
+
+@mcp.tool()
+def revoke_artifact(artifact_identity: str, operator_identity: str) -> Dict[str, Any]:
+    """Record an opaque artifact revocation event in the active governance scope."""
+    return _append_scoped_artifact_event(
+        "opaque_artifact_revocation",
+        artifact_identity,
+        operator_identity,
+    )
+
+
+@mcp.tool()
+def list_active_approvals() -> Dict[str, Any]:
+    """Return currently active approvals for the active governance scope."""
+    if not CHAIN.exists():
+        approvals = []
+    else:
+        scope = {
+            "governed_family": _governed_family(),
+            "deployment_context": _deployment_context(),
+            "policy_version": _policy_version(),
+        }
+        store = _approval_store()
+        approvals = [
+            approval
+            for approval in store.all_approvals()
+            if approval.get("governed_family") == scope["governed_family"]
+            and approval.get("deployment_context") == scope["deployment_context"]
+            and approval.get("policy_version") == scope["policy_version"]
+        ]
+        approvals.sort(
+            key=lambda row: (
+                str(row.get("artifact_identity", "")),
+                str(row.get("approving_operator", "")),
+                str(row.get("timestamp_utc", "")),
+            )
+        )
+
+    return {
+        "governed_family": _governed_family(),
+        "deployment_context": _deployment_context(),
+        "policy_version": _policy_version(),
+        "approvals": approvals,
+    }
+
+
+@mcp.tool()
+def certify_surface(governed_family: str) -> Dict[str, Any]:
+    """Record an unverified -> verified transition for a governed surface."""
+    return _transition_verification_surface(str(governed_family), "verified")
+
+
+@mcp.tool()
+def report_drift(governed_family: str) -> Dict[str, Any]:
+    """Record a verified -> drift_detected transition for a governed surface."""
+    return _transition_verification_surface(str(governed_family), "drift_detected")
+
+
+@mcp.tool()
+def recertify_surface(governed_family: str) -> Dict[str, Any]:
+    """Record a drift_detected -> verified transition for a governed surface."""
+    return _transition_verification_surface(str(governed_family), "verified")
+
+
+@mcp.tool()
+def run_probe_and_apply(governed_family: str, probe_definition: str) -> Dict[str, Any]:
+    from probe_harness import run_probe
+
+    tracker = _verification_tracker()
+    result = run_probe(probe_definition, str(governed_family))
+    target_state = evaluate_probe_result(result, tracker)
+    transition_event = None
+    if target_state is not None:
+        transition_event = _transition_verification_surface(str(governed_family), target_state)
+    return {
+        "probe_result": {
+            "probe_id": result.probe_id,
+            "governed_family": result.governed_family,
+            "property_tested": result.property_tested,
+            "evidence": result.evidence,
+            "passed": result.passed,
+            "nonce": result.nonce,
+            "timestamp_utc": result.timestamp_utc,
+        },
+        "target_state": target_state,
+        "transition_event": transition_event,
+    }
+
+
+@mcp.tool()
+def governance_status(window: Optional[int] = None) -> Dict[str, Any]:
+    """Return the full GASR governance status snapshot."""
+    window_value = int(window) if window is not None else None
+    if window_value is not None and window_value <= 0:
+        window_value = None
+    return assemble_governance_status_record(
+        CHAIN,
+        _verification_tracker(),
+        _approval_store(),
+        window=window_value,
+    )
+
+
+@mcp.tool()
+def governance_approvals() -> Dict[str, Any]:
+    """Return the active-approval GASR view."""
+    return governance_approvals_view(CHAIN, _approval_store())
+
+
+@mcp.tool()
+def governance_verification(governed_family: str = "") -> Dict[str, Any]:
+    """Return the verification-state GASR view."""
+    family = str(governed_family).strip() or None
+    return governance_verification_view(
+        CHAIN,
+        _verification_tracker(),
+        governed_family=family,
+    )
+
+
+@mcp.tool()
+def governance_activity(
+    limit: int = 50,
+    offset: int = 0,
+    governed_family: str = "",
+    event_category: str = "",
+    resolution: str = "",
+) -> Dict[str, Any]:
+    """Return the Governance Activity Projection — bounded recent activity."""
+    lim = max(int(limit), 0) if limit is not None else 50
+    off = max(int(offset), 0) if offset is not None else 0
+    fam = str(governed_family).strip() or None
+    cat = str(event_category).strip() or None
+    res = str(resolution).strip() or None
+    return governance_activity_view(
+        CHAIN,
+        limit=lim,
+        offset=off,
+        governed_family=fam,
+        event_category=cat,
+        resolution=res,
+    )
+
 
 @mcp.tool()
 def fs_write(path: str, content: str, overwrite: bool = False, request_executable: bool = False) -> Dict[str, Any]:
@@ -957,6 +1515,255 @@ def fs_delete(path: str, recursive: bool = False) -> Dict[str, Any]:
     return governed_tool("FS_DELETE", args, intent, _action)
 
 
+def _messaging_proxy_root() -> Path:
+    return REPO / "out" / "messaging_proxy"
+
+
+def _load_messaging_binding(surface_binding_id: str) -> Dict[str, Any]:
+    _, mapping_doc, _ = load_messaging_map()
+    entry = find_mapping_entry(mapping_doc, surface_binding_id)
+    if entry is None:
+        raise RuntimeError("MSG_SURFACE_BINDING_UNKNOWN")
+    return entry
+
+
+def _write_messaging_forward_receipt(
+    out_dir: Path,
+    rec: Dict[str, Any],
+    args: Dict[str, Any],
+    binding: Dict[str, Any],
+    payload_sha256: str,
+    expected_len: int,
+) -> Path:
+    receipt_path = out_dir / FORWARD_RECEIPT_FILENAME
+    receipt = {
+        "receipt_version": FORWARD_RECEIPT_VERSION,
+        "artifact_role": "post_allow_forwarding_receipt",
+        "record_hash": rec.get("record_hash"),
+        "request_id": rec.get("request_id"),
+        "tool": rec.get("tool"),
+        "surface_binding_id": args["surface_binding_id"],
+        "provider": binding.get("provider"),
+        "external_operation": binding.get("external_operation"),
+        "canonical_destination": args["canonical_destination"],
+        "payload_handle": args["opaque_payload"]["payload_handle"],
+        "payload_transport": args["opaque_payload"]["transport"],
+        "payload_byte_length": expected_len,
+        "payload_sha256": payload_sha256,
+        "binding_strength_note": (
+            "payload digest lives only in post-ALLOW forwarding receipt; "
+            "evaluator-facing structures remain payload-blind"
+        ),
+    }
+    _write_json(receipt_path, receipt)
+    return receipt_path
+
+
+def _forward_message(rec: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]:
+    binding = _load_messaging_binding(str(args["surface_binding_id"]))
+    payload = args["opaque_payload"]
+    handle = str(payload["payload_handle"])
+    try:
+        payload_path = resolve_repo_relative_payload_handle(handle, REPO)
+        data = payload_path.read_bytes()
+    except Exception as exc:
+        return {
+            "message_forward_error": {
+                "code": "E-MSG-PAYLOAD-HANDLE-UNREADABLE",
+                "detail": {"handle": handle, "error": str(exc)},
+            }
+        }
+    expected_len = int(payload["byte_length"])
+    if len(data) != expected_len:
+        return {
+            "message_forward_error": {
+                "code": "E-MSG-PAYLOAD-LENGTH-MISMATCH",
+                "detail": {
+                    "expected_byte_length": expected_len,
+                    "actual_byte_length": len(data),
+                },
+            }
+        }
+
+    out_dir = _messaging_proxy_root() / str(rec.get("request_id"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload_out = out_dir / "payload.bin"
+    meta_out = out_dir / "forward_request.json"
+    payload_out.write_bytes(data)
+    payload_sha256 = sha256_prefixed_bytes(data)
+    metadata = {
+        "record_hash": rec.get("record_hash"),
+        "tool": rec.get("tool"),
+        "surface_binding_id": args["surface_binding_id"],
+        "provider": binding.get("provider"),
+        "external_operation": binding.get("external_operation"),
+        "canonical_destination": args["canonical_destination"],
+        "payload_handle": handle,
+        "payload_transport": payload.get("transport"),
+        "payload_byte_length": expected_len,
+        "forward_receipt_version": FORWARD_RECEIPT_VERSION,
+        "forward_receipt_binding_note": (
+            "payload digest is recorded only in the post-ALLOW forwarding receipt; "
+            "payload bytes and payload hash do not enter evaluator-facing structures"
+        ),
+    }
+    _write_json(meta_out, metadata)
+    receipt_out = _write_messaging_forward_receipt(
+        out_dir,
+        rec,
+        args,
+        binding,
+        payload_sha256,
+        expected_len,
+    )
+    return {
+        "message_forward_result": {
+            "provider": binding.get("provider"),
+            "external_operation": binding.get("external_operation"),
+            "surface_binding_id": args["surface_binding_id"],
+            "canonical_destination": args["canonical_destination"],
+            "payload_bytes_forwarded": expected_len,
+            "forwarded_outbox_path": str(meta_out),
+            "forward_receipt_path": str(receipt_out),
+            "provider_evidence": {
+                "artifact_role": "post_allow_forwarding_receipt",
+                "receipt_version": FORWARD_RECEIPT_VERSION,
+                "record_hash": rec.get("record_hash"),
+                "payload_handle": handle,
+                "payload_transport": payload.get("transport"),
+                "payload_byte_length": expected_len,
+                "payload_sha256": payload_sha256,
+                "binding_strength_note": (
+                    "provider-evidence remains local post-ALLOW forwarding evidence; "
+                    "it is not provider-confirmed delivery"
+                ),
+            },
+        }
+    }
+
+
+@mcp.tool()
+def msg_send(
+    surface_binding_id: str,
+    mapping_version: str,
+    canonical_destination_kind: str,
+    canonical_destination_id: str,
+    raw_destination_kind: str,
+    raw_destination_value: str,
+    payload_handle: str,
+    payload_byte_length: int,
+    transport: str = "opaque_file_handle.v1",
+    intent_goal: str = "Send governed message via messaging proof surface.",
+    intent_label: str = "",
+    justification_ref: str = "",
+    rate_window_count: int = 0,
+) -> Dict[str, Any]:
+    args = {
+        "surface_binding_id": surface_binding_id,
+        "mapping_version": mapping_version,
+        "canonical_destination": {
+            "kind": canonical_destination_kind,
+            "id": canonical_destination_id,
+        },
+        "raw_destination_input": {
+            "kind": raw_destination_kind,
+            "value": raw_destination_value,
+        },
+        "opaque_payload": {
+            "payload_handle": payload_handle,
+            "byte_length": int(payload_byte_length),
+            "transport": transport,
+        },
+        "audit_scope": {
+            "intent_label": intent_label,
+            "justification_ref": justification_ref,
+            "rate_window_count": int(rate_window_count),
+        },
+    }
+    intent = {
+        "goal": intent_goal,
+        "constraints": {
+            "content_visible_to_evaluator": False,
+            "forwarding_evidence_binding": (
+                "payload digest captured only in post-ALLOW forwarding receipt"
+            ),
+        },
+        "requested_action": "MSG_SEND",
+        "inputs": [
+            {"ref": "message:destination", "value": canonical_destination_id},
+            {"ref": "message:opaque_payload_handle", "value": payload_handle},
+        ],
+        "expected_outputs": [
+            {"ref": "message:forward_result", "value": canonical_destination_id},
+        ],
+    }
+    return governed_tool("MSG_SEND", args, intent, lambda rec, norm_args: _forward_message(rec, norm_args))
+
+
+@mcp.tool()
+def msg_reply(
+    surface_binding_id: str,
+    mapping_version: str,
+    canonical_destination_kind: str,
+    canonical_destination_id: str,
+    raw_destination_kind: str,
+    raw_destination_value: str,
+    reply_target_kind: str,
+    reply_target_id: str,
+    payload_handle: str,
+    payload_byte_length: int,
+    transport: str = "opaque_file_handle.v1",
+    intent_goal: str = "Reply via governed messaging proof surface.",
+    intent_label: str = "",
+    justification_ref: str = "",
+    rate_window_count: int = 0,
+) -> Dict[str, Any]:
+    args = {
+        "surface_binding_id": surface_binding_id,
+        "mapping_version": mapping_version,
+        "canonical_destination": {
+            "kind": canonical_destination_kind,
+            "id": canonical_destination_id,
+        },
+        "raw_destination_input": {
+            "kind": raw_destination_kind,
+            "value": raw_destination_value,
+        },
+        "opaque_payload": {
+            "payload_handle": payload_handle,
+            "byte_length": int(payload_byte_length),
+            "transport": transport,
+        },
+        "reply_context": {
+            "reply_target_kind": reply_target_kind,
+            "reply_target_id": reply_target_id,
+        },
+        "audit_scope": {
+            "intent_label": intent_label,
+            "justification_ref": justification_ref,
+            "rate_window_count": int(rate_window_count),
+        },
+    }
+    intent = {
+        "goal": intent_goal,
+        "constraints": {
+            "content_visible_to_evaluator": False,
+            "forwarding_evidence_binding": (
+                "payload digest captured only in post-ALLOW forwarding receipt"
+            ),
+        },
+        "requested_action": "MSG_REPLY",
+        "inputs": [
+            {"ref": "message:reply_target", "value": reply_target_id},
+            {"ref": "message:opaque_payload_handle", "value": payload_handle},
+        ],
+        "expected_outputs": [
+            {"ref": "message:forward_result", "value": canonical_destination_id},
+        ],
+    }
+    return governed_tool("MSG_REPLY", args, intent, lambda rec, norm_args: _forward_message(rec, norm_args))
+
+
 @mcp.tool()
 def capabilities_admissibility_check(
     name: str, params: Dict[str, Any], policy_context: str = "DEFAULT"
@@ -1211,11 +2018,17 @@ def capabilities_receipt(run_id: str, verify_signature: bool = False, pubkey: st
             "run_id": run_id,
             "digest": "",
             "action_record": {},
+            "tool_event_digests": [],
+            "linked_tool_event_count": 0,
             "digest_valid": False,
             "reason_token": "RECEIPT_NOT_FOUND",
             "signature_present": False,
             "signature_valid": False,
             "signature_reason_token": "NONE",
+            "storage_contract": describe_storage_contract(REPO),
+            "inspectability_contract": describe_inspectability_contract(
+                "capabilities.receipt", "constitutive"
+            ),
         }
 
 
@@ -1257,20 +2070,74 @@ def capabilities_replay_check(
             "signature_present": False,
             "signature_valid": False,
             "signature_reason_token": "NONE",
+            "tool_event_digests": [],
+            "linked_tool_event_count": 0,
             "policy_context_used": str(policy_context or "DEFAULT").strip().upper() or "DEFAULT",
+            "storage_contract": describe_storage_contract(REPO),
+            "inspectability_contract": describe_inspectability_contract(
+                "capabilities.replay_check", "constitutive"
+            ),
         }
 
 
-def _tool_event_row_payload(row: Dict[str, Any]) -> Dict[str, Any]:
-    ref = str(row.get("tool_event_ref", ""))
-    payload_digest = str(row.get("tool_event_digest", ""))
+@mcp.tool()
+def capabilities_tool_register(action: Dict[str, Any]) -> Dict[str, Any]:
+    mod = _tool_catalog_module()
+    result = mod.execute(CAP_REGISTRY_PATH, REPO, dict(action), dry_run=False)
+    payload = dict(result.get("result", {})) if isinstance(result.get("result"), dict) else {}
     return {
-        "tool_event_digest": payload_digest,
-        "tool_event_payload_sha256": payload_digest,
-        "tool_event_ref": ref,
-        "receipt_id": str(row.get("receipt_id", "")),
-        "stored_at": int(row.get("stored_seq", 0)),
+        "executed": bool(result.get("executed", False)),
+        "admissible": bool(result.get("admissible", False)),
+        "reason_token": str(result.get("reason_token", "NONE")),
+        "tool_id": str(payload.get("tool_id", "")),
+        "schema_sha256": str(payload.get("schema_sha256", "")),
     }
+
+
+@mcp.tool()
+def capabilities_tool_get(tool_id: str, policy_context: str = "DEFAULT") -> Dict[str, Any]:
+    mod = _tool_catalog_module()
+    return mod.query_get(REPO, str(tool_id), policy_context=policy_context)
+
+
+@mcp.tool()
+def capabilities_tool_list_recent(limit: int = 10, policy_context: str = "DEFAULT") -> Dict[str, Any]:
+    mod = _tool_catalog_module()
+    return mod.query_list_recent(REPO, int(limit), policy_context=policy_context)
+
+
+@mcp.tool()
+def capabilities_tool_catalog_list_slice(
+    created_from: str = "any",
+    capability: str = "",
+    limit: Any = 25,
+    policy_context: str = "DEFAULT",
+) -> Dict[str, Any]:
+    mod = _tool_catalog_module()
+    return mod.query_list_slice(
+        REPO,
+        created_from=str(created_from),
+        capability=str(capability),
+        limit=limit,
+        policy_context=policy_context,
+    )
+
+
+@mcp.tool()
+def capabilities_tool_catalog_summarize_slice(
+    created_from: str = "any",
+    capability: str = "",
+    limit: Any = 25,
+    policy_context: str = "DEFAULT",
+) -> Dict[str, Any]:
+    mod = _tool_catalog_module()
+    return mod.query_summarize_slice(
+        REPO,
+        created_from=str(created_from),
+        capability=str(capability),
+        limit=limit,
+        policy_context=policy_context,
+    )
 
 
 def _canonical_json_bytes(value: Dict[str, Any]) -> bytes:
@@ -1302,7 +2169,101 @@ def capabilities_tool_event_get(digest: str, policy_context: str = "DEFAULT") ->
         "reason_token": "NONE",
         "policy_context_used": used_context,
         "POLICY_BYPASS": "READ_ONLY_QUERY",
-        **_tool_event_row_payload(row),
+        **build_tool_event_row_payload(row),
+    }
+
+
+@mcp.tool()
+def capabilities_tool_catalog_export_bundle(
+    tool_ids: Optional[list[str]] = None,
+    sign: bool = False,
+    private_key_ref: str = "",
+    policy_context: str = "DEFAULT",
+) -> Dict[str, Any]:
+    used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
+    selected_ids = [str(v).strip() for v in (tool_ids or []) if str(v).strip()]
+    bundle_root = _tool_catalog_bundle_store_root()
+    pending_dir = bundle_root / f"_pending_{uuid.uuid4().hex}"
+    pending_rel = str(pending_dir.relative_to(REPO)).replace("\\", "/")
+    cmd = [
+        "python3",
+        str(REPO / "scripts/attest/export_tool_catalog_bundle.py"),
+        "--out-dir",
+        pending_rel,
+        "--sign",
+        "1" if sign else "0",
+    ]
+    for tool_id in selected_ids:
+        cmd.extend(["--tool-id", tool_id])
+    if sign:
+        cmd.extend(["--private-key", str(private_key_ref or "")])
+    proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    combined = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    machine = _parse_machine_line("TOOL_CATALOG_BUNDLE_EXPORT ", combined)
+    ok = proc.returncode == 0 and machine.get("ok") == "yes" and machine.get("reason") == "OK"
+    if not ok:
+        shutil.rmtree(pending_dir, ignore_errors=True)
+        return {
+            "tool_catalog_bundle_version": "v0",
+            "ok": False,
+            "reason": str(machine.get("reason", "EXPORT_FAILED") or "EXPORT_FAILED"),
+            "bundle_id": "",
+            "manifest_sha256": "",
+            "signature_present": "no",
+            "policy_context_used": used_context,
+            "POLICY_BYPASS": "READ_ONLY_QUERY",
+        }
+    bundle_id = str(machine.get("bundle_id", "")).strip()
+    final_dir = bundle_root / bundle_id
+    if final_dir.exists():
+        shutil.rmtree(final_dir)
+    pending_dir.rename(final_dir)
+    return {
+        "tool_catalog_bundle_version": "v0",
+        "ok": True,
+        "reason": "OK",
+        "bundle_id": bundle_id,
+        "manifest_sha256": str(machine.get("manifest_sha256", "")),
+        "signature_present": str(machine.get("signature_present", "no")),
+        "policy_context_used": used_context,
+        "POLICY_BYPASS": "READ_ONLY_QUERY",
+    }
+
+
+@mcp.tool()
+def capabilities_tool_catalog_verify_bundle(
+    bundle_id: str,
+    require_signature: bool = False,
+    pubkey: str = "",
+    policy_context: str = "DEFAULT",
+) -> Dict[str, Any]:
+    used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
+    key = str(bundle_id or "").strip()
+    bundle_dir = _tool_catalog_bundle_store_root() / key
+    cmd = [
+        "python3",
+        str(REPO / "scripts/attest/verify_tool_catalog_bundle.py"),
+        "--bundle-dir",
+        str(bundle_dir),
+        "--require-signature",
+        "1" if require_signature else "0",
+    ]
+    if require_signature:
+        cmd.extend(["--pubkey", str(pubkey or "")])
+    proc = subprocess.run(cmd, text=True, capture_output=True, check=False)
+    combined = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    machine = _parse_machine_line("TOOL_CATALOG_BUNDLE_VERIFY ", combined)
+    reason = str(machine.get("reason", "VERIFY_FAILED") or "VERIFY_FAILED")
+    ok = proc.returncode == 0 and machine.get("ok") == "yes" and reason == "OK"
+    return {
+        "tool_catalog_bundle_verify_version": "v0",
+        "ok": bool(ok),
+        "reason": reason,
+        "bundle_id": key,
+        "manifest_sha256": str(machine.get("manifest_sha256", "")),
+        "signature_verified": str(machine.get("signature_verified", "not_required")),
+        "policy_context_used": used_context,
+        "POLICY_BYPASS": "READ_ONLY_QUERY",
     }
 
 
@@ -1310,27 +2271,13 @@ def capabilities_tool_event_get(digest: str, policy_context: str = "DEFAULT") ->
 def capabilities_tool_event_list_recent(limit: int = 10, policy_context: str = "DEFAULT") -> Dict[str, Any]:
     used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
     rows = list_tool_events_recent(REPO, int(limit))
-    events = [_tool_event_row_payload(r) for r in rows]
-    return {
-        "tool_event_version": "v0",
-        "events": events,
-        "policy_context_used": used_context,
-        "POLICY_BYPASS": "READ_ONLY_QUERY",
-    }
+    return build_tool_event_list_recent_payload(REPO, rows, used_context)
 
 
 @mcp.tool()
 def capabilities_tool_event_list_for_receipt(receipt_id: str, policy_context: str = "DEFAULT") -> Dict[str, Any]:
     used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
-    rows = list_tool_events_for_receipt(REPO, str(receipt_id))
-    events = [_tool_event_row_payload(r) for r in rows]
-    return {
-        "tool_event_version": "v0",
-        "receipt_id": str(receipt_id),
-        "events": events,
-        "policy_context_used": used_context,
-        "POLICY_BYPASS": "READ_ONLY_QUERY",
-    }
+    return build_tool_event_list_for_receipt_payload(REPO, str(receipt_id), used_context)
 
 
 @mcp.tool()
@@ -1506,13 +2453,7 @@ def capabilities_receipt_tool_events(receipt_id: str, policy_context: str = "DEF
     used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
     rid = str(receipt_id or "").strip()
     digests = get_tool_events_for_receipt(REPO, rid)
-    return {
-        "tool_event_link_version": "v0",
-        "receipt_id": rid,
-        "tool_event_digests": digests,
-        "policy_context_used": used_context,
-        "POLICY_BYPASS": "READ_ONLY_QUERY",
-    }
+    return build_receipt_tool_events_payload(REPO, rid, digests, used_context)
 
 
 @mcp.tool()
@@ -1520,13 +2461,7 @@ def capabilities_tool_event_receipts(digest: str, policy_context: str = "DEFAULT
     used_context = str(policy_context or "DEFAULT").strip().upper() or "DEFAULT"
     token = str(digest or "").strip()
     receipt_ids = get_receipts_for_tool_event(REPO, token)
-    return {
-        "tool_event_link_version": "v0",
-        "tool_event_digest": token,
-        "receipt_ids": receipt_ids,
-        "policy_context_used": used_context,
-        "POLICY_BYPASS": "READ_ONLY_QUERY",
-    }
+    return build_tool_event_receipts_payload(REPO, token, receipt_ids, used_context)
 
 
 @mcp.tool()
@@ -1568,4 +2503,4 @@ def capabilities_export_attestation(
 if __name__ == "__main__":
     if len(sys.argv) == 2 and sys.argv[1] == "--stdio-test-capabilities-execute":
         raise SystemExit(_run_stdio_capabilities_execute())
-    mcp.run()
+    run_local_stdio()

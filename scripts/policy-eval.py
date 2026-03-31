@@ -24,6 +24,12 @@ from coverage_stamp import (
     COVERAGE_REASON_VERSION_UNSUPPORTED,
     validate_coverage_stamp,
 )
+from messaging_surface import (
+    contains_content_fields,
+    find_mapping_entry,
+    load_messaging_map,
+    parse_nonnegative_int,
+)
 
 
 CAP_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "capabilities" / "capability-registry.json"
@@ -135,6 +141,32 @@ RC_MAX_BYTES_EXCEEDED = "RC-FS-MAX-BYTES-EXCEEDED"
 RC_MISSING_INTENT_FIELDS = "RC-FS-MISSING-INTENT-FIELDS"
 RC_CROSS_ROOT_DISALLOWED = "RC-FS-CROSS-ROOT-DISALLOWED"
 RC_RECURSIVE_DISALLOWED = "RC-FS-RECURSIVE-DISALLOWED"
+RC_PROMO_ROOT_PAIR_DISALLOWED = "RC-PROMO-ROOT-PAIR-DISALLOWED"
+RC_PROMO_SRC_MISSING = "RC-PROMO-SRC-MISSING"
+RC_PROMO_SRC_TYPE_DISALLOWED = "RC-PROMO-SRC-TYPE-DISALLOWED"
+RC_PROMO_HASH_MISMATCH_SRC = "RC-PROMO-HASH-MISMATCH-SRC"
+RC_PROMO_HASH_MISMATCH_DST = "RC-PROMO-HASH-MISMATCH-DST"
+RC_PROMO_ARTIFACT_CLASS_DISALLOWED = "RC-PROMO-ARTIFACT-CLASS-DISALLOWED"
+RC_PROMO_OVERWRITE_DISALLOWED = "RC-PROMO-OVERWRITE-DISALLOWED"
+RC_PROMO_PATH_DISALLOWED = "RC-PROMO-PATH-DISALLOWED"
+RC_PROMO_CHAIN_VERIFY_FAIL = "RC-PROMO-CHAIN-VERIFY-FAIL"
+RC_MSG_UNKNOWN_SURFACE_BINDING = "RC-MSG-UNKNOWN-SURFACE-BINDING"
+RC_MSG_MAPPING_VERSION_MISMATCH = "RC-MSG-MAPPING-VERSION-MISMATCH"
+RC_MSG_CAPABILITY_MAPPING_MISMATCH = "RC-MSG-CAPABILITY-MAPPING-MISMATCH"
+RC_MSG_CANONICAL_DESTINATION_MISSING = "RC-MSG-CANONICAL-DESTINATION-MISSING"
+RC_MSG_CANONICAL_DESTINATION_KIND_MISMATCH = "RC-MSG-CANONICAL-DESTINATION-KIND-MISMATCH"
+RC_MSG_RAW_DESTINATION_MISSING = "RC-MSG-RAW-DESTINATION-MISSING"
+RC_MSG_OPAQUE_PAYLOAD_MISSING = "RC-MSG-OPAQUE-PAYLOAD-MISSING"
+RC_MSG_CONTENT_FIELD_PRESENT = "RC-MSG-CONTENT-FIELD-PRESENT"
+RC_MSG_REPLY_CONTEXT_MISSING = "RC-MSG-REPLY-CONTEXT-MISSING"
+RC_MSG_REPLY_TARGET_MISMATCH = "RC-MSG-REPLY-TARGET-MISMATCH"
+RC_MSG_DECISION_ALPHABET_VIOLATION = "RC-MSG-DECISION-ALPHABET-VIOLATION"
+RC_MSG_MISSING_INTENT_FIELDS = "RC-MSG-MISSING-INTENT-FIELDS"
+RC_MSG_DESTINATION_DISALLOWED = "RC-MSG-DESTINATION-DISALLOWED"
+RC_MSG_DESTINATION_CLASS_DISALLOWED = "RC-MSG-DESTINATION-CLASS-DISALLOWED"
+RC_MSG_TRANSPORT_UNAUTHORIZED = "RC-MSG-TRANSPORT-UNAUTHORIZED"
+RC_MSG_PAYLOAD_SIZE_EXCEEDED = "RC-MSG-PAYLOAD-SIZE-EXCEEDED"
+RC_MSG_RATE_EXCEEDED = "RC-MSG-RATE-EXCEEDED"
 REASON_PATH_TRAVERSAL = "PATH_TRAVERSAL"
 REASON_OUTSIDE_ALLOWED_ROOT = "OUTSIDE_ALLOWED_ROOT"
 REASON_TARGET_IS_HOT_FILE = "TARGET_IS_HOT_FILE"
@@ -145,7 +177,6 @@ REASON_OVERWRITE_FORBIDDEN = "OVERWRITE_FORBIDDEN"
 REASON_UNKNOWN = "UNKNOWN"
 
 REASON_ORDER = [
-    RC_MISSING_INTENT_FIELDS,
     COVERAGE_REASON_MISSING,
     COVERAGE_REASON_MALFORMED,
     COVERAGE_REASON_VERSION_UNSUPPORTED,
@@ -153,7 +184,25 @@ REASON_ORDER = [
     COVERAGE_REASON_ORDER_INVALID,
     COVERAGE_REASON_PARTIAL,
     COVERAGE_REASON_OK,
+    RC_MISSING_INTENT_FIELDS,
+    RC_MSG_MISSING_INTENT_FIELDS,
     RC_UNKNOWN_TOOL,
+    RC_MSG_UNKNOWN_SURFACE_BINDING,
+    RC_MSG_MAPPING_VERSION_MISMATCH,
+    RC_MSG_CAPABILITY_MAPPING_MISMATCH,
+    RC_MSG_CANONICAL_DESTINATION_MISSING,
+    RC_MSG_CANONICAL_DESTINATION_KIND_MISMATCH,
+    RC_MSG_DESTINATION_CLASS_DISALLOWED,
+    RC_MSG_DESTINATION_DISALLOWED,
+    RC_MSG_RAW_DESTINATION_MISSING,
+    RC_MSG_OPAQUE_PAYLOAD_MISSING,
+    RC_MSG_TRANSPORT_UNAUTHORIZED,
+    RC_MSG_PAYLOAD_SIZE_EXCEEDED,
+    RC_MSG_RATE_EXCEEDED,
+    RC_MSG_REPLY_CONTEXT_MISSING,
+    RC_MSG_REPLY_TARGET_MISMATCH,
+    RC_MSG_CONTENT_FIELD_PRESENT,
+    RC_MSG_DECISION_ALPHABET_VIOLATION,
     REASON_PATH_TRAVERSAL,
     REASON_OUTSIDE_ALLOWED_ROOT,
     REASON_TARGET_IS_HOT_FILE,
@@ -173,7 +222,17 @@ REASON_ORDER = [
     RC_EXECUTABLE_DISALLOWED,
     RC_NOT_A_DIRECTORY,
     RC_NOT_A_FILE,
+    RC_PROMO_ROOT_PAIR_DISALLOWED,
+    RC_PROMO_SRC_MISSING,
+    RC_PROMO_SRC_TYPE_DISALLOWED,
+    RC_PROMO_HASH_MISMATCH_SRC,
+    RC_PROMO_HASH_MISMATCH_DST,
+    RC_PROMO_ARTIFACT_CLASS_DISALLOWED,
+    RC_PROMO_OVERWRITE_DISALLOWED,
+    RC_PROMO_PATH_DISALLOWED,
+    RC_PROMO_CHAIN_VERIFY_FAIL,
 ]
+MESSAGING_CAPABILITY_CLASSES = frozenset(("MSG_SEND", "MSG_REPLY"))
 
 def now_utc_z() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -218,6 +277,7 @@ def build_manifest_from_record(record: dict) -> dict:
         "cap_registry_hash": record.get("cap_registry_hash"),
         "capability_class": record.get("capability_class"),
         "manifest_version": "0.1",
+        "messaging_map_hash": record.get("messaging_map_hash"),
         "normalized_args_hash": _sha256_prefixed_from_canonical(_manifest_normalized_args(record)),
         "policy_decision": record.get("policy_decision"),
         "reason_codes": reason_codes,
@@ -314,6 +374,15 @@ def under_base(path: Path, base: Path) -> bool:
         path.relative_to(base)
         return True
     except ValueError:
+        # On case-insensitive filesystems, shell-provided roots can differ in path
+        # casing from Python-resolved request paths. Fall back to a case-folded
+        # prefix check there so allowed-root enforcement reflects the actual mount.
+        if sys.platform == "darwin":
+            path_s = str(path).rstrip("/")
+            base_s = str(base).rstrip("/")
+            path_folded = path_s.casefold()
+            base_folded = base_s.casefold()
+            return path_folded == base_folded or path_folded.startswith(base_folded + "/")
         return False
 
 
@@ -331,6 +400,14 @@ def resolve_allow_base_dirs(base_dirs: list) -> list:
         )
         resolved.append(value)
     return resolved
+
+
+def _is_allow_deny_only(values) -> bool:
+    return isinstance(values, list) and values == ["ALLOW", "DENY"]
+
+
+def _all_prefixes_match(value: str, prefixes: list[str]) -> bool:
+    return any(value == prefix or value.startswith(prefix) for prefix in prefixes)
 
 
 def is_hot_file_target(path: Path) -> bool:
@@ -583,8 +660,6 @@ def main():
 
     # Policy evaluation begins
 
-    if missing_intent:
-        add_reason(record, RC_MISSING_INTENT_FIELDS, "Missing required intent.goal or intent.expected_outputs.")
     if not coverage_validation.ok:
         add_reason(record, coverage_validation.reason_code, coverage_validation.message)
 
@@ -593,6 +668,235 @@ def main():
         finalize_reasons(record)
         emit_record(record)
         return
+
+    if capability_class in MESSAGING_CAPABILITY_CLASSES:
+        if missing_intent:
+            add_reason(
+                record,
+                RC_MSG_MISSING_INTENT_FIELDS,
+                "Missing required intent.goal or intent.expected_outputs.",
+            )
+        try:
+            _raw_map, messaging_map, messaging_map_hash = load_messaging_map()
+        except OSError as exc:
+            add_reason(record, RC_MSG_UNKNOWN_SURFACE_BINDING, f"messaging map unreadable: {exc}")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+        except Exception as exc:
+            add_reason(record, RC_MSG_UNKNOWN_SURFACE_BINDING, f"messaging map invalid: {exc}")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        record["governed_surface"] = "messaging_proof_surface.v1"
+        record["messaging_map_hash"] = messaging_map_hash
+
+        surface_binding_id = str(args.get("surface_binding_id", ""))
+        mapping_version = str(args.get("mapping_version", ""))
+        canonical_destination = (
+            args.get("canonical_destination")
+            if isinstance(args.get("canonical_destination"), dict)
+            else {}
+        )
+        raw_destination_input = (
+            args.get("raw_destination_input")
+            if isinstance(args.get("raw_destination_input"), dict)
+            else {}
+        )
+        opaque_payload = args.get("opaque_payload") if isinstance(args.get("opaque_payload"), dict) else {}
+        reply_context = args.get("reply_context") if isinstance(args.get("reply_context"), dict) else {}
+        audit_scope = args.get("audit_scope") if isinstance(args.get("audit_scope"), dict) else {}
+
+        mapping_entry = find_mapping_entry(messaging_map, surface_binding_id)
+        if mapping_entry is None:
+            add_reason(record, RC_MSG_UNKNOWN_SURFACE_BINDING, "surface_binding_id not present in messaging map.")
+            mapping_entry = {}
+
+        requested_decisions = mapping_entry.get("allowed_decisions") if mapping_entry else None
+        if mapping_entry and not _is_allow_deny_only(requested_decisions):
+            add_reason(
+                record,
+                RC_MSG_DECISION_ALPHABET_VIOLATION,
+                "messaging bindings must expose ALLOW/DENY only.",
+            )
+
+        if mapping_entry and str(mapping_entry.get("mapping_version", "")) != mapping_version:
+            add_reason(
+                record,
+                RC_MSG_MAPPING_VERSION_MISMATCH,
+                "mapping_version does not match authoritative messaging binding.",
+            )
+
+        if mapping_entry and str(mapping_entry.get("capability_class", "")) != capability_class:
+            add_reason(
+                record,
+                RC_MSG_CAPABILITY_MAPPING_MISMATCH,
+                "capability_class does not match surface binding.",
+            )
+
+        canonical_kind = str(canonical_destination.get("kind", ""))
+        canonical_id = str(canonical_destination.get("id", ""))
+        if not canonical_kind or not canonical_id:
+            add_reason(
+                record,
+                RC_MSG_CANONICAL_DESTINATION_MISSING,
+                "canonical_destination.kind and canonical_destination.id are required.",
+            )
+        elif mapping_entry and canonical_kind != str(mapping_entry.get("canonical_destination_kind", "")):
+            add_reason(
+                record,
+                RC_MSG_CANONICAL_DESTINATION_KIND_MISMATCH,
+                "canonical_destination.kind does not match mapped destination kind.",
+            )
+
+        raw_destination_kind = str(raw_destination_input.get("kind", ""))
+        raw_destination_value = str(raw_destination_input.get("value", ""))
+        if not raw_destination_kind or not raw_destination_value:
+            add_reason(
+                record,
+                RC_MSG_RAW_DESTINATION_MISSING,
+                "raw_destination_input.kind and raw_destination_input.value are required.",
+            )
+
+        payload_handle = str(opaque_payload.get("payload_handle", ""))
+        payload_transport = str(opaque_payload.get("transport", ""))
+        payload_byte_length = parse_nonnegative_int(opaque_payload.get("byte_length"), default=-1)
+        if not payload_handle or not payload_transport or payload_byte_length < 0:
+            add_reason(
+                record,
+                RC_MSG_OPAQUE_PAYLOAD_MISSING,
+                "opaque_payload.payload_handle, transport, and byte_length are required.",
+            )
+
+        if contains_content_fields(args):
+            add_reason(
+                record,
+                RC_MSG_CONTENT_FIELD_PRESENT,
+                "content-bearing evaluator-facing fields are prohibited on messaging surface.",
+            )
+            record["request_bytes_b64"] = None
+
+        if mapping_entry:
+            allowed_raw_destination_kinds = mapping_entry.get("allowed_raw_destination_kinds", [])
+            if raw_destination_kind and isinstance(allowed_raw_destination_kinds, list):
+                if raw_destination_kind not in allowed_raw_destination_kinds:
+                    add_reason(
+                        record,
+                        RC_MSG_DESTINATION_CLASS_DISALLOWED,
+                        "raw destination class is not allowed for the selected surface binding.",
+                    )
+
+            allowed_prefixes = mapping_entry.get("allowed_canonical_destination_prefixes", [])
+            if canonical_id and isinstance(allowed_prefixes, list) and not _all_prefixes_match(canonical_id, allowed_prefixes):
+                add_reason(
+                    record,
+                    RC_MSG_DESTINATION_DISALLOWED,
+                    "canonical destination identity is outside the allowed surface scope.",
+                )
+
+            allowed_transports = mapping_entry.get("allowed_transports", [])
+            if payload_transport and isinstance(allowed_transports, list) and payload_transport not in allowed_transports:
+                add_reason(
+                    record,
+                    RC_MSG_TRANSPORT_UNAUTHORIZED,
+                    "payload transport is not authorized for the selected surface binding.",
+                )
+
+            max_payload_bytes = parse_nonnegative_int(mapping_entry.get("max_payload_bytes"), default=0)
+            if max_payload_bytes and payload_byte_length > max_payload_bytes:
+                add_reason(
+                    record,
+                    RC_MSG_PAYLOAD_SIZE_EXCEEDED,
+                    f"opaque payload byte_length exceeds max_payload_bytes={max_payload_bytes}.",
+                )
+
+            max_rate_window_count = parse_nonnegative_int(mapping_entry.get("max_rate_window_count"), default=0)
+            rate_window_count = parse_nonnegative_int(audit_scope.get("rate_window_count"), default=0)
+            if max_rate_window_count and rate_window_count > max_rate_window_count:
+                add_reason(
+                    record,
+                    RC_MSG_RATE_EXCEEDED,
+                    f"rate_window_count exceeds max_rate_window_count={max_rate_window_count}.",
+                )
+        else:
+            rate_window_count = parse_nonnegative_int(audit_scope.get("rate_window_count"), default=0)
+            max_payload_bytes = 0
+            max_rate_window_count = 0
+
+        if capability_class == "MSG_REPLY":
+            reply_target_kind = str(reply_context.get("reply_target_kind", ""))
+            reply_target_id = str(reply_context.get("reply_target_id", ""))
+            if not reply_target_kind or not reply_target_id:
+                add_reason(
+                    record,
+                    RC_MSG_REPLY_CONTEXT_MISSING,
+                    "reply_context.reply_target_kind and reply_context.reply_target_id are required.",
+                )
+            elif reply_target_id != canonical_id:
+                add_reason(
+                    record,
+                    RC_MSG_REPLY_TARGET_MISMATCH,
+                    "reply_context.reply_target_id must match canonical_destination.id.",
+                )
+        else:
+            reply_target_kind = ""
+            reply_target_id = ""
+
+        record["tool_args_redacted"] = {
+            "surface_binding_id": surface_binding_id,
+            "mapping_version": mapping_version,
+            "canonical_destination_kind": canonical_kind or None,
+            "canonical_destination_id": canonical_id or None,
+            "raw_destination_input_kind": raw_destination_kind or None,
+            "raw_destination_input_value": raw_destination_value or None,
+            "opaque_payload_handle": payload_handle or None,
+            "opaque_payload_transport": payload_transport or None,
+            "opaque_payload_byte_length": payload_byte_length if payload_byte_length >= 0 else None,
+            "rate_window_count": rate_window_count,
+        }
+        record["policy_inputs"] = {
+            "surface_binding_id": surface_binding_id,
+            "mapping_version": mapping_version,
+            "messaging_map_hash": messaging_map_hash,
+            "canonical_destination": {
+                "kind": canonical_kind,
+                "id": canonical_id,
+            },
+            "decision_alphabet": ["ALLOW", "DENY"],
+            "content_visible_to_evaluator": False,
+            "allowed_transport": (
+                str(mapping_entry.get("allowed_transports", [""])[0])
+                if mapping_entry and isinstance(mapping_entry.get("allowed_transports"), list) and mapping_entry.get("allowed_transports")
+                else ""
+            ),
+            "max_payload_bytes": max_payload_bytes,
+            "max_rate_window_count": max_rate_window_count,
+        }
+        record["normalized_args"] = {
+            "surface_binding_id": surface_binding_id,
+            "mapping_version": mapping_version,
+            "canonical_destination_kind": canonical_kind or None,
+            "canonical_destination_id": canonical_id or None,
+            "raw_destination_input_kind": raw_destination_kind or None,
+            "raw_destination_input_value": raw_destination_value or None,
+            "opaque_payload_handle": payload_handle or None,
+            "opaque_payload_transport": payload_transport or None,
+            "opaque_payload_byte_length": payload_byte_length if payload_byte_length >= 0 else None,
+            "rate_window_count": rate_window_count,
+        }
+        if capability_class == "MSG_REPLY":
+            record["normalized_args"]["reply_target_kind"] = reply_target_kind or None
+            record["normalized_args"]["reply_target_id"] = reply_target_id or None
+
+        finalize_reasons(record)
+        if not record["policy_reasons"]:
+            record["policy_decision"] = "ALLOW"
+        emit_record(record)
+        return
+
+    if missing_intent:
+        add_reason(record, RC_MISSING_INTENT_FIELDS, "Missing required intent.goal or intent.expected_outputs.")
 
     # Populate policy_inputs from capability registry and normalized request
     allow_base_dirs = resolve_allow_base_dirs(tool_meta.get("allow_base_dirs", []))
@@ -674,6 +978,18 @@ def main():
             "canonical_dst_path": str(canonicalize(_raw_dst)) if _raw_dst else None,
             "overwrite_requested": bool(args.get("overwrite", False)),
             "recursive_requested": bool(args.get("recursive", False)),
+        }
+    elif capability_class == "FS_PROMOTE":
+        _raw_src = str(args.get("src_path", ""))
+        _raw_dst = str(args.get("dst_path", ""))
+        norm = {
+            "canonical_src_path": str(canonicalize(_raw_src)) if _raw_src else None,
+            "canonical_dst_path": str(canonicalize(_raw_dst)) if _raw_dst else None,
+            "src_root_id": str(intent.get("src_root_id", "")),
+            "dst_root_id": str(intent.get("dst_root_id", "")),
+            "promotion_id": str(intent.get("promotion_id", "")),
+            "allowed_artifact_class": str(intent.get("allowed_artifact_class", "")),
+            "overwrite_requested": bool(args.get("overwrite", False)),
         }
     record["normalized_args"] = norm
 
@@ -835,6 +1151,139 @@ def main():
             }
             emit_record(record)
             return
+
+        # Category 6: explicit authorization required (genuine residual)
+        _intent = record.get("intent") or {}
+        _constraints = _intent.get("constraints") or {}
+        if _constraints.get("requires_authorization") is True and not record["policy_reasons"]:
+            record["policy_decision"] = "UNDECIDED"
+            record["policy_reasons"] = []
+            record["insufficiency"] = {
+                "trigger": "authorization_required",
+                "surface": "filesystem",
+                "tool": "FS_COPY",
+                "condition": "Intent explicitly requires authorization that the evaluator cannot provide",
+                "rules_consulted": ["FS_COPY.caps"],
+                "gap": "The evaluator has complete rules for filesystem operations but lacks authority to grant or deny authorization explicitly requested by the caller. No deterministic rule can substitute for authorization.",
+            }
+            emit_record(record)
+            return
+
+        finalize_reasons(record)
+        if not record["policy_reasons"]:
+            record["policy_decision"] = "ALLOW"
+        emit_record(record)
+        return
+
+    # FS_PROMOTE: guarded cross-root promotion with root-pair allowlist, hash check, artifact class check.
+    if capability_class == "FS_PROMOTE":
+        raw_src = str(args.get("src_path", ""))
+        raw_dst = str(args.get("dst_path", ""))
+        if not raw_src or not raw_dst:
+            add_reason(record, RC_PROMO_PATH_DISALLOWED, "FS_PROMOTE requires non-empty src_path and dst_path.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        # Required intent fields for FS_PROMOTE
+        _promo_required = ["promotion_id", "src_root_id", "dst_root_id",
+                           "src_content_hash_sha256", "allowed_artifact_class", "requested_by"]
+        _promo_missing = [f for f in _promo_required if not intent.get(f)]
+        if _promo_missing:
+            add_reason(record, RC_MISSING_INTENT_FIELDS,
+                       f"Missing required intent fields for FS_PROMOTE: {', '.join(_promo_missing)}.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        if ".." in Path(raw_src).parts:
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in src_path.")
+        if ".." in Path(raw_dst).parts:
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in dst_path.")
+
+        try:
+            canon_src = canonicalize(raw_src)
+            canon_dst = canonicalize(raw_dst)
+        except Exception:
+            add_reason(record, REASON_UNKNOWN, "Path normalization failed.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        if deny_hidden and is_hidden_segment(canon_src):
+            add_reason(record, RC_HIDDEN_PATH, f"Hidden path segment in src_path: {canon_src}")
+        if deny_hidden and is_hidden_segment(canon_dst):
+            add_reason(record, RC_HIDDEN_PATH, f"Hidden path segment in dst_path: {canon_dst}")
+
+        # Root pair validation
+        _promo_caps = tool_meta.get("caps", {})
+        _root_id_map_raw = _promo_caps.get("root_id_map", {})
+        _root_pair_allowlist = _promo_caps.get("root_pair_allowlist", [])
+        _src_root_id = str(intent.get("src_root_id", ""))
+        _dst_root_id = str(intent.get("dst_root_id", ""))
+
+        _pair_allowed = any(
+            p.get("src_root_id") == _src_root_id and p.get("dst_root_id") == _dst_root_id
+            for p in _root_pair_allowlist
+        )
+        if not _pair_allowed:
+            add_reason(record, RC_PROMO_ROOT_PAIR_DISALLOWED,
+                       f"Root pair src_root_id={_src_root_id!r} -> dst_root_id={_dst_root_id!r} "
+                       f"not in root_pair_allowlist.")
+
+        # Resolve declared root base dirs and verify paths are under them
+        def _resolve_root_id(root_id: str):
+            template = _root_id_map_raw.get(root_id)
+            if template is None:
+                return None
+            resolved = resolve_allow_base_dirs([template])
+            return resolved[0] if resolved else None
+
+        _src_base = _resolve_root_id(_src_root_id)
+        _dst_base = _resolve_root_id(_dst_root_id)
+
+        if _src_base is not None and not under_base(canon_src, canonicalize(_src_base)):
+            add_reason(record, RC_PROMO_PATH_DISALLOWED,
+                       f"src_path is not under declared src_root_id base dir.")
+        if _dst_base is not None and not under_base(canon_dst, canonicalize(_dst_base)):
+            add_reason(record, RC_PROMO_PATH_DISALLOWED,
+                       f"dst_path is not under declared dst_root_id base dir.")
+
+        # Artifact class check
+        _allowed_classes = _promo_caps.get("allowed_artifact_classes", [])
+        _req_class = str(intent.get("allowed_artifact_class", ""))
+        if _req_class not in _allowed_classes:
+            add_reason(record, RC_PROMO_ARTIFACT_CLASS_DISALLOWED,
+                       f"allowed_artifact_class={_req_class!r} not in registry allowed classes.")
+
+        # Source existence and type check (only if no reasons so far — early exit avoided)
+        if canon_src.exists():
+            if not canon_src.is_file():
+                add_reason(record, RC_PROMO_SRC_TYPE_DISALLOWED,
+                           "Source path exists but is not a regular file.")
+            else:
+                # Source hash verification (INV-PROMO-003)
+                _declared_hash = str(intent.get("src_content_hash_sha256", ""))
+                try:
+                    _actual_hash = "sha256:" + hashlib.sha256(canon_src.read_bytes()).hexdigest()
+                except OSError:
+                    add_reason(record, RC_PROMO_SRC_MISSING, "Source file unreadable.")
+                else:
+                    if _actual_hash != _declared_hash:
+                        add_reason(record, RC_PROMO_HASH_MISMATCH_SRC,
+                                   f"Source hash mismatch: declared={_declared_hash!r} "
+                                   f"actual={_actual_hash!r}.")
+        else:
+            add_reason(record, RC_PROMO_SRC_MISSING, "Source path does not exist.")
+
+        # Overwrite check
+        if not bool(_promo_caps.get("overwrite_allowed", False)):
+            if bool(args.get("overwrite", False)):
+                add_reason(record, RC_PROMO_OVERWRITE_DISALLOWED,
+                           "overwrite is not permitted: caps.overwrite_allowed=false.")
+            elif canon_dst.exists():
+                add_reason(record, RC_PROMO_OVERWRITE_DISALLOWED,
+                           "Destination exists and overwrite is disallowed.")
 
         finalize_reasons(record)
         if not record["policy_reasons"]:

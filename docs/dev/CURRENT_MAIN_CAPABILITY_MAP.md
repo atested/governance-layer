@@ -1,234 +1,172 @@
 # CURRENT_MAIN_CAPABILITY_MAP
 
-Last Updated On Branch: codex/PLANNING_COHERENCE_CLEANUP__v3  
-Current Baseline (`origin/main`): `25218fce214c4677157512e3c0c37cb2ee9907cb`  
-Latest Merge Window: `UNRESOLVED_ON_MAIN` (cleanup does not infer merge-window labels)
+Last Updated On Branch: `codex/TASK_419__record_complete_for_now_state_and_defer_remaining_residue__v1`  
+Current Baseline (`origin/main`): `17bbf84153981ad6de9b10a45bae4037b1b83e31`  
+Latest Merge Window: `UNRESOLVED_ON_MAIN` (main does not expose merge-window labels as canonical truth)  
 Canonical GitHub URL: `https://github.com/GregKeeter/governance-layer/blob/main/docs/dev/CURRENT_MAIN_CAPABILITY_MAP.md`
 
 ## 0) Quick State (startup-read)
-- `origin/main`: `25218fce214c4677157512e3c0c37cb2ee9907cb`
+- `origin/main`: `17bbf84153981ad6de9b10a45bae4037b1b83e31`
 - Latest merge window: `UNRESOLVED_ON_MAIN`
-- Latest landed tasks: `TASK_337`, `TASK_338`, `TASK_339`, `TASK_340`
-- Planning judgment: `PARTIALLY_CONSUMED`
-- Preferred next lane: RDD next-seam restock/spec determination (post-`TASK_339-340`) or whole-project contract-convergence lane.
-- Secondary candidates: proof/attestation contract convergence seam; MCP tool-event/tool-catalog bounded resilience seam
-- Refresh marker: `map_reflects_current_main=yes` (source SHA `25218fce214c4677157512e3c0c37cb2ee9907cb`)
+- Current control-plane outcome: `COMPLETE_FOR_NOW`
+- Current bounded-tranche status: no additional Operator UI v1 follow-on truth is recorded on reachable current main beyond the prototype baseline through T201, T203, T205, and T206
+- Preferred immediate formulation candidate: `none; current phase intentionally stopped at complete-for-now`
+- Strongest currently-derived subcandidate inside that formulation lane: `none active for this phase`
+- Latest narrower follow-on formulation need: `none`
+- Planning judgment: `VALID`
+- Refresh marker: `map_reflects_current_main=yes` (source SHA `17bbf84153981ad6de9b10a45bae4037b1b83e31`)
 - Startup rule: consult this map before proposing a new workfront.
 - Hard dependency: if this map path or canonical GitHub URL is unreadable, STOP before workfront selection.
-- Dual-source requirement: startup refresh must inspect both capability state and authoritative workfront state on main.
 
-## 1) Latest Landed Tasks (Planning-Relevant)
-- `TASK_337`, `TASK_338`: RDD Phase 10 selector-mode source contract hardening + coverage
-- `TASK_339`, `TASK_340`: RDD Phase 11 selector-mode request-source strictness + coverage
-- `TASK_331` through `TASK_336`: RDD Phase 7-9 selector routing/contract/mode progression
-- `TASK_325` through `TASK_330`: RDD Phase 4-6 signal extraction, replay extension, external criteria progression
-- `TASK_323`, `TASK_324`: RDD Phase 3 chain verifier multi-record rules + coverage
-- `TASK_320`, `TASK_321`, `TASK_322`: RDD Phase 2 triage evaluator + wiring + coverage
-- `TASK_311`, `TASK_312`, `TASK_313`: RDD Phase 1 pass undecided schema/emission/coverage
+## 1) Current-Main Baseline Truth
 
-## 2) Live Surfaces
-- RDD v1 staged implementation surface (landed through Phase 11 seams on main):
-  `scripts/policy-eval.py`, `scripts/rdd-pass-triage.sh`, `scripts/triage-eval.py`,
-  `scripts/verify-chain.py`, `scripts/replay-record.py`,
-  `tests/test_policy_pass_undecided.sh`, `tests/test_rdd_*`,
-  `tests/fixtures/rdd_phase11_selector_mode_*`
-- Tool-catalog inspectability and validation surface:
-  `mcp/tool_catalog_store.py`, `scripts/attest/export_tool_catalog_bundle.py`,
-  `scripts/attest/verify_tool_catalog_bundle.py`,
-  `scripts/attest/summarize_tool_catalog_slice.py`, `system/tests/test_tool_catalog_*`
-- Tool-event inspectability and validation surface:
-  `mcp/tool_event_store.py`, `mcp/tool_event_link_store.py`,
-  `scripts/attest/export_tool_event_bundle.py`,
-  `scripts/attest/verify_tool_event_bundle.py`,
-  `scripts/attest/summarize_tool_event_slice.py`, `system/tests/test_tool_event_*`
-- Planning/process dispatch surface:
-  `docs/dev/BRIEFING_FORMAT__BFPS_v12.md`,
-  `docs/dev/DISPATCH_LIBRARY__CECIL_CODEX__CANON.md`,
-  `docs/dev/WORK_QUEUE.md`
+### GovLayer
+- GovLayer-core trust-grade closure is landed baseline on main.
+- Signed-record emission, verifier strictness, and replay verification are materially closed for the canonical `PolicyRecord` path.
 
-## 3) Recent Landed Work By Live Surface
-### RDD planning + refresh-scope governance
-- RDD implementation progressed from Phase 1 through Phase 11 bounded seams on main (`TASK_311` through `TASK_340` present as ready specs; corresponding runtime/tests landed).
-- Authoritative refresh scope rules remain active (TASK_314-316): planning refreshes must inspect capability state and authoritative workfront state.
-- Planning docs and queue cadence are partially stale against landed RDD reality; treat RDD status as `PARTIALLY_CONSUMED` rather than `Phase 1 ready`.
+### GovMCP
+- GovMCP minimum required-path closure is landed baseline on main.
+- GovMCP inspectability/query seam closure is landed baseline on main.
+- GovMCP tool-catalog exposure coherence closure is landed baseline on main.
+- GovMCP tool-catalog slice/query seam closure is landed baseline on main.
+- These do not imply broad GovMCP maturity or broad connector completion.
 
-### Tool-catalog
-- Added deterministic slice selection + summary/report and expanded negative matrix (TASK_278-280).
-- Contract-style bundle export/verify tests strengthened.
+### Proof / Export / External Defensibility
+- Receipt-attestation proof/export handoff seam closure is landed baseline on main.
+- Proof-packet handoff seam closure is landed baseline on main.
+- Shipped-bundle validator parity / external-contract convergence closure is landed baseline on main.
+- External summary-contract parity residue audit is landed baseline on main.
+- Packet-hash normalization with explicit contract stance is landed baseline on main.
 
-### Tool-event
-- Added helper/output hardening and follow-on negative controls (TASK_275-277).
-- Added deterministic event-slice summary capability and negative matrix expansion (TASK_284-286).
+### RDD
+- RDD selector-mode contract completion tranche is landed baseline on main.
+- Combo A structured summary emission is landed baseline on main.
 
-### Planning/process
-- BFPS v12 dispatch-shape guidance and canonical dispatch-pointer seam cleanup (TASK_281-282).
-- Discovery lane recommendation introduced and consumed by M73 execution (TASK_283).
-- Capability map artifact and baseline protocol landed (TASK_287-289).
-- BFPS startup now requires capability-map reference + canonical URL and fail-closed unreadable rule (TASK_290-292).
-- BFPS hard-dependency startup and explicit DEV numbering landed (TASK_293-295).
-- BFPS now requires map-derived Current Planning State and DEV-number prompt pre-briefing startup (TASK_296-298).
-- BFPS now requires refresh-then-brief sequencing with canonical extraction contract (TASK_299-301).
-- Pre-briefing refresh workflow now requires packetized standardized extraction block and fail-closed completeness check (TASK_305-307).
+### Messaging
+- Messaging proof-surface baseline slices are landed baseline on main.
+- Messaging provider-evidence / receipt-linkage strengthening is landed baseline on main.
 
-## 4) Adjacent Bounded Seams (Next-Lane Candidates)
-- RDD next-seam restock/spec lane:
-  bounded determination of post-`TASK_340` continuation before further implementation.
-- Tool-catalog continued inspectability seam:
-  bounded follow-on on catalog slice/report semantics and extension-safe negative controls.
-- Tool-event receipt/replay seam:
-  bounded continuation on receipt-linked event query/report semantics without server wiring.
-- Attestation/proof utility seam:
-  bounded contract consistency continuation across existing attest scripts/tests.
-- MCP RPC seam (`mcp/server.py`):
-  architecture-sensitive and often outside bounded Codex lanes; treat as separate class.
+### Operator UI
+- Operator UI v1 prototype baseline through T201, T203, T205, and T206 is landed on main.
+- No reachable current-main evidence supports a landed follow-on batch using `TASK_399` through `TASK_402`.
+- Treat any later Operator UI follow-on story for those task IDs as orphaned/unmerged history unless and until reachable current-main evidence says otherwise.
 
-## 5) Constraints And Risk Notes
-- Common hard boundary: no `mcp/server.py`, capability registry, release scripts, or assignment hot-file edits during Codex bounded lanes.
-- Prefer lanes with deterministic artifacts and self-contained tests.
-- Server/RPC failures observed in MCP tests should not be folded into bounded non-server lanes unless explicitly authorized.
+### Process Canon
+- Merge-protocol control-plane sync update is landed baseline on main.
 
-## 6) Leverage Judgment
-- Highest leverage comes from bounded lanes that are simultaneously:
-  - implementation-ready in authoritative workfront state,
-  - constrained to existing code/test surfaces,
-  - and explicitly fail-closed in task specs.
-- For current main at `25218fce214c4677157512e3c0c37cb2ee9907cb`, highest near-term leverage is bounded next-seam determination with queue/plan/map coherence refresh rather than replaying already-landed early-phase RDD lanes.
-- Lowest leverage for bounded Codex lanes comes from server-integration seams requiring cross-surface architecture judgment.
+## 2) Family Status Map For Selection
+
+### Consumed or materially harvested as obvious next work
+- deployment external validator execution-path family
+- deployment external packaging/distribution family
+- AAT stage -> shim -> Gate C operator-path tranche
+- observability receipt/tool-event traceability tranche
+- messaging proof-surface baseline slices
+- highest-leverage proof/export handoff/parity seams
+- bounded GovMCP seam-closure family that used to surface as generic “GovMCP maturity”
+
+### Complete for now / deferred unless concrete need reappears
+- `GovCore naming-correction implementation` consumed on main
+- `post-slice governed communications expansion beyond provider-evidence strengthening` deferred as complete enough for this phase
+- `external validator/operator hardening residue beyond parity audit and packet-hash normalization` deferred unless a concrete testing-discovered issue reopens it
+- `post-selector doctrine continuation beyond Combo A structured summary emission` deferred unless testing exposes a concrete presentation/coherence problem
+- `AAT / Foundation v0 admissibility convergence restock candidate` remains live inventory, but not active completion work for this phase
+
+### Lower-yield / defer
+- `demonstration packaging follow-on`
+
+## 3) What Is Newly True On Main
+- main is no longer accurately described by a pre-messaging, pre-proof-packet-handoff, or pre-selector-RDD baseline
+- the repo now contains a real governed messaging surface with stronger replay binding kept outside evaluator-facing inputs
+- the repo contains the landed Operator UI v1 prototype baseline through T201, T203, T205, and T206
+- multiple once-plausible “next tranches” were later shown to be already consumed on main
+- T413 consumed the first safe packaged slices from the external validator/operator hardening, messaging follow-on, and post-selector RDD residual lanes
+- T415 consumed the bounded GovCore naming-correction implementation tranche
+- T418 consumed the packet-hash normalization tranche with an explicit versioned contract stance
+- Greg then set the current phase stop rule:
+  - messaging is complete enough for this phase
+  - presentation coherence is deferred unless testing exposes a concrete problem
+  - overall app status is complete for now
+
+## 4) Honest Remaining Capability Picture
+
+### Materially complete / operational baseline
+- GovLayer-core trust-grade semantics
+- GovMCP bounded minimum required-path, inspectability/query, tool-catalog exposure coherence, and tool-catalog slice/query seams
+- receipt-attestation handoff, proof-packet handoff, and shipped-bundle validator parity / external-contract convergence seams
+- RDD selector-mode contract completion tranche
+- messaging proof-surface baseline slices
+- Operator UI v1 prototype baseline through T201, T203, T205, and T206
+- merge-process control-plane sync responsibility
+
+### Live but still requiring fresh formulation or restock
+- AAT / Foundation v0 admissibility convergence
+- any new messaging or presentation follow-on only if concrete testing exposes a bounded problem
+
+### Inventory that must not be treated as direct next-lane truth
+- large ready-task stock in `docs/dev/WORK_QUEUE.md`
+- stale family labels such as generic `GovMCP maturity`, generic `deployment`, and generic `observability`
+
+## 5) Current Control-Plane Outcome
+
+### Recommended mode
+`COMPLETE_FOR_NOW`
+
+### Why current main is complete for now
+- T413 consumed the first packaged slices in the messaging, external validator/operator hardening, and post-selector RDD residual lanes
+- T415 consumed the bounded GovCore naming-correction package
+- T418 consumed the packet-hash normalization residue with a clear contract stance
+- Greg explicitly accepted the remaining messaging residue as sufficient for this phase
+- Greg explicitly deferred remaining presentation/doctrine coherence unless testing exposes a concrete problem
+
+### Preferred immediate formulation candidate
+`none`
+
+### Current bounded next tranche
+1. none active for the current phase
+2. reopen only on concrete testing-discovered failure or a new explicitly authorized tranche
+
+## 6) Constraints And Risk Notes
+- Do not reopen landed GovLayer, GovMCP, proof/export, RDD selector, or messaging baseline closures unless current-main evidence directly contradicts them.
+- Do not import orphaned Operator UI follow-on history into current-main planning truth; only the landed prototype baseline through T201, T203, T205, and T206 is supported on reachable main.
+- If a future Operator UI tranche is proposed, frame it as a deliberate new tranche or canon-driven need rather than continuation cleanup.
+- Do not treat stale queue stock as authoritative next-lane ranking.
+- Do not collapse consumed GovMCP seam closures and already-landed replay-outcome governance-evidence propagation into one generic `GovMCP maturity` family.
+- Treat broad deployment, observability, and proof/export labels as too blunt unless they are restocked into bounded current-main-useful workfronts.
+- Treat T413’s three landed slices as consumed baseline, not as remaining packaged candidates.
+- Treat messaging residue as deferred for this phase unless testing exposes a concrete bounded problem.
+- Treat presentation/doctrine residue as deferred unless testing exposes a concrete operator-facing coherence problem.
 
 ## 7) Current Planning Judgment
-- Judgment State: `PARTIALLY_CONSUMED`
-- Why: main includes explicit authoritative-workfront refresh rules and substantial landed RDD implementation through Phase 11 seams, but canonical planning artifacts (map/impl-plan/queue cross-view) were stale before this cleanup and still require periodic reconciliation.
-- Prior discovery guidance status (`TASK_283`): `CONSUMED` (preferred lane executed in M73); capability-only preference requires authoritative reconciliation.
-- Preferred next lane: bounded post-`TASK_340` RDD restock/spec determination or equivalent bounded contract-convergence lane selected from authoritative workfront state.
-- Secondary candidates:
-  - tool-catalog continued inspectability seam
-  - tool-event receipt/replay seam
-- Major constraints / sensitive areas:
-  - Respect authoritative workfront sources when they diverge from capability-only seam preferences.
-  - `mcp/server.py` and capability registry remain out of bounded lane scope
-  - release/validation hot files remain protected
-  - avoid cross-surface architecture work in pre-briefing refresh lanes
-- Divergence note: queue and historical planning text may lag landed implementation; authoritative truth requires reconciling code/tests/evidence with ready-task and plan surfaces, not relying on a single stale planning artifact.
-- Next lane selection should use this map first, then run targeted discovery only if state drops below `VALID` or authoritative state becomes ambiguous.
+- Judgment State: `VALID`
+- Why:
+  - current-main baseline truth is clear
+  - T413, T415, and T418 consumed the strongest previously packaged bounded slices
+  - Greg explicitly closed the phase as complete for now
+  - the leftover messaging and presentation residue is intentionally deferred rather than active completion work
+  - orphaned Operator UI follow-on history must not be treated as landed current-main truth
+- Preferred immediate control step:
+  - no new tranche by default; reopen only on testing-discovered concrete issues or a deliberate new tranche decision
+- Secondary live-but-unbounded directions:
+  - AAT / Foundation v0 admissibility convergence
+  - any future messaging follow-on beyond provider-evidence strengthening, if a new concrete need appears
+  - any future presentation/coherence follow-on beyond Combo A, if testing exposes a concrete issue
 
 ## 8) Staleness / Exhaustion Note
-- Mark map `STALE` if two or more merge windows land without map refresh.
-- Mark map `PARTIALLY_CONSUMED` when a recommended lane has been merged but adjacent seams remain open.
-- Mark map `EXHAUSTED` when all listed high-leverage seams are consumed or blocked by forbidden boundaries.
-- Mark map `INSUFFICIENT` if current-main facts cannot support bounded candidate comparison.
+- Mark map `VALID` when baseline truth is current and the present control-plane state is honestly recorded, including complete-for-now phase stops.
+- Mark map `PARTIALLY_CONSUMED` when baseline truth is current but obvious next tranches have been harvested and only formulation-grade work remains.
+- Mark map `EXHAUSTED` when no credible remaining live direction survives comparison.
+- Mark map `INSUFFICIENT` if canonical artifacts and repo surfaces no longer support honest bounded comparison.
 
 ## 9) Lightweight Update / Read Protocol
+
 ### Update after each Cecil merge window
-1. Update baseline SHA and latest merge window fields.
-2. Add landed tasks relevant to active live surfaces.
-3. Refresh only affected surface rows and seam notes.
-4. Reclassify planning judgment state (`VALID`, `PARTIALLY_CONSUMED`, `EXHAUSTED`, `STALE`, `INSUFFICIENT`).
-5. Refresh the `0) Quick State (startup-read)` block to mirror the new baseline and latest landed tasks.
-
-### Session-state extraction for BFPS briefings
-- Capability map remains canonical.
-- New briefings extract a compact `Current Planning State` subset from this map:
-  - current baseline
-  - latest merge window
-  - latest landed tasks
-  - planning judgment state
-  - live surfaces summary
-  - preferred next lane
-  - secondary candidates
-  - major constraints / sensitive areas
-  - refresh marker (`map reflects current main = yes/no` + source SHA)
-  - refresh / new-chat trigger note
-- Do not duplicate full map content inside BFPS.
-
-### Briefing extraction contract (required for refresh-then-brief)
-- A new briefing MUST be generated only from refreshed canonical map state (after Codex refresh + Cecil merge).
-- Required extraction fields:
-  - full current `origin/main` SHA
-  - latest merge window
-  - latest landed tasks
-  - planning judgment state
-  - live surfaces summary
-  - preferred next lane
-  - secondary candidates
-  - major constraints / sensitive areas
-  - refresh marker indicating map reflects current main
-- Do not generate briefings from in-chat memory or stale prior briefing text.
-
-### Pre-briefing refresh completion packet contract (required)
-- Every pre-briefing refresh completion packet MUST include a standardized `BRIEFING EXTRACTION BLOCK`.
-- Briefing generation after refresh MUST consume this block directly; do not reconstruct missing state from chat/session memory.
-- If the extraction block is missing or incomplete, STOP before briefing generation.
-
-### Standard BRIEFING EXTRACTION BLOCK (required packet payload)
-- `CURRENT_ORIGIN_MAIN_SHA`: full `origin/main` SHA from refreshed canonical map state.
-- `LATEST_MERGE_WINDOW`: latest merge window marker (for example `M81` with merge short SHA when available).
-- `LATEST_LANDED_TASKS`: latest landed task IDs from refreshed canonical map state.
-- `PLANNING_JUDGMENT_STATE`: one of `VALID`, `PARTIALLY_CONSUMED`, `EXHAUSTED`, `STALE`, `INSUFFICIENT`.
-- `LIVE_SURFACES_SUMMARY`: compact live-surface summary from refreshed canonical map state.
-- `PREFERRED_NEXT_LANE`: current preferred bounded lane from refreshed canonical map state.
-- `SECONDARY_CANDIDATES`: current secondary candidates from refreshed canonical map state.
-- `MAJOR_CONSTRAINTS`: major constraints / sensitive areas from refreshed canonical map state.
-- `REFRESH_MARKER`: map-reflects-current-main marker (`yes/no`) with source SHA.
-- `CURRENT_PROCESS_STATE`: required BFPS startup process state:
-  - canonical map path + canonical URL readable
-  - startup read rule active
-  - fail-closed unreadable rule active
-  - refresh-then-brief sequencing active
-  - DEV-number prompt step active
-
-### Extraction mapping note
-- Source extraction-block fields from this canonical map only.
-- Do not source extraction-block fields from prior briefing text or assistant reconstruction.
-
-### Trigger deeper planning refresh
-- Trigger when:
-  - state becomes `STALE` / `INSUFFICIENT`, or
-  - next candidate lane requires cross-surface/server judgment, or
-  - bounded candidates are no longer distinguishable from map contents.
-  - session quality becomes flaky enough to reduce trust.
+1. Update baseline SHA and latest merge-window field if canonical evidence exists.
+2. Add newly landed planning-relevant capabilities and consumed-family consequences.
+3. Reclassify whether the repo is in bounded-tranche mode or formulation mode.
+4. Refresh only the affected family-status rows and quick-state block.
 
 ### Read before new workfront selection
-- Dev chat + Greg should read this map before drafting any new combined workfront dispatch.
-- If this map path or canonical URL is unreadable, STOP and resolve readability before workfront selection.
-- If state is `VALID` or `PARTIALLY_CONSUMED`, choose from listed seams first.
-- If state is `EXHAUSTED`, `STALE`, or `INSUFFICIENT`, run a bounded discovery-restock lane before selecting implementation scope.
-
-### Dual-source refresh contract (authoritative)
-Refresh and briefing-extraction workflows must consume two truth classes:
-
-1. Capability state:
-   - `docs/dev/CURRENT_MAIN_CAPABILITY_MAP.md`
-2. Authoritative workfront state on main:
-   - `docs/dev/WORK_QUEUE.md`
-   - active initiative implementation-plan docs
-   - corresponding `docs/dev/tasks/ready/` task specs for that initiative
-
-Current required authoritative workfront source instance (RDD initiative):
-- `docs/dev/WORK_QUEUE.md`
-- `docs/dev/RESIDUAL_DISCRETION_DOCTRINE__IMPL_PLAN__v1.md`
-- doctrine source path resolution:
-  - expected legacy path: `docs/dev/RESIDUAL_DISCRETION_DOCTRINE.md`
-  - current canonical path on main: `docs/RESIDUAL_DISCRETION_DOCTRINE.md`
-  - fail-closed: if neither path is readable, STOP
-- `docs/dev/tasks/ready/TASK_311__rdd_pass_v02_schema_fields.md`
-- `docs/dev/tasks/ready/TASK_312__rdd_pass_undecided_emission.md`
-- `docs/dev/tasks/ready/TASK_313__rdd_pass_undecided_test_coverage.md`
-
-Refresh extraction alignment rule:
-- extracted planning state must reflect both truth classes
-- if capability state and authoritative workfront state diverge, refresh output must say so explicitly
-- if authoritative workfront state cannot be determined cleanly, STOP rather than guess
-
-### Operator sequence for "create new Dev briefing"
-1. Tell Greg briefing creation starts with canonical map refresh.
-2. Provide Codex refresh task.
-3. After Codex returns, provide Cecil merge block.
-4. After Cecil merge completes, ask for DEV number.
-5. Create briefing from refreshed canonical map state.
-6. Negative rule: do not create a new briefing immediately upon request.
-7. Require full `BRIEFING EXTRACTION BLOCK` in refresh packet; if missing/incomplete, STOP.
-8. Ensure refresh inspected authoritative workfront state sources; if unavailable or divergent without clear resolution, STOP.
-
-### In-chat continuation rule
-- During a Dev chat, local session planning state may be updated after merges and reused for additional lane selection while judgment remains coherent.
-- Create a new chat and refresh map-derived startup state when judgment becomes `EXHAUSTED`, `STALE`, or `INSUFFICIENT`, or when chat quality is flaky enough to reduce trust.
+- Read this map first.
+- If state is `VALID`, follow the current control-plane state recorded here before drafting a new family or reopening a deferred lane.
+- If state is `PARTIALLY_CONSUMED`, `EXHAUSTED`, or `INSUFFICIENT`, run formulation or refresh work before choosing implementation scope.

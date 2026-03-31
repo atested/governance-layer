@@ -48,6 +48,8 @@ PY
 
 # PASS when signature present and valid
 out_pass="$(python3 "$VERIFY" "$BUNDLE" --require-signature 1 --pubkey "$KEY_PUB")"
+echo "$out_pass" | rg '^ATTESTATION_BUNDLE_VERIFY ok=yes reason=OK ' >/dev/null
+echo "$out_pass" | rg ' signature_verified=yes$' >/dev/null
 echo "$out_pass" | rg '^PASS: attestation bundle signature verified$' >/dev/null
 echo "$out_pass" | rg '^PASS: attestation bundle manifest \+ payload hashes verified$' >/dev/null
 
@@ -58,6 +60,8 @@ out_missing="$(python3 "$VERIFY" "$BUNDLE" --require-signature 1 --pubkey "$KEY_
 rc_missing=$?
 set -e
 [[ $rc_missing -ne 0 ]]
+echo "$out_missing" | rg '^ATTESTATION_BUNDLE_VERIFY ok=no reason=SIGNATURE_INVALID ' >/dev/null
+echo "$out_missing" | rg ' signature_verified=no$' >/dev/null
 echo "$out_missing" | rg '^FAIL: SIGNATURE_REQUIRED_MISSING$' >/dev/null
 
 # FAIL on bad signature
@@ -82,6 +86,7 @@ out_bad="$(python3 "$VERIFY" "$BUNDLE" --require-signature 1 --pubkey "$KEY_PUB"
 rc_bad=$?
 set -e
 [[ $rc_bad -ne 0 ]]
+echo "$out_bad" | rg '^ATTESTATION_BUNDLE_VERIFY ok=no reason=SIGNATURE_INVALID ' >/dev/null
 echo "$out_bad" | rg '^FAIL: SIGNATURE_VERIFICATION_FAILED$' >/dev/null
 
 echo "CASE=VERIFY_ATTESTATION_BUNDLE_SIGNATURE_MODE PASS"

@@ -43,6 +43,18 @@ attestation_proof_require_kv_equal() {
   attestation_proof_require_equal "$got" "$expected" "$fail_marker"
 }
 
+attestation_proof_require_kv_present() {
+  local line="$1"
+  local key="$2"
+  local fail_marker="$3"
+  local got
+  got="$(attestation_proof_kv_field "$line" "$key" || true)"
+  if [[ -z "$got" ]]; then
+    echo "$fail_marker"
+    exit 1
+  fi
+}
+
 attestation_proof_sha256_file() {
   local file="$1"
   if command -v sha256sum >/dev/null 2>&1; then

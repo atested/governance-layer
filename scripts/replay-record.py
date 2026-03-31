@@ -41,6 +41,14 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from coverage_stamp import validate_coverage_stamp, canonical_json
+from event_model import is_non_action_event
+from messaging_surface import (
+    DEFAULT_MESSAGING_PROXY_ROOT,
+    FORWARD_RECEIPT_FILENAME,
+    FORWARD_RECEIPT_VERSION,
+    resolve_repo_relative_payload_handle,
+    sha256_prefixed_bytes,
+)
 
 SCRIPTS = Path(__file__).resolve().parent
 POLICY_EVAL = SCRIPTS / "policy-eval.py"
@@ -62,12 +70,14 @@ INVARIANT_FIELDS = (
     "policy_decision",
     "tool",
     "cap_registry_hash",
+    "messaging_map_hash",
     "normalized_args",
     "reason_codes",
     "coverage_stamp",
 )
 STRICTNESS_CHOICES = ("error", "mismatch", "ignore")
 RDD_REPLAYABLE_TYPES = frozenset(("triage_decision", "terminal_judgment"))
+MESSAGING_REPLAYABLE_TOOLS = frozenset(("MSG_SEND", "MSG_REPLY"))
 
 
 def sha256_hex(data: bytes) -> str:
@@ -97,6 +107,8 @@ def compare_invariants(orig: dict, replay: dict) -> list:
          "tool" in orig, "tool" in replay),
         ("cap_registry_hash", "raw", orig.get("cap_registry_hash"), replay.get("cap_registry_hash"),
          "cap_registry_hash" in orig, "cap_registry_hash" in replay),
+        ("messaging_map_hash", "raw", orig.get("messaging_map_hash"), replay.get("messaging_map_hash"),
+         "messaging_map_hash" in orig, "messaging_map_hash" in replay),
         ("normalized_args",  "raw", orig.get("normalized_args"),   replay.get("normalized_args"),
          "normalized_args" in orig, "normalized_args" in replay),
         ("reason_codes",     "derived", extract_reason_codes(orig), extract_reason_codes(replay), True, True),
@@ -201,6 +213,120 @@ def apply_test_mutation(replay: dict) -> dict:
         mutated["policy_reasons"] = [{"code": "RC-REPLAY-TEST-MISMATCH"}]
         return mutated
     raise ValueError(f"unsupported {TEST_MUTATION_ENV} mode: {mode}")
+
+
+def _messaging_proxy_root() -> Path:
+    raw = os.environ.get("GOV_MESSAGING_PROXY_ROOT", "").strip()
+    if raw:
+        return Path(raw)
+    return DEFAULT_MESSAGING_PROXY_ROOT
+
+
+def _verify_messaging_forward_receipt(orig: dict) -> tuple[list, Optional[dict]]:
+    if orig.get("tool") not in MESSAGING_REPLAYABLE_TOOLS:
+        return [], None
+    if orig.get("policy_decision") != "ALLOW":
+        return [], None
+    request_id = str(orig.get("request_id", ""))
+    if not request_id:
+        return [
+            {
+                "field": "forward_receipt.request_id",
+                "kind": "missing",
+                "original": "<required>",
+                "replay": None,
+            }
+        ], None
+
+    receipt_path = _messaging_proxy_root() / request_id / FORWARD_RECEIPT_FILENAME
+    if not receipt_path.exists():
+        return [], None
+
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [
+            {
+                "field": "forward_receipt",
+                "kind": "invalid",
+                "original": "valid json receipt",
+                "replay": str(exc),
+            }
+        ], None
+
+    norm = orig.get("normalized_args", {})
+    policy_inputs = orig.get("policy_inputs", {})
+    canonical_destination = policy_inputs.get("canonical_destination", {})
+    expected_byte_length = norm.get("opaque_payload_byte_length")
+    expected_handle = norm.get("opaque_payload_handle")
+    expected_transport = norm.get("opaque_payload_transport")
+    mismatches = []
+
+    checks = (
+        ("forward_receipt.receipt_version", FORWARD_RECEIPT_VERSION, receipt.get("receipt_version")),
+        ("forward_receipt.record_hash", orig.get("record_hash"), receipt.get("record_hash")),
+        ("forward_receipt.request_id", request_id, receipt.get("request_id")),
+        ("forward_receipt.surface_binding_id", norm.get("surface_binding_id"), receipt.get("surface_binding_id")),
+        ("forward_receipt.payload_handle", expected_handle, receipt.get("payload_handle")),
+        ("forward_receipt.payload_transport", expected_transport, receipt.get("payload_transport")),
+        ("forward_receipt.payload_byte_length", expected_byte_length, receipt.get("payload_byte_length")),
+        (
+            "forward_receipt.canonical_destination.kind",
+            canonical_destination.get("kind"),
+            (receipt.get("canonical_destination") or {}).get("kind"),
+        ),
+        (
+            "forward_receipt.canonical_destination.id",
+            canonical_destination.get("id"),
+            (receipt.get("canonical_destination") or {}).get("id"),
+        ),
+    )
+    for field, old_val, new_val in checks:
+        if old_val != new_val:
+            mismatches.append(
+                {
+                    "field": field,
+                    "kind": "value",
+                    "original": old_val,
+                    "replay": new_val,
+                }
+            )
+
+    try:
+        payload_path = resolve_repo_relative_payload_handle(str(expected_handle or ""), SCRIPT_DIR.parent)
+        payload_bytes = payload_path.read_bytes()
+        payload_sha256 = sha256_prefixed_bytes(payload_bytes)
+        if len(payload_bytes) != int(expected_byte_length):
+            mismatches.append(
+                {
+                    "field": "forward_receipt.payload_byte_length",
+                    "kind": "value",
+                    "original": expected_byte_length,
+                    "replay": len(payload_bytes),
+                }
+            )
+        if payload_sha256 != receipt.get("payload_sha256"):
+            mismatches.append(
+                {
+                    "field": "forward_receipt.payload_sha256",
+                    "kind": "value",
+                    "original": receipt.get("payload_sha256"),
+                    "replay": payload_sha256,
+                }
+            )
+    except Exception as exc:
+        mismatches.append(
+            {
+                "field": "forward_receipt.payload_handle_verification",
+                "kind": "invalid",
+                "original": "resolvable payload handle with stable bytes",
+                "replay": str(exc),
+            }
+        )
+    return mismatches, {
+        "receipt_path": str(receipt_path),
+        "receipt_version": receipt.get("receipt_version"),
+    }
 
 
 def record_hash_digest_bytes(record: dict) -> bytes:
@@ -322,6 +448,27 @@ def replay_record(
         verify_mod = load_verify_record_module()
     except Exception as e:
         return fail_fatal(f"unable to initialize verify-record module: {e}")
+
+    # Non-action governance events are chain-valid but not policy-replayable.
+    # Verify their structural integrity and return a skip result.
+    if is_non_action_event(orig):
+        rc, lines = verify_mod.verify_record_dict(orig)
+        if rc != 0:
+            first = lines[0] if lines else "non-action event verification failed"
+            return fail_fatal(first.replace("FAIL: ", ""), rc=rc)
+        return {
+            "kind": "skip",
+            "exit_code": 0,
+            "record": orig,
+            "record_path": record_path,
+            "record_hash": orig.get("record_hash"),
+            "event_type": orig.get("event_type"),
+            "skip_reason": "non-action governance event (chain-valid, not policy-replayable)",
+            "mismatches": [],
+            "ignored_findings": [],
+            "fatal_findings": [],
+            "fatal_reason": None,
+        }
 
     record_type = orig.get("record_type")
     if record_type in RDD_REPLAYABLE_TYPES:
@@ -478,6 +625,9 @@ def replay_record(
     ignored_findings = strict_eval["ignored_findings"]
     fatal_findings = strict_eval["fatal_findings"]
     fatal_reason = strict_eval["fatal_reason"]
+    receipt_mismatches, receipt_info = _verify_messaging_forward_receipt(orig)
+    if receipt_mismatches:
+        mismatches = sorted_mismatches(mismatches + receipt_mismatches)
     if fatal_reason is not None:
         kind = "fatal"
         exit_code = 2
@@ -502,6 +652,7 @@ def replay_record(
         "fatal_reason": fatal_reason,
         "coverage_reason_code": orig_cov.reason_code,
         "coverage_overall_status": orig_cov.overall_status,
+        "messaging_forward_receipt": receipt_info,
     }
     return result
 
@@ -526,6 +677,13 @@ def print_replay_result(result: dict) -> None:
             print(f"  replay:   {m['replay']}")
         _print_ignored()
         return
+    if result["kind"] == "skip":
+        record_label = Path(result["record_path"]).name
+        print(
+            f"SKIP: {record_label} — {result.get('skip_reason', 'not replayable')} "
+            f"(event_type={result.get('event_type')})"
+        )
+        return
     if result["kind"] == "pass":
         record_label = Path(result["record_path"]).name
         print(
@@ -539,6 +697,14 @@ def print_replay_result(result: dict) -> None:
                 reason=result.get("coverage_reason_code", "COVERAGE_STAMP_MISSING"),
             )
         )
+        receipt = result.get("messaging_forward_receipt")
+        if isinstance(receipt, dict) and receipt.get("receipt_path"):
+            print(
+                "Messaging Receipt: receipt_path={path} receipt_version={version}".format(
+                    path=receipt.get("receipt_path"),
+                    version=receipt.get("receipt_version", "unknown"),
+                )
+            )
         _print_ignored()
         return
     mismatches = result["mismatches"]
@@ -602,6 +768,7 @@ def build_audit_report(results: list) -> dict:
             "matched": sum(1 for r in results if r.get("kind") == "pass"),
             "mismatched": sum(1 for r in results if r.get("kind") == "mismatch"),
             "fatal": sum(1 for r in results if r.get("kind") == "fatal"),
+            "skipped": sum(1 for r in results if r.get("kind") == "skip"),
         },
         "invariant_counts": {
             "total_checked": checked,
@@ -653,8 +820,9 @@ def main():
         res["strict_extra"] = args.strict_extra
         results.append(res)
         print_replay_result(res)
-        if res["kind"] == "pass":
-            ok_records.append(res["record"])
+        if res["kind"] in ("pass", "skip"):
+            if res["kind"] == "pass":
+                ok_records.append(res["record"])
             continue
         final_rc = res["exit_code"]
         break

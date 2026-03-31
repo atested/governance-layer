@@ -17,6 +17,12 @@ from coverage_stamp import (
     SURFACE_ORDER,
     validate_coverage_stamp,
 )
+from event_model import (
+    is_non_action_event,
+    validate_compound_metadata,
+    validate_non_action_event,
+    verify_non_action_event_hash,
+)
 
 CAP_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "capabilities" / "capability-registry.json"
 POLICY_EVAL_PATH = Path(__file__).resolve().with_name("policy-eval.py")
@@ -331,12 +337,41 @@ def _verify_signature_if_present(rec: dict):
     return 0, [], True
 
 
+def _verify_compound_metadata_if_present(rec: dict):
+    """Validate compound_metadata if present. Returns (exit_code, output_lines)."""
+    compound_meta = rec.get("compound_metadata")
+    if compound_meta is None:
+        return 0, []
+    ok, err = validate_compound_metadata(compound_meta)
+    if not ok:
+        return 1, [f"FAIL: {err}"]
+    return 0, []
+
+
+def verify_non_action_event_dict(rec: dict):
+    """Verify a non-action governance event record. Returns (exit_code, output_lines)."""
+    ok, err = validate_non_action_event(rec)
+    if not ok:
+        return 1, [f"FAIL: {err}"]
+
+    hash_ok, hash_err = verify_non_action_event_hash(rec)
+    if not hash_ok:
+        return 1, [f"FAIL: {hash_err}"]
+
+    return 0, ["PASS: non-action event verified"]
+
+
 def verify_record_dict(
     rec: dict,
     require_coverage_stamp: Optional[bool] = None,
     check_cap_registry_hash: bool = True,
 ):
     """Return (exit_code, output_lines)."""
+
+    # Non-action events use a separate verification path.
+    if is_non_action_event(rec):
+        return verify_non_action_event_dict(rec)
+
     mode_err = _validate_signing_mode_flags()
     if mode_err is not None:
         return mode_err
@@ -347,6 +382,11 @@ def verify_record_dict(
     coverage = validate_coverage_stamp(rec.get("coverage_stamp"), required=require_coverage_stamp)
     if not coverage.ok:
         return 1, [f"FAIL: {coverage.reason_code} ({coverage.message})"]
+
+    # Validate compound_metadata if present (additive extension).
+    cm_rc, cm_lines = _verify_compound_metadata_if_present(rec)
+    if cm_rc != 0:
+        return cm_rc, cm_lines
 
     # Verify cap_registry_hash when checking against the live registry surface.
     got_cap_hash = rec.get("cap_registry_hash")

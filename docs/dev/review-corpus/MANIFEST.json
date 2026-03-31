@@ -1,0 +1,298 @@
+[
+  {
+    "path": "docs/dev/AGENT_CONTRACT.md",
+    "tier": 1,
+    "size_bytes": 11427,
+    "line_count": 395,
+    "sha256": "08abf80e76d5afdfbe91c4438edea52557871a37f49ebeac5fd080636a6cec66",
+    "purpose": "Agent confirmation policy, safe defaults, and operational constraints."
+  },
+  {
+    "path": "docs/dev/BRIEFING_FORMAT__BFPS_v12.md",
+    "tier": 1,
+    "size_bytes": 11532,
+    "line_count": 241,
+    "sha256": "27ceda964293ad841da2fe1b1a5ad2374752a6b53f681a34a3dcfb1b3499503c",
+    "purpose": "Briefing format specification."
+  },
+  {
+    "path": "docs/dev/CODEX_CAPABILITY_TIER__v0.md",
+    "tier": 1,
+    "size_bytes": 8675,
+    "line_count": 233,
+    "sha256": "0b10b5853a4fb4400bfd31768fb564f1e857bb31f6944c256b47da9e0ff5844c",
+    "purpose": "Codex role, boundaries, QT-first delegation, and escalation rules."
+  },
+  {
+    "path": "docs/dev/DISPATCH_LIBRARY__CECIL_CODEX__v10.md",
+    "tier": 1,
+    "size_bytes": 2801,
+    "line_count": 70,
+    "sha256": "904acfc0cbfe487ede29e992bb2b287d7dc931384dc2f64cf9efbe679725093d",
+    "purpose": "Dispatch templates for Cecil and Codex work."
+  },
+  {
+    "path": "docs/dev/EVIDENCE-CONTRACT.md",
+    "tier": 1,
+    "size_bytes": 2843,
+    "line_count": 125,
+    "sha256": "ee83079674897aad870203a7e54c0bbb1e70f6ff597a1dc460ac08023684abcf",
+    "purpose": "Evidence bundle specification for task completion."
+  },
+  {
+    "path": "docs/dev/MERGE_GATE.md",
+    "tier": 1,
+    "size_bytes": 4009,
+    "line_count": 99,
+    "sha256": "eac56c5730b664be6fceb68a6fddb0b5011606230399f9a5f3680db7bbbfbfbf",
+    "purpose": "Merge checklist, fail-closed rules, and evidence requirements."
+  },
+  {
+    "path": "docs/dev/OPS_CANONICAL.md",
+    "tier": 1,
+    "size_bytes": 3833,
+    "line_count": 77,
+    "sha256": "1b9478aeb471394de680767c49b2d302a81ee7e96719c53e17f996170bbd648b",
+    "purpose": "Operational invariants and script registry."
+  },
+  {
+    "path": "docs/dev/OPS_PROCESS__CHATGPT_CODEX_CECIL__v1.md",
+    "tier": 1,
+    "size_bytes": 16028,
+    "line_count": 376,
+    "sha256": "aaa3d5cf4a83bf6aa176c6b943897f384fd806f3de0756861ac169a1900de0cd",
+    "purpose": "Multi-agent collaboration process, roles, and merge strategy."
+  },
+  {
+    "path": "docs/dev/RUNBOOK.md",
+    "tier": 1,
+    "size_bytes": 21322,
+    "line_count": 549,
+    "sha256": "85a084146e5ce98b24f6ea6a6901819919547b1205271f912e170c3b79a40044",
+    "purpose": "Operational procedures manual."
+  },
+  {
+    "path": "docs/dev/TASK_TEMPLATE.md",
+    "tier": 1,
+    "size_bytes": 2969,
+    "line_count": 112,
+    "sha256": "a7b5a855316910ec56c19779f6c2a23105b3ec845d4d028a6aefb6e55b841e71",
+    "purpose": "Standard task specification format."
+  },
+  {
+    "path": "system/ops/limits.json",
+    "tier": 2,
+    "size_bytes": 100,
+    "line_count": 5,
+    "sha256": "a42693f7afa20a4dd0d78898c5188a8e22aca876a9f0bc66b09d68526e35b2fc",
+    "purpose": "Execution caps and operational limits."
+  },
+  {
+    "path": "system/scripts/codex-batch.sh",
+    "tier": 2,
+    "size_bytes": 4436,
+    "line_count": 161,
+    "sha256": "6d3c24bfb3198bd2a80574d85fd87d58d80a68f01b2fb55b28cc1239ccec90f5",
+    "purpose": "Batch generation and execution support for Codex."
+  },
+  {
+    "path": "system/scripts/codex-unattended.sh",
+    "tier": 2,
+    "size_bytes": 22307,
+    "line_count": 834,
+    "sha256": "d958bdd205eb0af093edb146147b0340490ebb98455b1e837bf3cad0cd5e8216",
+    "purpose": "Codex execution envelope for preflight, branching, scope checks, evidence, and completion."
+  },
+  {
+    "path": "system/scripts/qt-runner.sh",
+    "tier": 2,
+    "size_bytes": 7826,
+    "line_count": 296,
+    "sha256": "3bebe38a518e74ddfe53ddb1d51af7b9d968274760705ea8f2252e17cb605ccc",
+    "purpose": "QT verification runner."
+  },
+  {
+    "path": "system/scripts/qt-usage-summary.sh",
+    "tier": 2,
+    "size_bytes": 1297,
+    "line_count": 49,
+    "sha256": "b2a34698044459132f178084a0e6d6b88a057102368a7ec61825693946704fbf",
+    "purpose": "Compact QT usage observability surface."
+  },
+  {
+    "path": "system/scripts/release-gate.sh",
+    "tier": 2,
+    "size_bytes": 14005,
+    "line_count": 429,
+    "sha256": "809a658cc1171265f0a7b10a7058a4d8f84c20151b3b53a96c42d33900d97230",
+    "purpose": "Release gate and proof-bundle generation."
+  },
+  {
+    "path": "system/scripts/validate-proof-bundle.sh",
+    "tier": 2,
+    "size_bytes": 14556,
+    "line_count": 433,
+    "sha256": "224b900c76a661c0fd9dc251ab0e8ace27834460d0ac18bf5bef09db338eea1d",
+    "purpose": "Proof-bundle validation entrypoint."
+  },
+  {
+    "path": "docs/dev/ASSIGNMENTS.md",
+    "tier": 3,
+    "size_bytes": 83749,
+    "line_count": 449,
+    "sha256": "468c5bb2a45ebd06da0ba4155fa52fcdd15b3518721ab430d65611305de11f50",
+    "purpose": "Task ownership and completion history."
+  },
+  {
+    "path": "docs/dev/CODEX_ROUTED_RUNTIME_BASELINE__COMPLETION_RECORD__v0.md",
+    "tier": 3,
+    "size_bytes": 6933,
+    "line_count": 170,
+    "sha256": "cfa1772ce9bb43b2bc45b5cc40f032f41fb78dc724d769c281bbc81601a7480c",
+    "purpose": "Codex routed-runtime baseline proof record."
+  },
+  {
+    "path": "docs/dev/INGESTION_WORKFLOW.md",
+    "tier": 3,
+    "size_bytes": 14939,
+    "line_count": 371,
+    "sha256": "013077fb0d2612b2a69548aa42cfdbde557fabf8b2608515bd5fae72e7a6525c",
+    "purpose": "End-to-end task lifecycle description."
+  },
+  {
+    "path": "docs/dev/QT_JOB_SCHEMA.md",
+    "tier": 3,
+    "size_bytes": 1209,
+    "line_count": 35,
+    "sha256": "4fc1d4b50005a831ece0b2f6adef2a0d6e5835b356f3ee3efb8ece2a7207400b",
+    "purpose": "QT job format and required fields."
+  },
+  {
+    "path": "docs/dev/QT_RUNTIME_PROOF__v0.md",
+    "tier": 3,
+    "size_bytes": 4490,
+    "line_count": 148,
+    "sha256": "6d8c4a2d712a9bef37fbae3fcca0843ab72a306da12ecad467b73fbbea77b963",
+    "purpose": "QT liveness proof record."
+  },
+  {
+    "path": "docs/dev/ROUTED_RUNTIME_BASELINE__COMPLETION_RECORD__v0.md",
+    "tier": 3,
+    "size_bytes": 9379,
+    "line_count": 168,
+    "sha256": "b02090155271dcc933f04cbaf580d92719a642559812b9c977003e3a9ea01651",
+    "purpose": "Cecil routed-runtime baseline proof record."
+  },
+  {
+    "path": "docs/dev/TASK_SEEDS.md",
+    "tier": 3,
+    "size_bytes": 9890,
+    "line_count": 424,
+    "sha256": "d8d96732bc0b8b0df49952719e8ce762d0fe6f9a56c0db19ac8b95ffeb55c394",
+    "purpose": "Task generation system and seed definitions."
+  },
+  {
+    "path": "docs/dev/WORK_QUEUE.md",
+    "tier": 3,
+    "size_bytes": 61263,
+    "line_count": 432,
+    "sha256": "4726ef1d498a30d6f22dcc1d0b7c7ef43efb0c5b81016e8fe9dce6703924dfdf",
+    "purpose": "Current task-state inventory."
+  },
+  {
+    "path": "docs/dev/specs/CODEX_RECEPTION_CHECKLIST__SPEC__v0.md",
+    "tier": 3,
+    "size_bytes": 5995,
+    "line_count": 132,
+    "sha256": "fcc619c5923252ac0093903bd16f28afc485c29173b1f30480845c7392ec7365",
+    "purpose": "Reception validation specification."
+  },
+  {
+    "path": "docs/dev/tasks/ready/TASK_003__dry-run-doc-task.md",
+    "tier": 3,
+    "size_bytes": 2324,
+    "line_count": 68,
+    "sha256": "d1653ebfa43ca625f57d5b34e8c2bad686f5ac118b0bfcecf1545b7df63fee55",
+    "purpose": "Representative simple docs-only task spec."
+  },
+  {
+    "path": "docs/dev/tasks/ready/TASK_157__validate_proof_bundle_supports_deterministic_summary_json.md",
+    "tier": 3,
+    "size_bytes": 1800,
+    "line_count": 49,
+    "sha256": "809b338167058c22e22cdeb98638f89ea4f00de2fc3854cc2b1c05434784fd07",
+    "purpose": "Representative implementation task spec."
+  },
+  {
+    "path": "docs/dev/tasks/ready/TASK_283__discovery_next_deeper_bounded_lane_recommendation.md",
+    "tier": 3,
+    "size_bytes": 2207,
+    "line_count": 51,
+    "sha256": "dfedd9ccddc921969912525b4442416ea238a208ee7e39aaea13beeb2fac1150",
+    "purpose": "Representative investigation task spec."
+  },
+  {
+    "path": "docs/dev/tasks/ready/TASK_306__capability_map_extraction_support.md",
+    "tier": 3,
+    "size_bytes": 1739,
+    "line_count": 49,
+    "sha256": "e65f92f6b2790779c38c9826d48b0d0c04ee5486ca0fc13f36153c6531a4aa8f",
+    "purpose": "Representative bounded docs-only task spec in current template style."
+  },
+  {
+    "path": "docs/dev/tasks/ready/TASK_321__rdd_pass_to_triage_conditional_invocation_wiring.md",
+    "tier": 3,
+    "size_bytes": 2505,
+    "line_count": 56,
+    "sha256": "3d38e1225e0f0af53a0449d670139f6536dab428c8534be40f0a7462c7d81497",
+    "purpose": "Representative complex implementation task spec."
+  },
+  {
+    "path": "docs/DECISION-RECORD.md",
+    "tier": 4,
+    "size_bytes": 1163,
+    "line_count": 36,
+    "sha256": "e1fb87073d3b528a7a351068e09a509c773457a744929afcb204b1e77ea0b258",
+    "purpose": "Decision record schema and semantics."
+  },
+  {
+    "path": "docs/GOVERNANCE_OVERVIEW.md",
+    "tier": 4,
+    "size_bytes": 12425,
+    "line_count": 269,
+    "sha256": "7a5a42d7f0f3bf7c28cbbd00d05a7959f75e3a3ed93c3e27c1c9804f202c8786",
+    "purpose": "System guarantees and high-level architecture."
+  },
+  {
+    "path": "docs/POLICY.md",
+    "tier": 4,
+    "size_bytes": 4664,
+    "line_count": 143,
+    "sha256": "edab5f30b49164eddbfddddaf472a6d58a247b5452f0098b1bafca6908cf7077",
+    "purpose": "Policy rules enforced by the governance layer."
+  },
+  {
+    "path": "docs/RESIDUAL_DISCRETION_DOCTRINE.md",
+    "tier": 4,
+    "size_bytes": 54800,
+    "line_count": 690,
+    "sha256": "51fcea6ccfb98efc88e3c4258b8eba4a6f06914a18fb78ae9af6015b446305c4",
+    "purpose": "Residual discretion doctrine architecture."
+  },
+  {
+    "path": "docs/SCOPE.md",
+    "tier": 4,
+    "size_bytes": 1027,
+    "line_count": 20,
+    "sha256": "172ad22014b29099134c47576cbd9ac8292d9e1cf14b2fb5cda95215c6a23268",
+    "purpose": "What the governance layer is and is not."
+  },
+  {
+    "path": "docs/THREAT-MODEL.md",
+    "tier": 4,
+    "size_bytes": 1421,
+    "line_count": 32,
+    "sha256": "bc0461e5ab815473de62bad11da6b4cf1dffe0fcf605c7cbb8716c200cee3194",
+    "purpose": "Threat model and assumptions."
+  }
+]

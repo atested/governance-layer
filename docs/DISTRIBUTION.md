@@ -24,6 +24,7 @@ Optional additive files:
 - Optional: `out/proof-bundles/<run-id>/queue_drift_scan.json`
 - Optional: `out/proof-bundles/<run-id>/status_bundle.json`
 - Optional: `out/proof-bundles/<run-id>/validate_proof_bundle_summary.json`
+  - Machine-readable schema: `validate_proof_bundle_summary_v1`
 
 ## Do Not Commit (Runtime / Local-Only)
 - `out/proof-bundles/**` (runtime outputs)
@@ -44,4 +45,5 @@ Optional additive files:
   - matching `END:<task> rc=<n>` lines
 - Required docs anchors for smoke scans:
   - required outputs: `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
-  - optional outputs: `queue_drift_scan.txt`, `queue_drift_scan.json`, `status_bundle.json`
+  - optional outputs: `queue_drift_scan.txt`, `queue_drift_scan.json`, `status_bundle.json`, `validate_proof_bundle_summary.json`
+  - machine-readable schemas: `proof_packet_verify_summary_v2`, `validate_proof_bundle_summary_v1`

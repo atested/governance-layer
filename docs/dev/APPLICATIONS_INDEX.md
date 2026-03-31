@@ -97,7 +97,7 @@ Status-tagged index of downstream consumers, use cases, and applications built o
 ### MCP Server (Governed Tools) `[IMPLEMENTED]`
 **Description**: Model Context Protocol server exposing governed filesystem tools.
 
-**Status**: Operational, smoke tests passing
+**Status**: Operational for the bounded GovMCP baselines currently proven on main: minimum required-path continuity, the receipt-linked inspectability/query seam, tool-catalog exposure coherence, and the bounded tool-catalog slice/query seam for already-existing catalog register/get/list/export/verify behavior. This is not a claim of broad GovMCP maturity or broad connector completion, and it should not be read as canonical proof that generic “more GovMCP maturity” is still the next default workfront.
 
 **Tools Exposed**:
 - fs_read (governed)
@@ -105,10 +105,58 @@ Status-tagged index of downstream consumers, use cases, and applications built o
 - fs_list (governed)
 - fs_move (governed)
 - fs_delete (governed)
+- bounded GovMCP catalog-local methods:
+  - `capabilities.tool_register`
+  - `capabilities.tool_get`
+  - `capabilities.tool_list_recent`
+  - `capabilities.tool_catalog_export_bundle`
+  - `capabilities.tool_catalog_verify_bundle`
 
-**Evidence**: `tests/run-mcp-smoke.sh`, MCP server logs
+**Evidence**:
+- Minimum required-path closure: `tests/test_mcp_storage_contract.sh`, `tests/test_mcp_receipt_tool_event_continuity.sh`, `tests/test_mcp_exposure_alignment.sh`
+- Inspectability/query seam closure: `tests/test_mcp_inspectability_contract.sh`, `tests/test_mcp_receipt_tool_event_continuity.sh`, `tests/test_mcp_exposure_alignment.sh`
+- Tool-catalog exposure coherence: `system/tests/test_mcp_tool_catalog_register_and_get.sh`, `system/tests/test_mcp_tool_catalog_list_recent.sh`, `system/tests/test_mcp_tool_catalog_export_bundle.sh`, `system/tests/test_mcp_tool_catalog_verify_bundle.sh`
+- Auxiliary smoke harness: `tests/run-mcp-smoke.sh` (environment-sensitive bootstrap check, not the primary bounded-closure proof)
 
 **Code**: `mcp/server.py` (or equivalent MCP implementation)
+
+**Boundary Note**:
+- Landed GovMCP baselines cover:
+  - explicit mixed-root storage contract for the bounded required path
+  - receipt -> retrieval -> replay linkage -> receipt-linked inspectability
+  - explicit inspectability/query contract for constitutive receipt-linked surfaces
+  - narrow MCP exposure for already-existing tool-catalog register/get/list/export/verify behavior
+- Partial recent/list surfaces remain partial.
+- Broader tool-catalog maturity, bundle/export maturity, and broader GovMCP ergonomics remain separate follow-on concerns.
+
+---
+
+### Messaging Proof Surface `[IMPLEMENTED]`
+**Description**: Governed messaging capability surface for bounded privileged messaging invocation.
+
+**Status**: Operational for the first two bounded messaging slices currently proven on main:
+- first-slice messaging proof-surface implementation (`TASK_399`)
+- replay-strengthening second slice with post-`ALLOW` forwarding receipt evidence kept outside evaluator-facing structures (`TASK_400`)
+
+**Implemented Surface**:
+- `MSG_SEND`
+- `MSG_REPLY`
+- explicit mapping/version binding for messaging capability registration
+- `ALLOW` / `DENY` only behavior
+- structurally content-blind evaluator inputs
+- stronger replay binding through forwarding-phase evidence rather than evaluator-facing schema
+
+**Evidence**:
+- `tests/test_msg_policy_surface.sh`
+- `system/tests/test_mcp_msg_surface.sh`
+- `system/tests/test_mcp_msg_replay_receipt.sh`
+- `tests/test_replay.sh`
+- `docs/dev/TASK_399_POST_IMPLEMENTATION_REVIEW__v1.md`
+- `docs/dev/TASK_400_POST_IMPLEMENTATION_REVIEW__v1.md`
+
+**Boundary Note**:
+- This is bounded messaging proof-surface baseline, not broad messaging-platform completion.
+- Messaging follow-on remains a separate future formulation/restock concern.
 
 ---
 

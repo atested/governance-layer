@@ -43,7 +43,7 @@ Create the bounded GovLayer trust-grade closure workfront that follows `TASK_366
 - No stale-branch recovery.
 - Preserve the current layer boundaries:
   - DR = philosophy
-  - GovCore = main development target
+  - governance-layer repo = main development target
   - GovLayer = enabling governance layer / main core application
   - GovMCP = connector / targeted application of GovLayer
   - DevCore = development operating layer

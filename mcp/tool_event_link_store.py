@@ -5,6 +5,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+from storage_contract import tool_event_link_index_path
+from tool_event_store import get_tool_event_by_digest, list_tool_events_for_receipt
+
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
 _RECEIPT_ID_RE = re.compile(r"[A-Za-z0-9._:-]{1,128}$")
 _INDEX_VERSION = "v1"
@@ -15,7 +18,7 @@ def _canonical_json(value: Any) -> str:
 
 
 def _index_path(repo_root: Path) -> Path:
-    return repo_root / "out" / "mcp_exec" / "tool_event_links.v1.json"
+    return tool_event_link_index_path(repo_root)
 
 
 def _empty_index() -> dict[str, list[dict[str, Any]]]:
@@ -162,6 +165,11 @@ def get_tool_events_for_receipt(repo_root: Path, receipt_id: str) -> list[str]:
     rid = str(receipt_id or "").strip()
     if not _RECEIPT_ID_RE.fullmatch(rid):
         return []
+    runtime_digests = [
+        str(row.get("tool_event_digest", "")).strip()
+        for row in list_tool_events_for_receipt(repo_root, rid)
+        if _DIGEST_RE.fullmatch(str(row.get("tool_event_digest", "")).strip())
+    ]
     payload = _load(repo_root)
     for row in payload["receipt_to_tool_events"]:
         if not isinstance(row, dict):
@@ -169,15 +177,21 @@ def get_tool_events_for_receipt(repo_root: Path, receipt_id: str) -> list[str]:
         if str(row.get("receipt_id", "")).strip() == rid:
             vals = row.get("tool_event_digests", [])
             if isinstance(vals, list):
-                return _clean_digests(vals)
-            return []
-    return []
+                return _clean_digests(list(vals) + runtime_digests)
+            return _clean_digests(runtime_digests)
+    return _clean_digests(runtime_digests)
 
 
 def get_receipts_for_tool_event(repo_root: Path, tool_event_digest: str) -> list[str]:
     digest = str(tool_event_digest or "").strip()
     if not _DIGEST_RE.fullmatch(digest):
         return []
+    runtime_receipts: list[str] = []
+    runtime_row = get_tool_event_by_digest(repo_root, digest)
+    if isinstance(runtime_row, dict):
+        runtime_receipt = str(runtime_row.get("receipt_id", "")).strip()
+        if _RECEIPT_ID_RE.fullmatch(runtime_receipt):
+            runtime_receipts.append(runtime_receipt)
     payload = _load(repo_root)
     for row in payload["tool_event_to_receipts"]:
         if not isinstance(row, dict):
@@ -185,6 +199,6 @@ def get_receipts_for_tool_event(repo_root: Path, tool_event_digest: str) -> list
         if str(row.get("tool_event_digest", "")).strip() == digest:
             vals = row.get("receipt_ids", [])
             if isinstance(vals, list):
-                return _clean_receipt_ids(vals)
-            return []
-    return []
+                return _clean_receipt_ids(list(vals) + runtime_receipts)
+            return _clean_receipt_ids(runtime_receipts)
+    return _clean_receipt_ids(runtime_receipts)

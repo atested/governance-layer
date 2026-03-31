@@ -5,7 +5,7 @@ import json
 import sys
 import tarfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mcp"))
@@ -18,6 +18,7 @@ import ed25519_bundle_signing as edsig
 HASH_ALGO = "sha256"
 MANIFEST_NAME = "manifest.json"
 PAYLOAD_PREFIX = "payload/"
+VERIFY_PREFIX = "ATTESTATION_BUNDLE_VERIFY"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -26,6 +27,34 @@ def sha256_bytes(data: bytes) -> str:
 
 def fail(msg: str, code: int = 1) -> int:
     print(f"FAIL: {msg}")
+    return code
+
+
+def _final(
+    ok: bool,
+    reason: str,
+    human_lines: Optional[list[str]] = None,
+    code: int = 0,
+    bundle_version: str = "NONE",
+    receipt_bundle_version: str = "NONE",
+    bundle_id: str = "NONE",
+    manifest_sha256: str = "NONE",
+    files_checked: int = 0,
+    signature_verified: str = "not_required",
+) -> int:
+    print(
+        f"{VERIFY_PREFIX} "
+        f"ok={'yes' if ok else 'no'} "
+        f"reason={reason} "
+        f"bundle_version={bundle_version} "
+        f"receipt_bundle_version={receipt_bundle_version} "
+        f"bundle_id={bundle_id} "
+        f"manifest_sha256={manifest_sha256} "
+        f"files_checked={files_checked} "
+        f"signature_verified={signature_verified}"
+    )
+    for line in human_lines or []:
+        print(line)
     return code
 
 
@@ -201,7 +230,6 @@ def _verify_signature_sidecars(
     except Exception:
         return fail("SIGNATURE_VERIFICATION_FAILED", 1)
 
-    print("PASS: attestation bundle signature verified")
     return 0
 
 
@@ -216,47 +244,153 @@ def verify_bundle(
     try:
         manifest_raw, payload_member_map = _load_bundle(path)
     except ValueError as e:
-        return fail(str(e), 2)
+        return _final(False, "BUNDLE_INVALID", [f"FAIL: {e}"], code=2)
 
     try:
         manifest = json.loads(manifest_raw.decode("utf-8"))
     except Exception as e:
-        return fail(f"malformed manifest json: {e}")
+        return _final(False, "MANIFEST_INVALID", [f"FAIL: malformed manifest json: {e}"], code=1)
 
     if not isinstance(manifest, dict):
-        return fail("manifest must be a JSON object")
+        return _final(False, "MANIFEST_INVALID", ["FAIL: manifest must be a JSON object"], code=1)
+    manifest_sha = sha256_bytes(manifest_raw)
+    bundle_id = "rab_" + manifest_sha.split(":", 1)[1]
+    bundle_version = str(manifest.get("bundle_version", "NONE"))
+    receipt_bundle_version = str(manifest.get("receipt_bundle_version", "NONE"))
+    signature_verified_fail = "no" if require_signature else "not_required"
+    signature_verified_success = "yes" if require_signature else "not_required"
     if manifest.get("bundle_version") != "attestation_bundle_v1":
-        return fail("manifest bundle_version mismatch")
+        return _final(
+            False,
+            "MANIFEST_INVALID",
+            ["FAIL: manifest bundle_version mismatch"],
+            code=1,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            signature_verified=signature_verified_fail,
+        )
     if manifest.get("hash_algo") != HASH_ALGO:
-        return fail("manifest hash_algo mismatch")
+        return _final(
+            False,
+            "MANIFEST_INVALID",
+            ["FAIL: manifest hash_algo mismatch"],
+            code=1,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            signature_verified=signature_verified_fail,
+        )
     files = manifest.get("files")
     if not isinstance(files, list) or not files:
-        return fail("manifest files must be a non-empty list")
+        return _final(
+            False,
+            "MANIFEST_INVALID",
+            ["FAIL: manifest files must be a non-empty list"],
+            code=1,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            signature_verified=signature_verified_fail,
+        )
 
     manifest_map = {}
     for entry in files:
         if not isinstance(entry, dict):
-            return fail("manifest file entry must be object")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                ["FAIL: manifest file entry must be object"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
         p = entry.get("path")
         h = entry.get("sha256")
         sz = entry.get("size")
         if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/"):
-            return fail(f"invalid manifest path: {p!r}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: invalid manifest path: {p!r}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
         if p in manifest_map:
-            return fail(f"duplicate manifest path: {p}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: duplicate manifest path: {p}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
         if not isinstance(h, str) or not h.startswith("sha256:"):
-            return fail(f"invalid sha256 for {p}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: invalid sha256 for {p}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
         if not isinstance(sz, int) or sz < 0:
-            return fail(f"invalid size for {p}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: invalid size for {p}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
         manifest_map[p] = {"sha256": h, "size": sz}
 
     if "record.json" not in manifest_map:
-        return fail("manifest missing record.json")
+        return _final(
+            False,
+            "MANIFEST_INVALID",
+            ["FAIL: manifest missing record.json"],
+            code=1,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            signature_verified=signature_verified_fail,
+        )
     for p in manifest_map:
         if p == "record.json":
             continue
         if not p.startswith("artifacts/"):
-            return fail(f"unexpected manifest path outside artifacts/: {p}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: unexpected manifest path outside artifacts/: {p}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
 
     for rel in sorted(manifest_map):
         if rel in payload_member_map:
@@ -265,16 +399,37 @@ def verify_bundle(
             alt = "sig/" + rel[len("artifacts/") :]
             if alt in payload_member_map:
                 continue
-        return fail(f"manifest references missing bundle member: {rel}")
+        return _final(
+            False,
+            "MISSING_FILE",
+            [f"FAIL: manifest references missing bundle member: {rel}"],
+            code=1,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            signature_verified=signature_verified_fail,
+        )
     for rel in sorted(payload_member_map):
         if rel.startswith("sig/"):
             rel_manifest = "artifacts/" + rel[len("sig/") :]
         else:
             rel_manifest = rel
         if rel_manifest not in manifest_map:
-            return fail(f"unexpected payload member not in manifest: {rel_manifest}")
+            return _final(
+                False,
+                "MANIFEST_INVALID",
+                [f"FAIL: unexpected payload member not in manifest: {rel_manifest}"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                signature_verified=signature_verified_fail,
+            )
 
     canonical_payload: dict[str, bytes] = {}
+    files_checked = 0
     for rel in sorted(manifest_map):
         entry = manifest_map[rel]
         src_rel = rel
@@ -285,16 +440,50 @@ def verify_bundle(
         data = payload_member_map[src_rel]
         canonical_payload[rel] = data
         if len(data) != entry["size"]:
-            return fail(f"size mismatch for {rel} (got={len(data)} expected={entry['size']})")
+            return _final(
+                False,
+                "SIZE_MISMATCH",
+                [f"FAIL: size mismatch for {rel} (got={len(data)} expected={entry['size']})"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                files_checked=files_checked,
+                signature_verified=signature_verified_fail,
+            )
         got = sha256_bytes(data)
         if got != entry["sha256"]:
-            return fail(f"hash mismatch for {rel} (got={got} expected={entry['sha256']})")
+            return _final(
+                False,
+                "HASH_MISMATCH",
+                [f"FAIL: hash mismatch for {rel} (got={got} expected={entry['sha256']})"],
+                code=1,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                files_checked=files_checked,
+                signature_verified=signature_verified_fail,
+            )
+        files_checked += 1
 
     rc = _validate_receipt_extension(
         manifest, canonical_payload, receipt_pubkey, require_signature=require_signature
     )
     if rc != 0:
-        return rc
+        return _final(
+            False,
+            "RECEIPT_EXTENSION_INVALID",
+            [],
+            code=rc,
+            bundle_version=bundle_version,
+            receipt_bundle_version=receipt_bundle_version,
+            bundle_id=bundle_id,
+            manifest_sha256=manifest_sha,
+            files_checked=files_checked,
+            signature_verified=signature_verified_fail,
+        )
 
     is_receipt_bundle = manifest.get("receipt_bundle_version") == "receipt_attestation_bundle_v0"
     should_verify_sidecars = path.is_file() and (
@@ -315,10 +504,35 @@ def verify_bundle(
             sigmeta_path_arg=sigmeta_path_arg,
         )
         if sig_rc != 0:
-            return sig_rc
+            return _final(
+                False,
+                "SIGNATURE_INVALID",
+                [],
+                code=sig_rc,
+                bundle_version=bundle_version,
+                receipt_bundle_version=receipt_bundle_version,
+                bundle_id=bundle_id,
+                manifest_sha256=manifest_sha,
+                files_checked=files_checked,
+                signature_verified="no" if require_signature else "not_required",
+            )
 
-    print("PASS: attestation bundle manifest + payload hashes verified")
-    return 0
+    pass_lines: list[str] = []
+    if path.is_file() and should_verify_sidecars:
+        pass_lines.append("PASS: attestation bundle signature verified")
+    pass_lines.append("PASS: attestation bundle manifest + payload hashes verified")
+    return _final(
+        True,
+        "OK",
+        pass_lines,
+        code=0,
+        bundle_version=bundle_version,
+        receipt_bundle_version=receipt_bundle_version,
+        bundle_id=bundle_id,
+        manifest_sha256=manifest_sha,
+        files_checked=files_checked,
+        signature_verified=signature_verified_success,
+    )
 
 
 def main() -> int:

@@ -165,7 +165,7 @@ Interpretation:
 
 The governance-layer provides **stability contracts** for CI/CD integration:
 
-- **Proof-packet schemas frozen:** `proof_packet_v1` manifest and `proof_packet_verify_summary_v1` summary schemas are versioned and stable
+- **Proof-packet schemas versioned:** `proof_packet_v1` manifest is stable and the current verifier summary schema is `proof_packet_verify_summary_v2`
 - **Required files guaranteed:** `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`
 - **Optional files may be present:** `queue_drift_scan.txt`, `status_bundle.json` (do not treat as required)
 - **Profile semantics:** `dev` (informational) and `ci` (gating) profiles for strictness control

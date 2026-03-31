@@ -40,8 +40,52 @@ assert j["packet_hash"]["algo"] == "sha256"
 assert j["summary_hash"]["algo"] == "sha256"
 assert "queue_drift_scan" in j and "status_bundle" in j
 print("PASS: summary json required keys/schema version present")
+gov = j.get("governance_evidence")
+assert isinstance(gov, dict), f"governance_evidence missing or not a dict: {gov!r}"
+assert gov.get("replay_outcome") in ("pass", "fail", "unavailable"), \
+    f"governance_evidence.replay_outcome invalid: {gov.get('replay_outcome')!r}"
+print(f"PASS: validate_proof_bundle_summary_v1 contains governance_evidence.replay_outcome={gov['replay_outcome']!r}")
 PY
 echo "VALIDATE_SUMMARY_JSON_SHA256_RUN1=$J1"
 echo "VALIDATE_SUMMARY_JSON_SHA256_RUN2=$J2"
 echo "PASS: validator summary JSON deterministic across two runs"
 
+echo "--- T-VALIDATE-SUMMARY-JSON-002: validator summary propagates fail replay_outcome ---"
+python3 - <<'PY' "$bundle/proof_packet_verify_summary.json"
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+j = json.loads(path.read_text(encoding="utf-8"))
+j.setdefault("governance_evidence", {})["replay_outcome"] = "fail"
+path.write_text(json.dumps(j, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+PY
+bash "$ROOT/system/scripts/validate-proof-bundle.sh" "$bundle" --summary-json "$TMPDIR_LOCAL/summary_fail.json" > "$TMPDIR_LOCAL/validate_fail.out"
+python3 - <<'PY' "$TMPDIR_LOCAL/summary_fail.json"
+import json,sys
+j=json.load(open(sys.argv[1], encoding='utf-8'))
+assert j["result"] == "PASS"
+gov = j.get("governance_evidence")
+assert isinstance(gov, dict), f"governance_evidence missing or not a dict: {gov!r}"
+assert gov.get("replay_outcome") == "fail", gov
+print("PASS: validator summary propagates governance_evidence.replay_outcome='fail'")
+PY
+
+echo "--- T-VALIDATE-SUMMARY-JSON-003: validator summary normalizes unavailable replay_outcome ---"
+python3 - <<'PY' "$bundle/proof_packet_verify_summary.json"
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+j = json.loads(path.read_text(encoding="utf-8"))
+j.setdefault("governance_evidence", {}).pop("replay_outcome", None)
+path.write_text(json.dumps(j, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+PY
+bash "$ROOT/system/scripts/validate-proof-bundle.sh" "$bundle" --summary-json "$TMPDIR_LOCAL/summary_unavailable.json" > "$TMPDIR_LOCAL/validate_unavailable.out"
+python3 - <<'PY' "$TMPDIR_LOCAL/summary_unavailable.json"
+import json,sys
+j=json.load(open(sys.argv[1], encoding='utf-8'))
+assert j["result"] == "PASS"
+gov = j.get("governance_evidence")
+assert isinstance(gov, dict), f"governance_evidence missing or not a dict: {gov!r}"
+assert gov.get("replay_outcome") == "unavailable", gov
+print("PASS: validator summary emits governance_evidence.replay_outcome='unavailable'")
+PY

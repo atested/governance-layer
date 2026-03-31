@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from storage_contract import tool_catalog_store_root
+
 _MAX_DOC_BYTES = 32768
 _CREATED_FROM_VALUES = {"ingest", "manual", "external"}
 _TOOL_ID_RE = re.compile(r"tool_[0-9a-f]{16}$")
@@ -18,7 +20,7 @@ def _canonical_json(obj: Any) -> str:
 
 
 def _store_root(repo_root: Path) -> Path:
-    return repo_root / "out" / "mcp_tool_catalog"
+    return tool_catalog_store_root(repo_root)
 
 
 def _index_path(repo_root: Path) -> Path:
@@ -213,7 +215,7 @@ def list_recent(repo_root: Path, limit: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def list_slice(repo_root: Path, created_from: str = "any", capability: str = "", limit: int = 25) -> list[dict[str, Any]]:
+def _normalize_slice_filters(created_from: str = "any", capability: str = "", limit: int = 25) -> dict[str, Any]:
     token_created = str(created_from or "any").strip().lower() or "any"
     if token_created != "any" and token_created not in _CREATED_FROM_VALUES:
         raise ValueError("FILTER_INVALID")
@@ -227,6 +229,18 @@ def list_slice(repo_root: Path, created_from: str = "any", capability: str = "",
     except Exception as exc:
         raise ValueError("FILTER_INVALID") from exc
     n = max(1, min(n, 500))
+    return {
+        "created_from": token_created,
+        "capability": token_capability,
+        "limit": n,
+    }
+
+
+def list_slice(repo_root: Path, created_from: str = "any", capability: str = "", limit: int = 25) -> list[dict[str, Any]]:
+    filters = _normalize_slice_filters(created_from=created_from, capability=capability, limit=limit)
+    token_created = str(filters["created_from"])
+    token_capability = str(filters["capability"])
+    n = int(filters["limit"])
 
     index = _load_index(repo_root)
     out: list[dict[str, Any]] = []
@@ -248,6 +262,56 @@ def list_slice(repo_root: Path, created_from: str = "any", capability: str = "",
         if len(out) >= n:
             break
     return out
+
+
+def summarize_slice(repo_root: Path, created_from: str = "any", capability: str = "", limit: int = 25) -> dict[str, Any]:
+    filters = _normalize_slice_filters(created_from=created_from, capability=capability, limit=limit)
+    rows = list_slice(
+        repo_root,
+        created_from=str(filters["created_from"]),
+        capability=str(filters["capability"]),
+        limit=int(filters["limit"]),
+    )
+
+    by_created_from: dict[str, int] = {}
+    by_capability: dict[str, int] = {}
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        row_created_from = str(row.get("created_from", "")).strip()
+        by_created_from[row_created_from] = by_created_from.get(row_created_from, 0) + 1
+        caps = row.get("declared_capabilities", [])
+        if isinstance(caps, list):
+            for cap in caps:
+                token = str(cap).strip()
+                if token:
+                    by_capability[token] = by_capability.get(token, 0) + 1
+        items.append(
+            {
+                "tool_id": str(row.get("tool_id", "")),
+                "tool_name": str(row.get("tool_name", "")),
+                "tool_version": str(row.get("tool_version", "")),
+                "created_from": row_created_from,
+                "schema_sha256": str(row.get("schema_sha256", "")),
+                "declared_capabilities": list(caps) if isinstance(caps, list) else [],
+                "index_seq": int(row.get("index_seq", 0)),
+            }
+        )
+
+    return {
+        "summary_version": "tool_catalog_slice_summary_v1",
+        "filters": {
+            "created_from": str(filters["created_from"]),
+            "capability": str(filters["capability"]),
+            "limit": int(filters["limit"]),
+        },
+        "selected_count": len(items),
+        "selected_tool_ids": [item["tool_id"] for item in items],
+        "counts": {
+            "by_created_from": {k: by_created_from[k] for k in sorted(by_created_from)},
+            "by_declared_capability": {k: by_capability[k] for k in sorted(by_capability)},
+        },
+        "items": items,
+    }
 
 
 def store_root(repo_root: Path) -> Path:

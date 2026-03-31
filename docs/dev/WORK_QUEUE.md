@@ -28,16 +28,11 @@ Tasks actively in progress.
 ## Next
 Ready and prioritised for immediate pickup.
 
-### GovLayer Trust-Grade Closure Lane (Priority)
+Canonical truth note:
+The GovLayer trust-grade lane (`TASK_367`-`TASK_370`), GovMCP required-path lane (`TASK_375`-`TASK_378`), broader GovMCP maturity seam-selection lane (`TASK_387`-`TASK_390`), broader GovMCP inspectability/query lane (`TASK_391`-`TASK_394`), broader GovMCP tool-catalog exposure-coherence lane (`TASK_395`-`TASK_398`), deployment execution-path family, deployment packaging family, AAT operator-path tranche, observability traceability tranche, and messaging baseline slices (`TASK_399`, `TASK_400`) are landed or consumed baselines and are not active immediate-pickup work on current main. Remaining ready inventory below should be treated as defined task stock, not by itself as authoritative next-lane ranking.
 
-Restock rationale: Follow-on implementation lane after `TASK_366`. Translates the three minimum implied implementation fronts for moving GovLayer from `operational with explicit limitations` to the stronger trust/defensibility tier into bounded execution-ready tasks: core signing semantic closure, core verification-depth closure, and trust-claim evidence/wording closure. Branch: `codex/TASK_367__govlayer_trust_grade_closure_restock__v1`.
-
-| TASK_ID | Title | Status | Executor | Dependencies | Task File |
-|---|---|---|---|---|---|
-| TASK_367 | [GovLayer trust-grade closure lane] GovLayer trust-grade closure restock | In Progress | Codex | none | [→](tasks/ready/TASK_367__govlayer_trust_grade_closure_restock.md) |
-| TASK_368 | [GovLayer trust-grade closure lane] GovLayer core signing semantic closure | Ready | Codex | TASK_367 | [→](tasks/ready/TASK_368__govlayer_core_signing_semantic_closure.md) |
-| TASK_369 | [GovLayer trust-grade closure lane] GovLayer core verification-depth closure | Ready | Codex | TASK_367 | [→](tasks/ready/TASK_369__govlayer_core_verification_depth_closure.md) |
-| TASK_370 | [GovLayer trust-grade closure lane] GovLayer trust-claim evidence and wording closure | Ready | Codex | TASK_368, TASK_369 | [→](tasks/ready/TASK_370__govlayer_trust_claim_evidence_and_wording_closure.md) |
+Current control-plane mode:
+Canonical current-main truth is no longer the pre-T413 `NEXT_WORKFRONT_FORMULATION` state. Replay-outcome governance-evidence propagation, the external summary-contract parity residue audit, messaging provider-evidence / receipt-linkage strengthening, Combo A structured summary emission, GovCore naming correction, and packet-hash normalization are all landed on main. For the current phase, Greg has marked the app complete for now: remaining messaging residue is accepted as sufficient for this phase, and presentation/doctrine residue is deferred unless testing exposes a concrete problem. Queue rows below remain defined task stock, not authoritative ranking or an active completion-critical winner by mere `Ready` status.
 
 ### RDD Phase 1: Pass UNDECIDED Extension (Priority)
 

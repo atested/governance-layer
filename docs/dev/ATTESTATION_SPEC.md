@@ -269,7 +269,7 @@ Proof Packet v1 is a deterministic archive that packages a replayable policy rec
 
 Verifier summary output (`--summary-json`) also emits:
 
-- `packet_hash`: SHA256 of the final proof-packet tar bytes
+- `packet_hash`: `{"algo":"sha256","value":"<lowercase-hex>"}` for the final proof-packet tar bytes
 - deterministic counts (`matched`, `mismatched`, `missing`, `extra`, `fatal`)
 - key linkage summary fields for CI/log bundles
 
@@ -307,7 +307,8 @@ python3 scripts/proof-packet.py verify \
 ### 4.5 Versioning and Compatibility (Proof Packet / Replay Audit Reports)
 
 - Proof packet manifest schema version: `proof_packet_v1` (`manifest.json.proof_packet_version`)
-- Proof-packet verifier summary JSON schema version: `proof_packet_verify_summary_v1` (`report_version`)
+- Proof-packet verifier summary JSON schema version: `proof_packet_verify_summary_v2` (`report_version`)
+- Proof-packet verifier summary JSON includes an additive `governance_evidence` block that surfaces packet identity, manifest hash, record/replay hash linkage, and the pass/fail result for operator-facing coherence checks.
 - Replay audit report JSON is expected to remain deterministic and versioned by its report payload shape; proof-packet pack/verify treat it as a hashed payload member referenced by `source_summary.replay_report_hash`.
 
 Compatibility expectations:
@@ -318,7 +319,8 @@ Compatibility expectations:
 
 **External contract policy:**
 - `proof_packet_v1` manifest: **FROZEN** within v1 (no field add/remove/rename/retype allowed)
-- `proof_packet_verify_summary_v1`: **ADDITIVE-ONLY** within v1 (new fields allowed, existing fields stable)
+- `proof_packet_verify_summary_v2`: **ADDITIVE-ONLY** within v2 (new fields allowed, existing fields stable)
+- `validate-proof-bundle.sh` accepts legacy `proof_packet_verify_summary_v1` during the bounded migration window, but current proof-bundle emission is `proof_packet_verify_summary_v2`
 - Breaking changes require version bump to v2
 - See [EXTERNAL_CONTRACTS.md](../../EXTERNAL_CONTRACTS.md) for full stability guarantees and versioning policy
 
