@@ -4,6 +4,18 @@ const API = "";  // relative to current origin
 const pageSize = 20;
 
 // ---------------------------------------------------------------------------
+// Tooltip helper
+// ---------------------------------------------------------------------------
+
+function tip(label, tooltipText) {
+  return `<span class="has-tooltip">${escapeHtml(label)}<span class="tooltip-text">${escapeHtml(tooltipText)}</span></span>`;
+}
+
+function tipHtml(labelHtml, tooltipText) {
+  return `<span class="has-tooltip">${labelHtml}<span class="tooltip-text">${escapeHtml(tooltipText)}</span></span>`;
+}
+
+// ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
 
@@ -77,27 +89,41 @@ function getContext() {
 // ---------------------------------------------------------------------------
 
 function formatTime(iso) {
-  if (!iso) return "—";
+  if (!iso) return "\u2014";
   return new Date(iso).toLocaleString("en-US", {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
   });
 }
 
 function truncate(s, n = 24) {
-  if (!s) return "—";
-  return s.length > n ? s.slice(0, n) + "…" : s;
+  if (!s) return "\u2014";
+  return s.length > n ? s.slice(0, n) + "\u2026" : s;
 }
 
 function decisionTag(decision) {
   if (decision === "ALLOW") return '<span class="det-tag">ALLOW</span>';
   if (decision === "DENY") return '<span class="judgment-tag">DENY</span>';
-  return `<span class="step-tag determined">${decision || "—"}</span>`;
+  return `<span class="step-tag determined">${decision || "\u2014"}</span>`;
 }
 
 function escapeHtml(s) {
   const div = document.createElement("div");
   div.textContent = s;
   return div.innerHTML;
+}
+
+// Human-readable category names
+function categoryLabel(cat) {
+  const map = {
+    "action_decision": "Governed Action",
+    "verification_transition": "Verification Change",
+    "opaque_approval": "Artifact Approval",
+    "opaque_revocation": "Artifact Revocation",
+    "opaque_invocation_decision": "Invocation Decision",
+    "ungoverned_observation": "Ungoverned Observation",
+    "usage_attestation": "Usage Attestation",
+  };
+  return map[cat] || cat || "\u2014";
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +156,7 @@ async function renderOverview() {
   const [status, approvals, activity, users] = await Promise.all([
     cached("status", () => api("status")),
     cached("approvals", () => api("approvals")),
-    cached("activity", () => api("activity", { limit: 5 })),
+    cached("activity", () => api("activity", { limit: 8 })),
     cached("users", () => api("users")),
   ]);
 
@@ -138,68 +164,75 @@ async function renderOverview() {
     ? '<span class="status-ok">OK</span>'
     : '<span class="status-warn">BROKEN</span>';
 
+  const transparencyVal = status.transparency_metric && status.transparency_metric.observation_data
+    ? Math.round(status.transparency_metric.transparency_pct * 100) + "%"
+    : '<span class="muted" style="font-size:0.75rem">No observation data</span>';
+
   return `
     <section class="page">
       <div class="card">
         <span class="eyebrow">Governance Status</span>
         <h2>System Overview</h2>
+        <p class="explainer">
+          This dashboard provides real-time visibility into your governance chain \u2014
+          the tamper-evident log of every governed operation, approval, and verification event.
+          Each metric below reflects the current state of the chain and connected systems.
+        </p>
       </div>
       <div class="status-grid">
         <div class="status-card">
-          <span class="eyebrow">Chain Events</span>
+          <span class="eyebrow">${tip("Chain Events", "Total number of records in the governance chain, including governed actions, approvals, verifications, and observations.")}</span>
           <span class="status-value">${status.chain_event_count}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Chain Integrity</span>
+          <span class="eyebrow">${tip("Chain Integrity", "Whether the hash-linked chain is structurally valid. OK means every record's hash links correctly to its predecessor.")}</span>
           <span class="status-value">${integ}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Active Approvals</span>
+          <span class="eyebrow">${tip("Active Approvals", "Number of artifact approvals currently in effect. Approvals authorize specific artifacts for use within governed families.")}</span>
           <span class="status-value">${status.active_approvals_count}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Surfaces in Drift</span>
+          <span class="eyebrow">${tip("Surfaces with Drift", "Proof surfaces whose current state has diverged from their last certified configuration. Drift may indicate unauthorized changes.")}</span>
           <span class="status-value ${status.surfaces_in_drift.length ? "status-warn" : "status-ok"}">${status.surfaces_in_drift.length}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Unique Users</span>
+          <span class="eyebrow">${tip("Unique Users", "Distinct user identities that have generated governed actions or events in the chain.")}</span>
           <span class="status-value">${users.unique_users}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Transparent Actions</span>
+          <span class="eyebrow">${tip("Governed Actions", "Actions that were evaluated by the governance policy engine and recorded with a full decision trail.")}</span>
           <span class="status-value">${status.opacity_posture.transparent_count}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Opaque Actions</span>
+          <span class="eyebrow">${tip("Opaque Invocations", "Actions that were invoked through opaque (non-transparent) resolution paths, such as operator intervention or approved lookups.")}</span>
           <span class="status-value">${status.opacity_posture.opaque_count}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Transparency %</span>
-          <span class="status-value">${status.transparency_metric && status.transparency_metric.observation_data
-            ? Math.round(status.transparency_metric.transparency_pct * 100) + "%"
-            : '<span class="muted" style="font-size:0.75rem">No observation data</span>'}</span>
+          <span class="eyebrow">${tip("Transparency", "Percentage of total observed operations that flowed through governance. Higher is better. Requires observation hooks to be configured.")}</span>
+          <span class="status-value">${transparencyVal}</span>
         </div>
       </div>
 
       ${status.transparency_metric ? `
         <div class="card">
-          <h3>Transparency Metric</h3>
-          <p class="muted" style="margin-bottom:12px">Ratio of governed operations to total observed operations (governed + ungoverned).</p>
+          <h3>${tip("Transparency Metric", "Measures how much of your AI tool usage is captured by the governance chain. transparency% = governed / (governed + ungoverned).")}</h3>
+          <p class="explainer">Ratio of governed operations to total observed operations (governed + ungoverned). Configure observation hooks to start collecting data.</p>
           <div class="status-grid">
             <div class="status-card">
-              <span class="eyebrow">Governed Ops</span>
+              <span class="eyebrow">${tip("Governed Ops", "Operations that passed through governance policy evaluation and were recorded in the chain.")}</span>
               <span class="status-value">${status.transparency_metric.governed_operations}</span>
             </div>
             <div class="status-card">
-              <span class="eyebrow">Ungoverned Obs.</span>
+              <span class="eyebrow">${tip("Ungoverned Obs.", "Operations reported by observation hooks that bypassed governance. These were detected but not policy-evaluated.")}</span>
               <span class="status-value">${status.transparency_metric.ungoverned_observations}</span>
             </div>
             <div class="status-card">
-              <span class="eyebrow">Total Observed</span>
+              <span class="eyebrow">${tip("Total Observed", "Sum of governed operations and ungoverned observations. The denominator for the transparency percentage.")}</span>
               <span class="status-value">${status.transparency_metric.total_observed}</span>
             </div>
             <div class="status-card">
-              <span class="eyebrow">Has Hook Data</span>
+              <span class="eyebrow">${tip("Hook Data", "Whether any ungoverned operation observations have been received. No means observation hooks are not yet configured.")}</span>
               <span class="status-value">${status.transparency_metric.observation_data
                 ? '<span class="status-ok">Yes</span>'
                 : '<span class="muted">No</span>'}</span>
@@ -210,12 +243,15 @@ async function renderOverview() {
 
       ${status.verification_state && Object.keys(status.verification_state).length ? `
         <div class="card">
-          <h3>Verification State</h3>
+          <h3>${tip("Verification State", "Current verification status of registered proof surfaces. Verified means the surface matches its certified configuration.")}</h3>
           <table class="audit-results-table">
-            <thead><tr><th>Surface</th><th>State</th></tr></thead>
+            <thead><tr>
+              <th>${tip("Surface", "The proof surface identifier (e.g. a governed family or deployment context).")}</th>
+              <th>${tip("State", "Current verification state: verified, unverified, or drift_detected.")}</th>
+            </tr></thead>
             <tbody>
               ${Object.entries(status.verification_state).map(([f, s]) => `
-                <tr><td>${escapeHtml(f)}</td><td>${s === "drift_detected" ? '<span class="status-warn">drift_detected</span>' : escapeHtml(s)}</td></tr>
+                <tr><td>${escapeHtml(f)}</td><td>${s === "drift_detected" ? '<span class="status-warn">drift detected</span>' : escapeHtml(s)}</td></tr>
               `).join("")}
             </tbody>
           </table>
@@ -224,9 +260,12 @@ async function renderOverview() {
 
       ${users.users.length ? `
         <div class="card">
-          <h3>Users</h3>
+          <h3>${tip("Users", "All user identities that appear in the governance chain, with their action counts.")}</h3>
           <table class="audit-results-table">
-            <thead><tr><th>Identity</th><th>Actions</th></tr></thead>
+            <thead><tr>
+              <th>${tip("Identity", "The user identity string recorded with each governed action.")}</th>
+              <th>${tip("Actions", "Total number of governed actions and events attributed to this user.")}</th>
+            </tr></thead>
             <tbody>
               ${users.users.map(u => `
                 <tr><td>${escapeHtml(u.identity)}</td><td>${u.count}</td></tr>
@@ -238,12 +277,16 @@ async function renderOverview() {
 
       <div class="card">
         <h3>Recent Activity</h3>
-        ${activity.entries.length ? activity.entries.map(e => `
-          <div class="activity-entry">
-            <strong>${escapeHtml(e.summary)}</strong>
-            <span class="muted"> · ${e.event_category} · ${formatTime(e.timestamp_utc)}</span>
-          </div>
-        `).join("") : '<p class="muted">No activity recorded yet.</p>'}
+        ${activity.entries.length ? activity.entries.map(e => {
+          const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
+          const href = rid ? navHref("/record", { record_id: rid }) : "";
+          return `
+            <div class="activity-entry${href ? " clickable" : ""}" ${href ? `onclick="window.location.hash='${href}'"` : ""}>
+              <strong>${escapeHtml(e.summary)}</strong>
+              <span class="muted"> \u00b7 ${categoryLabel(e.event_category)} \u00b7 ${formatTime(e.timestamp_utc)}</span>
+            </div>
+          `;
+        }).join("") : '<p class="muted">No activity recorded yet.</p>'}
       </div>
     </section>
   `;
@@ -265,18 +308,29 @@ async function renderActivity() {
         ${data.entries.length ? `
           <table class="audit-results-table">
             <thead>
-              <tr><th>#</th><th>Time</th><th>Category</th><th>Summary</th><th>Family</th></tr>
+              <tr>
+                <th>${tip("#", "Sequence position in the governance chain.")}</th>
+                <th>${tip("Time", "UTC timestamp when the event was recorded.")}</th>
+                <th>${tip("Category", "The type of governance event: governed action, approval, verification change, etc.")}</th>
+                <th>${tip("Summary", "Human-readable description of what happened.")}</th>
+                <th>${tip("Family", "The governed family this event belongs to, if applicable.")}</th>
+                <th>Detail</th>
+              </tr>
             </thead>
             <tbody>
-              ${data.entries.map(e => `
-                <tr>
-                  <td>${e.sequence_position}</td>
-                  <td>${formatTime(e.timestamp_utc)}</td>
-                  <td>${escapeHtml(e.event_category)}</td>
-                  <td>${escapeHtml(e.summary)}</td>
-                  <td>${escapeHtml(e.governed_family || "—")}</td>
-                </tr>
-              `).join("")}
+              ${data.entries.map(e => {
+                const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
+                return `
+                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
+                    <td>${e.sequence_position}</td>
+                    <td>${formatTime(e.timestamp_utc)}</td>
+                    <td>${categoryLabel(e.event_category)}</td>
+                    <td>${escapeHtml(e.summary)}</td>
+                    <td>${escapeHtml(e.governed_family || "\u2014")}</td>
+                    <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "\u2014"}</td>
+                  </tr>
+                `;
+              }).join("")}
             </tbody>
           </table>
           <div class="toolbar" style="margin-top:14px">
@@ -297,6 +351,7 @@ async function renderApprovals() {
       <div class="card">
         <span class="eyebrow">Approvals</span>
         <h2>Active Approvals (${data.total_count})</h2>
+        <p class="explainer">Artifact approvals authorize specific artifacts for use within a governed family. Approvals can be revoked at any time.</p>
       </div>
       ${data.active_approvals.length ? `
         <div class="approval-grid">
@@ -305,10 +360,10 @@ async function renderApprovals() {
               <span class="eyebrow">Active approval</span>
               <h3>${truncate(a.artifact_identity, 40)}</h3>
               <ul class="kv">
-                <li><span>Family</span><strong>${escapeHtml(a.governed_family || "—")}</strong></li>
+                <li><span>Family</span><strong>${escapeHtml(a.governed_family || "\u2014")}</strong></li>
                 <li><span>Operator</span><strong>${escapeHtml(a.approving_operator)}</strong></li>
-                <li><span>Context</span><strong>${escapeHtml(a.deployment_context || "—")}</strong></li>
-                <li><span>Policy</span><strong>${escapeHtml(a.policy_version || "—")}</strong></li>
+                <li><span>Context</span><strong>${escapeHtml(a.deployment_context || "\u2014")}</strong></li>
+                <li><span>Policy</span><strong>${escapeHtml(a.policy_version || "\u2014")}</strong></li>
                 <li><span>Approved</span><strong>${formatTime(a.timestamp_utc)}</strong></li>
               </ul>
             </div>
@@ -345,19 +400,26 @@ async function renderAudit() {
         ${data.entries.length ? `
           <table class="audit-results-table">
             <thead>
-              <tr><th>#</th><th>Time</th><th>Category</th><th>Summary</th><th>User</th><th>Detail</th></tr>
+              <tr>
+                <th>${tip("#", "Sequence position in the chain.")}</th>
+                <th>${tip("Time", "When the event was recorded.")}</th>
+                <th>${tip("Category", "Type of governance event.")}</th>
+                <th>${tip("Summary", "What happened.")}</th>
+                <th>${tip("User", "Identity of the user who triggered the action.")}</th>
+                <th>Detail</th>
+              </tr>
             </thead>
             <tbody>
               ${data.entries.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 return `
-                  <tr>
+                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
-                    <td>${escapeHtml(e.event_category)}</td>
+                    <td>${categoryLabel(e.event_category)}</td>
                     <td>${escapeHtml(e.summary)}</td>
-                    <td>${escapeHtml(e.user_identity || "—")}</td>
-                    <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "—"}</td>
+                    <td>${escapeHtml(e.user_identity || "\u2014")}</td>
+                    <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "\u2014"}</td>
                   </tr>
                 `;
               }).join("")}
@@ -381,26 +443,27 @@ async function renderAudit() {
       <div class="card">
         <span class="eyebrow">Audit</span>
         <h2>Query Governance Records</h2>
+        <p class="explainer">Search the governance chain by time range, user, tool, decision outcome, or event category. Each result links to the full record detail.</p>
         <form class="audit-form" id="audit-form" onsubmit="return handleAuditSubmit(event)">
-          <label>Start time<input type="datetime-local" name="start_time" value="${ctx.startTime ? ctx.startTime.replace("Z","").replace("+00:00","") : ""}"></label>
-          <label>End time<input type="datetime-local" name="end_time" value="${ctx.endTime ? ctx.endTime.replace("Z","").replace("+00:00","") : ""}"></label>
-          <label>User identity<input type="text" name="user" value="${escapeHtml(ctx.user)}" placeholder="e.g. gkeeter"></label>
-          <label>Tool name<input type="text" name="tool" value="${escapeHtml(ctx.tool)}" placeholder="e.g. FS_WRITE"></label>
-          <label>Decision
+          <label>${tip("Start time", "Filter to events on or after this time.")}<input type="datetime-local" name="start_time" value="${ctx.startTime ? ctx.startTime.replace("Z","").replace("+00:00","") : ""}"></label>
+          <label>${tip("End time", "Filter to events on or before this time.")}<input type="datetime-local" name="end_time" value="${ctx.endTime ? ctx.endTime.replace("Z","").replace("+00:00","") : ""}"></label>
+          <label>${tip("User identity", "Filter by the user who triggered the action.")}<input type="text" name="user" value="${escapeHtml(ctx.user)}" placeholder="e.g. gkeeter"></label>
+          <label>${tip("Tool name", "Filter by the governed tool that was invoked.")}<input type="text" name="tool" value="${escapeHtml(ctx.tool)}" placeholder="e.g. FS_WRITE"></label>
+          <label>${tip("Decision", "Filter by policy outcome: ALLOW or DENY.")}
             <select name="decision">
               <option value="">All</option>
               <option value="ALLOW" ${ctx.decision === "ALLOW" ? "selected" : ""}>ALLOW</option>
               <option value="DENY" ${ctx.decision === "DENY" ? "selected" : ""}>DENY</option>
             </select>
           </label>
-          <label>Category
+          <label>${tip("Category", "Filter by event type.")}
             <select name="category">
               <option value="">All</option>
-              <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Action Decision</option>
-              <option value="verification_transition" ${ctx.category === "verification_transition" ? "selected" : ""}>Verification</option>
-              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Approval</option>
-              <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>Revocation</option>
-              <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Opaque Invocation</option>
+              <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Governed Action</option>
+              <option value="verification_transition" ${ctx.category === "verification_transition" ? "selected" : ""}>Verification Change</option>
+              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Artifact Approval</option>
+              <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>Artifact Revocation</option>
+              <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Invocation Decision</option>
               <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Ungoverned Observation</option>
             </select>
           </label>
@@ -430,12 +493,12 @@ async function renderRecordDetail() {
       </div>
       <div class="card">
         <h3>Chain Record</h3>
-        <pre style="overflow-x:auto;font-size:0.85rem;line-height:1.5">${escapeHtml(JSON.stringify(data.chain_record, null, 2))}</pre>
+        <pre>${escapeHtml(JSON.stringify(data.chain_record, null, 2))}</pre>
       </div>
       ${data.sidecar_record ? `
         <div class="card">
           <h3>Sidecar Record</h3>
-          <pre style="overflow-x:auto;font-size:0.85rem;line-height:1.5">${escapeHtml(JSON.stringify(data.sidecar_record, null, 2))}</pre>
+          <pre>${escapeHtml(JSON.stringify(data.sidecar_record, null, 2))}</pre>
         </div>
       ` : ""}
     </section>
@@ -456,10 +519,11 @@ async function renderReport() {
       <div class="card">
         <span class="eyebrow">Reports</span>
         <h2>Audit Summary</h2>
+        <p class="explainer">Aggregate view of governance activity. Group by tool, user, decision, or event category to identify patterns.</p>
         <form class="audit-form" id="report-form" onsubmit="return handleReportSubmit(event)">
-          <label>Start time<input type="datetime-local" name="start_time" value="${ctx.startTime ? ctx.startTime.replace("Z","").replace("+00:00","") : ""}"></label>
-          <label>End time<input type="datetime-local" name="end_time" value="${ctx.endTime ? ctx.endTime.replace("Z","").replace("+00:00","") : ""}"></label>
-          <label>Group by
+          <label>${tip("Start time", "Beginning of the reporting window.")}<input type="datetime-local" name="start_time" value="${ctx.startTime ? ctx.startTime.replace("Z","").replace("+00:00","") : ""}"></label>
+          <label>${tip("End time", "End of the reporting window.")}<input type="datetime-local" name="end_time" value="${ctx.endTime ? ctx.endTime.replace("Z","").replace("+00:00","") : ""}"></label>
+          <label>${tip("Group by", "How to aggregate the results.")}
             <select name="group_by">
               <option value="tool" ${ctx.groupBy === "tool" ? "selected" : ""}>Tool</option>
               <option value="user" ${ctx.groupBy === "user" ? "selected" : ""}>User</option>
@@ -472,7 +536,7 @@ async function renderReport() {
       </div>
 
       <div class="card">
-        <h3>Decision Summary (${data.total_records} records)</h3>
+        <h3>${tip("Decision Summary", "Breakdown of policy decisions across all records in the selected time range.")} (${data.total_records} records)</h3>
         <div class="status-grid">
           ${Object.entries(data.decision_summary).map(([k, v]) => `
             <div class="status-card">
