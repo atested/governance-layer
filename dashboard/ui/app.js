@@ -174,10 +174,39 @@ async function renderOverview() {
           <span class="status-value">${status.opacity_posture.opaque_count}</span>
         </div>
         <div class="status-card">
-          <span class="eyebrow">Transparent %</span>
-          <span class="status-value">${Math.round(status.opacity_posture.transparent_pct * 100)}%</span>
+          <span class="eyebrow">Transparency %</span>
+          <span class="status-value">${status.transparency_metric && status.transparency_metric.observation_data
+            ? Math.round(status.transparency_metric.transparency_pct * 100) + "%"
+            : '<span class="muted" style="font-size:0.75rem">No observation data</span>'}</span>
         </div>
       </div>
+
+      ${status.transparency_metric ? `
+        <div class="card">
+          <h3>Transparency Metric</h3>
+          <p class="muted" style="margin-bottom:12px">Ratio of governed operations to total observed operations (governed + ungoverned).</p>
+          <div class="status-grid">
+            <div class="status-card">
+              <span class="eyebrow">Governed Ops</span>
+              <span class="status-value">${status.transparency_metric.governed_operations}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">Ungoverned Obs.</span>
+              <span class="status-value">${status.transparency_metric.ungoverned_observations}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">Total Observed</span>
+              <span class="status-value">${status.transparency_metric.total_observed}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">Has Hook Data</span>
+              <span class="status-value">${status.transparency_metric.observation_data
+                ? '<span class="status-ok">Yes</span>'
+                : '<span class="muted">No</span>'}</span>
+            </div>
+          </div>
+        </div>
+      ` : ""}
 
       ${status.verification_state && Object.keys(status.verification_state).length ? `
         <div class="card">
@@ -372,6 +401,7 @@ async function renderAudit() {
               <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Approval</option>
               <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>Revocation</option>
               <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Opaque Invocation</option>
+              <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Ungoverned Observation</option>
             </select>
           </label>
           <button type="submit">Search</button>
