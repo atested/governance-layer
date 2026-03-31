@@ -1,7 +1,0 @@
-{
-  "template_note": "Replace all placeholder values during project-local bootstrap filling. Do not copy governance-layer machine paths into this file.",
-  "project_name": "__PROJECT_NAME__",
-  "repo_root": "__REPO_ROOT__",
-  "governing_operator": "__GOVERNING_OPERATOR__",
-  "bootstrap_protocol_version": "NEW_PROJECT_BOOTSTRAP_PROTOCOL v1"
-}

@@ -1,8 +1,0 @@
- .../DIFF_NAME_ONLY.txt                             |   0
- .../DIFF_STAT.txt                                  |   0
- .../HOTFILE_SCAN.txt                               |  10 ++
- .../TASK_AAT_STAGE_K1_ALIGNMENT__42e32fc/TESTS.txt |  16 +++
- scripts/aat_stage_into_proof_bundle.py             |  80 +++++++++++++-
- system/tests/test_aat_shim_operator_pilot.sh       |  10 +-
- system/tests/test_aat_stage_bundle_alignment_k1.sh | 118 +++++++++++++++++++++
- 7 files changed, 227 insertions(+), 7 deletions(-)

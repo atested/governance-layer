@@ -1,4 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/tasks/ready/TASK_296__bfps_map_derived_session_state.md
-docs/dev/tasks/ready/TASK_297__capability_map_session_update_protocol.md
-docs/dev/tasks/ready/TASK_298__dev_number_prompt_in_briefing_creation.md

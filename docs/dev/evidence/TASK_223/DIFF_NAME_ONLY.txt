@@ -1,6 +1,0 @@
-mcp/tool_event_store.py
-mcp/tool_event_link_store.py
-scripts/attest/export_tool_event_bundle.py
-system/tests/test_export_tool_event_bundle.sh
-system/tests/test_mcp_tool_event_receipts_query.sh
-system/tests/test_mcp_receipt_tool_events_query.sh

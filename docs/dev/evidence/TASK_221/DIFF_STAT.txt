@@ -1,4 +1,0 @@
- mcp/tool_event_store.py                    |  8 +++++-
- mcp/tool_event_link_store.py               |  2 ++
- scripts/attest/export_tool_event_bundle.py | 30 +++++++++++++--------
- 3 files changed, 26 insertions(+), 14 deletions(-)

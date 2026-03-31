@@ -1,2 +1,0 @@
-$ echo "TASK_010 evidence bootstrap (tests not run yet)"
-[exit=0]

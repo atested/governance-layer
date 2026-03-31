@@ -1,7 +1,0 @@
-BASE_SHA_RESOLVED=8f3af8f29aa99a7d8ccbdaad52ebd7b3157b4b56
-BASE7=8f3af8f
-COMMAND_1=rg --no-filename -o 'TASK_[0-9]{3}' docs/dev/tasks/ready docs/dev/tasks/proposed
-COMMAND_2=... | sed 's/TASK_//' | sort -n | tail -n1
-HIGHEST_TASK_ID=205
-ALLOCATED_RANGE=TASK_206..TASK_217
-TEMPLATE_SOURCE=docs/dev/tasks/ready/TASK_193__locale_invariance_completion_for_dirscan_contract.md

@@ -1,5 +1,0 @@
-TASK_230 TESTS
-- PASS: bash system/tests/test_tool_event_receipt_negative_matrix.sh
-- PASS: bash system/tests/test_tool_event_receipt_link_index.sh
-- PASS: bash system/tests/test_mcp_receipt_tool_events_query.sh
-- PASS: bash system/tests/test_mcp_tool_event_receipts_query.sh

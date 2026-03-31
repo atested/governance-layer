@@ -1,4 +1,0 @@
-bash system/scripts/inventory-snapshot.sh
-
-python3 scripts/verify-ops-canonical.py
-OK

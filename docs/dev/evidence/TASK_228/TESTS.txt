@@ -1,4 +1,0 @@
-TASK_228 TESTS
-- PASS: bash system/tests/test_mcp_replay_check_includes_tool_event_digests.sh
-- PASS: bash system/tests/test_mcp_replay_check.sh
-- PASS: bash system/tests/test_tool_event_receipt_link_index.sh

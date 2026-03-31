@@ -1,4 +1,0 @@
- mcp/tool_catalog_store.py                          | 44 ++++++++++++++++++++--
- system/tests/test_export_tool_catalog_bundle.sh    | 38 +++++++++++++++++++
- system/tests/test_tool_catalog_store_edge_cases.sh | 17 +++++++++
- 3 files changed, 96 insertions(+), 3 deletions(-)

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atested — Governance infrastructure for AI operations</title>
+  <meta name="description" content="Every action your AI agents take is evaluated against policy, signed into an immutable record, and available as auditable proof.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <header>
+    <nav class="container">
+      <a href="/" class="nav-brand">atested</a>
+      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      <ul class="nav-links">
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="explainer.html">Why governance</a></li>
+        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <h1>Every action. Evaluated. Recorded. Provable.</h1>
+        <p class="lead">
+          Atested is governance infrastructure for AI operations. Every action your AI agents take
+          is evaluated against policy, signed into an immutable record, and available as auditable proof.
+        </p>
+        <div class="cta-group">
+          <a href="pricing.html" class="btn btn-primary">See pricing</a>
+          <a href="https://github.com/GregKeeter/governance-layer" class="btn btn-secondary" target="_blank" rel="noopener">Get started on GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Value propositions -->
+    <section>
+      <div class="container">
+        <div class="card-grid">
+          <div class="card">
+            <h3>Policy evaluation</h3>
+            <p>
+              Every action is evaluated against your policy before execution. You define
+              the rules. The governance layer enforces them consistently, across every tool
+              call, every session, every operator. No action bypasses evaluation.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Signed records</h3>
+            <p>
+              Every decision is cryptographically signed into an immutable chain. Each record
+              includes the policy decision, the action context, and a hash linking it to the
+              previous record. Tampering with any record breaks the chain.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Proof packets</h3>
+            <p>
+              Generate verifiable attestation artifacts for any audit or review. A proof packet
+              contains the decision records, the policy that produced them, and cryptographic
+              evidence that nothing has been altered. Hand it to compliance, to a customer,
+              or to your future self.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Record visual -->
+    <section>
+      <div class="container">
+        <h2 class="text-center">What a governance record looks like</h2>
+        <p class="text-center" style="margin: 0 auto var(--space-xl); max-width: 36em;">
+          Every governed action produces a record like this. Chained, signed, and verifiable.
+        </p>
+
+        <div class="record-visual" style="max-width: 48rem; margin: 0 auto;">
+          <div class="record-visual-header">
+            <span>decision-chain.jsonl</span>
+            <span class="badge badge-allow">ALLOW</span>
+          </div>
+          <pre><code>{
+  <span class="json-key">"tool"</span>:             <span class="json-string">"fs_write"</span>,
+  <span class="json-key">"capability_class"</span>: <span class="json-string">"FS_WRITE"</span>,
+  <span class="json-key">"policy_decision"</span>:  <span class="json-string">"ALLOW"</span>,
+  <span class="json-key">"timestamp_utc"</span>:    <span class="json-string">"2026-05-28T09:12:00Z"</span>,
+  <span class="json-key">"user_identity"</span>:    <span class="json-string">"bearer:e1f2a3b4c5d67890"</span>,
+  <span class="json-key">"organization_id"</span>:  <span class="json-string">"acme-engineering"</span>,
+  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
+  <span class="json-key">"record_hash"</span>:      <span class="json-string">"sha256:0a1b2c3d4e5f6a7b..."</span>,
+  <span class="json-key">"prev_record_hash"</span>: <span class="json-string">"sha256:f0e1d2c3b4a59687..."</span>
+}</code></pre>
+        </div>
+
+        <div class="record-visual" style="max-width: 48rem; margin: var(--space-lg) auto 0;">
+          <div class="record-visual-header">
+            <span>attestation.json</span>
+            <span class="badge badge-signed">ATTESTATION</span>
+          </div>
+          <pre><code>{
+  <span class="json-key">"attestation_version"</span>: <span class="json-string">"1.0"</span>,
+  <span class="json-key">"unique_users"</span>:        <span class="json-number">5</span>,
+  <span class="json-key">"total_operations"</span>:    <span class="json-number">2104</span>,
+  <span class="json-key">"license_tier"</span>:        <span class="json-string">"team"</span>,
+  <span class="json-key">"organization_id"</span>:     <span class="json-string">"acme-engineering"</span>,
+  <span class="json-key">"recommended_tier"</span>:    <span class="json-string">"team"</span>,
+  <span class="json-key">"artifact_hash"</span>:       <span class="json-string">"sha256:b4c2d5e6f7a8b9c0..."</span>
+}</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-copy">&copy; 2026 Atested</span>
+        <ul class="footer-links">
+          <li><a href="terms.html">Terms</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/nav.js"></script>
+</body>
+</html>

@@ -1,5 +1,0 @@
- scripts/attest/export_receipt_bundle.py            | 96 ++++++++++++++++------
- .../test_export_receipt_attestation_bundle.sh      |  9 +-
- ..._export_receipt_bundle_includes_replay_check.sh | 14 ++--
- .../test_export_receipt_bundle_signature_parity.sh | 15 ++--
- 4 files changed, 98 insertions(+), 36 deletions(-)

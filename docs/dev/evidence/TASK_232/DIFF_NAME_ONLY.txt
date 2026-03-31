@@ -1,2 +1,0 @@
-mcp/tool_event_link_store.py
-system/tests/test_mcp_replay_check.sh

@@ -1,7 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/evidence/RDD_PHASE5_RESTOCK__v1/DIFF_NAME_ONLY.txt
-docs/dev/evidence/RDD_PHASE5_RESTOCK__v1/DIFF_STAT.txt
-docs/dev/evidence/RDD_PHASE5_RESTOCK__v1/HOTFILE_SCAN.txt
-docs/dev/evidence/RDD_PHASE5_RESTOCK__v1/VALIDATION.txt
-docs/dev/tasks/ready/TASK_327__rdd_replay_extension_for_triage_terminal_records.md
-docs/dev/tasks/ready/TASK_328__rdd_replay_extension_test_coverage.md

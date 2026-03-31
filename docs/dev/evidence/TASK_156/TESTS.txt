@@ -1,6 +1,0 @@
-$ bash tests/test_release_gate_ci_runs_external_validator.sh
---- T-RELEASE-GATE-CI-VALIDATOR-001: ci profile runs external validator deterministically ---
-CI_VALIDATOR_BLOCK_SHA256_RUN1=651733b9d6ae2ab799e6a902c659486fade676627f02f0b25e9c8385dd7d4af8
-CI_VALIDATOR_BLOCK_SHA256_RUN2=651733b9d6ae2ab799e6a902c659486fade676627f02f0b25e9c8385dd7d4af8
-PASS: ci profile external validator block deterministic across two runs
-[exit=0]

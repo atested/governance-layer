@@ -1,5 +1,0 @@
- docs/dev/WORK_QUEUE.md                             |  9 ++++
- .../evidence/RDD_PHASE9_RESTOCK__v1/VALIDATION.txt | 48 +++++++++++++++++
- .../TASK_335__rdd_selector_mode_explicit_wiring.md | 57 ++++++++++++++++++++
- .../ready/TASK_336__rdd_selector_mode_coverage.md  | 62 ++++++++++++++++++++++
- 4 files changed, 176 insertions(+)

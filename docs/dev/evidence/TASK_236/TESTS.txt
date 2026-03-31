@@ -1,6 +1,0 @@
-=== RUN: bash system/tests/test_export_tool_event_bundle.sh
-EXPORT_TOOL_EVENT_BUNDLE=PASS
-DETERMINISTIC=YES
-RUN1_SHA256=94284dcd7ef28e7bc3bf2183c73af7e82f9c7b744c9dbfe7b82e61d0e87d0ab6
-RUN2_SHA256=94284dcd7ef28e7bc3bf2183c73af7e82f9c7b744c9dbfe7b82e61d0e87d0ab6
-=== PASS: bash system/tests/test_export_tool_event_bundle.sh

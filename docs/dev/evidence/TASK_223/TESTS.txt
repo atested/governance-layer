@@ -1,8 +1,0 @@
-NEGATIVE_CONTROLS:
-- exporter missing digest emits stable reason-coded contract line
-- malformed digest reverse-query returns deterministic empty list
-COMMANDS:
-- bash system/tests/test_export_tool_event_bundle.sh
-- bash system/tests/test_mcp_tool_event_receipts_query.sh
-- bash system/tests/test_mcp_receipt_tool_events_query.sh
-RESULT=PASS

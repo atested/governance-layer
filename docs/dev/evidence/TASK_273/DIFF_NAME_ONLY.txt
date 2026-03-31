@@ -1,3 +1,0 @@
-mcp/tool_catalog_store.py
-system/tests/test_export_tool_catalog_bundle.sh
-system/tests/test_tool_catalog_store_edge_cases.sh

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test: Verification State Model (Lane A — CECIL-T6)
+# Test: Verification State Model 
 #
 # Validates:
 #   1. VerificationStateTracker — valid transitions, invalid transition rejection

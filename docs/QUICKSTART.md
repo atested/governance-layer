@@ -255,6 +255,5 @@ Call `governance_user_report` to see unique user counts and per-user action tota
 ## Next steps
 
 - [Governance Overview](GOVERNANCE_OVERVIEW.md) — architecture and guarantees
-- [Attestation Spec](dev/ATTESTATION_SPEC.md) — how the decision chain and replay work
-- [Runbook](dev/RUNBOOK.md) — operational procedures
-- [Signing Guide](dev/SIGNING_GUIDE.md) — Ed25519 signing for non-repudiation
+- [Licensing](LICENSING.md) — license terms and commercial use
+- [External Contracts](EXTERNAL_CONTRACTS.md) — stability guarantees for CI/CD integration

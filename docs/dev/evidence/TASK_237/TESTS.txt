@@ -1,6 +1,0 @@
-=== RUN: bash system/tests/test_verify_tool_event_bundle.sh
-VERIFY_TOOL_EVENT_BUNDLE=PASS
-DETERMINISTIC=YES
-RUN1_SHA256=0393c125d2a9a35f638386d290ae4b47bb7c6518e59494d0f5e218a83ad3fae6
-RUN2_SHA256=0393c125d2a9a35f638386d290ae4b47bb7c6518e59494d0f5e218a83ad3fae6
-=== PASS: bash system/tests/test_verify_tool_event_bundle.sh

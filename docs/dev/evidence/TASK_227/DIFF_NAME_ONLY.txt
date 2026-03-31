@@ -1,5 +1,0 @@
-mcp/tool_event_link_store.py
-system/tests/test_mcp_receipt_tool_events_query.sh
-system/tests/test_mcp_replay_check_includes_tool_event_digests.sh
-system/tests/test_mcp_tool_event_receipts_query.sh
-system/tests/test_tool_event_receipt_link_index.sh

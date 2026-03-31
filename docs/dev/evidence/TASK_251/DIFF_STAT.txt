@@ -1,8 +1,0 @@
- docs/dev/WORK_QUEUE.md                             |  3 ++
- mcp/tool_event_link_store.py                       | 16 ++++++++---
- .../helpers/tool_event_receipt_replay_common.sh    | 12 ++++++++
- system/tests/test_mcp_receipt_tool_events_query.sh |  6 ++--
- system/tests/test_mcp_tool_event_receipts_query.sh |  6 ++--
- system/tests/test_tool_event_receipt_link_index.sh |  6 ++--
- .../test_tool_event_receipt_negative_matrix.sh     | 32 ++++++++++++++++++++--
- 7 files changed, 65 insertions(+), 16 deletions(-)

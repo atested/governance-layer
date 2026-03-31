@@ -1,9 +1,0 @@
-TASK=TASK_333
-BASE_SHA=1d4b5d2d04cd305fc371293b83fd2c9aa1009888
-TESTS_RUN:
-- tests/test_rdd_triage_eval.sh
-- tests/test_rdd_triage_criteria_file.sh
-DETERMINISM:
-- run1_hash=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
-- run2_hash=9b457efa7fc728ba6319398cfc07f6349bd606806c122f0fbfb9fe0e825d9c24
-- match=YES

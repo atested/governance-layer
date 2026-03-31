@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test: Hardening — Singleton Consistency (CECIL-T8)
+# Test: Hardening — Singleton Consistency 
 #
 # Validates:
 #   1. Approval store singleton caching (not rebuilt on every opaque action)

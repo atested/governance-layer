@@ -1,5 +1,0 @@
-TASK_281 validation:
-- Verified BFPS includes a concise preferred Codex combined-workfront dispatch-shape addendum.
-- Verified BFPS still points to CANON for Cecil and OPS_PROCESS v1 section 9.1 for Codex.
-- Verified compliance section has a single canonical-pointer rule line.
-RESULT=PASS

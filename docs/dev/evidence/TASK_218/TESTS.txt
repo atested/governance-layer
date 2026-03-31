@@ -1,6 +1,0 @@
-COMMANDS:
-- bash system/tests/test_canonicalize_manifest.sh
-- bash system/tests/test_diff_manifest.sh
-- bash system/tests/test_diff_proof_bundle.sh
-- bash system/tests/test_summarize_proof_bundle.sh
-RESULT=PASS

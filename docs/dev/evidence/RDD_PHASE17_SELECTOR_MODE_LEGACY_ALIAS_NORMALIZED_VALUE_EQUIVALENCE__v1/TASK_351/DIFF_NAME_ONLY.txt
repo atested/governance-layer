@@ -1,8 +1,0 @@
-docs/dev/evidence/RDD_PHASE17_SELECTOR_MODE_LEGACY_ALIAS_NORMALIZED_VALUE_EQUIVALENCE__v1/TASK_351/TESTS.txt
-docs/dev/evidence/RDD_PHASE17_SELECTOR_MODE_LEGACY_ALIAS_NORMALIZED_VALUE_EQUIVALENCE__v1/TASK_352/TESTS.txt
-docs/dev/evidence/TASK_351/TESTS.txt
-docs/dev/evidence/TASK_352/TESTS.txt
-scripts/rdd-pass-triage.sh
-tests/fixtures/rdd_phase17_selector_mode_intent_legacy_both_aliases_normalized_equal_whitespace.json
-tests/fixtures/rdd_phase17_selector_mode_intent_legacy_both_aliases_normalized_mismatch_whitespace.json
-tests/test_rdd_triage_selector_mode.sh

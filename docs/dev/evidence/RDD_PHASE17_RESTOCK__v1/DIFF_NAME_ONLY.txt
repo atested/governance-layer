@@ -1,4 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/evidence/RDD_PHASE17_RESTOCK__v1/VALIDATION.txt
-docs/dev/tasks/ready/TASK_351__rdd_selector_mode_legacy_dual_alias_normalized_value_equivalence_hardening.md
-docs/dev/tasks/ready/TASK_352__rdd_selector_mode_legacy_dual_alias_normalized_value_equivalence_coverage.md

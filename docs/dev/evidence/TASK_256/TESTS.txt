@@ -1,8 +1,0 @@
-PASS bash system/tests/test_export_receipt_attestation_bundle.sh
-PASS bash system/tests/test_export_receipt_bundle_signature_parity.sh
-PASS bash system/tests/test_export_receipt_bundle_includes_replay_check.sh
-PASS bash system/tests/test_no_conflict_markers_tracked.sh
-PASS bash system/tests/test_no_absolute_paths_tracked.sh
-PASS bash system/tests/test_no_trailing_whitespace.sh
-PASS bash system/tests/test_shell_scripts_strict_mode.sh
-PASS bash system/tests/test_dev_scripts_safe_defaults.sh

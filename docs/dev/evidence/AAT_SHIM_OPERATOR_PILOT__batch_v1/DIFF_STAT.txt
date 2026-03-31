@@ -1,5 +1,0 @@
- docs/dev/AAT_SHIM_OPERATOR_PILOT.md                |  41 +++++++
- scripts/aat_stage_into_proof_bundle.py             |  67 ++++++++++++
- scripts/run_validate_proof_bundle_with_aat_shim.sh |  35 ++++++
- system/tests/test_aat_shim_operator_pilot.sh       | 118 +++++++++++++++++++++
- 4 files changed, 261 insertions(+)

@@ -1,7 +1,0 @@
-$ bash tests/test_validate_proof_bundle_summary_json.sh
---- T-VALIDATE-SUMMARY-JSON-001: validator summary JSON deterministic across two runs ---
-PASS: summary json required keys/schema version present
-VALIDATE_SUMMARY_JSON_SHA256_RUN1=206bceb23400af1aa338d6d5fc6afc982f0c1c5f3c6129069c6fda2e8f9c50c3
-VALIDATE_SUMMARY_JSON_SHA256_RUN2=206bceb23400af1aa338d6d5fc6afc982f0c1c5f3c6129069c6fda2e8f9c50c3
-PASS: validator summary JSON deterministic across two runs
-[exit=0]

@@ -1,2 +1,0 @@
-Forbidden-file scan against working diff:
-PASS

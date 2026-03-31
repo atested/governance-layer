@@ -1,8 +1,0 @@
-docs/dev/evidence/RDD_PHASE16_SELECTOR_MODE_LEGACY_ALIAS_ALLOWED_VALUE_CONTRACT__v1/TASK_349/TESTS.txt
-docs/dev/evidence/RDD_PHASE16_SELECTOR_MODE_LEGACY_ALIAS_ALLOWED_VALUE_CONTRACT__v1/TASK_350/TESTS.txt
-docs/dev/evidence/TASK_349/TESTS.txt
-docs/dev/evidence/TASK_350/TESTS.txt
-scripts/rdd-pass-triage.sh
-tests/fixtures/rdd_phase16_selector_mode_intent_legacy_both_aliases_unsupported_equal.json
-tests/fixtures/rdd_phase16_selector_mode_intent_legacy_both_aliases_unsupported_mixed.json
-tests/test_rdd_triage_selector_mode.sh

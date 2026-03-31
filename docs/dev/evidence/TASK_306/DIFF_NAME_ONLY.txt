@@ -1,1 +1,0 @@
-docs/dev/CURRENT_MAIN_CAPABILITY_MAP.md

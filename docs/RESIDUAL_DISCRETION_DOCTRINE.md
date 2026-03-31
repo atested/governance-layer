@@ -2,7 +2,7 @@
 
 **Status**: [CANDIDATE] — pressure-testable doctrine artifact, not yet canonical
 **Date**: 2026-03-08 (fifth revision)
-**Author**: Cecil (governance operator), directed by Greg (product owner)
+**Author**: Greg Keeter
 **Working name history**: Originally "Earned Grace" (placeholder, 2026-03-06). Renamed "Doctrine of Residual Discretion" (2026-03-06). Finalized as "Residual Discretion Doctrine" (2026-03-08).
 
 ---

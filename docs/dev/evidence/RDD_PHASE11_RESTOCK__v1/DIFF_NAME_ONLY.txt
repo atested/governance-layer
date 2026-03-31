@@ -1,6 +1,0 @@
-docs/dev/evidence/RDD_PHASE11_RESTOCK__v1/DIFF_NAME_ONLY.txt
-docs/dev/evidence/RDD_PHASE11_RESTOCK__v1/DIFF_STAT.txt
-docs/dev/evidence/RDD_PHASE11_RESTOCK__v1/HOTFILE_SCAN.txt
-docs/dev/evidence/RDD_PHASE11_RESTOCK__v1/VALIDATION.txt
-docs/dev/tasks/ready/TASK_339__rdd_selector_mode_request_source_strictness.md
-docs/dev/tasks/ready/TASK_340__rdd_selector_mode_request_source_strictness_coverage.md

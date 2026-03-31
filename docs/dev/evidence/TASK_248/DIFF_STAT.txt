@@ -1,7 +1,0 @@
- docs/dev/WORK_QUEUE.md                             |  3 ++
- scripts/attest/verify_tool_catalog_bundle.py       |  8 ++++-
- scripts/attest/verify_tool_event_bundle.py         |  2 ++
- .../tests/helpers/tool_catalog_contract_common.sh  | 13 +++++++++
- .../test_verify_tool_catalog_bundle_edge_cases.sh  | 34 ++++++++++++++++++++--
- system/tests/test_verify_tool_event_bundle.sh      |  4 +++
- 6 files changed, 60 insertions(+), 4 deletions(-)

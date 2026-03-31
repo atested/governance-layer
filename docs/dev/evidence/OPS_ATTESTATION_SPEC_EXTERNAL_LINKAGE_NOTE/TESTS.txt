@@ -1,6 +1,0 @@
-$ rg -n "External proof-bundle linkage note|status_bundle\.json is an optional output|not part of `proof_packet_v1`|status_bundle_version" docs/dev/ATTESTATION_SPEC.md
-277:**External proof-bundle linkage note (release-gate):**
-278:- `status_bundle.json` is an optional output of `system/scripts/release-gate.sh` in the proof-bundle directory.
-279:- `status_bundle.json` is **not** part of `proof_packet_v1`; it belongs to the external proof-bundle output contract documented in `docs/EXTERNAL_CONTRACTS.md`.
-280:- When present, `status_bundle.json` includes a `status_bundle_version` field (current value: `status_bundle_v1`) for explicit consumer compatibility checks.
-[exit=0]

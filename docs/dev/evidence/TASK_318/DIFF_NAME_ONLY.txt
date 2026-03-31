@@ -1,4 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/tasks/ready/TASK_317__capability_map_lightweight_state_refresh_v3.md
-docs/dev/tasks/ready/TASK_318__capability_map_planning_judgment_refresh_v3.md
-docs/dev/tasks/ready/TASK_319__capability_map_briefing_extraction_refresh_v3.md

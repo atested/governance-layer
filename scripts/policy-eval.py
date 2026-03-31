@@ -38,9 +38,6 @@ HOT_FILE_PATHS = frozenset(
     [
         "system/scripts/release-gate.sh",
         "system/scripts/validate-proof-bundle.sh",
-        "system/scripts/codex-unattended.sh",
-        "docs/dev/WORK_QUEUE.md",
-        "docs/dev/ASSIGNMENTS.md",
     ]
 )
 

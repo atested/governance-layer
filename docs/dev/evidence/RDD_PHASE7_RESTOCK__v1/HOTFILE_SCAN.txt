@@ -1,6 +1,0 @@
-Hot file scan (BASE..WORKTREE)
-OK system/scripts/release-gate.sh
-OK system/scripts/validate-proof-bundle.sh
-OK system/scripts/codex-unattended.sh
-TOUCHED docs/dev/WORK_QUEUE.md
-OK docs/dev/ASSIGNMENTS.md

@@ -1,3 +1,0 @@
-TASK_224 TESTS
-- PASS: bash system/tests/test_export_tool_catalog_bundle.sh
-- PASS: bash system/tests/test_verify_tool_catalog_bundle.sh

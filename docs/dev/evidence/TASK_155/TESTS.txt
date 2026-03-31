@@ -1,8 +1,0 @@
-$ bash tests/test_release_gate_ci_contract_suite.sh
---- T-RELEASE-GATE-CI-SUITE-001: ci profile runs full contract suite deterministically ---
-CI_CONTRACT_SUITE_SHA256_RUN1=7a9974d59bb970ad702a221cae2f11127d4ed62512865b9c15c8694481a6f1d8
-CI_CONTRACT_SUITE_SHA256_RUN2=7a9974d59bb970ad702a221cae2f11127d4ed62512865b9c15c8694481a6f1d8
-PASS: ci profile runs proof-packet core/aux/required-file contract suite deterministically
-[exit=0]
-
-SUPERSEDED_BRANCHES: origin/codex/TASK_152__284cb83, origin/codex/TASK_153__f11a652, origin/codex/TASK_154__776b398, origin/codex/TASK_155__ad9cebf

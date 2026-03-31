@@ -1,4 +1,0 @@
-docs/dev/WORK_QUEUE.md
-mcp/tool_event_link_store.py
-mcp/tool_event_store.py
-system/tests/test_tool_event_receipt_negative_matrix.sh

@@ -1,4 +1,0 @@
-HOTFILE_SCAN_CMD=git diff --name-only origin/main..HEAD | rg -n "^(system/scripts/release-gate\.sh|system/scripts/validate-proof-bundle\.sh|system/scripts/codex-unattended\.sh|docs/dev/WORK_QUEUE\.md|docs/dev/ASSIGNMENTS\.md)$"
-AUTHORIZED_HOT_EDIT=system/scripts/validate-proof-bundle.sh
-2:system/scripts/validate-proof-bundle.sh
-HOTFILE_SCAN=PASS

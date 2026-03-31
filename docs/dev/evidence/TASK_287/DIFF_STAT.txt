@@ -1,5 +1,0 @@
- docs/dev/WORK_QUEUE.md                             |  3 ++
- ...TASK_287__current_main_capability_map_create.md | 46 ++++++++++++++++++++
- .../TASK_288__current_main_capability_map_seed.md  | 47 ++++++++++++++++++++
- ...SK_289__current_main_capability_map_protocol.md | 50 ++++++++++++++++++++++
- 4 files changed, 146 insertions(+)

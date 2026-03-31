@@ -1,9 +1,0 @@
-docs/dev/WORK_QUEUE.md
-scripts/attest/export_tool_catalog_bundle.py
-system/tests/helpers/tool_catalog_contract_common.sh
-system/tests/test_export_tool_catalog_bundle.sh
-system/tests/test_verify_tool_catalog_bundle.sh
-system/tests/test_verify_tool_catalog_bundle_edge_cases.sh
-docs/dev/tasks/ready/TASK_257__tool_catalog_export_verify_output_alignment.md
-docs/dev/tasks/ready/TASK_258__tool_catalog_export_verify_negative_followon.md
-docs/dev/tasks/ready/TASK_259__tool_catalog_export_verify_fixture_alignment.md

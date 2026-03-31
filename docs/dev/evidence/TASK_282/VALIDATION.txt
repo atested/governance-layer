@@ -1,5 +1,0 @@
-TASK_282 validation:
-- Verified BFPS dispatch pointer seam is resolved by explicit CANON-pointer policy and version-resolution note.
-- Verified DISPATCH_LIBRARY__CECIL_CODEX__CANON.md source-of-truth pointer remains to v10.
-- Verified no edit to dispatch-library version file was required.
-RESULT=PASS

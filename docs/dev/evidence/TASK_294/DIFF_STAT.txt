@@ -1,5 +1,0 @@
- docs/dev/WORK_QUEUE.md                             |  3 ++
- ...93__bfps_capability_map_hard_dependency_link.md | 48 ++++++++++++++++++++++
- ...4__capability_map_canonical_link_integration.md | 46 +++++++++++++++++++++
- ...K_295__dev_chat_numbering_and_startup_wiring.md | 48 ++++++++++++++++++++++
- 4 files changed, 145 insertions(+)

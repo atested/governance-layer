@@ -1,4 +1,0 @@
-scripts/attest/export_receipt_bundle.py
-system/tests/test_export_receipt_attestation_bundle.sh
-system/tests/test_export_receipt_bundle_includes_replay_check.sh
-system/tests/test_export_receipt_bundle_signature_parity.sh

@@ -1,9 +1,0 @@
-docs/dev/WORK_QUEUE.md
-scripts/attest/export_receipt_bundle.py
-system/tests/helpers/attestation_proof_contract_common.sh
-system/tests/test_export_receipt_attestation_bundle.sh
-system/tests/test_export_receipt_bundle_includes_replay_check.sh
-system/tests/test_export_receipt_bundle_signature_parity.sh
-docs/dev/tasks/ready/TASK_254__attestation_export_output_alignment.md
-docs/dev/tasks/ready/TASK_255__attestation_export_negative_followon.md
-docs/dev/tasks/ready/TASK_256__attestation_export_fixture_alignment.md

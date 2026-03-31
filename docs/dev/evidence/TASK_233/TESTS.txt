@@ -1,3 +1,0 @@
-TASK_233 TESTS
-- PASS: bash system/tests/test_tool_catalog_store_deterministic_root.sh
-- PASS: bash system/tests/test_tool_catalog_store_edge_cases.sh

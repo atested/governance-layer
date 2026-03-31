@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>License issued — Atested</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <header>
+    <nav class="container">
+      <a href="/" class="nav-brand">atested</a>
+      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      <ul class="nav-links">
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="explainer.html">Why governance</a></li>
+        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container narrow">
+        <h1>Payment confirmed</h1>
+        <p class="lead">
+          Your license key is being generated. It will appear below momentarily.
+        </p>
+
+        <div id="license-loading" class="mt-xl text-center">
+          <p class="text-muted">Generating your signed license key...</p>
+        </div>
+
+        <div id="license-result" style="display: none;" class="mt-xl">
+          <h3>Your license key</h3>
+          <p>
+            Copy this key and activate it in your Atested server:
+          </p>
+          <div class="record-visual" style="margin-top: var(--space-md);">
+            <div class="record-visual-header">
+              <span>license key</span>
+              <span class="badge badge-signed">Ed25519</span>
+            </div>
+            <pre><code id="license-key-text" style="word-break: break-all; white-space: pre-wrap;"></code></pre>
+          </div>
+
+          <div class="mt-lg">
+            <button class="btn btn-primary" onclick="copyLicenseKey()">Copy to clipboard</button>
+          </div>
+
+          <div class="mt-xl">
+            <h3>Activate your license</h3>
+            <p>
+              In your Atested deployment, use the <code>license_activate</code> governed tool
+              to activate your license key. The governance chain will record the license
+              activation event with your organization identity and license tier.
+            </p>
+          </div>
+        </div>
+
+        <div id="license-error" style="display: none;" class="mt-xl">
+          <p>
+            If your license key does not appear within a few minutes, please contact
+            <a href="mailto:greg@atested.com">greg@atested.com</a> with your Stripe receipt.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-copy">&copy; 2026 Atested</span>
+        <ul class="footer-links">
+          <li><a href="terms.html">Terms</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // After Stripe redirects here with ?session_id=..., poll the worker
+    // endpoint for the generated license key.
+    //
+    // The Cloudflare Worker generates the license key asynchronously on
+    // Stripe webhook confirmation. This page polls the worker's lookup
+    // endpoint until the key is ready.
+
+    var WORKER_BASE = 'https://license.atested.com'; // Update to your Worker URL
+
+    function getSessionId() {
+      var params = new URLSearchParams(window.location.search);
+      return params.get('session_id');
+    }
+
+    function copyLicenseKey() {
+      var text = document.getElementById('license-key-text').textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        alert('License key copied to clipboard.');
+      });
+    }
+
+    function pollForLicense(sessionId, attempts) {
+      if (attempts > 30) {
+        document.getElementById('license-loading').style.display = 'none';
+        document.getElementById('license-error').style.display = 'block';
+        return;
+      }
+
+      fetch(WORKER_BASE + '/license?session_id=' + encodeURIComponent(sessionId))
+        .then(function (resp) {
+          if (resp.ok) return resp.json();
+          throw new Error('not ready');
+        })
+        .then(function (data) {
+          if (data.license_key) {
+            document.getElementById('license-loading').style.display = 'none';
+            document.getElementById('license-key-text').textContent = data.license_key;
+            document.getElementById('license-result').style.display = 'block';
+          } else {
+            throw new Error('not ready');
+          }
+        })
+        .catch(function () {
+          setTimeout(function () { pollForLicense(sessionId, attempts + 1); }, 2000);
+        });
+    }
+
+    var sessionId = getSessionId();
+    if (sessionId) {
+      pollForLicense(sessionId, 0);
+    } else {
+      document.getElementById('license-loading').innerHTML =
+        '<p class="text-muted">No session ID found. If you just completed payment, check your email for the license key.</p>';
+    }
+  </script>
+</body>
+</html>

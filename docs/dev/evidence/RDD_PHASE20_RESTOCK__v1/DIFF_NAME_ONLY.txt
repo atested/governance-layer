@@ -1,3 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/tasks/ready/TASK_357__rdd_selector_mode_canonical_request_value_contract_precedence_hardening.md
-docs/dev/tasks/ready/TASK_358__rdd_selector_mode_canonical_request_value_contract_precedence_coverage.md

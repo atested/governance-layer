@@ -1,9 +1,0 @@
-$ bash tests/test_external_ci_smoke.sh
---- T-EXTERNAL-CI-SMOKE-001: bootstrap dry-run + release-gate + core contract assertions ---
-PASS: bootstrap-run dry-run reports expected proof-bundle output location
-EXTERNAL_CI_SMOKE_SHA256_RUN1=bdb5a63ac85971fea5508d07f122a1d0fb51c157e36d7efde84b9d5e1070937f
-EXTERNAL_CI_SMOKE_SHA256_RUN2=bdb5a63ac85971fea5508d07f122a1d0fb51c157e36d7efde84b9d5e1070937f
-PASS: external CI smoke contract digest deterministic across two runs
-PASS: proof-bundle required files exist and summary report_version is proof_packet_verify_summary_v1
-Summary: external CI single-command smoke checks complete
-[exit=0]

@@ -1,3 +1,0 @@
- docs/dev/BRIEFING_FORMAT__BFPS_v12.md   | 30 ++++++++++++++++++++++++++++++
- docs/dev/CURRENT_MAIN_CAPABILITY_MAP.md | 27 +++++++++++++++++++++++++++
- 2 files changed, 57 insertions(+)

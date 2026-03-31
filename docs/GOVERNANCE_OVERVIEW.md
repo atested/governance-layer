@@ -52,30 +52,12 @@ The Governance Layer is a deterministic policy enforcement system for tool execu
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Documentation Map
+## Documentation
 
-### For Newcomers
 - **This document** (GOVERNANCE_OVERVIEW.md): System guarantees and architecture
-- [ATTESTATION_SPEC.md](dev/ATTESTATION_SPEC.md): Object model and replay mechanics
-
-### For Operators
-- [RUNBOOK.md](dev/RUNBOOK.md): Operational procedures (seeds, task generation, run loops)
-- [OPS_CANONICAL.md](dev/OPS_CANONICAL.md): Canonical ops record and script registry
-
-### For Contributors
-- [TASK_SEEDS.md](dev/TASK_SEEDS.md): Task generation format
-- [WORK_QUEUE.md](dev/WORK_QUEUE.md): Current task queue
-- [ASSIGNMENTS.md](dev/ASSIGNMENTS.md): Task ownership tracking
-
-### Specifications
-- [EPIC_SIGNING.md](EPIC_SIGNING.md): Phase 3 Ed25519 signing specification
-- [EPIC_PROMOTION.md](EPIC_PROMOTION.md): Cross-root promotion design
-- [INVARIANTS_MAP.md](dev/INVARIANTS_MAP.md): System invariants and enforcement mapping
-- [REASON_CODES.md](dev/REASON_CODES.md): Policy rejection reason code index
-- [MERGE_GATE.md](dev/MERGE_GATE.md): Merge requirements and verification rules
-
-### Applications
-- [APPLICATIONS_INDEX.md](dev/APPLICATIONS_INDEX.md): Downstream consumers and use cases
+- [Quickstart Guide](QUICKSTART.md): Get running in under 5 minutes
+- [Licensing](LICENSING.md): License terms and commercial use
+- [External Contracts](EXTERNAL_CONTRACTS.md): Stability guarantees for CI/CD integration
 
 ## Project Status
 
@@ -87,18 +69,9 @@ The Governance Layer is a deterministic policy enforcement system for tool execu
 - Deterministic record generation and replay
 - Trust-grade GovLayer-core record signing and verifier closure (record, chain, replay)
 - Reason code taxonomy (12 filesystem rejection codes)
-- Task scaffolding and batch execution workflows
 - Evidence bundle requirements
 
-**In Progress**:
-- Adjacent GovMCP/application-layer exposure hardening
-- Cross-cutting proof/export packaging hardening
-
-**Designed (Not Implemented)**:
-- Cross-root promotion (EPIC_PROMOTION.md)
-- Time ribbon rendering for attestation chains
-
-See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md) for detailed progress.
+See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
 
 ---
 
@@ -218,9 +191,7 @@ python3 scripts/verify-chain.py decision-chain.jsonl  # Full chain
 ```
 
 **See also**:
-- [SIGNING_GUIDE.md](dev/SIGNING_GUIDE.md) - Practical guide with key management and troubleshooting
 - [EPIC_SIGNING.md](EPIC_SIGNING.md) - Technical specification and design rationale
-- [ATTESTATION_SPEC.md](dev/ATTESTATION_SPEC.md) - Complete attestation architecture (includes replay semantics)
 
 ## Key Concepts
 
@@ -266,4 +237,4 @@ See README.md for environment variable setup.
 
 ## Contact & Contributions
 
-This project uses a Cecil-managed workflow with task-based development. See [RUNBOOK.md](dev/RUNBOOK.md) for contribution guidelines and task claiming procedures.
+See the [Quickstart Guide](QUICKSTART.md) for getting started.

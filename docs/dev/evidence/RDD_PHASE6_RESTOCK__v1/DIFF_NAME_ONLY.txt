@@ -1,7 +1,0 @@
-docs/dev/WORK_QUEUE.md
-docs/dev/evidence/RDD_PHASE6_RESTOCK__v1/DIFF_NAME_ONLY.txt
-docs/dev/evidence/RDD_PHASE6_RESTOCK__v1/DIFF_STAT.txt
-docs/dev/evidence/RDD_PHASE6_RESTOCK__v1/HOTFILE_SCAN.txt
-docs/dev/evidence/RDD_PHASE6_RESTOCK__v1/VALIDATION.txt
-docs/dev/tasks/ready/TASK_329__rdd_external_triage_criteria_file.md
-docs/dev/tasks/ready/TASK_330__rdd_external_triage_criteria_coverage.md

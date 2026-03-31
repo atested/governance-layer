@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Service — Atested</title>
+  <meta name="description" content="Atested terms of service, licensing terms, and liability language.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <header>
+    <nav class="container">
+      <a href="/" class="nav-brand">atested</a>
+      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      <ul class="nav-links">
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="explainer.html">Why governance</a></li>
+        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section>
+      <div class="container prose">
+        <h1>Terms of Service</h1>
+        <p class="text-muted">Effective date: March 30, 2026</p>
+
+        <h2>1. Definitions</h2>
+
+        <p>
+          <strong>"Atested"</strong> refers to the governance infrastructure software, including the
+          governance layer, the MCP server, the policy evaluation engine, the decision chain,
+          and all associated tools, scripts, and documentation published at
+          <a href="https://github.com/GregKeeter/governance-layer">github.com/GregKeeter/governance-layer</a>
+          and at <a href="https://atested.com">atested.com</a>.
+        </p>
+
+        <p>
+          <strong>"Personal use"</strong> means use by a single individual for non-commercial,
+          non-revenue purposes. This includes personal projects, learning, experimentation,
+          and individual development work that is not conducted on behalf of or for the
+          benefit of any organization, employer, or client.
+        </p>
+
+        <p>
+          <strong>"Commercial use"</strong> means any use that is not personal use. This includes,
+          without limitation: use by any organization (whether for-profit, non-profit, or
+          governmental); use by any individual on behalf of an employer, client, or
+          organization; use in any revenue-generating activity; use in any production
+          environment; and use by any team of two or more individuals working on a
+          shared project.
+        </p>
+
+        <p>
+          <strong>"License key"</strong> means a cryptographically signed Ed25519 token issued by
+          Atested upon purchase, encoding the licensed tier, expiry date, and organization
+          identity.
+        </p>
+
+        <p>
+          <strong>"Attestation artifact"</strong> means a cryptographically signed record generated
+          by your Atested deployment that summarizes governance activity, including unique
+          users, operations, tool categories, and license status.
+        </p>
+
+        <h2>2. License Grant</h2>
+
+        <p>
+          Atested is source-available under the <strong>Business Source License 1.1</strong> (BSL 1.1).
+          The source code is publicly available. On March 30, 2030 (the Change Date), the license
+          automatically converts to the <strong>Apache License 2.0</strong>, at which point all use
+          becomes free and unrestricted.
+        </p>
+
+        <p>
+          Until the Change Date, Atested grants you a non-exclusive, non-transferable license
+          to use the software subject to the terms of this agreement and the tier corresponding
+          to your usage.
+        </p>
+
+        <ul>
+          <li>
+            <strong>Personal tier (free):</strong> You may use Atested for personal use at no cost,
+            without a license key, indefinitely. Personal use is limited to a single individual.
+          </li>
+          <li>
+            <strong>Team tier ($999/year):</strong> Licensed for organizations with 2 to 10 users.
+            Requires a valid license key.
+          </li>
+          <li>
+            <strong>Business tier ($4,999/year):</strong> Licensed for organizations with 11 to 100 users.
+            Requires a valid license key.
+          </li>
+          <li>
+            <strong>Enterprise tier (contact us):</strong> Licensed for organizations with more than
+            100 users. Terms negotiated individually.
+          </li>
+        </ul>
+
+        <p>
+          All paid tiers include all features, all governed tools, and all integrations.
+          There are no per-tool fees or feature gates.
+        </p>
+
+        <p>
+          Non-profit organizations are eligible for 50% off all paid tiers. Contact us
+          for non-profit pricing.
+        </p>
+
+        <h2>3. Trial Period</h2>
+
+        <p>
+          All new installations begin with a 30-day trial period. During the trial, all
+          functionality is available without a license key. The trial period begins on
+          the date of first use.
+        </p>
+
+        <p>
+          At the end of the trial period, your Atested deployment generates an attestation
+          artifact showing your usage. This artifact recommends your appropriate tier based
+          on the number of unique users observed during the trial.
+        </p>
+
+        <p>
+          If your trial usage qualifies for the Personal tier (single user, non-commercial),
+          you may continue using Atested at no cost. If your usage qualifies for a paid tier,
+          you should purchase a license key within 14 days of trial expiration.
+        </p>
+
+        <h2>4. Renewal and Tier Adjustment</h2>
+
+        <p>
+          License keys are valid for one year from the date of purchase. At renewal, your
+          Atested deployment generates a current attestation artifact. Your renewal tier
+          is determined by this attestation:
+        </p>
+
+        <ul>
+          <li>If your unique user count has increased beyond your current tier, your renewal
+            tier adjusts upward.</li>
+          <li>If your unique user count has decreased below your current tier threshold, your
+            renewal tier adjusts downward.</li>
+          <li>Tier adjustments are effective at renewal, not mid-term.</li>
+        </ul>
+
+        <h2>5. The Evidentiary Enforcement Model</h2>
+
+        <p>
+          Atested uses an evidentiary enforcement model. This means:
+        </p>
+
+        <ul>
+          <li>Atested does not lock out unlicensed users. It does not implement DRM, activation
+            checks, or runtime restrictions that prevent the software from functioning.</li>
+          <li>The governance layer records the license status in every decision record. If you
+            are unlicensed, your governance records reflect that fact.</li>
+          <li>The system records what is true. An unlicensed deployment produces governance
+            records that show the license status as unlicensed. A licensed deployment produces
+            records showing the license status as licensed.</li>
+          <li>Your attestation artifacts &mdash; the same artifacts you would show an auditor or
+            customer &mdash; reflect your actual license status.</li>
+        </ul>
+
+        <h2>6. Liability Limitations</h2>
+
+        <p>
+          <strong>Atested provides attestation records, not guarantees of outcome.</strong>
+          The following limitations apply:
+        </p>
+
+        <ul>
+          <li>
+            <strong>Atested does not validate the correctness of any policy.</strong> The governance
+            layer evaluates actions against policies that you, the operator, define. Atested
+            makes no representation that your policies are correct, complete, or appropriate
+            for your use case.
+          </li>
+          <li>
+            <strong>Governance records are evidence of evaluation, not certification of safety.</strong>
+            A governance record showing "ALLOW" means that the action was evaluated against
+            your policy and the policy permitted it. It does not mean the action was safe,
+            appropriate, or free of unintended consequences.
+          </li>
+          <li>
+            <strong>Atested is not a substitute for legal, compliance, or security review.</strong>
+            Governance records and attestation artifacts may support your compliance efforts,
+            but they do not replace professional legal, regulatory, or security assessment.
+          </li>
+          <li>
+            <strong>No warranty that the governance layer catches every policy violation.</strong>
+            While the governance layer evaluates every action routed through it, Atested does
+            not warrant that all agent actions are routed through the governance layer, that
+            the policy covers all relevant scenarios, or that the evaluation logic is free
+            of defects.
+          </li>
+          <li>
+            <strong>Cryptographic verification is evidence, not insurance.</strong> Hash chains,
+            digital signatures, and proof packets provide tamper evidence. They do not
+            prevent data loss, system failures, or unauthorized access to the underlying
+            infrastructure.
+          </li>
+        </ul>
+
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, ATESTED IS PROVIDED "AS IS"
+          AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED,
+          STATUTORY, OR OTHERWISE, INCLUDING WITHOUT LIMITATION WARRANTIES OF MERCHANTABILITY,
+          FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+        </p>
+
+        <p>
+          IN NO EVENT SHALL ATESTED OR ITS AUTHOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
+          SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA,
+          BUSINESS, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM YOUR USE OF
+          OR INABILITY TO USE THE SOFTWARE, WHETHER BASED ON WARRANTY, CONTRACT, TORT,
+          NEGLIGENCE, STRICT LIABILITY, OR ANY OTHER LEGAL THEORY, EVEN IF ADVISED OF
+          THE POSSIBILITY OF SUCH DAMAGES.
+        </p>
+
+        <p>
+          ATESTED'S TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR
+          RELATED TO THIS AGREEMENT SHALL NOT EXCEED THE AMOUNT YOU PAID FOR THE SOFTWARE
+          IN THE TWELVE MONTHS PRECEDING THE CLAIM.
+        </p>
+
+        <h2>7. Data and Privacy</h2>
+
+        <p>
+          Atested runs entirely on your infrastructure. Governance records, decision chains,
+          attestation artifacts, and all associated data are stored locally on your systems.
+          Atested does not transmit governance data, usage telemetry, or any other information
+          to external servers.
+        </p>
+
+        <p>
+          The only external communication is optional: license key activation (a one-time
+          verification of your license key) and the Stripe payment flow for purchasing
+          licenses.
+        </p>
+
+        <h2>8. Termination</h2>
+
+        <p>
+          You may stop using Atested at any time. Your governance records remain on your
+          infrastructure and continue to be verifiable independently of Atested.
+        </p>
+
+        <p>
+          Atested reserves the right to refuse to issue or renew license keys for any reason.
+          This does not affect your ability to use the Personal tier or to verify existing
+          governance records.
+        </p>
+
+        <h2>9. Changes to These Terms</h2>
+
+        <p>
+          Atested may update these terms. Changes take effect when posted to
+          <a href="https://atested.com/terms.html">atested.com/terms.html</a>. Your continued
+          use of the software after changes are posted constitutes acceptance of the updated
+          terms.
+        </p>
+
+        <h2>10. Governing Law</h2>
+
+        <p>
+          These terms are governed by the laws of the State of Texas, United States, without
+          regard to conflict of law provisions. Any disputes shall be resolved in the courts
+          located in Travis County, Texas.
+        </p>
+
+        <h2>11. Contact</h2>
+
+        <p>
+          For questions about these terms, licensing, or commercial use:
+          <a href="mailto:greg@atested.com">greg@atested.com</a>
+        </p>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-copy">&copy; 2026 Atested</span>
+        <ul class="footer-links">
+          <li><a href="terms.html">Terms</a></li>
+          <li><a href="pricing.html">Pricing</a></li>
+          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/nav.js"></script>
+</body>
+</html>
