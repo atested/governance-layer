@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"read\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      },
+      {
+        "matcher": "Write",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"write\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      },
+      {
+        "matcher": "Edit",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"edit\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      },
+      {
+        "matcher": "Bash",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"execute\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      },
+      {
+        "matcher": "Glob",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"glob\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      },
+      {
+        "matcher": "Grep",
+        "hook": "curl -s -X POST http://localhost:9700/api/observe -H 'Content-Type: application/json' -d '{\"operation_type\": \"grep\", \"source\": \"claude_code_hook\"}' > /dev/null 2>&1 &"
+      }
+    ]
+  }
+}

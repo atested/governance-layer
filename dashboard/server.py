@@ -67,6 +67,43 @@ def _json_response(handler, data, status=200):
     handler.wfile.write(body)
 
 
+import threading
+
+_chain_lock = threading.Lock()
+
+
+def _get_chain_head_hash():
+    """Read the record_hash from the last line of the chain."""
+    if not CHAIN.exists():
+        return None
+    last_line = ""
+    with open(CHAIN, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if stripped:
+                last_line = stripped
+    if not last_line:
+        return None
+    try:
+        return json.loads(last_line).get("record_hash")
+    except json.JSONDecodeError:
+        return None
+
+
+def _append_observation_event(event):
+    """Append a pre-built observation event to the chain (lightweight)."""
+    import stat as _stat
+    CHAIN.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+    with _chain_lock:
+        fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                      _stat.S_IRUSR | _stat.S_IWUSR)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+
+
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui"
 
 
@@ -82,6 +119,79 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self._handle_api(parsed)
         else:
             super().do_GET()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/observe":
+            self._handle_observe()
+        elif parsed.path.startswith("/api/"):
+            _json_response(self, {"error": "method not allowed"}, 405)
+        else:
+            self.send_error(405)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def _handle_observe(self):
+        """POST /api/observe — record an ungoverned operation observation.
+
+        Accepts JSON body: {"operation_type": "...", "target": "...", "source": "..."}
+        This is the HTTP endpoint for non-MCP integrations.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        op_type = str(data.get("operation_type", "")).strip().lower()
+        from event_model import UNGOVERNED_OPERATION_TYPES, build_non_action_event
+        if op_type not in UNGOVERNED_OPERATION_TYPES:
+            _json_response(self, {
+                "error": "INVALID_OPERATION_TYPE",
+                "valid_types": sorted(UNGOVERNED_OPERATION_TYPES),
+            }, 400)
+            return
+
+        payload = {"operation_type": op_type}
+        target = str(data.get("target", "")).strip()
+        source = str(data.get("source", "")).strip()
+        observed_at = str(data.get("observed_at", "")).strip()
+        if target:
+            payload["target"] = target
+        if source:
+            payload["source"] = source
+        if observed_at:
+            payload["observed_at"] = observed_at
+
+        # Append to chain (lightweight — no policy eval)
+        try:
+            from event_model import _compute_event_record_hash
+            import threading
+            import stat as _stat
+
+            event = build_non_action_event(
+                "ungoverned_operation_observed",
+                payload,
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+            _json_response(self, {
+                "recorded": True,
+                "event_id": event.get("event_id"),
+                "operation_type": op_type,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
 
     def log_message(self, format, *args):
         pass  # Silence request logs
@@ -166,6 +276,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 start_time=qs("start_time") or None,
                 end_time=qs("end_time") or None,
                 group_by=qs("group_by", "tool"),
+            )
+            _json_response(self, data)
+
+        elif path == "/api/transparency":
+            from readout import load_chain_rows, compute_transparency_metric
+            rows = load_chain_rows(CHAIN)
+            data = compute_transparency_metric(
+                rows,
+                start_time=qs("start_time") or None,
+                end_time=qs("end_time") or None,
             )
             _json_response(self, data)
 

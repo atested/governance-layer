@@ -40,6 +40,12 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "opaque_artifact_revocation",
     "opaque_invocation_decision",
     "usage_attestation",
+    "ungoverned_operation_observed",
+])
+
+UNGOVERNED_OPERATION_TYPES = frozenset([
+    "read", "write", "edit", "delete", "move", "execute",
+    "glob", "grep", "list", "other",
 ])
 
 ALLOWED_DEPENDENCY_TYPES = frozenset(["data", "state", "control"])
@@ -224,11 +230,32 @@ def _validate_opaque_invocation_decision(event: dict) -> tuple[bool, Optional[st
     return True, None
 
 
+def _validate_ungoverned_operation_observed(event: dict) -> tuple[bool, Optional[str]]:
+    op_type = event.get("operation_type")
+    if not isinstance(op_type, str) or not op_type:
+        return False, "ungoverned_operation_observed: operation_type must be a non-empty string"
+    if op_type not in UNGOVERNED_OPERATION_TYPES:
+        return False, (
+            f"ungoverned_operation_observed: operation_type must be one of "
+            f"{sorted(UNGOVERNED_OPERATION_TYPES)}, got: {op_type!r}"
+        )
+    # target is optional
+    target = event.get("target")
+    if target is not None and not isinstance(target, str):
+        return False, "ungoverned_operation_observed: target must be a string or null"
+    # source is optional (identifies the reporting tool)
+    source = event.get("source")
+    if source is not None and not isinstance(source, str):
+        return False, "ungoverned_operation_observed: source must be a string or null"
+    return True, None
+
+
 _EVENT_TYPE_VALIDATORS = {
     "verification_state_transition": _validate_verification_state_transition,
     "opaque_artifact_approval": _validate_opaque_artifact_approval,
     "opaque_artifact_revocation": _validate_opaque_artifact_revocation,
     "opaque_invocation_decision": _validate_opaque_invocation_decision,
+    "ungoverned_operation_observed": _validate_ungoverned_operation_observed,
 }
 
 
