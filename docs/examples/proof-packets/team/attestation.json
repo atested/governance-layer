@@ -1,0 +1,29 @@
+{
+  "attestation_version": "1.0",
+  "attestation_id": "att_example_team0001",
+  "generated_at": "2026-06-01T14:30:00Z",
+  "unique_users": 5,
+  "unique_sessions": 83,
+  "total_operations": 2104,
+  "operations_by_category": {
+    "FS_READ": 612,
+    "FS_WRITE": 489,
+    "FS_LIST": 301,
+    "MSG_SEND": 187,
+    "MSG_REPLY": 142,
+    "FS_DELETE": 98,
+    "FS_MKDIR": 67,
+    "FS_MOVE": 45,
+    "verification_state_transition": 89,
+    "opaque_artifact_approval": 42,
+    "opaque_artifact_revocation": 8,
+    "usage_attestation": 24
+  },
+  "license_status": "licensed",
+  "license_tier": "team",
+  "organization_id": "acme-engineering",
+  "license_expiry": "2027-06-01T00:00:00Z",
+  "trial_days_remaining": null,
+  "recommended_tier": "team",
+  "artifact_hash": "sha256:b4c2d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4"
+}
