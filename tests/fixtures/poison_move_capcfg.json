@@ -1,0 +1,29 @@
+{
+  "tool": "FS_MOVE",
+  "args": {
+    "src_path": "/tmp/poison-move-src.txt",
+    "dst_path": "/tmp/poison-move-dst.txt",
+    "overwrite": false
+  },
+  "intent": {
+    "goal": "Attempt move in /tmp using cap_cfg to widen allowlist.",
+    "constraints": {"overwrite": false},
+    "requested_action": "FS_MOVE",
+    "inputs": [{"ref": "file:src_path", "value": "/tmp/poison-move-src.txt"}],
+    "expected_outputs": [{"ref": "file:dst_path", "value": "/tmp/poison-move-dst.txt"}]
+  },
+  "cap_cfg": {
+    "tools": [
+      {
+        "tool": "FS_MOVE",
+        "capability_class": "FS_MOVE",
+        "risk_level": "NONE",
+        "allow_base_dirs": ["/"],
+        "deny_hidden_paths": false,
+        "deny_traversal": false,
+        "args": {"required": ["src_path", "dst_path"], "optional": ["overwrite"]},
+        "caps": {"overwrite_allowed": true, "cross_root_allowed": true, "dst_must_be_within_allowlist": false}
+      }
+    ]
+  }
+}

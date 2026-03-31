@@ -1,0 +1,28 @@
+# secrets
+.env
+*.key
+*.pem
+*.p12
+secrets/
+keys/
+
+# noisy logs and runtime artifacts
+LOGS/*
+!LOGS/.gitkeep
+!LOGS/report-*.md
+logs/
+tmp/
+temp/
+cache/
+caches/
+*.log
+*.jsonl
+
+# OS/editor junk
+.DS_Store
+
+# decision chain (runtime evidence, do not commit by default)
+LOGS/decision-chain.jsonl
+mcp/.venv
+venv/
+__pycache__/

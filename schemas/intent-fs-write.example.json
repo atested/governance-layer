@@ -1,0 +1,21 @@
+{
+  "intent": {
+    "goal": "Write a small text file into the governance-layer repo for testing.",
+    "constraints": {
+      "overwrite": false
+    },
+    "requested_action": "FS_WRITE",
+    "inputs": [
+      {"ref": "inline:text", "value": "hello"}
+    ],
+    "expected_outputs": [
+      {"ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/LOGS/example.txt"}
+    ]
+  },
+  "tool": "FS_WRITE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/LOGS/example.txt",
+    "content": "hello",
+    "request_executable": false
+  }
+}

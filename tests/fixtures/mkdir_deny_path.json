@@ -1,0 +1,15 @@
+{
+  "tool": "FS_MKDIR",
+  "args": {
+    "path": "/tmp/poison-mkdir-outside-root",
+    "parents": false,
+    "exist_ok": false
+  },
+  "intent": {
+    "goal": "Attempt to create directory outside allowed roots.",
+    "constraints": {"parents": false, "exist_ok": false},
+    "requested_action": "FS_MKDIR",
+    "inputs": [],
+    "expected_outputs": [{"ref": "directory:path", "value": "/tmp/poison-mkdir-outside-root"}]
+  }
+}

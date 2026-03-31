@@ -1,0 +1,26 @@
+{
+  "tool": "FS_DELETE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md",
+    "recursive": false
+  },
+  "intent": {
+    "goal": "Delete a file using FS_DELETE.",
+    "constraints": {},
+    "requested_action": "FS_DELETE",
+    "inputs": [],
+    "expected_outputs": [{"ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md"}]
+  },
+  "cap_cfg": {
+    "tools": [
+      {
+        "tool": "FS_DELETE",
+        "capability_class": "FS_DELETE",
+        "risk_level": "LOW",
+        "allow_base_dirs": ["/"],
+        "deny_hidden_paths": false,
+        "deny_traversal": false
+      }
+    ]
+  }
+}
