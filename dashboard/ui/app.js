@@ -137,6 +137,7 @@ function globalNav(currentPath) {
     { path: "/approvals", label: "Approvals" },
     { path: "/audit", label: "Audit" },
     { path: "/report", label: "Reports" },
+    { path: "/health", label: "Health" },
   ];
   return `
     <nav class="nav">
@@ -562,6 +563,267 @@ async function renderReport() {
 }
 
 // ---------------------------------------------------------------------------
+// System Health page
+// ---------------------------------------------------------------------------
+
+function healthStatusBadge(status) {
+  const map = {
+    "healthy": '<span class="status-ok">Healthy</span>',
+    "healthy_auto_repaired": '<span class="status-ok">Healthy (auto-repaired)</span>',
+    "attention": '<span class="status-warn">Attention</span>',
+    "critical": '<span class="status-danger">Critical</span>',
+  };
+  return map[status] || `<span class="muted">${escapeHtml(status)}</span>`;
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + " " + units[i];
+}
+
+async function renderHealth() {
+  const data = await api("health");
+
+  const alertsHtml = data.alerts && data.alerts.length ? `
+    <div class="card">
+      <h3>Active Alerts</h3>
+      ${data.alerts.map(a => `
+        <div class="health-alert health-alert--${a.severity}">
+          <div class="health-alert-header">
+            <strong>${escapeHtml(a.source)}</strong>
+            <span class="health-alert-severity">${a.severity === "critical" ? "CRITICAL" : a.severity === "attention" ? "ATTENTION" : "INFO"}</span>
+          </div>
+          <p>${escapeHtml(a.message)}</p>
+          ${a.guidance ? `<p class="muted" style="font-size:0.85rem">${escapeHtml(a.guidance)}</p>` : ""}
+          <button class="export-link" style="margin-top:8px" onclick="acknowledgeAlert('${escapeHtml(a.source)}', '${escapeHtml(a.message)}')">Acknowledge</button>
+        </div>
+      `).join("")}
+    </div>
+  ` : "";
+
+  const chain = data.chain || {};
+  const chainStatusHtml = chain.break_info ? `
+    <div style="margin-top:8px">
+      <span class="eyebrow">Break Details</span>
+      <ul class="kv" style="margin-top:4px">
+        <li><span>Break at</span><strong>Line ${chain.break_info.break_at_line}</strong></li>
+        <li><span>Reason</span><strong>${escapeHtml(chain.break_info.reason)}</strong></li>
+        ${chain.break_info.classification ? `
+          <li><span>Classification</span><strong>${escapeHtml(chain.break_info.classification.classification)}</strong></li>
+          ${chain.break_info.classification.pattern ? `<li><span>Pattern</span><strong>${escapeHtml(chain.break_info.classification.pattern)}</strong></li>` : ""}
+          <li><span>Description</span><strong>${escapeHtml(chain.break_info.classification.description)}</strong></li>
+        ` : ""}
+      </ul>
+    </div>
+  ` : "";
+
+  const repairHtml = chain.repair_info && chain.repair_info.repaired ? `
+    <div style="margin-top:8px">
+      <span class="eyebrow">Auto-Repair Applied</span>
+      <ul class="kv" style="margin-top:4px">
+        <li><span>Strategy</span><strong>${escapeHtml(chain.repair_info.strategy)}</strong></li>
+        <li><span>Event ID</span><strong>${truncate(chain.repair_info.stability_event_id, 20)}</strong></li>
+      </ul>
+    </div>
+  ` : "";
+
+  const deny = data.deny_rate || {};
+  const storage = data.storage || {};
+  const obs = data.observations || {};
+  const users = data.users || {};
+  const license = data.license || {};
+  const retention = data.retention || {};
+
+  const stabilityEvents = data.recent_stability_events || [];
+
+  return `
+    <section class="page">
+      <div class="card">
+        <span class="eyebrow">System Health</span>
+        <h2>Atested Infrastructure Status</h2>
+        <p class="explainer">
+          Monitors the health of your governance infrastructure: chain integrity, policy trends,
+          storage, observation coverage, and license status. Issues are classified and, where safe,
+          auto-repaired.
+        </p>
+        <div class="status-grid" style="margin-top:12px">
+          <div class="status-card">
+            <span class="eyebrow">${tip("Overall Status", "Aggregate health derived from all monitored signals. Healthy means everything is normal. Attention means something needs review. Critical requires immediate action.")}</span>
+            <span class="status-value">${healthStatusBadge(data.overall_status)}</span>
+          </div>
+        </div>
+      </div>
+
+      ${alertsHtml}
+
+      <div class="card">
+        <h3>${tip("Chain Integrity", "Structural health of the governance chain. Verifies hash linkage and record validity. Breaks are classified as known (auto-repairable) or suspicious (requires investigation).")}</h3>
+        <div class="status-grid">
+          <div class="status-card">
+            <span class="eyebrow">Status</span>
+            <span class="status-value">${healthStatusBadge(chain.status || "unknown")}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Records", "Total number of records in the active governance chain.")}</span>
+            <span class="status-value">${chain.chain_event_count || 0}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Verified", "Whether the chain has been checked during this health assessment.")}</span>
+            <span class="status-value">${chain.checked ? '<span class="status-ok">Yes</span>' : '<span class="muted">No</span>'}</span>
+          </div>
+        </div>
+        ${chainStatusHtml}
+        ${repairHtml}
+      </div>
+
+      <div class="status-grid">
+        <div class="card">
+          <h3>${tip("Policy Trends", "ALLOW vs DENY ratio from recent governance decisions. A sudden spike in DENY rate may indicate misconfigured policy or a compromised agent.")}</h3>
+          <div class="status-grid">
+            <div class="status-card">
+              <span class="eyebrow">ALLOW</span>
+              <span class="status-value status-ok">${deny.allow_count || 0}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">DENY</span>
+              <span class="status-value ${deny.deny_count > 0 ? "status-warn" : ""}">${deny.deny_count || 0}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("DENY Rate", "Percentage of recent policy decisions that resulted in DENY.")}</span>
+              <span class="status-value">${deny.total > 0 ? Math.round(deny.deny_rate * 100) + "%" : "\u2014"}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Anomaly", "Whether the recent DENY rate is significantly above the historical average.")}</span>
+              <span class="status-value">${deny.anomaly ? '<span class="status-warn">Detected</span>' : '<span class="status-ok">None</span>'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>${tip("Observations", "Status of ungoverned operation observation hooks. Gap detection flags when governed operations continue but observations stop.")}</h3>
+          <div class="status-grid">
+            <div class="status-card">
+              <span class="eyebrow">${tip("Hook Data", "Whether any observation hooks are reporting ungoverned operations.")}</span>
+              <span class="status-value">${obs.has_observations ? '<span class="status-ok">Active</span>' : '<span class="muted">None</span>'}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Gap Detected", "A gap means governed operations are happening but no observations are being reported. Hooks may have stopped.")}</span>
+              <span class="status-value">${obs.gap_detected ? '<span class="status-warn">Yes</span>' : '<span class="status-ok">No</span>'}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">Governed</span>
+              <span class="status-value">${obs.governed_count || 0}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">Observed</span>
+              <span class="status-value">${obs.observation_count || 0}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-grid">
+        <div class="card">
+          <h3>${tip("Storage", "Disk usage of governance data files. Monitor to ensure the system has adequate storage for the configured retention window.")}</h3>
+          <div class="status-grid">
+            <div class="status-card">
+              <span class="eyebrow">${tip("Chain Size", "Size of the active governance chain file.")}</span>
+              <span class="status-value">${formatBytes(storage.chain_size_bytes || 0)}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Stability Log", "Size of the chain stability/health log.")}</span>
+              <span class="status-value">${formatBytes(storage.stability_log_size_bytes || 0)}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Archive", "Size of archived chain segments from rolling retention.")}</span>
+              <span class="status-value">${formatBytes(storage.archive_size_bytes || 0)}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Archives", "Number of archived chain segment files.")}</span>
+              <span class="status-value">${storage.archive_count || 0}</span>
+            </div>
+          </div>
+          <p class="muted" style="margin-top:8px;font-size:0.82rem">Retention: ${retention.active_window_days || 90} days active, ${retention.archive_window_days || 90} days archive</p>
+        </div>
+
+        <div class="card">
+          <h3>${tip("Users", "User activity summary from the governance chain. Anomalies flag users with unusually high action counts.")}</h3>
+          <div class="status-grid">
+            <div class="status-card">
+              <span class="eyebrow">Unique Users</span>
+              <span class="status-value">${users.unique_users || 0}</span>
+            </div>
+            <div class="status-card">
+              <span class="eyebrow">${tip("Anomalies", "Users with action counts significantly above average. Could be normal for power users or indicate a compromised agent.")}</span>
+              <span class="status-value">${users.anomalies && users.anomalies.length ? '<span class="status-warn">' + users.anomalies.length + '</span>' : '<span class="status-ok">0</span>'}</span>
+            </div>
+          </div>
+          ${users.anomalies && users.anomalies.length ? `
+            <div style="margin-top:8px">
+              ${users.anomalies.map(a => `<p class="muted" style="font-size:0.82rem">${escapeHtml(a.description)}</p>`).join("")}
+            </div>
+          ` : ""}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>${tip("License", "Current license status. Trial expiry and tier information.")}</h3>
+        <div class="status-grid">
+          <div class="status-card">
+            <span class="eyebrow">Status</span>
+            <span class="status-value">${escapeHtml(license.status || "unknown")}</span>
+          </div>
+          ${license.tier ? `
+            <div class="status-card">
+              <span class="eyebrow">Tier</span>
+              <span class="status-value">${escapeHtml(license.tier)}</span>
+            </div>
+          ` : ""}
+          ${license.trial_days_remaining !== undefined ? `
+            <div class="status-card">
+              <span class="eyebrow">Trial Days</span>
+              <span class="status-value ${license.trial_days_remaining < 7 ? "status-warn" : ""}">${license.trial_days_remaining}</span>
+            </div>
+          ` : ""}
+          ${license.expiry ? `
+            <div class="status-card">
+              <span class="eyebrow">Expires</span>
+              <span class="status-value">${formatTime(license.expiry)}</span>
+            </div>
+          ` : ""}
+        </div>
+      </div>
+
+      ${stabilityEvents.length ? `
+        <div class="card">
+          <h3>${tip("Recent Health Events", "Stability log entries showing auto-repairs, checkpoints, break detections, and other health-related events.")}</h3>
+          <table class="audit-results-table">
+            <thead>
+              <tr>
+                <th>${tip("Time", "When the health event occurred.")}</th>
+                <th>${tip("Type", "Category of health event.")}</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stabilityEvents.map(e => `
+                <tr>
+                  <td>${formatTime(e.timestamp_utc)}</td>
+                  <td>${escapeHtml(e.event_type)}</td>
+                  <td>${escapeHtml(e.detail ? (e.detail.description || e.detail.strategy || e.detail.source || JSON.stringify(e.detail).slice(0, 80)) : "\u2014")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : ""}
+    </section>
+  `;
+}
+
+// ---------------------------------------------------------------------------
 // Render dispatcher
 // ---------------------------------------------------------------------------
 
@@ -572,6 +834,7 @@ const contentMap = {
   "/audit": renderAudit,
   "/record": renderRecordDetail,
   "/report": renderReport,
+  "/health": renderHealth,
 };
 
 async function render() {
@@ -650,6 +913,20 @@ window.exportAuditJson = async function() {
   a.href = URL.createObjectURL(blob);
   a.download = `audit-export-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.json`;
   a.click();
+};
+
+window.acknowledgeAlert = async function(source, message) {
+  try {
+    await fetch(`${API}/api/health/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source, message }),
+    });
+    clearCache();
+    render();
+  } catch (err) {
+    console.error("Failed to acknowledge alert:", err);
+  }
 };
 
 // ---------------------------------------------------------------------------
