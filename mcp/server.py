@@ -1287,6 +1287,20 @@ def governance_status(window: Optional[int] = None) -> Dict[str, Any]:
 
 
 @mcp.tool()
+def system_health() -> Dict[str, Any]:
+    """Return system health summary.
+
+    Provides overall health status, chain integrity with break classification,
+    DENY rate trends, storage usage, observation gaps, license status, and
+    recent stability events. Use this when the operator asks about system health.
+    """
+    from chain_health import collect_health_signals
+    stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
+    chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
+    return collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
+
+
+@mcp.tool()
 def governance_approvals() -> Dict[str, Any]:
     """Return the active-approval GASR view."""
     return governance_approvals_view(CHAIN, _approval_store())
