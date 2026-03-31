@@ -145,13 +145,34 @@ def _diagnostic_value(value):
     return str(value)
 
 
+_DIAGNOSTIC_REDACT_KEYS = frozenset({
+    "access_token", "id_token", "refresh_token", "token", "authorization",
+    "password", "secret", "client_secret", "private_key",
+})
+
+
+def _redact_sensitive(fields: dict) -> dict:
+    """M7: Redact sensitive fields from diagnostic output."""
+    redacted = {}
+    for key, value in fields.items():
+        if key.lower() in _DIAGNOSTIC_REDACT_KEYS:
+            redacted[key] = "[REDACTED]"
+        elif isinstance(value, dict):
+            redacted[key] = _redact_sensitive(value)
+        else:
+            redacted[key] = _diagnostic_value(value)
+    return redacted
+
+
 def _diagnostic_log(event: str, **fields) -> None:
     if not _diagnostics_enabled():
         return
+    # M7: Redact sensitive fields before logging.
+    safe_fields = _redact_sensitive(fields)
     payload = {
         "ts": int(time.time()),
         "event": event,
-        **{key: _diagnostic_value(value) for key, value in fields.items()},
+        **safe_fields,
     }
     line = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     print(line, file=sys.stderr, flush=True)
@@ -160,9 +181,14 @@ def _diagnostic_log(event: str, **fields) -> None:
         return
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a", encoding="utf-8") as fh:
-            fh.write(line)
-            fh.write("\n")
+        # M7: Enforce 0600 on diagnostic log file.
+        import stat as _stat
+        fd = os.open(str(log_path), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                     _stat.S_IRUSR | _stat.S_IWUSR)
+        try:
+            os.write(fd, (line + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
     except OSError:
         pass
 
@@ -636,6 +662,14 @@ def _unauthorized(detail: str) -> JSONResponse:
 
 def build_remote_app():
     _apply_runtime_settings()
+    # M7: Warn at startup when OIDC diagnostics are enabled (may log sensitive data).
+    if _diagnostics_enabled():
+        print(
+            "WARNING: GOVMCP_OIDC_DIAGNOSTICS is enabled. "
+            "Diagnostic logs may contain request metadata. "
+            "Disable in production by unsetting GOVMCP_OIDC_DIAGNOSTICS.",
+            file=sys.stderr, flush=True,
+        )
     govmcp_server.mcp.settings.transport_security = _remote_transport_security()
     if _auth_mode() == _AUTH_MODE_OIDC:
         _register_oidc_compatibility_routes()
@@ -653,11 +687,24 @@ def build_remote_app():
 
         @app.middleware("http")
         async def inject_user_identity_oidc(request: Request, call_next):
+            # M3 (F-10): Validate JWT structure and expiry BEFORE setting
+            # identity.  The full OIDC signature verification happens
+            # downstream in FastMCP's TokenVerifier, but we perform local
+            # structural checks to avoid setting identity from a clearly
+            # invalid or expired token.
             authz = request.headers.get("authorization", "")
             if authz.startswith("Bearer "):
                 token = authz.split(" ", 1)[1].strip()
-                identity = _extract_user_identity(token, _AUTH_MODE_OIDC)
-                govmcp_server._current_user_identity.set(identity)
+                try:
+                    claims = jwt.decode(token, options={"verify_signature": False})
+                    sub = str(claims.get("sub", "")).strip()
+                    exp = claims.get("exp")
+                    # Reject if no sub claim or token is expired.
+                    if sub and (exp is None or exp > time.time()):
+                        identity = _extract_user_identity(token, _AUTH_MODE_OIDC)
+                        govmcp_server._current_user_identity.set(identity)
+                except Exception:
+                    pass  # Malformed JWT — do not set identity.
             return await call_next(request)
 
         @app.middleware("http")
@@ -698,6 +745,16 @@ def main() -> int:
         return 0
     app = build_remote_app()
     cfg = remote_runtime_contract()
+    # H9: warn if HTTP surface is exposed without a TLS-terminating reverse proxy
+    host = str(cfg["host"])
+    if host in ("0.0.0.0", "::"):
+        import logging
+        logging.getLogger("govmcp.remote").warning(
+            "HTTP server binding to %s — this transport provides NO TLS. "
+            "Deploy behind a TLS-terminating reverse proxy (nginx, Caddy, ALB) "
+            "before exposing to any network. Bearer tokens sent over plain HTTP "
+            "are visible to network observers.", host,
+        )
     server = uvicorn.Server(
         uvicorn.Config(
             app,

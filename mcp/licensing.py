@@ -6,10 +6,30 @@ and posture fields that are added to every governance record.
 Licensing is *evidentiary, not enforcement*.  The governance layer operates
 identically regardless of license status — ALLOW/DENY decisions are not
 affected.  Licensing fields record the truth about the operator's status.
+
+License key scheme (v2):
+    License tokens are Ed25519-signed JSON payloads.  The signing private key
+    is held by the license issuer (website/Stripe backend) and is NOT shipped
+    with the client code.  The client embeds only the public key for
+    verification.
+
+    Token format: base64url(JSON-payload) + "." + base64url(Ed25519-signature)
+    Payload: {"tier": "team", "exp": "20271231", "org": "acme", "v": 2}
+
+    The public verification key is embedded in this module.  To generate
+    license tokens, use the issuer tool (not shipped in this repo) with the
+    corresponding private key stored at the issuer's infrastructure.
+
+    For development/testing, set GOV_LICENSE_SIGNING_KEY_PATH to a PEM file
+    containing the Ed25519 private key to enable local key generation via
+    generate_license_token().
 """
+import base64
 import hashlib
 import json
 import os
+import stat
+import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -21,46 +41,124 @@ from typing import Any, Dict, Optional
 LICENSE_FILENAME = "license.json"
 TRIAL_DAYS = 30
 
-VALID_STATUSES = ("trial", "licensed", "unlicensed", "personal")
+VALID_STATUSES = ("trial", "licensed", "unlicensed", "personal", "clock_anomaly")
 VALID_TIERS = ("personal", "team", "business", "enterprise")
 
-# License key format: GOV-<tier>-<expiry-YYYYMMDD>-<check8>
-# Example: GOV-team-20270101-a1b2c3d4
-_KEY_PREFIX = "GOV"
-_KEY_SALT = "governance-layer-license-v1"
-
-
 # ---------------------------------------------------------------------------
-# License key scheme
+# Ed25519 license token scheme (v2)
 # ---------------------------------------------------------------------------
 
-def _compute_check(tier: str, expiry: str) -> str:
-    payload = f"{_KEY_SALT}:{tier}:{expiry}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+# Embedded public key for license verification.
+# The corresponding private key is held by the license issuer and is NOT
+# in this repository.  To rotate: generate a new Ed25519 keypair, update
+# this constant, and deploy new tokens from the issuer.
+#
+# Generate keypair (issuer-side, NOT in this repo):
+#   from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+#   from cryptography.hazmat.primitives import serialization
+#   priv = Ed25519PrivateKey.generate()
+#   pub_bytes = priv.public_key().public_bytes(
+#       serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+#   print(pub_bytes.hex())
+#
+# Set GOV_LICENSE_VERIFY_KEY_HEX to override for testing.
+_DEFAULT_VERIFY_KEY_HEX = os.environ.get(
+    "GOV_LICENSE_VERIFY_KEY_HEX",
+    # Production public key.  The corresponding private key is held by the
+    # license issuer (NOT in this repo).  See docs/LICENSING.md for rotation
+    # procedure.  Store the issuer private key at $GOV_LICENSE_SIGNING_KEY_PATH.
+    "ec1ebd3ac6ff62e352f327820b56bddec423d594a9ddfce5117106536bf16bae",
+)
 
 
-def generate_license_key(tier: str, expiry_date: str) -> str:
-    """Generate a license key for the given tier and expiry (YYYYMMDD)."""
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(s: str) -> bytes:
+    padded = s + "=" * (4 - len(s) % 4)
+    return base64.urlsafe_b64decode(padded)
+
+
+def _load_verify_public_key():
+    """Load the Ed25519 public key for license verification."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        raw = bytes.fromhex(_DEFAULT_VERIFY_KEY_HEX)
+        return Ed25519PublicKey.from_public_bytes(raw)
+    except Exception:
+        return None
+
+
+def _load_issuer_private_key():
+    """Load the Ed25519 private key for license generation (issuer-side only)."""
+    key_path = os.environ.get("GOV_LICENSE_SIGNING_KEY_PATH", "")
+    if not key_path:
+        return None
+    try:
+        from cryptography.hazmat.primitives import serialization
+        raw = Path(key_path).read_bytes()
+        return serialization.load_pem_private_key(raw, password=None)
+    except Exception:
+        return None
+
+
+def generate_license_token(tier: str, expiry_date: str, org: str = "") -> str:
+    """Generate a signed license token (issuer-side only).
+
+    Requires GOV_LICENSE_SIGNING_KEY_PATH to point to the Ed25519 private key.
+    This function is NOT available in production client deployments.
+    """
     if tier not in VALID_TIERS:
         raise ValueError(f"invalid tier: {tier}")
-    check = _compute_check(tier, expiry_date)
-    return f"{_KEY_PREFIX}-{tier}-{expiry_date}-{check}"
+    priv = _load_issuer_private_key()
+    if priv is None:
+        raise RuntimeError(
+            "GOV_LICENSE_SIGNING_KEY_PATH not set or key unreadable. "
+            "License generation requires the issuer private key."
+        )
+    payload = json.dumps(
+        {"tier": tier, "exp": expiry_date, "org": org, "v": 2},
+        sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+    sig = priv.sign(payload)
+    return _b64url_encode(payload) + "." + _b64url_encode(sig)
 
 
-def validate_license_key(key: str) -> Optional[Dict[str, str]]:
-    """Validate a license key and return its decoded fields, or None."""
-    parts = key.strip().split("-")
-    if len(parts) != 4 or parts[0] != _KEY_PREFIX:
+def validate_license_token(token: str) -> Optional[Dict[str, str]]:
+    """Validate a signed license token and return decoded fields, or None.
+
+    Only Ed25519-signed v2 tokens are accepted.  Legacy v1 GOV-* keys are
+    rejected (C1: forgeable deterministic scheme removed).
+    """
+    parts = token.strip().split(".")
+    if len(parts) != 2:
         return None
-    _, tier, expiry, check = parts
+    try:
+        payload_bytes = _b64url_decode(parts[0])
+        sig_bytes = _b64url_decode(parts[1])
+    except Exception:
+        return None
+
+    pub = _load_verify_public_key()
+    if pub is None:
+        return None
+    try:
+        pub.verify(sig_bytes, payload_bytes)
+    except Exception:
+        return None
+
+    try:
+        claims = json.loads(payload_bytes.decode("utf-8"))
+    except Exception:
+        return None
+
+    tier = claims.get("tier", "")
     if tier not in VALID_TIERS:
         return None
+    expiry = claims.get("exp", "")
     if len(expiry) != 8 or not expiry.isdigit():
         return None
-    expected = _compute_check(tier, expiry)
-    if check != expected:
-        return None
-    # Parse expiry date
     try:
         exp_date = datetime.strptime(expiry, "%Y%m%d").replace(tzinfo=timezone.utc)
     except ValueError:
@@ -69,11 +167,18 @@ def validate_license_key(key: str) -> Optional[Dict[str, str]]:
         "tier": tier,
         "expiry_date": expiry,
         "expiry_iso": exp_date.strftime("%Y-%m-%dT00:00:00Z"),
+        "organization": claims.get("org", ""),
+        "version": claims.get("v", 2),
     }
 
 
+def validate_license_key(key: str) -> Optional[Dict[str, str]]:
+    """Validate a license key.  Only Ed25519-signed v2 tokens are accepted."""
+    return validate_license_token(key)
+
+
 # ---------------------------------------------------------------------------
-# License file I/O
+# License file I/O (C2: atomic write, permissions, fail-closed on corruption)
 # ---------------------------------------------------------------------------
 
 def _license_path(runtime_dir: Path) -> Path:
@@ -81,24 +186,45 @@ def _license_path(runtime_dir: Path) -> Path:
 
 
 def load_license(runtime_dir: Path) -> Dict[str, Any]:
-    """Load license configuration, returning the raw dict or empty."""
+    """Load license configuration.
+
+    Returns the parsed dict, empty dict if file does not exist, or raises
+    ValueError if the file exists but is corrupted/malformed (C2: fail closed).
+    """
     path = _license_path(runtime_dir)
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+        data = path.read_text(encoding="utf-8")
+        config = json.loads(data)
+        if not isinstance(config, dict):
+            raise ValueError(f"license.json is not a JSON object: {path}")
+        return config
+    except json.JSONDecodeError as e:
+        raise ValueError(f"license.json is corrupted (invalid JSON): {path}: {e}") from e
+    except OSError as e:
+        raise ValueError(f"license.json unreadable: {path}: {e}") from e
 
 
 def save_license(runtime_dir: Path, config: Dict[str, Any]) -> None:
-    """Persist license configuration."""
+    """Persist license configuration with atomic write and restrictive permissions."""
     path = _license_path(runtime_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(config, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    content = json.dumps(config, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    # Atomic write: write to temp file then rename (C2)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)  # 0600 (H8)
+        os.close(fd)
+        os.rename(tmp_path, str(path))
+    except Exception:
+        os.close(fd) if not os.get_inheritable(fd) else None
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def initialize_trial(runtime_dir: Path) -> Dict[str, Any]:
@@ -111,6 +237,7 @@ def initialize_trial(runtime_dir: Path) -> Dict[str, Any]:
         "organization_id": "",
         "license_expiry": expiry.strftime("%Y-%m-%dT00:00:00Z"),
         "trial_started": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "trial_started_chain_marker": "",  # H5: set by caller with chain record count
         "license_key": "",
     }
     save_license(runtime_dir, config)
@@ -118,10 +245,35 @@ def initialize_trial(runtime_dir: Path) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Posture resolution
+# Posture resolution (C3: enforce expiry for licensed; H5: clock rollback)
 # ---------------------------------------------------------------------------
 
-def resolve_posture(runtime_dir: Path, unique_user_count: int = 0) -> Dict[str, str]:
+def _chain_last_timestamp(runtime_dir: Path) -> Optional[datetime]:
+    """Read the timestamp of the most recent chain record as a rollback anchor."""
+    chain_path = runtime_dir / "LOGS" / "decision-chain.jsonl"
+    if not chain_path.exists():
+        return None
+    try:
+        last_line = ""
+        with open(chain_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+        if not last_line:
+            return None
+        import json as _json
+        rec = _json.loads(last_line)
+        ts = rec.get("timestamp_utc", "")
+        if not ts:
+            return None
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def resolve_posture(runtime_dir: Path, unique_user_count: int = 0,
+                    chain_record_count: int = 0) -> Dict[str, str]:
     """Resolve the current licensing posture.
 
     Returns a dict with exactly four fields suitable for embedding in
@@ -130,7 +282,18 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0) -> Dict[str, 
 
     Side-effect: creates a trial license.json on first call if none exists.
     """
-    config = load_license(runtime_dir)
+    try:
+        config = load_license(runtime_dir)
+    except ValueError:
+        # C2: corrupted license.json → fail closed to unlicensed, do NOT
+        # silently reset to trial.
+        return {
+            "license_status": "unlicensed",
+            "license_tier": "personal",
+            "organization_id": "",
+            "license_expiry": "",
+        }
+
     if not config:
         config = initialize_trial(runtime_dir)
 
@@ -140,26 +303,41 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0) -> Dict[str, 
     org_id = config.get("organization_id", "")
     expiry_str = config.get("license_expiry", "")
 
-    # Check for personal single-user (free tier)
-    if status == "trial" and unique_user_count <= 1:
-        # Single user during trial — could transition to personal
-        pass
+    # H5 (D-019): Clock rollback detection using chain timestamp as anchor.
+    # If system time is before the last chain record timestamp, fail closed.
+    last_chain_ts = _chain_last_timestamp(runtime_dir)
+    if last_chain_ts is not None and now < last_chain_ts - timedelta(minutes=5):
+        return {
+            "license_status": "clock_anomaly",
+            "license_tier": tier,
+            "organization_id": org_id,
+            "license_expiry": expiry_str,
+        }
 
-    # Check trial expiry
-    if status == "trial" and expiry_str:
+    # Parse expiry once
+    expiry_dt = None
+    if expiry_str:
         try:
             expiry_dt = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
-            if now >= expiry_dt:
-                # Trial expired — check if single personal user
-                if unique_user_count <= 1 and not config.get("license_key"):
-                    status = "personal"
-                else:
-                    status = "unlicensed"
-                # Update persisted state
-                config["license_status"] = status
-                save_license(runtime_dir, config)
         except (ValueError, TypeError):
             pass
+
+    # Check trial expiry
+    if status == "trial" and expiry_dt is not None:
+        if now >= expiry_dt:
+            if unique_user_count <= 1 and not config.get("license_key"):
+                status = "personal"
+            else:
+                status = "unlicensed"
+            config["license_status"] = status
+            save_license(runtime_dir, config)
+
+    # C3: Check licensed expiry — expired licensed → unlicensed
+    if status == "licensed" and expiry_dt is not None:
+        if now >= expiry_dt:
+            status = "unlicensed"
+            config["license_status"] = status
+            save_license(runtime_dir, config)
 
     return {
         "license_status": status,
@@ -172,21 +350,25 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0) -> Dict[str, 
 def activate_license(
     runtime_dir: Path, license_key: str, organization_id: str = ""
 ) -> Dict[str, Any]:
-    """Activate a license key.  Returns result dict."""
+    """Activate a license key (Ed25519-signed v2 token).  Returns result dict."""
     decoded = validate_license_key(license_key)
     if decoded is None:
         return {"ok": False, "error": "INVALID_LICENSE_KEY"}
 
-    config = load_license(runtime_dir)
+    try:
+        config = load_license(runtime_dir)
+    except ValueError:
+        config = {}
     if not config:
         config = initialize_trial(runtime_dir)
 
+    org = organization_id or decoded.get("organization", "")
     config["license_status"] = "licensed"
     config["license_tier"] = decoded["tier"]
     config["license_expiry"] = decoded["expiry_iso"]
     config["license_key"] = license_key.strip()
-    if organization_id:
-        config["organization_id"] = organization_id
+    if org:
+        config["organization_id"] = org
 
     save_license(runtime_dir, config)
     return {
@@ -199,16 +381,27 @@ def activate_license(
 
 
 def trial_days_remaining(runtime_dir: Path) -> Optional[int]:
-    """Return days remaining in trial, or None if not in trial."""
-    config = load_license(runtime_dir)
+    """Return days remaining in trial, or None if not in trial.
+
+    H5 (D-021): Returns None when clock anomaly is detected so the caller
+    never sees a positive remaining count with an anomalous status.
+    """
+    try:
+        config = load_license(runtime_dir)
+    except ValueError:
+        return None
     if config.get("license_status") != "trial":
+        return None
+    # H5: Check for clock rollback before reporting remaining days.
+    now = datetime.now(timezone.utc)
+    last_chain_ts = _chain_last_timestamp(runtime_dir)
+    if last_chain_ts is not None and now < last_chain_ts - timedelta(minutes=5):
         return None
     expiry_str = config.get("license_expiry", "")
     if not expiry_str:
         return None
     try:
         expiry = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
         remaining = (expiry - now).days
         return max(remaining, 0)
     except (ValueError, TypeError):

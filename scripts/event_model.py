@@ -39,6 +39,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "opaque_artifact_approval",
     "opaque_artifact_revocation",
     "opaque_invocation_decision",
+    "usage_attestation",
 ])
 
 ALLOWED_DEPENDENCY_TYPES = frozenset(["data", "state", "control"])

@@ -18,6 +18,9 @@ if [[ $# -ne 1 ]]; then
 fi
 
 INTENT="$1"
+# H8 (D-019): Restrict file creation permissions — chain, sidecars, logs
+# should be owner-only (0600 files, 0700 dirs).
+umask 0077
 mkdir -p "$RUNTIME/LOGS"
 
 # Portable exclusive lock using mkdir (atomic on all POSIX systems).
@@ -51,4 +54,12 @@ rec="$("$EVAL" "$REG" "$INTENT")"
 one_line="$(echo "$rec" | python3 -c 'import json,sys; obj=json.load(sys.stdin); print(json.dumps(obj, sort_keys=True, separators=(",",":"), ensure_ascii=False))')"
 
 echo "$one_line" >> "$CHAIN"
+
+# M1: Update chain_meta.json with current chain length for truncation detection.
+CHAIN_META="$RUNTIME/LOGS/chain_meta.json"
+CHAIN_LEN="$(grep -c '.' "$CHAIN" 2>/dev/null || echo 0)"
+printf '{\n  "chain_length": %d\n}\n' "$CHAIN_LEN" > "$CHAIN_META.tmp"
+chmod 600 "$CHAIN_META.tmp"
+mv "$CHAIN_META.tmp" "$CHAIN_META"
+
 echo "$one_line"

@@ -99,6 +99,49 @@ _current_user_identity: contextvars.ContextVar[Optional[str]] = contextvars.Cont
 )
 
 
+def _ensure_runtime_permissions() -> None:
+    """H8: Ensure runtime directories have restrictive permissions (0700)."""
+    import stat
+    for d in (RUNTIME, RUNTIME / "LOGS", RUNTIME / "LOGS" / "records",
+              RUNTIME / "LOGS" / "intents", RUNTIME / "LOGS" / "attestations"):
+        if d.exists() and d.is_dir():
+            try:
+                current = d.stat().st_mode & 0o777
+                if current != 0o700:
+                    d.chmod(0o700)
+            except OSError:
+                pass
+
+
+def _check_signing_key_permissions() -> None:
+    """M2: Warn if signing key file has permissions broader than 0600."""
+    import stat
+    key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "")
+    if not key_path:
+        return
+    p = Path(key_path)
+    if not p.exists():
+        return
+    try:
+        mode = p.stat().st_mode & 0o777
+        if mode & (stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH):
+            import sys as _sys
+            print(
+                f"WARNING: signing key {key_path} has permissions {oct(mode)} "
+                f"(should be 0600). Other users may read the private key.",
+                file=_sys.stderr, flush=True,
+            )
+    except OSError:
+        pass
+
+
+# H8: Set permissions on startup
+if RUNTIME.exists():
+    _ensure_runtime_permissions()
+# M2: Check signing key permissions on startup
+_check_signing_key_permissions()
+
+
 def _tool_catalog_bundle_store_root() -> Path:
     return REPO / "out" / "mcp_tool_catalog_bundles"
 
@@ -592,8 +635,32 @@ def normalize_args(capability: str, args: dict) -> tuple:
     return out, constraints
 
 def _write_json(path: Path, obj: Any) -> None:
+    """Write JSON to a file with restrictive permissions (0600)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    import stat as _stat
+    import tempfile as _tmpmod
+    content = json.dumps(obj, indent=2, sort_keys=True) + "\n"
+    fd, tmp = _tmpmod.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.fchmod(fd, _stat.S_IRUSR | _stat.S_IWUSR)  # 0600
+        os.close(fd)
+        os.rename(tmp, str(path))
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _write_attestation_file(path: Path, obj: Any) -> None:
+    """Write attestation JSON with 0600 permissions."""
+    _write_json(path, obj)
 
 
 def _governed_family() -> str:
@@ -628,6 +695,55 @@ def _approval_store() -> ApprovalStore:
     return _APPROVAL_STORE
 
 
+def _chain_meta_path() -> Path:
+    """Path to chain metadata file (M1: truncation detection)."""
+    return CHAIN.parent / "chain_meta.json"
+
+
+def _read_chain_meta() -> Dict[str, Any]:
+    """Read chain metadata. Returns empty dict if not present."""
+    p = _chain_meta_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _update_chain_meta_length(new_length: int) -> None:
+    """Atomically update chain_meta.json with current chain length."""
+    meta = _read_chain_meta()
+    meta["chain_length"] = new_length
+    _write_json(_chain_meta_path(), meta)
+
+
+def _chain_line_count() -> int:
+    """Count non-empty lines in the chain file."""
+    if not CHAIN.exists():
+        return 0
+    count = 0
+    with open(CHAIN, "r", encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                count += 1
+    return count
+
+
+def _check_chain_truncation() -> None:
+    """M1: Detect chain truncation by comparing actual length to recorded length."""
+    meta = _read_chain_meta()
+    recorded = meta.get("chain_length")
+    if recorded is None:
+        return  # No metadata yet — first run or legacy chain.
+    actual = _chain_line_count()
+    if actual < recorded:
+        raise RuntimeError(
+            f"CHAIN_TRUNCATION_DETECTED: recorded={recorded} actual={actual}. "
+            f"Records may have been removed from the chain."
+        )
+
+
 def _chain_head_record_hash() -> Optional[str]:
     if not CHAIN.exists():
         return None
@@ -651,7 +767,83 @@ def _chain_head_record_hash() -> Optional[str]:
     return record_hash
 
 
+def _acquire_chain_file_lock() -> Path:
+    """H6: Acquire the cross-process mkdir lock used by append-record-runtime.sh.
+
+    M6: On timeout, check if the lock holder PID is still alive.
+    If the holder is dead, remove the stale lock and retry once.
+    """
+    lockdir = Path(str(CHAIN) + ".lock.d")
+    lock_meta = lockdir / "lock_owner.json"
+    max_wait = 50
+
+    def _try_acquire() -> bool:
+        try:
+            lockdir.mkdir(exist_ok=False)
+            # Write PID+timestamp metadata for stale lock detection.
+            try:
+                import time as _time
+                meta = json.dumps({"pid": os.getpid(), "ts": _time.time()})
+                lock_meta.write_text(meta, encoding="utf-8")
+            except OSError:
+                pass
+            return True
+        except FileExistsError:
+            return False
+
+    def _holder_is_alive() -> bool:
+        """M6: Check if the PID that holds the lock is still running."""
+        try:
+            data = json.loads(lock_meta.read_text(encoding="utf-8"))
+            pid = data.get("pid")
+            if not isinstance(pid, int):
+                return True  # Can't determine — assume alive.
+            os.kill(pid, 0)  # signal 0 = existence check
+            return True
+        except (OSError, json.JSONDecodeError, KeyError):
+            return False  # PID doesn't exist or metadata unreadable.
+
+    waited = 0
+    while True:
+        if _try_acquire():
+            return lockdir
+        waited += 1
+        if waited >= max_wait:
+            # M6: Before giving up, check if the holder is dead.
+            if not _holder_is_alive():
+                try:
+                    # Remove stale lock metadata then directory.
+                    lock_meta.unlink(missing_ok=True)
+                    lockdir.rmdir()
+                except OSError:
+                    pass
+                # Retry once.
+                if _try_acquire():
+                    return lockdir
+            raise TimeoutError(f"timed out waiting for chain lock ({lockdir})")
+        import time
+        time.sleep(0.1)
+
+
+def _release_chain_file_lock(lockdir: Path) -> None:
+    try:
+        # Remove metadata file first, then directory.
+        (lockdir / "lock_owner.json").unlink(missing_ok=True)
+        lockdir.rmdir()
+    except OSError:
+        pass
+
+
 def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    # M4 (F-11): Validate non-action event has required fields and recognized
+    # event_type before accepting into the chain.
+    from event_model import validate_non_action_event
+    ok, err = validate_non_action_event(event)
+    if not ok:
+        raise ValueError(f"NON_ACTION_EVENT_INVALID: {err}")
+
+    # Fix 2 (D-019): Add runtime fields BEFORE hash computation.
+    # The event's record_hash must cover ALL fields that are written.
     identity = _current_user_identity.get(None)
     if identity is not None:
         event["user_identity"] = identity
@@ -660,9 +852,26 @@ def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
     event["license_tier"] = posture["license_tier"]
     event["organization_id"] = posture["organization_id"]
     event["license_expiry"] = posture["license_expiry"]
+    # Recompute record_hash now that all fields are set.
+    from event_model import _compute_event_record_hash
+    event["record_hash"] = _compute_event_record_hash(event)
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
-    with open(CHAIN, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+    # H6: Acquire cross-process file lock (same lock as append-record-runtime.sh)
+    lockdir = _acquire_chain_file_lock()
+    try:
+        line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+        # H8 (D-019): Ensure chain file is 0600.
+        import stat as _stat
+        fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                      _stat.S_IRUSR | _stat.S_IWUSR)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+    finally:
+        _release_chain_file_lock(lockdir)
+    # M1: Update chain length metadata after successful append.
+    _update_chain_meta_length(_chain_line_count())
     # Incrementally update runtime singletons so they stay consistent
     # with the chain without requiring a full re-parse.
     event_type = event.get("event_type")
@@ -772,6 +981,8 @@ def _verify_chain() -> None:
     # Fail closed if the runtime chain is broken.
     if not CHAIN.exists():
         return
+    # M1: Check for truncation before hash verification.
+    _check_chain_truncation()
     proc = subprocess.run(
         ["python3", str(VERIFY_CHAIN), str(CHAIN)],
         capture_output=True,
@@ -950,21 +1161,34 @@ def governed_tool(
 @mcp.tool()
 def approve_artifact(artifact_identity: str, operator_identity: str) -> Dict[str, Any]:
     """Record an opaque artifact approval event in the active governance scope."""
-    return _append_scoped_artifact_event(
+    # M5: Use authenticated identity from ContextVar when available,
+    # store caller-supplied value as claimed_operator to prevent spoofing.
+    authenticated = _current_user_identity.get(None)
+    effective = authenticated if authenticated else operator_identity
+    rec = _append_scoped_artifact_event(
         "opaque_artifact_approval",
         artifact_identity,
-        operator_identity,
+        effective,
     )
+    if authenticated and operator_identity != authenticated:
+        rec["claimed_operator"] = operator_identity
+    return rec
 
 
 @mcp.tool()
 def revoke_artifact(artifact_identity: str, operator_identity: str) -> Dict[str, Any]:
     """Record an opaque artifact revocation event in the active governance scope."""
-    return _append_scoped_artifact_event(
+    # M5: Use authenticated identity from ContextVar when available.
+    authenticated = _current_user_identity.get(None)
+    effective = authenticated if authenticated else operator_identity
+    rec = _append_scoped_artifact_event(
         "opaque_artifact_revocation",
         artifact_identity,
-        operator_identity,
+        effective,
     )
+    if authenticated and operator_identity != authenticated:
+        rec["claimed_operator"] = operator_identity
+    return rec
 
 
 @mcp.tool()
@@ -1149,8 +1373,26 @@ def governance_user_report(window: Optional[int] = None) -> Dict[str, Any]:
 def license_status() -> Dict[str, Any]:
     """Report current licensing state: status, tier, trial days remaining, unique users."""
     posture = resolve_posture(RUNTIME)
-    remaining = trial_days_remaining(RUNTIME)
-    config = load_license(RUNTIME)
+    # H5 (D-021): When clock_anomaly is detected, do not report positive
+    # trial_days_remaining — the entire response must be consistent.
+    if posture["license_status"] == "clock_anomaly":
+        remaining = None
+    else:
+        remaining = trial_days_remaining(RUNTIME)
+    try:
+        config = load_license(RUNTIME)
+    except ValueError as exc:
+        # C2 (D-019): corrupted license.json — return controlled error, not crash.
+        return {
+            "license_status": "error",
+            "license_tier": "personal",
+            "organization_id": "",
+            "license_expiry": "",
+            "trial_days_remaining": None,
+            "trial_started": "",
+            "unique_users_detected": 0,
+            "error": f"license.json is corrupted: {exc}",
+        }
 
     # Count unique users from sidecar records
     unique_users = 0
@@ -1281,25 +1523,64 @@ def usage_attestation() -> Dict[str, Any]:
     artifact_hash = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
     artifact["artifact_hash"] = artifact_hash
 
+    # H2 (D-021): Attestation signing is mandatory in production mode.
+    # In dev mode (GOV_SIGNING_DEV_MODE=1), unsigned attestation is permitted
+    # with an explicit warning.
+    dev_mode = os.environ.get("GOV_SIGNING_DEV_MODE", "").strip() == "1"
+    signing_key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "")
+    signed = False
+    artifact["signature"] = None
+    artifact["signing_key_id"] = None
+    if signing_key_path:
+        try:
+            from cryptography.hazmat.primitives import serialization as _ser
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey as _Ed25519PK
+            _pk_bytes = Path(signing_key_path).read_bytes()
+            _pk = _ser.load_pem_private_key(_pk_bytes, password=None)
+            if isinstance(_pk, _Ed25519PK):
+                _raw_pub = _pk.public_key().public_bytes(
+                    _ser.Encoding.Raw, _ser.PublicFormat.Raw)
+                artifact["signing_key_id"] = "ed25519:" + hashlib.sha256(_raw_pub).hexdigest()
+                _sig = _pk.sign(artifact_bytes)
+                artifact["signature"] = base64.urlsafe_b64encode(_sig).decode("ascii").rstrip("=")
+                signed = True
+        except Exception:
+            pass
+    if not signed:
+        if dev_mode:
+            artifact["signed"] = False
+            artifact["warning"] = "unsigned attestation — dev mode only"
+        else:
+            return {
+                "error": "ATTESTATION_SIGNING_REQUIRED",
+                "detail": (
+                    "Attestation artifacts must be signed in production mode. "
+                    "Set GOV_SIGNING_KEY_PATH to an Ed25519 private key PEM file, "
+                    "or set GOV_SIGNING_DEV_MODE=1 for unsigned dev attestations."
+                ),
+            }
+
     # Write attestation file to runtime
     att_dir = RUNTIME / "LOGS" / "attestations"
     att_dir.mkdir(parents=True, exist_ok=True)
     att_file = att_dir / f"{attestation_id}.json"
-    att_file.write_text(
-        json.dumps(artifact, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    _write_attestation_file(att_file, artifact)
 
-    # Record in chain
+    # Record in chain (H2: use build_non_action_event for proper hash linkage)
     with _CHAIN_LOCK:
-        _append_non_action_event({
-            "event_type": "usage_attestation",
-            "attestation_id": attestation_id,
-            "artifact_hash": artifact_hash,
-            "unique_users": n_users,
-            "recommended_tier": recommended_tier,
-            "timestamp_utc": now,
-        })
+        _verify_chain()
+        event = build_non_action_event(
+            "usage_attestation",
+            {
+                "attestation_id": attestation_id,
+                "artifact_hash": artifact_hash,
+                "unique_users": n_users,
+                "recommended_tier": recommended_tier,
+            },
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        rec = _append_non_action_event(event)
+        _verify_chain()
 
     return artifact
 
@@ -1341,10 +1622,24 @@ def fs_write(path: str, content: str, overwrite: bool = False, request_executabl
 
         target = Path(path)
         if not target.is_absolute():
-            # Phase 1: absolute paths only
             return {
                 "policy_decision": "DENY",
                 "policy_reasons": [{"code": "RC-FS-PATH-ABSOLUTE-REQUIRED", "detail": {"path": path}}],
+            }
+
+        # H7: Re-resolve and reject symlinks to prevent TOCTOU bypass.
+        resolved = target.resolve(strict=False)
+        if target.exists() and target.is_symlink():
+            return {
+                "policy_decision": "DENY",
+                "policy_reasons": [{"code": "RC-FS-SYMLINK-DENIED", "detail": {"path": str(target), "resolved": str(resolved)}}],
+            }
+        # Verify resolved path matches what policy approved
+        approved_canonical = rec.get("normalized_args", {}).get("canonical_path", "")
+        if approved_canonical and str(resolved) != approved_canonical:
+            return {
+                "policy_decision": "DENY",
+                "policy_reasons": [{"code": "RC-FS-PATH-CHANGED", "detail": {"expected": approved_canonical, "actual": str(resolved)}}],
             }
 
         # Perform write
@@ -1662,8 +1957,35 @@ def fs_move(src_path: str, dst_path: str, overwrite: bool = False) -> Dict[str, 
     def _action(rec: Dict[str, Any], _args: Dict[str, Any]) -> Dict[str, Any]:
         """Perform the actual move if policy allows."""
         use_overwrite = bool(_args.get("overwrite", False))
-        src_canon = src.resolve()
-        dst_canon = dst.resolve()
+
+        # H7 (D-019): Re-resolve and reject symlinks post-approval (TOCTOU).
+        src_resolved = src.resolve(strict=False)
+        if src.exists() and src.is_symlink():
+            return {
+                "move_error": {"code": "RC-FS-SYMLINK-DENIED", "detail": {"path": str(src), "resolved": str(src_resolved)}},
+                "move_result": None,
+            }
+        approved_src = rec.get("normalized_args", {}).get("canonical_src_path", "")
+        if approved_src and str(src_resolved) != approved_src:
+            return {
+                "move_error": {"code": "RC-FS-PATH-CHANGED", "detail": {"expected": approved_src, "actual": str(src_resolved)}},
+                "move_result": None,
+            }
+        dst_resolved = dst.resolve(strict=False)
+        if dst.exists() and dst.is_symlink():
+            return {
+                "move_error": {"code": "RC-FS-SYMLINK-DENIED", "detail": {"path": str(dst), "resolved": str(dst_resolved)}},
+                "move_result": None,
+            }
+        approved_dst = rec.get("normalized_args", {}).get("canonical_dst_path", "")
+        if approved_dst and str(dst_resolved) != approved_dst:
+            return {
+                "move_error": {"code": "RC-FS-PATH-CHANGED", "detail": {"expected": approved_dst, "actual": str(dst_resolved)}},
+                "move_result": None,
+            }
+
+        src_canon = src_resolved
+        dst_canon = dst_resolved
 
         if not src_canon.exists():
             return {
@@ -1730,8 +2052,22 @@ def fs_delete(path: str, recursive: bool = False) -> Dict[str, Any]:
     def _action(rec: Dict[str, Any], _args: Dict[str, Any]) -> Dict[str, Any]:
         """Perform the actual deletion if policy allows."""
         use_recursive = bool(_args.get("recursive", False))
-        canon = target.resolve()
 
+        # H7 (D-019): Re-resolve and reject symlinks post-approval (TOCTOU).
+        resolved = target.resolve(strict=False)
+        if target.exists() and target.is_symlink():
+            return {
+                "delete_error": {"code": "RC-FS-SYMLINK-DENIED", "detail": {"path": str(target), "resolved": str(resolved)}},
+                "delete_result": None,
+            }
+        approved_canonical = rec.get("normalized_args", {}).get("canonical_path", "")
+        if approved_canonical and str(resolved) != approved_canonical:
+            return {
+                "delete_error": {"code": "RC-FS-PATH-CHANGED", "detail": {"expected": approved_canonical, "actual": str(resolved)}},
+                "delete_result": None,
+            }
+
+        canon = resolved
         if not canon.exists():
             return {
                 "delete_error": {"code": "E-TARGET-NOT-FOUND", "detail": {"canonical_path": str(canon)}},

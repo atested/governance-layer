@@ -24,7 +24,41 @@ SERVER = REPO / "mcp" / "remote_server.py"
 # Add mcp/ to path so we can import licensing directly
 sys.path.insert(0, str(REPO / "mcp"))
 from licensing import (
-    generate_license_key,
+    generate_license_token,
+    validate_license_key,
+    resolve_posture,
+    initialize_trial,
+    load_license,
+    save_license,
+    activate_license,
+    trial_days_remaining,
+    TRIAL_DAYS,
+)
+
+# For tests, we need a real Ed25519 keypair.
+# Generate ephemeral test keypair and override the verify key.
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives import serialization
+
+_TEST_PRIV = Ed25519PrivateKey.generate()
+_TEST_PUB = _TEST_PRIV.public_key()
+_TEST_PUB_HEX = _TEST_PUB.public_bytes(
+    serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex()
+# Override verify key so tokens signed by our test key are accepted.
+os.environ["GOV_LICENSE_VERIFY_KEY_HEX"] = _TEST_PUB_HEX
+# Write test private key to a temp file for generate_license_token.
+_TEST_KEY_FILE = tempfile.NamedTemporaryFile(suffix=".pem", delete=False)
+_TEST_KEY_FILE.write(_TEST_PRIV.private_bytes(
+    serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+    serialization.NoEncryption()))
+_TEST_KEY_FILE.flush()
+os.environ["GOV_LICENSE_SIGNING_KEY_PATH"] = _TEST_KEY_FILE.name
+# Re-import to pick up the new verify key
+import importlib
+import licensing
+importlib.reload(licensing)
+from licensing import (
+    generate_license_token,
     validate_license_key,
     resolve_posture,
     initialize_trial,
@@ -37,20 +71,22 @@ from licensing import (
 
 
 def test_license_key_scheme():
-    """License key generation and validation round-trip."""
-    key = generate_license_key("team", "20270101")
-    assert key.startswith("GOV-team-20270101-"), key
-    decoded = validate_license_key(key)
-    assert decoded is not None, f"valid key rejected: {key}"
+    """License token generation and validation round-trip (Ed25519 v2)."""
+    token = generate_license_token("team", "20270101", "acme")
+    assert "." in token, token
+    decoded = validate_license_key(token)
+    assert decoded is not None, f"valid token rejected: {token}"
     assert decoded["tier"] == "team"
     assert decoded["expiry_date"] == "20270101"
 
-    # Invalid keys
+    # Legacy keys must be rejected (C1 fix)
     assert validate_license_key("GOV-team-20270101-00000000") is None
+    assert validate_license_key("GOV-team-20270101-abcdef12") is None
     assert validate_license_key("BAD-team-20270101-abcdef12") is None
-    assert validate_license_key("GOV-invalid-20270101-abcdef12") is None
     assert validate_license_key("") is None
-    print("PASS: license key scheme")
+    # Tampered token
+    assert validate_license_key(token + "X") is None
+    print("PASS: license key scheme (Ed25519 v2)")
 
 
 def test_trial_initialization():
@@ -124,8 +160,8 @@ def test_license_activation():
         runtime = Path(tmpdir)
         initialize_trial(runtime)
 
-        key = generate_license_key("business", "20271231")
-        result = activate_license(runtime, key, organization_id="acme-corp")
+        token = generate_license_token("business", "20271231", "acme")
+        result = activate_license(runtime, token, organization_id="acme-corp")
         assert result["ok"] is True, result
         assert result["license_status"] == "licensed"
         assert result["license_tier"] == "business"
@@ -223,11 +259,11 @@ def test_posture_in_governed_records():
             print("PASS: license_status tool")
 
             # Test license_activate tool
-            key = generate_license_key("team", "20271231")
+            token = generate_license_token("team", "20271231", "test-org")
             async with streamablehttp_client(url, headers=headers) as (r, w, _):
                 async with ClientSession(r, w) as session:
                     await session.initialize()
-                    resp = await session.call_tool("license_activate", {"license_key": key, "organization_id": "test-org"})
+                    resp = await session.call_tool("license_activate", {"license_key": token, "organization_id": "test-org"})
                     result = json.loads(resp.content[0].text)
             assert result.get("ok") is True, result
             assert result.get("license_tier") == "team", result
