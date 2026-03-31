@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Method Binding v0",
+  "description": "Binds an action to a specific execution method",
+  "type": "object",
+  "required": ["method_binding_version", "method_id", "action_kind"],
+  "additionalProperties": false,
+  "properties": {
+    "method_binding_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "method_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_kind": {
+      "type": "string",
+      "enum": ["TOOL_EXEC", "FILE_OPERATION", "NETWORK_REQUEST", "MODEL_INVOKE", "CORE_GENERIC"]
+    }
+  },
+  "field_order": ["method_binding_version", "method_id", "action_kind"]
+}

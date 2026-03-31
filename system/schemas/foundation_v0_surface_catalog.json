@@ -1,0 +1,13 @@
+{
+  "version": "foundation_v0_surface_catalog",
+  "surfaces": [
+    "filesystem",
+    "memory",
+    "model",
+    "network",
+    "routing",
+    "shell",
+    "toolchain",
+    "web"
+  ]
+}

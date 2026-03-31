@@ -5,11 +5,105 @@ import os
 import sys
 import uuid
 import hashlib
+import copy
 from datetime import datetime, timezone
 from pathlib import Path
+from base64 import urlsafe_b64encode
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from coverage_stamp import (
+    COVERAGE_REASON_MALFORMED,
+    COVERAGE_REASON_MISSING,
+    COVERAGE_REASON_OK,
+    COVERAGE_REASON_ORDER_INVALID,
+    COVERAGE_REASON_PARTIAL,
+    COVERAGE_REASON_SURFACE_UNKNOWN,
+    COVERAGE_REASON_VERSION_UNSUPPORTED,
+    validate_coverage_stamp,
+)
+
 
 CAP_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "capabilities" / "capability-registry.json"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+HOT_FILE_PATHS = frozenset(
+    [
+        "system/scripts/release-gate.sh",
+        "system/scripts/validate-proof-bundle.sh",
+        "system/scripts/codex-unattended.sh",
+        "docs/dev/WORK_QUEUE.md",
+        "docs/dev/ASSIGNMENTS.md",
+    ]
+)
 
+cryptography_missing_error = "FATAL: cryptography module required for signing but not installed"
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def signing_dev_mode_enabled() -> bool:
+    return _env_flag("GOV_SIGNING_DEV_MODE")
+
+
+def signing_required_mode_enabled() -> bool:
+    return _env_flag("GOV_SIGNING_REQUIRED")
+
+
+def validate_signing_mode_flags() -> None:
+    if signing_dev_mode_enabled() and signing_required_mode_enabled():
+        print(
+            "FATAL: GOV_SIGNING_DEV_MODE=1 and GOV_SIGNING_REQUIRED=1 are mutually exclusive",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+def _default_signing_key_path() -> Path:
+    home = Path(os.environ.get("HOME", Path.home()))
+    return home / ".config" / "gov-layer" / "signing.key"
+
+
+def _b64url_encode_nopad(data: bytes) -> str:
+    return urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _load_ed25519_private_key_from_pem(path: Path, source_label: str):
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        return None, None, f"FATAL: signing key unreadable ({source_label}): {path}"
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+    except ModuleNotFoundError:
+        return None, None, cryptography_missing_error
+    try:
+        priv = serialization.load_pem_private_key(raw, password=None)
+    except ValueError:
+        return None, None, f"FATAL: signing key invalid PEM ({source_label}): {path}"
+    if not isinstance(priv, Ed25519PrivateKey):
+        return None, None, f"FATAL: signing key is not Ed25519 ({source_label}): {path}"
+    pub = priv.public_key()
+    raw_pub = pub.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)
+    key_id = "ed25519:" + hashlib.sha256(raw_pub).hexdigest()
+    return priv, key_id, None
+
+def load_signing_private_key():
+    validate_signing_mode_flags()
+    env_path = os.environ.get("GOV_SIGNING_KEY_PATH")
+    if env_path:
+        priv, key_id, err = _load_ed25519_private_key_from_pem(Path(env_path), "GOV_SIGNING_KEY_PATH")
+        if err or priv:
+            return priv, key_id, err
+    default_path = _default_signing_key_path()
+    if default_path.exists():
+        priv, key_id, err = _load_ed25519_private_key_from_pem(default_path, "~/.config/gov-layer/signing.key")
+        if err or priv:
+            return priv, key_id, err
+    return None, None, None
 def load_internal_registry() -> tuple:
     """Load capability registry from the fixed internal path.
     Returns (raw_bytes, registry_dict, cap_registry_hash).
@@ -40,10 +134,34 @@ RC_NOT_A_FILE = "RC-FS-NOT-A-FILE"
 RC_MAX_BYTES_EXCEEDED = "RC-FS-MAX-BYTES-EXCEEDED"
 RC_MISSING_INTENT_FIELDS = "RC-FS-MISSING-INTENT-FIELDS"
 RC_CROSS_ROOT_DISALLOWED = "RC-FS-CROSS-ROOT-DISALLOWED"
+RC_RECURSIVE_DISALLOWED = "RC-FS-RECURSIVE-DISALLOWED"
+REASON_PATH_TRAVERSAL = "PATH_TRAVERSAL"
+REASON_OUTSIDE_ALLOWED_ROOT = "OUTSIDE_ALLOWED_ROOT"
+REASON_TARGET_IS_HOT_FILE = "TARGET_IS_HOT_FILE"
+REASON_IS_EXECUTABLE = "IS_EXECUTABLE"
+REASON_SRC_MISSING = "SRC_MISSING"
+REASON_DEST_EXISTS = "DEST_EXISTS"
+REASON_OVERWRITE_FORBIDDEN = "OVERWRITE_FORBIDDEN"
+REASON_UNKNOWN = "UNKNOWN"
 
 REASON_ORDER = [
     RC_MISSING_INTENT_FIELDS,
+    COVERAGE_REASON_MISSING,
+    COVERAGE_REASON_MALFORMED,
+    COVERAGE_REASON_VERSION_UNSUPPORTED,
+    COVERAGE_REASON_SURFACE_UNKNOWN,
+    COVERAGE_REASON_ORDER_INVALID,
+    COVERAGE_REASON_PARTIAL,
+    COVERAGE_REASON_OK,
     RC_UNKNOWN_TOOL,
+    REASON_PATH_TRAVERSAL,
+    REASON_OUTSIDE_ALLOWED_ROOT,
+    REASON_TARGET_IS_HOT_FILE,
+    REASON_IS_EXECUTABLE,
+    REASON_SRC_MISSING,
+    REASON_DEST_EXISTS,
+    REASON_OVERWRITE_FORBIDDEN,
+    REASON_UNKNOWN,
     RC_PATH_TRAVERSAL,
     RC_PATH_DISALLOWED,
     RC_CROSS_ROOT_DISALLOWED,
@@ -51,6 +169,7 @@ REASON_ORDER = [
     RC_INCLUDE_HIDDEN_DISALLOWED,
     RC_MAX_BYTES_EXCEEDED,
     RC_OVERWRITE_DISALLOWED,
+    RC_RECURSIVE_DISALLOWED,
     RC_EXECUTABLE_DISALLOWED,
     RC_NOT_A_DIRECTORY,
     RC_NOT_A_FILE,
@@ -67,6 +186,118 @@ def sha256_hex(s: str) -> str:
 
 def sha256_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+
+def _sha256_prefixed_from_canonical(obj) -> str:
+    return "sha256:" + sha256_hex(canonical_json(obj))
+
+
+def _extract_reason_codes(record: dict) -> list:
+    codes = []
+    for r in record.get("policy_reasons", []):
+        if isinstance(r, dict) and "code" in r:
+            codes.append(r.get("code"))
+    return codes
+
+
+def _manifest_normalized_args(record: dict) -> dict:
+    # Exclude path-bearing normalized args so manifest stays path-free and portable.
+    normalized_args = record.get("normalized_args")
+    if not isinstance(normalized_args, dict):
+        return {}
+    sanitized = dict(normalized_args)
+    for key in ("canonical_path", "canonical_src_path", "canonical_dst_path"):
+        sanitized.pop(key, None)
+    return sanitized
+
+
+def build_manifest_from_record(record: dict) -> dict:
+    """Deterministic, path-free build manifest derived from stable record fields."""
+    reason_codes = _extract_reason_codes(record)
+    return {
+        "cap_registry_hash": record.get("cap_registry_hash"),
+        "capability_class": record.get("capability_class"),
+        "manifest_version": "0.1",
+        "normalized_args_hash": _sha256_prefixed_from_canonical(_manifest_normalized_args(record)),
+        "policy_decision": record.get("policy_decision"),
+        "reason_codes": reason_codes,
+        "request_hash": record.get("request_hash"),
+        "tool": record.get("tool"),
+    }
+
+
+def maybe_write_build_manifest(record: dict) -> None:
+    out_path = os.environ.get("GOV_BUILD_MANIFEST_PATH")
+    if not out_path:
+        return
+    manifest = build_manifest_from_record(record)
+    try:
+        p = Path(out_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(canonical_json(manifest) + "\n", encoding="utf-8")
+    except OSError as e:
+        print(f"FATAL: cannot write build manifest: {e}", file=sys.stderr)
+        sys.exit(2)
+
+SIGNING_EXCLUDE_TOP_LEVEL = frozenset([
+    "timestamp_utc",
+    "session_id",
+    "request_id",
+    "process_id",
+    "prev_record_hash",
+    "record_hash",
+    "signature",
+    "signing_key_id",
+    "request_bytes_b64",
+    "evidence_refs",
+    "untrusted_inputs",
+])
+
+
+def _sanitize_expected_outputs_for_signing(expected_outputs):
+    sanitized = []
+    for item in expected_outputs or []:
+        if not isinstance(item, dict):
+            sanitized.append(item)
+            continue
+        cleaned = dict(item)
+        ref = cleaned.get("ref")
+        if isinstance(ref, str) and ref.endswith(":path") and "value" in cleaned:
+            cleaned["value"] = "<path-redacted>"
+        sanitized.append(cleaned)
+    return sanitized
+
+
+def signing_preimage_payload(record: dict) -> str:
+    # Stable preimage excludes volatile metadata and machine-specific path expansions.
+    unsigned = copy.deepcopy(record)
+    for key in SIGNING_EXCLUDE_TOP_LEVEL:
+        unsigned.pop(key, None)
+
+    if isinstance(unsigned.get("policy_reasons"), list):
+        unsigned["policy_reasons"] = [
+            {"code": r.get("code")} if isinstance(r, dict) else r
+            for r in unsigned["policy_reasons"]
+        ]
+
+    if isinstance(unsigned.get("tool_args_redacted"), dict):
+        unsigned["tool_args_redacted"].pop("path", None)
+        unsigned["tool_args_redacted"].pop("canonical_path", None)
+
+    if isinstance(unsigned.get("policy_inputs"), dict):
+        unsigned["policy_inputs"].pop("canonical_path", None)
+        unsigned["policy_inputs"].pop("allow_base_dirs", None)
+
+    if isinstance(unsigned.get("normalized_args"), dict):
+        for key in ("canonical_path", "canonical_src_path", "canonical_dst_path"):
+            unsigned["normalized_args"].pop(key, None)
+
+    if isinstance(unsigned.get("intent"), dict):
+        unsigned["intent"]["expected_outputs"] = _sanitize_expected_outputs_for_signing(
+            unsigned["intent"].get("expected_outputs", [])
+        )
+
+    return canonical_json(unsigned)
 
 def load_json(p: str):
     with open(p, "r", encoding="utf-8") as f:
@@ -85,6 +316,37 @@ def under_base(path: Path, base: Path) -> bool:
     except ValueError:
         return False
 
+
+def resolve_allow_base_dirs(base_dirs: list) -> list:
+    resolved = []
+    for base in base_dirs:
+        value = str(base)
+        value = value.replace(
+            "__GOV_CANONICAL_REPO_PATH__",
+            os.environ.get("GOV_CANONICAL_REPO_PATH", "__GOV_CANONICAL_REPO_PATH__"),
+        )
+        value = value.replace(
+            "__GOV_RUNTIME_PATH__",
+            os.environ.get("GOV_RUNTIME_PATH", "__GOV_RUNTIME_PATH__"),
+        )
+        resolved.append(value)
+    return resolved
+
+
+def is_hot_file_target(path: Path) -> bool:
+    try:
+        rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        return False
+    return rel in HOT_FILE_PATHS
+
+def is_executable_file(path: Path) -> bool:
+    try:
+        if not path.is_file():
+            return False
+        return bool(path.stat().st_mode & 0o111)
+    except OSError:
+        return False
 def add_reason(decision: dict, code: str, detail: str) -> None:
     # Deduplicate by code; keep the first detail for that code.
     existing = {r["code"] for r in decision["policy_reasons"]}
@@ -183,6 +445,7 @@ def eval_fs_read(intent: dict, tool_meta: dict):
     return "ALLOW", []
 
 def main():
+    validate_signing_mode_flags()
     # Accept 1 arg (intent) or 2 args (legacy: registry intent).
     # Registry is ALWAYS loaded internally from CAP_REGISTRY_PATH; argv[1] is ignored.
     caller_registry_path = None
@@ -217,6 +480,14 @@ def main():
     tool = obj.get("tool")
     args = obj.get("args", {})
     intent = obj.get("intent", {})
+    constraints = intent.get("constraints", {}) if isinstance(intent.get("constraints"), dict) else {}
+    coverage_required = os.environ.get("GOV_COVERAGE_STAMP_REQUIRED", "0") == "1" or bool(
+        constraints.get("require_coverage_stamp", False)
+    )
+    raw_coverage_stamp = obj.get("coverage_stamp")
+    if raw_coverage_stamp is None:
+        raw_coverage_stamp = constraints.get("coverage_stamp")
+    coverage_validation = validate_coverage_stamp(raw_coverage_stamp, required=coverage_required)
 
     # Detect and flag untrusted inputs (never used for enforcement).
     untrusted_inputs = []
@@ -232,6 +503,7 @@ def main():
     actor = os.environ.get("GOV_ACTOR", "unknown")
     session_id = os.environ.get("GOV_SESSION_ID", f"sess-{uuid.uuid4()}")
     request_id = str(uuid.uuid4())
+    process_id = hashlib.sha256(f"{session_id}:{request_id}:process".encode("utf-8")).hexdigest()[:16]
     prev_record_hash = os.environ.get("GOV_PREV_RECORD_HASH")
 
     # Tool lookup
@@ -264,13 +536,15 @@ def main():
 
     # Start building decision record
     record = {
-        "record_version": "0.1",
+        "record_version": "0.2",
+        "record_type": "pass_decision",
         "cap_registry_hash": cap_registry_hash,
         "request_hash": request_hash,
         "request_bytes_b64": request_bytes_b64,
         "timestamp_utc": now_utc_z(),
         "session_id": session_id,
         "request_id": request_id,
+        "process_id": process_id,
         "actor": actor,
         "tool": tool,
         "capability_class": capability_class,
@@ -284,6 +558,12 @@ def main():
         "normalized_args": {},
         "policy_decision": "DENY",
         "policy_reasons": [],
+        "coverage_stamp_summary": {
+            "coverage_stamp_version": "coverage_stamp_v1",
+            "overall_status": coverage_validation.overall_status,
+            "reason_code": coverage_validation.reason_code,
+            "required": coverage_required,
+        },
         "tool_args_redacted": {
             "path": raw_path if isinstance(raw_path, str) else None,
             "canonical_path": canon_s,
@@ -298,11 +578,15 @@ def main():
         "signature": None,
         "signing_key_id": None,
     }
+    if coverage_validation.normalized is not None:
+        record["coverage_stamp"] = coverage_validation.normalized
 
     # Policy evaluation begins
 
     if missing_intent:
         add_reason(record, RC_MISSING_INTENT_FIELDS, "Missing required intent.goal or intent.expected_outputs.")
+    if not coverage_validation.ok:
+        add_reason(record, coverage_validation.reason_code, coverage_validation.message)
 
     if tool_meta is None or capability_class is None:
         add_reason(record, RC_UNKNOWN_TOOL, f"Tool '{tool}' not registered in capability registry.")
@@ -311,7 +595,7 @@ def main():
         return
 
     # Populate policy_inputs from capability registry and normalized request
-    allow_base_dirs = tool_meta.get("allow_base_dirs", [])
+    allow_base_dirs = resolve_allow_base_dirs(tool_meta.get("allow_base_dirs", []))
     deny_hidden = bool(tool_meta.get("deny_hidden_paths", True))
     deny_overwrite_default = bool(tool_meta.get("deny_overwrite_by_default", True))
     deny_exec = bool(tool_meta.get("deny_executable_outputs", True))
@@ -373,6 +657,24 @@ def main():
             "canonical_dst_path": str(canonicalize(_raw_dst)) if _raw_dst else None,
             "overwrite_requested": bool(args.get("overwrite", False)),
         }
+    elif capability_class == "FS_DELETE":
+        norm = {
+            "canonical_path": canon_s,
+            "recursive_requested": bool(args.get("recursive", False)),
+        }
+    elif capability_class == "FS_DELETE_NONEXEC":
+        norm = {
+            "canonical_path": canon_s,
+        }
+    elif capability_class == "FS_COPY":
+        _raw_src = str(args.get("src_path", ""))
+        _raw_dst = str(args.get("dst_path", ""))
+        norm = {
+            "canonical_src_path": str(canonicalize(_raw_src)) if _raw_src else None,
+            "canonical_dst_path": str(canonicalize(_raw_dst)) if _raw_dst else None,
+            "overwrite_requested": bool(args.get("overwrite", False)),
+            "recursive_requested": bool(args.get("recursive", False)),
+        }
     record["normalized_args"] = norm
 
     # FS_MOVE: dual-path enforcement (src_path + dst_path instead of single path)
@@ -386,9 +688,9 @@ def main():
             return
 
         if ".." in Path(raw_src).parts:
-            add_reason(record, RC_PATH_TRAVERSAL, "Traversal attempt in src_path.")
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in src_path.")
         if ".." in Path(raw_dst).parts:
-            add_reason(record, RC_PATH_TRAVERSAL, "Traversal attempt in dst_path.")
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in dst_path.")
 
         canon_src = canonicalize(raw_src)
         canon_dst = canonicalize(raw_dst)
@@ -413,8 +715,10 @@ def main():
                 dst_allowed = True
                 dst_root_idx = _i
         if not src_allowed or not dst_allowed:
-            add_reason(record, RC_PATH_DISALLOWED,
+            add_reason(record, REASON_OUTSIDE_ALLOWED_ROOT,
                        "src_path or dst_path not under allowlisted base directories.")
+        if is_hot_file_target(canon_dst):
+            add_reason(record, REASON_TARGET_IS_HOT_FILE, "dst_path targets hot file.")
 
         _move_caps = tool_meta.get("caps", {})
         if not bool(_move_caps.get("cross_root_allowed", False)):
@@ -426,6 +730,148 @@ def main():
             if bool(args.get("overwrite", False)):
                 add_reason(record, RC_OVERWRITE_DISALLOWED,
                            "overwrite is not permitted: caps.overwrite_allowed=false.")
+
+        finalize_reasons(record)
+        if not record["policy_reasons"]:
+            record["policy_decision"] = "ALLOW"
+        emit_record(record)
+        return
+
+    # FS_DELETE_NONEXEC: single-path enforcement, rejects executable files.
+    if capability_class == "FS_DELETE_NONEXEC":
+        raw_nonexec_path = str(args.get("path", ""))
+        if not raw_nonexec_path:
+            add_reason(record, RC_PATH_DISALLOWED, "FS_DELETE_NONEXEC requires non-empty path.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        if ".." in Path(raw_nonexec_path).parts:
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt detected in path.")
+
+        canon_nonexec = canonicalize(raw_nonexec_path)
+        canon_nonexec_s = str(canon_nonexec)
+
+        if deny_hidden and is_hidden_segment(canon_nonexec):
+            add_reason(record, RC_HIDDEN_PATH, f"Hidden path segment is not allowed: {canon_nonexec_s}")
+
+        nonexec_allowed = False
+        for _base_s in allow_base_dirs:
+            if under_base(canon_nonexec, canonicalize(_base_s)):
+                nonexec_allowed = True
+                break
+        if not nonexec_allowed:
+            add_reason(record, REASON_OUTSIDE_ALLOWED_ROOT, "Canonical path not under allowlisted base directories.")
+
+        if is_hot_file_target(canon_nonexec):
+            add_reason(record, REASON_TARGET_IS_HOT_FILE, "Target path is hot file.")
+
+        if nonexec_allowed and is_executable_file(canon_nonexec):
+            add_reason(record, REASON_IS_EXECUTABLE, "Target path is executable.")
+
+        finalize_reasons(record)
+        if not record["policy_reasons"]:
+            record["policy_decision"] = "ALLOW"
+        emit_record(record)
+        return
+
+    # FS_COPY: dual-path enforcement (src_path + dst_path).
+    if capability_class == "FS_COPY":
+        raw_src = str(args.get("src_path", ""))
+        raw_dst = str(args.get("dst_path", ""))
+        if not raw_src or not raw_dst:
+            add_reason(record, RC_PATH_DISALLOWED, "FS_COPY requires non-empty src_path and dst_path.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        if ".." in Path(raw_src).parts:
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in src_path.")
+        if ".." in Path(raw_dst).parts:
+            add_reason(record, REASON_PATH_TRAVERSAL, "Traversal attempt in dst_path.")
+
+        try:
+            canon_src = canonicalize(raw_src)
+            canon_dst = canonicalize(raw_dst)
+        except Exception:
+            add_reason(record, REASON_UNKNOWN, "Path normalization failed.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        src_allowed = False
+        dst_allowed = False
+        for _base_s in allow_base_dirs:
+            _base = canonicalize(_base_s)
+            if under_base(canon_src, _base):
+                src_allowed = True
+            if under_base(canon_dst, _base):
+                dst_allowed = True
+        if not src_allowed or not dst_allowed:
+            add_reason(record, REASON_OUTSIDE_ALLOWED_ROOT, "src_path or dst_path not under allowlisted base directories.")
+
+        if is_hot_file_target(canon_dst):
+            add_reason(record, REASON_TARGET_IS_HOT_FILE, "dst_path targets hot file.")
+
+        if src_allowed and not canon_src.exists():
+            add_reason(record, REASON_SRC_MISSING, "src_path does not exist.")
+
+        overwrite_requested = bool(args.get("overwrite", False))
+        overwrite_allowed = bool(tool_meta.get("caps", {}).get("overwrite_allowed", False))
+        dest_exists_no_overwrite = canon_dst.exists() and not overwrite_requested
+        if overwrite_requested and not overwrite_allowed:
+            add_reason(record, REASON_OVERWRITE_FORBIDDEN, "overwrite requested but forbidden by policy.")
+
+        if dest_exists_no_overwrite and not record["policy_reasons"]:
+            record["policy_decision"] = "UNDECIDED"
+            record["policy_reasons"] = []
+            record["insufficiency"] = {
+                "trigger": "dest_exists_no_overwrite",
+                "surface": "filesystem",
+                "tool": "FS_COPY",
+                "condition": "Destination path exists and overwrite was not requested",
+                "rules_consulted": ["FS_COPY.caps.overwrite_allowed"],
+                "gap": "No rule specifies disposition when destination exists and overwrite is not requested. The overwrite policy governs whether overwrite is permitted when requested, not what to do when it is not requested and the destination exists.",
+            }
+            emit_record(record)
+            return
+
+        finalize_reasons(record)
+        if not record["policy_reasons"]:
+            record["policy_decision"] = "ALLOW"
+        emit_record(record)
+        return
+
+    # FS_DELETE: single-path enforcement (path + recursive flag)
+    if capability_class == "FS_DELETE":
+        raw_del_path = str(args.get("path", ""))
+        if not raw_del_path:
+            add_reason(record, RC_PATH_DISALLOWED, "FS_DELETE requires non-empty path.")
+            finalize_reasons(record)
+            emit_record(record)
+            return
+
+        if ".." in Path(raw_del_path).parts:
+            add_reason(record, RC_PATH_TRAVERSAL, "Traversal attempt detected in path.")
+
+        canon_del = canonicalize(raw_del_path)
+        canon_del_s = str(canon_del)
+
+        if deny_hidden and is_hidden_segment(canon_del):
+            add_reason(record, RC_HIDDEN_PATH, f"Hidden path segment is not allowed: {canon_del_s}")
+
+        del_allowed = False
+        for _base_s in allow_base_dirs:
+            if under_base(canon_del, canonicalize(_base_s)):
+                del_allowed = True
+                break
+        if not del_allowed:
+            add_reason(record, RC_PATH_DISALLOWED, "Canonical path not under allowlisted base directories.")
+
+        _del_caps = tool_meta.get("caps", {})
+        if bool(args.get("recursive", False)) and not bool(_del_caps.get("recursive_allowed", False)):
+            add_reason(record, RC_RECURSIVE_DISALLOWED,
+                       "recursive=true is not permitted: caps.recursive_allowed=false.")
 
         finalize_reasons(record)
         if not record["policy_reasons"]:
@@ -505,12 +951,25 @@ def main():
     emit_record(record)
 
 def emit_record(record: dict) -> None:
-    # Compute record_hash over canonical JSON excluding record_hash and signature
-    unsigned = dict(record)
-    unsigned["record_hash"] = None
-    unsigned["signature"] = None
-    payload = canonical_json(unsigned)
+    # Compute record_hash over deterministic signing preimage.
+    payload = signing_preimage_payload(record)
+    signing_key, signing_key_id, signing_err = load_signing_private_key()
+    if signing_err:
+        print(signing_err, file=sys.stderr)
+        sys.exit(2)
+    if signing_key is not None:
+        sig = signing_key.sign(payload.encode("utf-8"))
+        record["signature"] = _b64url_encode_nopad(sig)
+        record["signing_key_id"] = signing_key_id
+    elif signing_required_mode_enabled():
+        print(
+            "FATAL: signed PolicyRecord required for trust-grade mode; "
+            "configure GOV_SIGNING_KEY_PATH or use explicit compatibility mode",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     record["record_hash"] = f"sha256:{sha256_hex(payload)}"
+    maybe_write_build_manifest(record)
     print(json.dumps(record, indent=2, ensure_ascii=False))
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+{
+  "coverage_stamp_version": "coverage_stamp_v1",
+  "generated_by": "phase2d-test",
+  "generated_from": [
+    "intent",
+    "policy-eval"
+  ],
+  "surfaces": [
+    {"capability_surface":"web","surface_id":7,"coverage":{"observation":true,"enforcement":true,"provenance":true},"evidence_sources":["none"]}
+  ]
+}

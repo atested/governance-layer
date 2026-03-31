@@ -1,0 +1,2 @@
+{"record_type":"pass_decision","process_id":"phase4-proc-003","policy_decision":"UNDECIDED","record_hash":"sha256:pass-phase4-003"}
+{"record_type":"triage_decision","process_id":"phase4-proc-003","originating_pass_hash":"sha256:pass-phase4-003","record_hash":"sha256:triage-phase4-003","findings":[{"id":"F1","type":"rule_gap"}]}

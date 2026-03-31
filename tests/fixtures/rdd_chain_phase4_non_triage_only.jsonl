@@ -1,0 +1,2 @@
+{"record_type":"pass_decision","process_id":"phase4-proc-002","policy_decision":"ALLOW","record_hash":"sha256:pass-phase4-002"}
+{"record_type":"terminal_judgment","process_id":"phase4-proc-002","originating_triage_hash":"sha256:triage-none","record_hash":"sha256:terminal-phase4-002"}

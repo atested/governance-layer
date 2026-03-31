@@ -1,0 +1,20 @@
+{
+  "tool": "FS_LIST",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "max_entries": 10,
+    "include_hidden": true
+  },
+  "intent": {
+    "goal": "Attempt FS_LIST with include_hidden enabled.",
+    "constraints": {},
+    "requested_action": "FS_LIST",
+    "inputs": [],
+    "expected_outputs": [
+      {
+        "ref": "file:path",
+        "value": "/Volumes/SSD/archive/gov/governance-layer/docs"
+      }
+    ]
+  }
+}

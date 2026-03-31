@@ -1,0 +1,10 @@
+{
+  "csd_version": "v0",
+  "constraints": [
+    {
+      "constraint_id": "c-001",
+      "constraint_version": "v1",
+      "constraint_type": "no_network"
+    }
+  ]
+}

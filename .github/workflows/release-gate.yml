@@ -1,0 +1,38 @@
+name: release-gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run release-gate (GOV_PROFILE=ci, gating proof-packet)
+        env:
+          RELEASE_GATE_SKIP_BASE: "0"
+          RELEASE_GATE_PROOF_BUNDLE_OUT_BASE: out/proof-bundles
+          RELEASE_GATE_RUN_ID: ci
+        run: |
+          GOV_PROFILE=ci bash system/scripts/release-gate.sh | tee out/release_gate.stdout.log
+
+      - name: Upload proof bundle artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proof-bundles
+          path: |
+            out/proof-bundles/**
+            out/proof-bundles/**/validate_proof_bundle_summary.json
+            out/release_gate.stdout.log
+          if-no-files-found: warn

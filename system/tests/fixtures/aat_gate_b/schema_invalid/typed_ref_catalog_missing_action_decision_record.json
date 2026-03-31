@@ -1,0 +1,1 @@
+{"types":{"decision_record":{"hash_basis_rule_id":"canonical_json_single_entry"},"input_file":{"hash_basis_rule_id":"raw_bytes"},"proof_bundle":{"hash_basis_rule_id":"canonical_json_manifest"},"rules_version":{"hash_basis_rule_id":"canonical_json_snapshot"}},"version":"typed_ref_catalog_v0"}

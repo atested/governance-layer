@@ -1,0 +1,13 @@
+{
+  "cam_version": "v0",
+  "acknowledgments": [
+    {
+      "constraint_id": "c-001",
+      "status": "satisfied"
+    },
+    {
+      "constraint_id": "c-001",
+      "status": "unknown"
+    }
+  ]
+}

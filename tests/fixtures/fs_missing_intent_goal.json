@@ -1,0 +1,22 @@
+{
+  "tool": "FS_WRITE",
+  "args": {
+    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_066_missing_goal.txt",
+    "content": "x",
+    "overwrite": false,
+    "request_executable": false
+  },
+  "intent": {
+    "constraints": {
+      "overwrite": false
+    },
+    "requested_action": "FS_WRITE",
+    "inputs": [],
+    "expected_outputs": [
+      {
+        "ref": "file:path",
+        "value": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_066_missing_goal.txt"
+      }
+    ]
+  }
+}

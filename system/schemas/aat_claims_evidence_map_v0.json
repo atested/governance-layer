@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AAT Claims-to-Evidence Map v0",
+  "description": "Maps claims to evidence references with typed pointers",
+  "type": "object",
+  "required": ["cem_version", "claims"],
+  "additionalProperties": false,
+  "properties": {
+    "cem_version": {
+      "type": "string",
+      "enum": ["v0"]
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "claim_type", "evidence_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "pattern": "^cl-[0-9]{3,}$"
+          },
+          "claim_type": {
+            "type": "string",
+            "enum": ["verification_completed", "test_passed", "test_failed", "analysis_completed", "review_completed"]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["ref_type", "digest"],
+              "additionalProperties": false,
+              "properties": {
+                "ref_type": {
+                  "type": "string",
+                  "enum": ["tool_event", "file_digest", "retrieved_content", "proof_artifact"]
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "field_order": ["cem_version", "claims"]
+}

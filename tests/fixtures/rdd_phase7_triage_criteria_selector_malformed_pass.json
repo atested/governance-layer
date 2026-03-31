@@ -1,0 +1,8 @@
+{
+  "record_version": "0.2",
+  "record_type": "pass_decision",
+  "policy_decision": "UNDECIDED",
+  "record_hash": "sha256:fixture-hash",
+  "process_id": "aaaaaaaaaaaaaaaa",
+  "insufficiency": "not-an-object"
+}
