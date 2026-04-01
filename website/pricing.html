@@ -3,172 +3,149 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pricing — Atested</title>
-  <meta name="description" content="Atested pricing tiers based on team size. Personal use is free. All tiers cover all AI tools.">
+  <title>Atested Pricing</title>
+  <meta name="description" content="Pricing for Atested, including the self-demonstrating licensing model, trial period, and commercial tiers.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
 </head>
-<body>
-
-  <header>
-    <nav class="container">
-      <a href="/" class="nav-brand">atested</a>
-      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
-      <ul class="nav-links">
-        <li><a href="how-it-works.html">How it works</a></li>
-        <li><a href="pricing.html" class="active">Pricing</a></li>
-        <li><a href="explainer.html">Why governance</a></li>
-        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-      </ul>
-    </nav>
-  </header>
+<body data-page="pricing">
+  <div id="site-nav"></div>
 
   <main>
-    <section class="hero" style="padding-bottom: var(--space-xl);">
+    <section class="hero">
       <div class="container">
-        <h1>Simple, usage-based pricing</h1>
+        <div class="eyebrow">Pricing</div>
+        <h1>Simple pricing, demonstrated by actual usage</h1>
         <p class="lead">
-          Tiers are based on team size. All tiers include all governed tools.
-          No per-tool fees, no feature gates.
+          Every installation starts with a 30-day full-function trial. At trial end, Atested generates an attestation artifact from actual usage and recommends the appropriate tier.
         </p>
       </div>
     </section>
 
-    <section style="padding-top: 0;">
+    <section id="checkout">
       <div class="container">
-
         <div class="pricing-grid">
-          <!-- Personal -->
-          <div class="pricing-card">
-            <div class="tier-name">Personal</div>
-            <div class="tier-users">1 user</div>
-            <div class="tier-price">Free</div>
-            <div class="tier-period">forever</div>
-            <a href="https://github.com/GregKeeter/governance-layer" class="btn btn-secondary" target="_blank" rel="noopener">Get started</a>
-          </div>
+          <article class="pricing-card">
+            <h3>Personal</h3>
+            <div class="pricing-meta">1 user</div>
+            <div class="price">Free</div>
+            <p>Personal and evaluation use.</p>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">Get started</a>
+            </div>
+          </article>
 
-          <!-- Team -->
-          <div class="pricing-card featured">
-            <div class="tier-name">Team</div>
-            <div class="tier-users">2 &ndash; 10 users</div>
-            <div class="tier-price">$999</div>
-            <div class="tier-period">per year</div>
-            <button class="btn btn-stripe" onclick="checkout('team')">Purchase license</button>
-          </div>
+          <article class="pricing-card featured">
+            <h3>Team</h3>
+            <div class="pricing-meta">2–10 users</div>
+            <div class="price">$999/year</div>
+            <p>Small teams shipping with AI agents.</p>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="#">Purchase license</a>
+            </div>
+          </article>
 
-          <!-- Business -->
-          <div class="pricing-card">
-            <div class="tier-name">Business</div>
-            <div class="tier-users">11 &ndash; 100 users</div>
-            <div class="tier-price">$4,999</div>
-            <div class="tier-period">per year</div>
-            <button class="btn btn-stripe" onclick="checkout('business')">Purchase license</button>
-          </div>
+          <article class="pricing-card">
+            <h3>Business</h3>
+            <div class="pricing-meta">11–100 users</div>
+            <div class="price">$4,999/year</div>
+            <p>Operational deployments needing stronger governance posture.</p>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="#">Purchase license</a>
+            </div>
+          </article>
 
-          <!-- Enterprise -->
-          <div class="pricing-card">
-            <div class="tier-name">Enterprise</div>
-            <div class="tier-users">100+ users</div>
-            <div class="tier-price">Contact us</div>
-            <div class="tier-period">&nbsp;</div>
-            <a href="#enterprise-contact" class="btn btn-secondary">Get in touch</a>
-          </div>
+          <article class="pricing-card">
+            <h3>Enterprise</h3>
+            <div class="pricing-meta">100+ users</div>
+            <div class="price">Contact us</div>
+            <p>Custom terms and deployment support.</p>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="#enterprise-contact">Get in touch</a>
+            </div>
+          </article>
         </div>
-
-        <p class="pricing-note">
-          Non-profit organizations receive 50% off all paid tiers.
-          <a href="#enterprise-contact">Contact us</a> for non-profit pricing.
-        </p>
-
       </div>
     </section>
 
-    <!-- How pricing works -->
     <section>
-      <div class="container narrow">
-        <h2>How pricing works</h2>
+      <div class="container grid-2">
+        <div>
+          <h2>Self-demonstrating licensing</h2>
+          <p class="section-copy">
+            Atested does not ask buyers to guess what tier they need in advance and hope the estimate was right. The product itself generates an attestation artifact from actual usage, including users and governed operations, and recommends the appropriate commercial tier.
+          </p>
+          <p class="section-copy">
+            That same model continues into renewal. If usage grows, the tier can move up. If usage shrinks, the tier can move down. The system that governs the work also demonstrates the licensing facts.
+          </p>
+        </div>
 
-        <div class="flow-steps">
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Install and start your trial</h3>
-              <p>
-                Install Atested from GitHub and start your 30-day trial with full functionality.
-                Every feature, every tool, every integration. No credit card required.
-              </p>
-            </div>
+        <div class="panel">
+          <div class="record-head">
+            <span>attestation.json</span>
+            <span class="badge badge-allow">TEAM</span>
           </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Your system attests its own usage</h3>
-              <p>
-                At trial end, your own Atested system generates an attestation artifact showing
-                your usage: unique users, governed operations, and tool categories. This is the
-                same cryptographically signed attestation you'd show an auditor. It determines
-                your recommended tier.
-              </p>
-            </div>
-          </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Purchase your license</h3>
-              <p>
-                Purchase a license for your recommended tier. Your license key activates in your
-                Atested server, and your governance records reflect your licensed status from
-                that moment forward.
-              </p>
-            </div>
-          </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Renewal adjusts to actual usage</h3>
-              <p>
-                At renewal, your attestation artifact determines your next tier &mdash; up or down
-                based on actual usage. If your team grew, you move up. If it shrank, you move
-                down. The system records truth.
-              </p>
-            </div>
+          <pre>{
+  "unique_users": 5,
+  "total_operations": 2104,
+  "license_status": "licensed",
+  "license_tier": "team",
+  "organization_id": "acme-engineering",
+  "recommended_tier": "team",
+  "artifact_hash": "sha256:b4c2d5e6..."
+}</pre>
+          <div class="record-note">
+            The product that governs the operation also produces the artifact that demonstrates the appropriate commercial tier.
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Enterprise contact -->
-    <section id="enterprise-contact">
-      <div class="container narrow text-center">
-        <h2>Enterprise and non-profit inquiries</h2>
-        <p style="margin: 0 auto var(--space-lg); max-width: 32em;">
-          For organizations with 100+ users or non-profit pricing, contact us directly.
+    <section>
+      <div class="container grid-2">
+        <article class="card">
+          <h2>What every paid tier includes</h2>
+          <p class="section-copy">
+            All tiers cover all AI tools. There are no per-tool fees. Governance records, transparency measurement, and licensing are based on actual observed usage rather than seat forecasts alone.
+          </p>
+          <p class="section-copy">
+            Non-profits receive 50% off all paid tiers.
+          </p>
+        </article>
+
+        <article class="card" id="enterprise-contact">
+          <h2>Enterprise terms</h2>
+          <p class="section-copy">
+            Enterprise customers receive custom terms and deployment support. For high-security environments where evidentiary enforcement is not sufficient on its own, structural enforcement options are available through custom architecture.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#">Contact us</a>
+            <a class="btn btn-secondary" href="/implementation.html">Implementation guidance</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="container callout">
+        <div class="eyebrow">Trial model</div>
+        <h2>Start with the full product, then license from evidence</h2>
+        <p class="section-copy">
+          Every installation begins with a 30-day full-function trial. That gives teams enough time to use the real system, generate real governance records, and understand actual usage before committing to a paid tier.
         </p>
-        <form class="contact-form" action="mailto:greg@atested.com" method="post" enctype="text/plain">
-          <input type="text" name="organization" placeholder="Organization name" required>
-          <input type="email" name="email" placeholder="Email address" required>
-          <textarea name="message" placeholder="Tell us about your team size and use case"></textarea>
-          <button type="submit" class="btn btn-primary" style="align-self: center;">Send inquiry</button>
-        </form>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#">Purchase license</a>
+          <a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">View GitHub</a>
+        </div>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container">
-      <div class="footer-inner">
-        <span class="footer-copy">&copy; 2026 Atested</span>
-        <ul class="footer-links">
-          <li><a href="terms.html">Terms</a></li>
-          <li><a href="pricing.html">Pricing</a></li>
-          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-        </ul>
-      </div>
-    </div>
-  </footer>
+  <div id="site-footer"></div>
 
-  <script src="assets/js/nav.js"></script>
-  <script src="assets/js/stripe-checkout.js"></script>
+  <script defer src="/assets/js/site.js"></script>
 </body>
 </html>
