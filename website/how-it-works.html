@@ -238,16 +238,16 @@
 
             <!-- Navigation tabs -->
             <div class="dd-nav">
-              <div class="dd-nav-tab active">Overview</div>
-              <div class="dd-nav-tab">Activity</div>
-              <div class="dd-nav-tab">Approvals</div>
-              <div class="dd-nav-tab">Audit</div>
-              <div class="dd-nav-tab">Reports</div>
-              <div class="dd-nav-tab">Health</div>
+              <div class="dd-nav-tab active" data-dd-tab="overview">Overview</div>
+              <div class="dd-nav-tab" data-dd-tab="activity">Activity</div>
+              <div class="dd-nav-tab" data-dd-tab="approvals">Approvals</div>
+              <div class="dd-nav-tab" data-dd-tab="audit">Audit</div>
+              <div class="dd-nav-tab" data-dd-tab="reports">Reports</div>
+              <div class="dd-nav-tab" data-dd-tab="health">Health</div>
             </div>
 
-            <!-- Overview page -->
-            <div class="dd-page">
+            <!-- Overview panel -->
+            <div class="dd-page" data-dd-panel="overview">
               <p class="dd-explainer">
                 This dashboard shows governance activity for your organization. Every governed action produces a signed record in the decision chain. The metrics below reflect the current state of the governance surface.
               </p>
@@ -367,6 +367,298 @@
               </div>
 
             </div>
+
+            <!-- Activity panel -->
+            <div class="dd-page" data-dd-panel="activity" style="display: none;">
+              <p class="dd-explainer">
+                Full governance decision log. Every governed action — allowed or denied — appears here with its signed record. Click any row in production to inspect the full record and hash chain.
+              </p>
+              <div class="dd-card">
+                <div class="dd-section-head">Governance Decisions</div>
+                <table class="dd-table">
+                  <thead>
+                    <tr><th>Time</th><th>Tool</th><th>User</th><th>Decision</th><th>Intent</th><th>Record Hash</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Mar 30, 1:42 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>update deployment config</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:0a1b2c3d…</code></td></tr>
+                    <tr><td>Mar 30, 1:38 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>edit /etc/hosts</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:f0e1d2c3…</code></td></tr>
+                    <tr><td>Mar 30, 1:35 PM</td><td><code>fs_read</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>read project README</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:8b1ce3d7…</code></td></tr>
+                    <tr><td>Mar 30, 1:31 PM</td><td><code>msg_send</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>notify team channel</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:2d4f6a8b…</code></td></tr>
+                    <tr><td>Mar 30, 1:28 PM</td><td><code>fs_delete</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>remove .env.production</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:c3b4a5f0…</code></td></tr>
+                    <tr><td>Mar 30, 1:24 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>update test fixtures</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:9e8d7c6b…</code></td></tr>
+                    <tr><td>Mar 30, 1:19 PM</td><td><code>capabilities_execute</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>run lint check</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:5a4b3c2d…</code></td></tr>
+                    <tr><td>Mar 30, 1:15 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>write outside workspace</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:1b2c3d4e…</code></td></tr>
+                    <tr><td>Mar 30, 1:11 PM</td><td><code>fs_read</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>inspect build output</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:e5f6a7b8…</code></td></tr>
+                    <tr><td>Mar 30, 1:08 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>modify CI pipeline</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:7c8d9e0f…</code></td></tr>
+                    <tr><td>Mar 30, 1:04 PM</td><td><code>governance_status</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>check governance status</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:3d4e5f6a…</code></td></tr>
+                    <tr><td>Mar 30, 12:58 PM</td><td><code>fs_list</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>list project directory</td><td><code style="font-size:0.68rem;color:var(--dd-muted);">sha256:b8c9d0e1…</code></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Approvals panel -->
+            <div class="dd-page" data-dd-panel="approvals" style="display: none;">
+              <p class="dd-explainer">
+                Scoped approvals for opaque artifacts that cannot produce inline governance evidence. Each approval is pinned to a specific artifact hash and is revocable at any time.
+              </p>
+              <div class="dd-card">
+                <div class="dd-section-head">Active Approvals</div>
+                <table class="dd-table">
+                  <thead>
+                    <tr><th>Artifact</th><th>Hash</th><th>Family</th><th>Approved By</th><th>Granted</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>deploy-script.sh</td>
+                      <td><code style="font-size:0.72rem;color:var(--dd-muted);">sha256:4f2a8b1c…</code></td>
+                      <td><span class="dd-tag">FS_WRITE</span></td>
+                      <td><span class="dd-tag">bearer:e1f2a3b4</span></td>
+                      <td>Mar 28, 2:14 PM</td>
+                      <td><span class="dd-pill dd-pill-ok">Active</span></td>
+                    </tr>
+                    <tr>
+                      <td>ci-runner.py</td>
+                      <td><code style="font-size:0.72rem;color:var(--dd-muted);">sha256:8b1ce3d7…</code></td>
+                      <td><span class="dd-tag">CAPABILITIES_EXECUTE</span></td>
+                      <td><span class="dd-tag">bearer:a2b3c4d5</span></td>
+                      <td>Mar 29, 9:45 AM</td>
+                      <td><span class="dd-pill dd-pill-ok">Active</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="dd-card">
+                <div class="dd-section-head">Recently Revoked</div>
+                <table class="dd-table">
+                  <thead>
+                    <tr><th>Artifact</th><th>Hash</th><th>Revoked By</th><th>Revoked</th><th>Reason</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>legacy-migrate.sh</td>
+                      <td><code style="font-size:0.72rem;color:var(--dd-muted);">sha256:d7e8f901…</code></td>
+                      <td><span class="dd-tag">bearer:e1f2a3b4</span></td>
+                      <td>Mar 27, 4:30 PM</td>
+                      <td style="color:var(--dd-muted);">Artifact updated — hash mismatch</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Audit panel -->
+            <div class="dd-page" data-dd-panel="audit" style="display: none;">
+              <p class="dd-explainer">
+                Query the governance decision chain by time range, user, tool, or decision outcome. Every record is hash-linked and independently verifiable.
+              </p>
+              <div class="dd-card">
+                <div class="dd-section-head">Query Filters</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+                  <div style="display:grid;gap:4px;">
+                    <span class="dd-label" style="margin:0;">Time range</span>
+                    <span class="dd-tag" style="padding:6px 10px;">Last 24 hours</span>
+                  </div>
+                  <div style="display:grid;gap:4px;">
+                    <span class="dd-label" style="margin:0;">User</span>
+                    <span class="dd-tag" style="padding:6px 10px;">All users</span>
+                  </div>
+                  <div style="display:grid;gap:4px;">
+                    <span class="dd-label" style="margin:0;">Tool</span>
+                    <span class="dd-tag" style="padding:6px 10px;">All tools</span>
+                  </div>
+                  <div style="display:grid;gap:4px;">
+                    <span class="dd-label" style="margin:0;">Decision</span>
+                    <span class="dd-tag" style="padding:6px 10px;">DENY only</span>
+                  </div>
+                </div>
+              </div>
+              <div class="dd-card">
+                <div class="dd-section-head">Results &mdash; 11 DENY records (last 24h)</div>
+                <table class="dd-table">
+                  <thead>
+                    <tr><th>Time</th><th>Tool</th><th>User</th><th>Intent</th><th>Denial Reason</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Mar 30, 1:38 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td>edit /etc/hosts</td><td style="color:var(--dd-danger);">Path outside governed workspace</td></tr>
+                    <tr><td>Mar 30, 1:28 PM</td><td><code>fs_delete</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td>remove .env.production</td><td style="color:var(--dd-danger);">Protected file — requires approval</td></tr>
+                    <tr><td>Mar 30, 1:15 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td>write outside workspace</td><td style="color:var(--dd-danger);">Path outside governed workspace</td></tr>
+                    <tr><td>Mar 30, 1:08 PM</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td>modify CI pipeline</td><td style="color:var(--dd-danger);">Insufficient authority for CI scope</td></tr>
+                    <tr><td>Mar 30, 12:52 PM</td><td><code>fs_delete</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td>remove build cache</td><td style="color:var(--dd-danger);">Bulk delete not permitted</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Reports panel -->
+            <div class="dd-page" data-dd-panel="reports" style="display: none;">
+              <p class="dd-explainer">
+                Aggregate governance reports summarizing operations by user, tool, and decision outcome over a configurable time period. Use these for compliance reviews and management reporting.
+              </p>
+              <div class="dd-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="dd-card">
+                  <div class="dd-section-head">Operations by User (7 days)</div>
+                  <table class="dd-table">
+                    <thead>
+                      <tr><th>User</th><th>ALLOW</th><th>DENY</th><th>Total</th><th>DENY %</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td>17</td><td>4</td><td>21</td><td>19.0%</td></tr>
+                      <tr><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td>10</td><td>6</td><td>16</td><td>37.5%</td></tr>
+                      <tr><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td>9</td><td>1</td><td>10</td><td>10.0%</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="dd-card">
+                  <div class="dd-section-head">Operations by Tool (7 days)</div>
+                  <table class="dd-table">
+                    <thead>
+                      <tr><th>Tool</th><th>ALLOW</th><th>DENY</th><th>Total</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td><code>fs_write</code></td><td>14</td><td>7</td><td>21</td></tr>
+                      <tr><td><code>fs_read</code></td><td>10</td><td>0</td><td>10</td></tr>
+                      <tr><td><code>fs_delete</code></td><td>2</td><td>3</td><td>5</td></tr>
+                      <tr><td><code>msg_send</code></td><td>5</td><td>0</td><td>5</td></tr>
+                      <tr><td><code>capabilities_execute</code></td><td>3</td><td>0</td><td>3</td></tr>
+                      <tr><td><code>governance_status</code></td><td>2</td><td>0</td><td>2</td></tr>
+                      <tr><td><code>fs_list</code></td><td>0</td><td>1</td><td>1</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="dd-card">
+                <div class="dd-section-head">Decision Trend (7 days)</div>
+                <div style="display:flex;gap:10px;align-items:end;height:80px;padding-top:8px;">
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:40px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:12px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Mon</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:50px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:18px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Tue</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:35px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:8px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Wed</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:55px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:22px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Thu</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:45px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:15px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Fri</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:20px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:5px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Sat</span>
+                  </div>
+                  <div style="display:grid;gap:4px;text-align:center;flex:1;">
+                    <div style="display:flex;gap:2px;align-items:end;justify-content:center;height:60px;">
+                      <div style="width:16px;background:var(--dd-ok);border-radius:3px 3px 0 0;height:48px;opacity:0.8;"></div>
+                      <div style="width:16px;background:var(--dd-danger);border-radius:3px 3px 0 0;height:14px;opacity:0.8;"></div>
+                    </div>
+                    <span class="dd-label">Sun</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:16px;margin-top:10px;">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--dd-muted);"><span style="width:10px;height:10px;border-radius:2px;background:var(--dd-ok);display:inline-block;"></span> ALLOW</span>
+                  <span style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--dd-muted);"><span style="width:10px;height:10px;border-radius:2px;background:var(--dd-danger);display:inline-block;"></span> DENY</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Health panel -->
+            <div class="dd-page" data-dd-panel="health" style="display: none;">
+              <p class="dd-explainer">
+                System health and operational status of the governance infrastructure. Chain integrity is verified continuously — any break in the hash chain triggers an alert.
+              </p>
+              <div class="dd-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val" style="color: var(--dd-ok);">Healthy</span>
+                  <span class="dd-label">Overall Status</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">14d 6h</span>
+                  <span class="dd-label">Server Uptime</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val" style="color: var(--dd-ok);">Valid</span>
+                  <span class="dd-label">License Status</span>
+                </div>
+              </div>
+              <div class="dd-health-row">
+                <div class="dd-card">
+                  <div class="dd-section-head">Chain Integrity</div>
+                  <table class="dd-table">
+                    <thead>
+                      <tr><th>Check</th><th>Status</th><th>Last Verified</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Hash chain continuity</td><td><span class="dd-pill dd-pill-ok">Pass</span></td><td>Mar 30, 1:42 PM</td></tr>
+                      <tr><td>Signature verification</td><td><span class="dd-pill dd-pill-ok">Pass</span></td><td>Mar 30, 1:42 PM</td></tr>
+                      <tr><td>Record ordering</td><td><span class="dd-pill dd-pill-ok">Pass</span></td><td>Mar 30, 1:42 PM</td></tr>
+                      <tr><td>No orphaned records</td><td><span class="dd-pill dd-pill-ok">Pass</span></td><td>Mar 30, 1:42 PM</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="dd-card">
+                  <div class="dd-section-head">Performance</div>
+                  <table class="dd-table">
+                    <thead>
+                      <tr><th>Metric</th><th>Value</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Avg decision latency</td><td>12ms</td></tr>
+                      <tr><td>P95 decision latency</td><td>28ms</td></tr>
+                      <tr><td>Chain write latency</td><td>4ms</td></tr>
+                      <tr><td>Policy eval cache hit</td><td>84%</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="dd-health-row" style="margin-top:10px;">
+                <div class="dd-card dd-card-raised">
+                  <span style="font-size:0.82rem;font-weight:600;">DENY Rate Trend</span>
+                  <span class="dd-label" style="margin-top:4px;">23.4% (11 of 47) — within normal range</span>
+                  <div class="dd-bar-track"><div class="dd-bar-fill" style="width:23.4%;background:var(--dd-warn);"></div></div>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span style="font-size:0.82rem;font-weight:600;">Transparency Trend</span>
+                  <span class="dd-label" style="margin-top:4px;">72% governed — 47 governed / 18 ungoverned</span>
+                  <div class="dd-bar-track"><div class="dd-bar-fill" style="width:72%;background:var(--dd-accent);"></div></div>
+                </div>
+              </div>
+              <div class="dd-card" style="margin-top:10px;">
+                <div class="dd-section-head">Storage</div>
+                <div style="display:flex;gap:24px;font-size:0.82rem;">
+                  <div><span style="color:var(--dd-muted);">Chain:</span> 12.4 KB</div>
+                  <div><span style="color:var(--dd-muted);">Stability log:</span> 1.8 KB</div>
+                  <div><span style="color:var(--dd-muted);">Decision records:</span> 84.2 KB</div>
+                  <div><span style="color:var(--dd-muted);">Attestation bundles:</span> 6.1 KB</div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -390,5 +682,21 @@
   <div id="site-footer"></div>
 
   <script defer src="/assets/js/site.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var tabs = document.querySelectorAll("[data-dd-tab]");
+      var panels = document.querySelectorAll("[data-dd-panel]");
+      tabs.forEach(function (tab) {
+        tab.style.cursor = "pointer";
+        tab.addEventListener("click", function () {
+          tabs.forEach(function (t) { t.classList.remove("active"); });
+          panels.forEach(function (p) { p.style.display = "none"; });
+          tab.classList.add("active");
+          var target = document.querySelector('[data-dd-panel="' + tab.getAttribute("data-dd-tab") + '"]');
+          if (target) target.style.display = "";
+        });
+      });
+    });
+  </script>
 </body>
 </html>
