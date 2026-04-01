@@ -488,6 +488,9 @@
                   </tbody>
                 </table>
               </div>
+              <div style="margin-top:10px;">
+                <button id="dd-export-audit" style="display:inline-block;padding:8px 14px;border-radius:8px;font-size:0.78rem;font-weight:600;color:var(--dd-accent);background:rgba(91,138,245,0.08);border:1px solid rgba(91,138,245,0.2);cursor:pointer;transition:background 0.15s ease;" onmouseover="this.style.background='rgba(91,138,245,0.16)'" onmouseout="this.style.background='rgba(91,138,245,0.08)'">Export JSON</button>
+              </div>
             </div>
 
             <!-- Reports panel -->
@@ -696,6 +699,43 @@
           if (target) target.style.display = "";
         });
       });
+
+      var exportBtn = document.getElementById("dd-export-audit");
+      if (exportBtn) {
+        exportBtn.addEventListener("click", function () {
+          var payload = {
+            export_metadata: {
+              exported_at: new Date().toISOString(),
+              export_source: "atested-dashboard",
+              format_version: "1.0",
+              note: "Sample export from Atested website demo"
+            },
+            query_parameters: {
+              start_time: "2026-03-30T00:00:00Z",
+              end_time: "2026-03-30T23:59:59Z",
+              policy_decision: "DENY"
+            },
+            chain_integrity: {
+              status: "healthy",
+              total_records: 47,
+              verified_at: "2026-03-30T13:42:00Z"
+            },
+            total_matching: 5,
+            records: [
+              { sequence_position: 38, timestamp_utc: "2026-03-30T13:38:00Z", tool_name: "fs_write", user_identity: "bearer:c8d9e0f1", policy_decision: "DENY", summary: "edit /etc/hosts", denial_reason: "Path outside governed workspace", record_hash: "sha256:f0e1d2c3b4a596e8d7c6b5a4f3e2d1c0", prev_record_hash: "sha256:0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d" },
+              { sequence_position: 35, timestamp_utc: "2026-03-30T13:28:00Z", tool_name: "fs_delete", user_identity: "bearer:c8d9e0f1", policy_decision: "DENY", summary: "remove .env.production", denial_reason: "Protected file — requires approval", record_hash: "sha256:c3b4a5f0e1d2c3b4a596e8d7c6b5a4f3", prev_record_hash: "sha256:2d4f6a8bc3b4a5f0e1d2c3b4a596e8d7" },
+              { sequence_position: 32, timestamp_utc: "2026-03-30T13:15:00Z", tool_name: "fs_write", user_identity: "bearer:c8d9e0f1", policy_decision: "DENY", summary: "write outside workspace", denial_reason: "Path outside governed workspace", record_hash: "sha256:1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e", prev_record_hash: "sha256:9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b" },
+              { sequence_position: 30, timestamp_utc: "2026-03-30T13:08:00Z", tool_name: "fs_write", user_identity: "bearer:e1f2a3b4", policy_decision: "DENY", summary: "modify CI pipeline", denial_reason: "Insufficient authority for CI scope", record_hash: "sha256:7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f", prev_record_hash: "sha256:5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d" },
+              { sequence_position: 27, timestamp_utc: "2026-03-30T12:52:00Z", tool_name: "fs_delete", user_identity: "bearer:a2b3c4d5", policy_decision: "DENY", summary: "remove build cache", denial_reason: "Bulk delete not permitted", record_hash: "sha256:e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0", prev_record_hash: "sha256:3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a" }
+            ]
+          };
+          var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "atested-audit-export-2026-03-30.json";
+          a.click();
+        });
+      }
     });
   </script>
 </body>

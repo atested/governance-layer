@@ -898,20 +898,40 @@ window.handleReportSubmit = function(e) {
 
 window.exportAuditJson = async function() {
   const ctx = getContext();
-  const data = await api("audit/query", {
+  const queryParams = {
     start_time: ctx.startTime || null,
     end_time: ctx.endTime || null,
     user_identity: ctx.user || null,
     tool_name: ctx.tool || null,
     policy_decision: ctx.decision || null,
     event_category: ctx.category || null,
-    limit: 10000,
-    offset: 0,
-  });
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  };
+  const [data, health] = await Promise.all([
+    api("audit/query", { ...queryParams, limit: 10000, offset: 0 }),
+    api("health").catch(() => null),
+  ]);
+  const exportPayload = {
+    export_metadata: {
+      exported_at: new Date().toISOString(),
+      export_source: "atested-dashboard",
+      format_version: "1.0",
+    },
+    query_parameters: Object.fromEntries(
+      Object.entries(queryParams).filter(([, v]) => v != null)
+    ),
+    chain_integrity: health ? {
+      status: health.chain?.status || "unknown",
+      total_records: health.chain?.total_records ?? null,
+      verified_at: health.chain?.last_verified || null,
+    } : { status: "unavailable" },
+    total_matching: data.total_matching,
+    records: data.entries || [],
+  };
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `audit-export-${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.json`;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = `atested-audit-export-${dateStr}.json`;
   a.click();
 };
 
