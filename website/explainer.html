@@ -3,186 +3,75 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Why governance — Atested</title>
-  <meta name="description" content="Why AI operations need governance infrastructure, what evidentiary enforcement means, and how Atested compares to the alternatives.">
+  <title>Why Governance Infrastructure</title>
+  <meta name="description" content="Why AI operations need governance infrastructure instead of post-hoc reconstruction, vague logging, and black-box trust.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
 </head>
-<body>
-
-  <header>
-    <nav class="container">
-      <a href="/" class="nav-brand">atested</a>
-      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
-      <ul class="nav-links">
-        <li><a href="how-it-works.html">How it works</a></li>
-        <li><a href="pricing.html">Pricing</a></li>
-        <li><a href="explainer.html" class="active">Why governance</a></li>
-        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-      </ul>
-    </nav>
-  </header>
+<body data-page="explainer">
+  <div id="site-nav"></div>
 
   <main>
-    <section class="hero" style="padding-bottom: var(--space-xl);">
+    <section class="hero">
       <div class="container">
-        <h1>Why AI operations need governance</h1>
+        <div class="eyebrow">Why governance</div>
+        <h1>AI operations need more than logs and hope</h1>
         <p class="lead">
-          AI agents are taking actions on behalf of your organization. The question is not
-          whether they should. The question is whether you can prove what they did.
+          AI tools can accelerate real work, but when something goes wrong organizations still need to know what happened, why it happened, what was prevented, and whether the explanation can be checked later. That is the problem governance infrastructure solves.
         </p>
       </div>
     </section>
 
-    <section style="padding-top: 0;">
-      <div class="container prose">
+    <section>
+      <div class="container" style="display: grid; gap: 2rem;">
+        <section class="card">
+          <h2>Post-hoc reconstruction is a weak operating model</h2>
+          <p class="section-copy">
+            Most AI activity today is discovered after the fact through logs, screenshots, transcripts, or partial traces. That makes review expensive and uncertain. Even when an organization has records, it often does not have a coherent, checkable account of what the system attempted, what policy applied, and what should have happened next.
+          </p>
+        </section>
 
-        <h2>The problem</h2>
+        <section class="card">
+          <h2>Governance changes the timing of control</h2>
+          <p class="section-copy">
+            The important difference is not only that governance records exist. It is that governed actions are evaluated before they proceed. Many unsupported actions can be denied before they land. The resulting record then becomes evidence of what was requested, what standards were applied, and what decision was made.
+          </p>
+        </section>
 
-        <p>
-          AI agents are increasingly autonomous. They write code, modify files, send messages,
-          and interact with systems on behalf of human operators. Most organizations have
-          no systematic record of what these agents did, why they did it, or whether the
-          action complied with any policy.
-        </p>
+        <section class="card">
+          <h2>Proof matters more than assertion</h2>
+          <p class="section-copy">
+            A system saying it behaved correctly is not the same as a system producing verifiable evidence of what it did. Signed records, immutable chains, and attestation artifacts move the product away from black-box trust and toward independent checking.
+          </p>
+        </section>
 
-        <p>
-          When something goes wrong &mdash; or when someone asks what happened &mdash; the answer
-          is usually a log search, a manual review, or a best guess. There is no chain of
-          evidence. There is no policy record. There is no proof.
-        </p>
+        <section class="card">
+          <h2>Honesty about the boundary matters too</h2>
+          <p class="section-copy">
+            No governance layer in an open environment can honestly claim it controls every action an AI tool may take. Client tools have native capabilities outside governance. Atested does not hide that. It makes the boundary visible through transparency measurement so organizations can understand what is governed, what is merely observed, and where coverage still needs work.
+          </p>
+        </section>
 
-        <p>
-          This is not a hypothetical problem. As AI agents gain broader access to production
-          systems, the gap between "the agent did something" and "we can prove what the agent
-          did and whether it was permitted" becomes a material business risk.
-        </p>
-
-        <h2>What evidentiary enforcement means</h2>
-
-        <p>
-          Atested takes a specific approach to governance that we call <strong>evidentiary
-          enforcement</strong>. This is different from both "lock everything down" and
-          "log everything and hope."
-        </p>
-
-        <p>
-          Evidentiary enforcement means: the system records truth. Every action is evaluated
-          against policy. Every decision &mdash; allow or deny &mdash; is signed into an immutable,
-          hash-chained record. The record is not a log entry that can be edited. It is
-          cryptographic evidence that a specific action was evaluated against a specific
-          policy and produced a specific decision at a specific time.
-        </p>
-
-        <p>
-          The key word is <strong>evidence</strong>. Atested does not lock anyone out. It does
-          not prevent agents from operating. It produces a verifiable record of what happened.
-          If an action was permitted, the record proves it. If an action was denied, the
-          record proves that too. If the chain is tampered with, the verification fails.
-        </p>
-
-        <p>
-          This model is intentional. In practice, hard lockouts create workarounds. Agents
-          that can't complete an action find another path. Operators disable enforcement
-          to meet deadlines. The governance layer becomes something to route around rather
-          than something to rely on.
-        </p>
-
-        <p>
-          Evidentiary enforcement avoids this dynamic. The system never stops working. It
-          always records truth. The incentive shifts from "how do I bypass governance" to
-          "my governance records are clean."
-        </p>
-
-        <h2>What makes this different</h2>
-
-        <p>
-          There are no direct competitors doing what Atested does, but there are adjacent
-          approaches that organizations currently use. Here is how Atested compares.
-        </p>
-
-        <h3>Ad-hoc logging</h3>
-        <p>
-          Most teams log agent actions to a file, a database, or an observability platform.
-          This is better than nothing, but logs are mutable, unstructured, and disconnected
-          from policy. A log entry tells you that something happened. It does not tell you
-          whether it was permitted, and it cannot prove it was not tampered with.
-        </p>
-        <p>
-          Atested governance records are immutable, hash-chained, and cryptographically
-          signed. They include the policy decision, not just the action. They are verifiable
-          by an independent party without access to the system that produced them.
-        </p>
-
-        <h3>Manual audits</h3>
-        <p>
-          Periodic manual review of agent behavior is expensive, slow, and incomplete.
-          Reviewers can only examine what they know to look for. They cannot verify that
-          records have not been altered between the action and the review.
-        </p>
-        <p>
-          Atested generates proof packets on demand. An auditor receives a cryptographically
-          bound artifact containing the decision records, the policy, and verification
-          hashes. The audit is a verification, not an investigation.
-        </p>
-
-        <h3>The "trust me" approach</h3>
-        <p>
-          The most common approach is no governance at all. Teams trust that agents
-          behave correctly, that operators use them responsibly, and that nothing
-          will go wrong that requires evidence.
-        </p>
-        <p>
-          This works until it doesn't. When a customer asks for evidence of how their
-          data was handled, when a compliance review asks for policy enforcement records,
-          or when an incident requires reconstruction &mdash; the absence of governance
-          infrastructure becomes the problem.
-        </p>
-
-        <h2>Who this is for</h2>
-
-        <p>
-          Atested is for organizations that deploy AI agents in environments where the
-          question "what did the agent do, and was it permitted?" has a consequential answer.
-          This includes:
-        </p>
-
-        <ul>
-          <li>Engineering teams deploying AI coding assistants that modify production code</li>
-          <li>Operations teams using AI agents for system administration tasks</li>
-          <li>Organizations with compliance requirements around automated decision-making</li>
-          <li>Teams that need to demonstrate governance to customers, auditors, or regulators</li>
-          <li>Any team that wants a verifiable record of AI agent behavior, not just a log</li>
-        </ul>
-
-        <p>
-          If your AI agents take actions that matter, you need governance infrastructure
-          that produces evidence, not just records. That is what Atested provides.
-        </p>
-
-        <div class="mt-2xl text-center">
-          <a href="pricing.html" class="btn btn-primary">See pricing</a>
-          <a href="how-it-works.html" class="btn btn-secondary" style="margin-left: var(--space-md);">See how it works</a>
-        </div>
+        <section class="callout">
+          <div class="eyebrow">What governance infrastructure gives you</div>
+          <h2>More prevention, more usable evidence, less guesswork</h2>
+          <p class="section-copy">
+            More prevention before the fact. More usable evidence after the fact. Less reconstruction work. Less black-box ambiguity. A clearer operating model for AI systems that are expected to do real work inside real organizations.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/how-it-works.html">See how it works</a>
+            <a class="btn btn-secondary" href="/pricing.html">See pricing</a>
+          </div>
+        </section>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container">
-      <div class="footer-inner">
-        <span class="footer-copy">&copy; 2026 Atested</span>
-        <ul class="footer-links">
-          <li><a href="terms.html">Terms</a></li>
-          <li><a href="pricing.html">Pricing</a></li>
-          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-        </ul>
-      </div>
-    </div>
-  </footer>
+  <div id="site-footer"></div>
 
-  <script src="assets/js/nav.js"></script>
+  <script defer src="/assets/js/site.js"></script>
 </body>
 </html>

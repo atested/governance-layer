@@ -5,476 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Atested — Governance infrastructure for AI operations</title>
   <meta name="description" content="Every action your AI agents take is evaluated against policy, recorded in signed immutable records, and available as verifiable proof.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0f1722;
-      --bg-soft: #131d2a;
-      --panel: #182334;
-      --panel-2: #1d2a3d;
-      --line: rgba(255,255,255,0.10);
-      --text: #e6edf5;
-      --muted: #9cafc4;
-      --accent: #6ea8c7;
-      --accent-strong: #86b8d2;
-      --success: #7fbca1;
-      --max: 1180px;
-      --radius: 22px;
-      --shadow: 0 20px 60px rgba(0,0,0,0.28);
-    }
-
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      font-family: Inter, system-ui, sans-serif;
-      background:
-        radial-gradient(circle at top, rgba(110,168,199,0.10), transparent 30%),
-        linear-gradient(180deg, #101923 0%, #0f1722 100%);
-      color: var(--text);
-      line-height: 1.6;
-    }
-
-    a { color: inherit; text-decoration: none; }
-    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-
-    .container {
-      width: min(var(--max), calc(100% - 2rem));
-      margin: 0 auto;
-    }
-
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      backdrop-filter: blur(10px);
-      background: rgba(15, 23, 34, 0.82);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      min-height: 76px;
-    }
-
-    .brand {
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      display: flex;
-      flex-direction: column;
-      line-height: 1.05;
-      gap: 0.18rem;
-    }
-
-    .brand-sub {
-      font-size: 0.62rem;
-      font-weight: 600;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 1.5rem;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    .nav-links a:hover,
-    .nav-links a.active { color: var(--text); }
-
-    .nav-cta {
-      border: 1px solid rgba(110,168,199,0.35);
-      background: rgba(110,168,199,0.10);
-      color: #d9edf9;
-      padding: 0.75rem 1rem;
-      border-radius: 14px;
-      font-weight: 600;
-      font-size: 0.92rem;
-    }
-
-    .hero {
-      padding: 5.5rem 0 4rem;
-    }
-
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.05fr 0.95fr;
-      gap: 2rem;
-      align-items: start;
-    }
-
-    .eyebrow {
-      display: inline-block;
-      border: 1px solid rgba(110,168,199,0.22);
-      background: rgba(110,168,199,0.08);
-      color: #d5ebf7;
-      padding: 0.45rem 0.75rem;
-      border-radius: 999px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      margin-bottom: 1rem;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(3rem, 7vw, 5.5rem);
-      line-height: 0.98;
-      letter-spacing: -0.05em;
-      max-width: 10ch;
-    }
-
-    .lead {
-      margin-top: 1.5rem;
-      max-width: 42rem;
-      color: #c1d0df;
-      font-size: 1.16rem;
-      line-height: 1.8;
-    }
-
-    .sublead {
-      margin-top: 0.9rem;
-      max-width: 42rem;
-      color: var(--muted);
-      font-size: 1rem;
-    }
-
-    .cta-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.9rem;
-      margin-top: 2rem;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.95rem 1.2rem;
-      border-radius: 16px;
-      font-weight: 700;
-      font-size: 0.96rem;
-      transition: 160ms ease;
-      border: 1px solid transparent;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #0c1420;
-    }
-
-    .btn-primary:hover { background: var(--accent-strong); }
-
-    .btn-secondary {
-      background: rgba(255,255,255,0.04);
-      border-color: var(--line);
-      color: var(--text);
-    }
-
-    .btn-secondary:hover { background: rgba(255,255,255,0.08); }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.9rem;
-      margin-top: 2rem;
-      max-width: 40rem;
-    }
-
-    .metric {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 1rem;
-    }
-
-    .metric strong {
-      display: block;
-      font-size: 1.65rem;
-      letter-spacing: -0.04em;
-      margin-bottom: 0.2rem;
-    }
-
-    .metric span {
-      color: var(--muted);
-      font-size: 0.92rem;
-      line-height: 1.5;
-      display: block;
-    }
-
-    .panel {
-      background: linear-gradient(180deg, rgba(24,35,52,0.95), rgba(19,29,42,0.95));
-      border: 1px solid var(--line);
-      border-radius: 28px;
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .record-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 1rem 1.1rem;
-      border-bottom: 1px solid var(--line);
-      font-size: 0.92rem;
-      color: #d6e1ed;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.35rem 0.65rem;
-      border-radius: 999px;
-      font-size: 0.74rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .badge-allow {
-      background: rgba(127,188,161,0.12);
-      color: #b5e2cb;
-      border: 1px solid rgba(127,188,161,0.24);
-    }
-
-    .record pre {
-      margin: 0;
-      padding: 1.35rem;
-      background: rgba(9, 14, 22, 0.78);
-      color: #c2d2e2;
-      overflow: auto;
-      font-size: 0.9rem;
-      line-height: 1.75;
-    }
-
-    .record-note {
-      padding: 1rem 1.1rem 1.2rem;
-      color: var(--muted);
-      font-size: 0.96rem;
-      border-top: 1px solid var(--line);
-      background: rgba(255,255,255,0.02);
-    }
-
-    section {
-      padding: 4.5rem 0;
-    }
-
-    .section-muted {
-      border-top: 1px solid var(--line);
-      border-bottom: 1px solid var(--line);
-      background: rgba(255,255,255,0.025);
-    }
-
-    .section-head {
-      max-width: 48rem;
-      margin-bottom: 2rem;
-    }
-
-    h2 {
-      margin: 0 0 0.8rem;
-      font-size: clamp(2rem, 4vw, 3.2rem);
-      line-height: 1.05;
-      letter-spacing: -0.04em;
-    }
-
-    .section-head p,
-    .copy p {
-      color: var(--muted);
-      font-size: 1.02rem;
-      line-height: 1.9;
-      margin: 0.8rem 0 0;
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-
-    .card,
-    .audience-card,
-    .faq-item,
-    .pricing-card,
-    .check-item {
-      background: rgba(255,255,255,0.035);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-    }
-
-    .card,
-    .audience-card,
-    .faq-item,
-    .pricing-card {
-      padding: 1.35rem;
-    }
-
-    .card h3,
-    .audience-card h3,
-    .pricing-card h3,
-    .faq-item h3 {
-      margin: 0;
-      font-size: 1.2rem;
-      letter-spacing: -0.03em;
-    }
-
-    .card p,
-    .audience-card p,
-    .pricing-card p,
-    .faq-item p {
-      margin: 0.8rem 0 0;
-      color: var(--muted);
-      font-size: 0.98rem;
-      line-height: 1.8;
-    }
-
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 0.95fr;
-      gap: 1.2rem;
-      align-items: start;
-    }
-
-    .checklist {
-      display: grid;
-      gap: 0.8rem;
-    }
-
-    .check-item {
-      display: flex;
-      gap: 0.8rem;
-      align-items: flex-start;
-      padding: 1rem;
-    }
-
-    .dot {
-      width: 0.7rem;
-      height: 0.7rem;
-      border-radius: 999px;
-      background: var(--accent);
-      margin-top: 0.45rem;
-      flex: 0 0 auto;
-    }
-
-    .audiences,
-    .pricing-grid,
-    .faq-grid {
-      display: grid;
-      gap: 1rem;
-    }
-
-    .audiences { grid-template-columns: repeat(2, 1fr); }
-    .pricing-grid { grid-template-columns: repeat(4, 1fr); }
-
-    .pricing-card.featured {
-      border-color: rgba(110,168,199,0.32);
-      background: rgba(110,168,199,0.10);
-    }
-
-    .pricing-meta {
-      color: var(--muted);
-      font-size: 0.92rem;
-      margin-top: 0.4rem;
-    }
-
-    .price {
-      margin-top: 1rem;
-      font-size: 2.1rem;
-      font-weight: 800;
-      letter-spacing: -0.05em;
-    }
-
-    .pricing-note {
-      margin-top: 1rem;
-      padding: 1rem 1.1rem;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255,255,255,0.03);
-      color: var(--muted);
-      line-height: 1.8;
-    }
-
-    .faq-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .footer-cta {
-      display: flex;
-      justify-content: space-between;
-      gap: 1.5rem;
-      align-items: center;
-      padding: 1.5rem 0 0;
-      border-top: 1px solid var(--line);
-    }
-
-    footer {
-      border-top: 1px solid var(--line);
-      padding: 1.4rem 0 2.5rem;
-      color: var(--muted);
-      font-size: 0.94rem;
-    }
-
-    .footer-inner {
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    @media (max-width: 1080px) {
-      .hero-grid,
-      .two-col,
-      .pricing-grid,
-      .cards { grid-template-columns: 1fr 1fr; }
-      .audiences { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 760px) {
-      .nav { min-height: 68px; }
-      .nav-links { display: none; }
-      .hero { padding-top: 4rem; }
-      .hero-grid,
-      .two-col,
-      .cards,
-      .pricing-grid,
-      .metrics { grid-template-columns: 1fr; }
-      .footer-cta,
-      .footer-inner { flex-direction: column; align-items: flex-start; }
-      h1 { max-width: none; }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
 </head>
-<body>
-  <header>
-    <div class="container nav">
-      <a href="/" class="brand">
-        <span>Atested</span>
-        <span class="brand-sub">Auditable AI operations</span>
-      </a>
-      <nav class="nav-links">
-        <a href="how-it-works.html">How it works</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="explainer.html">Why governance</a>
-        <a href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">GitHub</a>
-      </nav>
-      <a class="nav-cta" href="pricing.html">Purchase license</a>
-    </div>
-  </header>
+<body data-page="home">
+  <div id="site-nav"></div>
 
   <main>
     <section class="hero">
@@ -482,24 +20,29 @@
         <div>
           <div class="eyebrow">Governance infrastructure for AI operations</div>
           <h1>Every action. Evaluated. Recorded. Provable.</h1>
+
           <p class="lead">
             Atested governs AI operations before actions proceed. It prevents many unsupported actions from landing, and when something does go wrong it gives you definitive, auditable facts instead of reconstruction work.
           </p>
+
           <p class="sublead">
-            Works with MCP-compatible AI tools including Claude Code, Cursor, Cline, Windsurf, and others. Self-hosted. One server. No cloud dependency, and no governance data leaves your network.
+            Works with MCP-compatible AI tools including Claude Code, Cursor, Cline, and Windsurf. Self-hosted. One server. No cloud dependency, and no governance data leaves your network.
           </p>
+
           <div class="cta-row">
             <a class="btn btn-primary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">Get started on GitHub</a>
-            <a class="btn btn-secondary" href="pricing.html">See pricing</a>
+            <a class="btn btn-secondary" href="/how-it-works.html">How it works</a>
+            <a class="btn btn-secondary" href="/pricing.html">See pricing</a>
           </div>
+
           <div class="metrics">
             <div class="metric">
-              <strong>46</strong>
-              <span>governed tools across filesystem, messaging, capabilities, governance, catalog, and surface management</span>
+              <strong>MCP-compatible</strong>
+              <span>works with existing AI tools that can route actions through governance</span>
             </div>
             <div class="metric">
-              <strong>MCP-compatible</strong>
-              <span>works with existing AI tools</span>
+              <strong>Self-hosted</strong>
+              <span>one governed server your team connects through, with governance data staying in your environment</span>
             </div>
           </div>
         </div>
@@ -523,9 +66,9 @@
   "signature": "ed25519:8f9c2ab1..."
 }</pre>
           <div class="record-note">
-            Actions that satisfy policy are allowed and recorded. Actions outside policy are denied and recorded the same way. Example ALLOW decisions include writing inside an approved project path, reading from an allowed workspace, or sending a message through an approved channel with the required context. Example DENY decisions include writing outside an approved path, sending through an unapproved channel, or invoking a governed capability without the proof or constraints required to allow it.
+            Governed actions are evaluated before they proceed. When the action satisfies policy, Atested allows it and records the decision. When required proof, scope, or constraints are missing, Atested denies the action and records that too.
           </div>
-          <div class="record-note" style="border-top: 1px solid var(--line); background: rgba(255,255,255,0.01);">
+          <div class="record-note">
             Architecture: MCP server → policy evaluation → signed record → hash chain → attestation artifact.
           </div>
         </div>
@@ -533,68 +76,53 @@
     </section>
 
     <section class="section-muted">
-      <div class="container">
-        <div class="section-head">
-          <h2>What a manager needs to know first</h2>
-          <p>
-            AI tools help teams move faster until something goes wrong. Then the questions are immediate: what happened, why did it happen, what was prevented, and can we prove it. Atested answers those questions without forcing teams into log archaeology or black-box guesswork.
+      <div class="container split-grid">
+        <div>
+          <div class="eyebrow">What it does</div>
+          <h2>Govern AI operations before they become reconstruction work</h2>
+
+          <p class="section-copy">
+            Atested evaluates governed actions before they proceed and records the outcome in signed, immutable records. That changes AI operations from black-box activity into checkable events with durable evidence.
           </p>
-          <p>
-            It does this in two ways. First, governed actions are evaluated before they proceed, so many unsupported or insufficiently evidenced actions are denied before they become incidents. Second, every decision is recorded in signed, immutable records that are themselves proof when audit, review, or verification is required.
-          </p>
+
+          <div class="cta-row">
+            <a class="btn btn-secondary" href="/how-it-works.html">See the governance flow</a>
+          </div>
         </div>
-        <div class="cards">
-          <article class="card">
-            <h3>Prevent many bad actions before they land</h3>
-            <p>Governed actions are checked against Atested's governance rules before they proceed. Atested resolves decisions deterministically where it can, and where deterministic resolution is not possible, it uses a structured, recorded judgment process to reach a decision. When required proof, scope, or constraints are missing, Atested can deny the action before the repo, message channel, or downstream system is affected.</p>
-          </article>
-          <article class="card">
-            <h3>Replace reconstruction with auditable facts</h3>
-            <p>When something does go wrong, Atested provides signed records showing what was requested, what evidence was presented, what governance rules were applied, what decision was made, what happened next, and where the issue occurred. That reduces investigation effort and gives managers a defensible account of AI operations.</p>
-          </article>
-          <article class="card">
-            <h3>Signed records</h3>
-            <p>Every decision is recorded and cryptographically signed into an immutable chain. Each record is linked so tampering breaks verification and the resulting evidence can be independently checked later.</p>
-          </article>
-          <article class="card">
-            <h3>Proof packets</h3>
-            <p>Generate attestation artifacts that auditors, customers, and internal stakeholders can verify without trusting the runtime by assertion alone.</p>
-          </article>
-          <article class="card">
-            <h3>Institutional auditability</h3>
-            <p>Policy evaluation, ALLOW or DENY decisions, returned guidance, signed records, and proof packets come together as a defensible audit trail. The result is not just a log of activity, but verifiable evidence of what was requested, what evidence was presented, what governance rules were applied, what decision was made, what happened next, and how that decision can be checked later.</p>
-          </article>
-          <article class="card">
-            <h3>Platform-agnostic observation hooks</h3>
-            <p>Any AI tool that supports action hooks can connect to Atested's observation endpoint. Claude Code, Cursor, Cline, Windsurf, and other tools can report native operations so Atested can measure governed versus ungoverned activity across the real workflow.</p>
-          </article>
-          <article class="card">
-            <h3>Scoped approvals for opaque operations</h3>
-            <p>Some governed code can't produce the evidence Atested requires — it's opaque to inspection. When that code is mission-essential and keeps getting DENY, the operator can grant a scoped approval for it. The approval is pinned to the artifact's exact content hash, deployment context, and active policy version. Change the artifact and the approval expires. The approval and any future revocation are signed into the governance chain. This means Atested never blocks you from getting work done — but it ensures the decision to allow unvetted code is explicit, scoped, and permanently recorded.</p>
-          </article>
-          <article class="card">
-            <h3>Not just proof after the fact</h3>
-            <p>Atested does more than preserve evidence for later review. It can stop governed actions from proceeding when required proof, scope, or constraints are missing. In practice, that means many unsupported or hallucinated action attempts can be denied before they become operational events.</p>
-          </article>
+
+        <div class="panel">
+          <div class="record-head">
+            <span>governance-summary.txt</span>
+            <span class="badge badge-allow">LIVE</span>
+          </div>
+          <pre>ALLOW: action satisfied active policy
+DENY: required proof, scope, or constraints missing
+RECORD: signed decision written to immutable chain
+PROOF: attestation artifacts available for later verification</pre>
+          <div class="record-note">
+            The system is designed to prevent many unsupported actions from landing and to preserve verifiable evidence when review is required later.
+          </div>
         </div>
       </div>
     </section>
 
     <section>
-      <div class="container two-col">
-        <div class="copy">
-          <h2>Governance transparency</h2>
-          <p>
-            Atested governs every action that flows through it. It cannot force every action to flow through it, because AI tools also have native capabilities that operate outside any governance layer. That is a structural reality in open environments.
+      <div class="container split-grid">
+        <div>
+          <div class="eyebrow">Governance transparency</div>
+          <h2>Know how much of your AI activity is actually under governance</h2>
+
+          <p class="section-copy">
+            Atested governs every action that flows through it. It cannot force every action to flow through it, because AI tools also have native capabilities outside any governance layer. The transparency metric makes that boundary visible and measurable.
           </p>
-          <p>
-            What Atested does is make that boundary visible and measurable. Governed operations produce full signed records. Ungoverned native operations can be observed and counted through action hooks, so managers can see how much of their AI activity is actually under governance.
-          </p>
-          <p>
-            The result is a Transparency metric: a clear percentage showing governed operations relative to total observed AI activity. The goal is not pretending you start at 100 percent. The goal is knowing where you are and having a path to improve it.
-          </p>
+
+          <div class="cta-row">
+            <a class="btn btn-secondary" href="/implementation.html">Implementation guidance</a>
+            <a class="btn btn-secondary" href="/how-it-works.html">Read more</a>
+          </div>
         </div>
-        <div class="panel record">
+
+        <div class="panel">
           <div class="record-head">
             <span>transparency-summary.json</span>
             <span class="badge badge-allow">72% governed</span>
@@ -607,187 +135,85 @@
   "manager_view": "governed vs observed"
 }</pre>
           <div class="record-note">
-            Governed operations produce full signed audit records. Ungoverned native operations are still visible when your AI tools report them through the observation endpoint.
+            Governed operations produce full signed records. Ungoverned native operations can still be counted when your AI tools report them through observation hooks.
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="container two-col">
-        <div class="copy">
-          <h2>Self-demonstrating licensing</h2>
-          <p>
-            Atested does not ask buyers to guess what tier they need. The system generates an attestation artifact from actual usage, including users and governed operations, and recommends the appropriate tier.
-          </p>
-          <p>
-            That same model carries into renewal. If usage grows, the tier can move up. If usage shrinks, the tier can move down. The product that governs the work also demonstrates the licensing facts.
-          </p>
-        </div>
-        <div class="panel record">
-          <div class="record-head">
-            <span>attestation.json</span>
-            <span class="badge badge-allow">TEAM</span>
-          </div>
-          <pre>{
-  "unique_users": 5,
-  "total_operations": 2104,
-  "license_status": "licensed",
-  "license_tier": "team",
-  "organization_id": "acme-engineering",
-  "recommended_tier": "team",
-  "artifact_hash": "sha256:b4c2d5e6..."
-}</pre>
-          <div class="record-note">
-            The system that governs the operation also produces the artifact that demonstrates the appropriate commercial tier.
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="container two-col">
-        <div class="copy">
-          <h2>Built for organizations that need more usable facts, not more work</h2>
-          <p>
-            Using AI tools, teams can get real work done quickly. But when something goes wrong, they need to know what happened. Today that usually means piecing together logs, screenshots, and partial traces after the fact, with a lot of effort and very little certainty. AI operations often remain a black box even after the review.
-          </p>
-          <p>
-            Atested changes that. First, it can prevent many governed actions from proceeding when the required proof, scope, or constraints are missing. Second, when something does go wrong, Atested provides easy-to-access immutable records that identify what was attempted, what policy was applied, what decision was made, and where the issue occurred.
-          </p>
-          <p>
-            Those records are institutional-grade, auditable, and definitive. They are designed to reduce reconstruction work, replace guesswork with checkable facts, and give organizations a usable account of AI operations instead of another opaque system.
-          </p>
-        </div>
-        <div class="checklist">
-          <div class="check-item"><span class="dot"></span><div>Signed, immutable records of every decision</div></div>
-          <div class="check-item"><span class="dot"></span><div>Actions proceed when the required proof is present</div></div>
-          <div class="check-item"><span class="dot"></span><div>Unsupported claims and missing evidence can be denied before the action proceeds</div></div>
-          <div class="check-item"><span class="dot"></span><div>DENY marks what is missing instead of failing silently</div></div>
-          <div class="check-item"><span class="dot"></span><div>No DRM, no lockouts, no fake enforcement</div></div>
-          <div class="check-item"><span class="dot"></span><div>Tiers are based on users, not on individual AI tools</div></div>
-          <div class="check-item"><span class="dot"></span><div>New AI tool or workflow added later is covered without an extra per-tool charge</div></div>
         </div>
       </div>
     </section>
 
     <section class="section-muted">
       <div class="container">
-        <div class="section-head">
-          <h2>What ALLOW and DENY actually mean</h2>
-          <p>
-            Atested does not just record an action after the fact. It evaluates the action before it proceeds. ALLOW means the action met the active policy with the required proof, scope, or constraints. DENY means the action did not meet those requirements, and the record will show what was missing.
-          </p>
-        </div>
-        <div class="cards" style="margin-bottom: 3rem; grid-template-columns: 1fr 1fr;">
-          <article class="card">
-            <h3>Example ALLOW</h3>
-            <p>Examples of governed actions that proceed:</p>
-            <ul style="margin: 0.9rem 0 0; padding-left: 1.2rem; color: var(--muted); line-height: 1.9;">
-              <li>A coding agent writes to a file inside an approved project path using an allowed tool and the required execution context.</li>
-              <li>An agent sends a message through an approved channel with the expected recipient scope and required supporting context.</li>
-            </ul>
-          </article>
-          <article class="card">
-            <h3>Example DENY</h3>
-            <p>Examples of governed actions that should make a team stop and look twice:</p>
-            <ul style="margin: 0.9rem 0 0; padding-left: 1.2rem; color: var(--muted); line-height: 1.9;">
-              <li>An agent tries to rewrite deployment files outside the approved workspace or touch production configuration it was never authorized to change.</li>
-              <li>An agent submits a call to Atested saying the tests passed and requesting permission to commit, along with evidence. Atested checks the evidence, finds it lacking, and DENIES the commit request, preventing the AI error from landing. The agent can then resubmit with better evidence or try something different. The user notices nothing happened, while Atested keeps an immutable record as it does for all governed interactions.</li>
-            </ul>
-          </article>
-        </div>
-        <div class="section-head">
-          <h2>Two entry points, one buying cycle</h2>
-          <p>
-            Managers need the business case quickly. Developers need the repository quickly.
-          </p>
-        </div>
-        <div class="audiences">
-          <article class="audience-card">
-            <h3>For managers and compliance leads</h3>
-            <p>Understand the governance model in under a minute, evaluate the licensing approach, and purchase without reading the repository first.</p>
-            <div class="cta-row"><a class="btn btn-secondary" href="pricing.html">See pricing</a></div>
-          </article>
-          <article class="audience-card">
-            <h3>For developers and operators</h3>
-            <p>Inspect the architecture, review the governed tools, and evaluate the technical surface in GitHub before bringing it into a workflow.</p>
-            <div class="cta-row"><a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">Open GitHub</a></div>
-          </article>
-        </div>
-      </div>
-    </section>
+        <div class="eyebrow">Pricing</div>
+        <h2>Simple, self-demonstrating pricing</h2>
 
-    <section>
-      <div class="container">
-        <div class="section-head">
-          <h2>Simple, self-demonstrating pricing</h2>
-          <p>
-            Every installation starts with a 30-day full-function trial. At trial end, Atested generates an attestation artifact showing actual usage and recommending the appropriate tier.
-          </p>
-        </div>
+        <p class="section-copy">
+          Every installation starts with a 30-day full-function trial. Atested recommends the appropriate tier from actual observed usage.
+        </p>
+
         <div class="pricing-grid">
           <article class="pricing-card">
             <h3>Personal</h3>
             <div class="pricing-meta">1 user</div>
             <div class="price">Free</div>
             <p>Personal and evaluation use.</p>
-            <div class="cta-row"><a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">Get started</a></div>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">Get started</a>
+            </div>
           </article>
+
           <article class="pricing-card featured">
             <h3>Team</h3>
             <div class="pricing-meta">2–10 users</div>
             <div class="price">$999/year</div>
             <p>Small teams shipping with AI agents.</p>
-            <div class="cta-row"><a class="btn btn-primary" href="pricing.html">Purchase license</a></div>
+            <div class="cta-row">
+              <a class="btn btn-primary" href="/pricing.html">Purchase license</a>
+            </div>
           </article>
+
           <article class="pricing-card">
             <h3>Business</h3>
             <div class="pricing-meta">11–100 users</div>
             <div class="price">$4,999/year</div>
             <p>Operational deployments needing stronger governance posture.</p>
-            <div class="cta-row"><a class="btn btn-secondary" href="pricing.html">Purchase license</a></div>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="/pricing.html">Purchase license</a>
+            </div>
           </article>
+
           <article class="pricing-card">
             <h3>Enterprise</h3>
             <div class="pricing-meta">100+ users</div>
             <div class="price">Contact us</div>
             <p>Custom terms and deployment support.</p>
-            <div class="cta-row"><a class="btn btn-secondary" href="pricing.html#enterprise-contact">Get in touch</a></div>
+            <div class="cta-row">
+              <a class="btn btn-secondary" href="/pricing.html#enterprise-contact">Get in touch</a>
+            </div>
           </article>
-        </div>
-        <div class="pricing-note">
-          Non-profits receive 50% off all paid tiers. All tiers cover all AI tools. No per-tool fees. Renewal is based on actual observed usage, not seat forecasts.
-          <br><br>
-          For high-security environments where evidentiary enforcement is not sufficient on its own, Atested offers structural enforcement options including credential-gated resource access and exclusive capability surfaces. Contact us for custom deployment architecture.
         </div>
       </div>
     </section>
 
     <section>
-      <div class="container footer-cta">
+      <div class="container footer-banner">
         <div>
           <div class="eyebrow">Source-available governance infrastructure</div>
-          <h2>Managers buy here. Developers verify there.</h2>
-          <p class="sublead">The website makes the case. The repository makes the product inspectable. Both need to hold up.</p>
+          <h2>Use AI tools with more control, more usable facts, and less guesswork</h2>
+          <p class="sublead">
+            Inspect the repository, understand the governance flow, or move directly to pricing.
+          </p>
         </div>
+
         <div class="cta-row">
-          <a class="btn btn-primary" href="pricing.html">Purchase a license</a>
+          <a class="btn btn-primary" href="/pricing.html">Purchase a license</a>
           <a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">View GitHub</a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container footer-inner">
-      <div>© 2026 Atested</div>
-      <div class="footer-links">
-        <a href="terms.html">Terms</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="explainer.html">Why governance</a>
-      </div>
-    </div>
-  </footer>
+  <div id="site-footer"></div>
+
+  <script defer src="/assets/js/site.js"></script>
 </body>
 </html>

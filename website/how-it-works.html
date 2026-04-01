@@ -3,293 +3,308 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>How it works — Atested</title>
-  <meta name="description" content="A walk-through of how Atested evaluates every AI action against policy, signs it into an immutable chain, and produces verifiable proof.">
+  <title>How Atested Works</title>
+  <meta name="description" content="How Atested evaluates governed actions, records decisions, makes governance boundaries visible, and gives operators usable evidence.">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/site.css">
 </head>
-<body>
-
-  <header>
-    <nav class="container">
-      <a href="/" class="nav-brand">atested</a>
-      <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
-      <ul class="nav-links">
-        <li><a href="how-it-works.html" class="active">How it works</a></li>
-        <li><a href="pricing.html">Pricing</a></li>
-        <li><a href="explainer.html">Why governance</a></li>
-        <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-      </ul>
-    </nav>
-  </header>
+<body data-page="how-it-works">
+  <div id="site-nav"></div>
 
   <main>
-    <section class="hero" style="padding-bottom: var(--space-xl);">
+    <section class="hero">
       <div class="container">
-        <h1>How Atested works</h1>
+        <div class="eyebrow">How it works</div>
+        <h1>Governed actions become checkable events</h1>
         <p class="lead">
-          From action request to auditable proof, in six steps. Every step produces
-          a verifiable artifact. Nothing is taken on trust.
+          Atested sits in front of governed AI operations. It evaluates the action before it proceeds, records the decision in a signed immutable chain, and makes the boundary between governed and ungoverned activity visible to the operator.
         </p>
       </div>
     </section>
 
-    <!-- Flow steps -->
-    <section style="padding-top: 0;">
-      <div class="container narrow">
-        <div class="flow-steps">
+    <section>
+      <div class="container grid-2">
+        <div>
+          <h2>The governance flow</h2>
+          <p class="section-copy">
+            The core flow is simple. An AI tool routes an action through Atested. Atested evaluates it against active policy. If the action satisfies the policy, it proceeds and the decision is recorded. If it does not, the action is denied and that denial is recorded too.
+          </p>
 
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Action request</h3>
-              <p>
-                An AI agent requests an action through the Model Context Protocol. This could be
-                writing a file, sending a message, reading data, or invoking any governed tool.
-                The request includes the tool name, arguments, and the operator's stated intent.
-              </p>
-            </div>
-          </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Policy evaluation</h3>
-              <p>
-                The governance layer evaluates the action against your policy. Policies are defined
-                in a capability registry that specifies which actions are allowed, under what
-                constraints, and with what arguments. The evaluation produces a decision: ALLOW or DENY.
-              </p>
-              <p>
-                The evaluation is deterministic. The same action, with the same policy, always
-                produces the same decision. This is what makes governance records replayable.
-              </p>
-            </div>
-          </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Decision record</h3>
-              <p>
-                Whether allowed or denied, the decision is recorded. The record captures the tool,
-                the arguments, the policy decision, the timestamp, the operator identity, and a
-                SHA-256 hash of the record contents.
-              </p>
-              <div class="record-visual">
-                <div class="record-visual-header">
-                  <span>decision record</span>
-                  <span class="badge badge-allow">ALLOW</span>
+          <div class="step-list">
+            <div class="step">
+              <div class="step-num">1</div>
+              <div>
+                <h3>Action request arrives</h3>
+                <div class="section-copy">
+                  A tool submits a governed action through the MCP surface with whatever proof, context, or constraints the policy requires.
                 </div>
-                <pre><code>{
-  <span class="json-key">"tool"</span>:             <span class="json-string">"fs_write"</span>,
-  <span class="json-key">"policy_decision"</span>:  <span class="json-string">"ALLOW"</span>,
-  <span class="json-key">"timestamp_utc"</span>:    <span class="json-string">"2026-05-28T09:12:00Z"</span>,
-  <span class="json-key">"user_identity"</span>:    <span class="json-string">"bearer:e1f2a3b4c5d67890"</span>,
-  <span class="json-key">"record_hash"</span>:      <span class="json-string">"sha256:0a1b2c3d..."</span>,
-  <span class="json-key">"prev_record_hash"</span>: <span class="json-string">"sha256:f0e1d2c3..."</span>
-}</code></pre>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-num">2</div>
+              <div>
+                <h3>Policy is evaluated</h3>
+                <div class="section-copy">
+                  Atested resolves the decision deterministically where it can. Where deterministic resolution is not possible, it uses a structured and recorded judgment process.
+                </div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-num">3</div>
+              <div>
+                <h3>ALLOW or DENY is issued</h3>
+                <div class="section-copy">
+                  ALLOW means the action satisfied the active policy. DENY means the required proof, scope, or constraints were not present.
+                </div>
+              </div>
+            </div>
+
+            <div class="step">
+              <div class="step-num">4</div>
+              <div>
+                <h3>Signed record is written</h3>
+                <div class="section-copy">
+                  Every decision is recorded into a signed immutable chain so it can be checked later without relying on runtime assertions alone.
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Chain append</h3>
-              <p>
-                The record is appended to an immutable decision chain. Each record's hash includes
-                the previous record's hash, creating a tamper-evident linked structure. If any
-                record is modified or removed after the fact, the chain verification fails.
-              </p>
-              <p>
-                The chain is cryptographically signed with Ed25519 keys. An independent verifier
-                can validate the entire chain without access to the governance system that produced it.
-              </p>
-            </div>
+        <div class="panel">
+          <div class="record-head">
+            <span>decision-chain.jsonl</span>
+            <span class="badge badge-allow">ALLOW</span>
           </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Attestation</h3>
-              <p>
-                At any point, the system can generate an attestation artifact that summarizes
-                the governance activity: how many users, how many operations, which tool categories,
-                the license status, and a hash binding the attestation to the chain.
-              </p>
-              <div class="record-visual">
-                <div class="record-visual-header">
-                  <span>attestation.json</span>
-                  <span class="badge badge-signed">ATTESTATION</span>
-                </div>
-                <pre><code>{
-  <span class="json-key">"attestation_version"</span>: <span class="json-string">"1.0"</span>,
-  <span class="json-key">"unique_users"</span>:        <span class="json-number">5</span>,
-  <span class="json-key">"total_operations"</span>:    <span class="json-number">2104</span>,
-  <span class="json-key">"operations_by_category"</span>: {
-    <span class="json-key">"FS_READ"</span>:  <span class="json-number">612</span>,
-    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">489</span>,
-    <span class="json-key">"FS_LIST"</span>:  <span class="json-number">301</span>,
-    <span class="json-key">"MSG_SEND"</span>: <span class="json-number">187</span>,
-    <span class="json-key">"MSG_REPLY"</span>:<span class="json-number"> 142</span>
-  },
-  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
-  <span class="json-key">"organization_id"</span>:  <span class="json-string">"acme-engineering"</span>,
-  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
-  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:b4c2d5e6..."</span>
-}</code></pre>
-              </div>
-            </div>
+          <pre>{
+  "tool": "fs_write",
+  "capability_class": "FS_WRITE",
+  "policy_decision": "ALLOW",
+  "timestamp_utc": "2026-03-30T13:12:00Z",
+  "operator_intent": "update README",
+  "organization_id": "acme-engineering",
+  "record_hash": "sha256:0a1b2c3d4e5f...",
+  "prev_record_hash": "sha256:f0e1d2c3b4a5...",
+  "signature": "ed25519:8f9c2ab1..."
+}</pre>
+          <div class="record-note">
+            The record itself is part of the product surface. The point is not only to decide correctly in the moment, but to preserve checkable evidence of what happened.
           </div>
-
-          <div class="flow-step">
-            <div class="flow-step-content">
-              <h3>Proof packet</h3>
-              <p>
-                A proof packet bundles everything into a single verifiable deliverable: the decision
-                records, the policy that produced them, the attestation, and a manifest with
-                cryptographic hashes of every component. An external verifier can validate the
-                entire packet independently.
-              </p>
-              <p>
-                This is what you hand to an auditor, a customer, or a compliance review. It is
-                not a report you wrote. It is evidence your system produced.
-              </p>
-            </div>
-          </div>
-
         </div>
       </div>
     </section>
 
-    <!-- Example proof packets -->
     <section>
       <div class="container">
-        <h2 class="text-center">Example proof packets</h2>
-        <p class="text-center" style="margin: 0 auto var(--space-xl); max-width: 36em;">
-          Real attestation artifacts from three scenarios. These are examples of what
-          your Atested deployment produces.
+        <h2>What ALLOW and DENY actually mean</h2>
+        <p class="section-copy">
+          Atested does not just log actions after the fact. It evaluates governed actions before they proceed. ALLOW means the action met the active policy with the required proof, scope, or constraints. DENY means it did not, and the record shows what was missing.
         </p>
 
-        <div class="tab-group" style="margin: 0 auto var(--space-lg);">
-          <button class="tab-btn active" data-tab="personal">personal</button>
-          <button class="tab-btn" data-tab="trial">trial-to-licensed</button>
-          <button class="tab-btn" data-tab="team">team</button>
+        <div class="grid-2" style="margin-top: 1.5rem;">
+          <article class="card">
+            <div class="badge badge-allow" style="margin-bottom: 0.9rem;">ALLOW</div>
+            <h3>Examples of actions that proceed</h3>
+            <p class="section-copy">
+              A coding agent writes inside an approved project path using an allowed tool and the required execution context. An agent sends a message through an approved channel with the expected recipient scope and supporting context.
+            </p>
+          </article>
+
+          <article class="card">
+            <div class="badge badge-deny" style="margin-bottom: 0.9rem;">DENY</div>
+            <h3>Examples of actions that are stopped</h3>
+            <p class="section-copy">
+              An agent tries to edit files outside the approved workspace, touch production configuration without authority, or assert that tests passed without sufficient evidence to support the claim.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container grid-2">
+        <div>
+          <h2>Governance transparency</h2>
+          <p class="section-copy">
+            Atested governs every action that flows through it. It cannot force every action to flow through it, because AI tools also have native capabilities that operate outside any governance layer. That is a structural reality in open environments.
+          </p>
+          <p class="section-copy">
+            What Atested does is make that boundary visible and measurable. Governed operations produce full signed records. Ungoverned native operations can still be observed and counted through action hooks, so operators can see how much of their AI activity is actually under governance.
+          </p>
         </div>
 
-        <!-- Personal -->
-        <div class="tab-panel active" id="tab-personal">
-          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
-            <div>
-              <h4>Scenario</h4>
-              <p>
-                A single developer using Atested locally. After the 30-day trial, the system
-                generated an attestation showing one user and 347 operations. The recommended
-                tier: Personal (free).
-              </p>
+        <div class="panel">
+          <div class="record-head">
+            <span>transparency-summary.json</span>
+            <span class="badge badge-allow">72% governed</span>
+          </div>
+          <pre>{
+  "governed_operations": 1842,
+  "observed_native_operations": 716,
+  "transparency_ratio": "72%",
+  "observation_mode": "hook-reported",
+  "manager_view": "governed vs observed"
+}</pre>
+          <div class="record-note">
+            The goal is not pretending you start at 100 percent. The goal is knowing where you are, seeing what remains outside governance, and improving coverage deliberately.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container cards-3">
+        <article class="card">
+          <h3>Scoped approvals for opaque operations</h3>
+          <p class="section-copy">
+            Some governed code cannot produce the evidence Atested requires because it is opaque to inspection. When that code is mission-essential, an operator can grant a scoped approval pinned to the artifact hash, deployment context, and active policy version.
+          </p>
+        </article>
+
+        <article class="card">
+          <h3>Approvals are explicit and revocable</h3>
+          <p class="section-copy">
+            Change the approved artifact and the approval expires. Granting and revoking approvals are themselves recorded in the governance chain, so exceptions stay visible and auditable.
+          </p>
+        </article>
+
+        <article class="card">
+          <h3>Not just proof after the fact</h3>
+          <p class="section-copy">
+            Atested is not limited to preserving evidence. It can stop many unsupported or insufficiently evidenced actions before they become operational events.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="container grid-2">
+        <div>
+          <div class="eyebrow">Operator surface</div>
+          <h2>What the operator sees</h2>
+          <p class="section-copy">
+            Operators need a usable view of governance activity, not just raw records. This section is reserved for a static recreation of the Atested dashboard with demo data. It should show the live governance surface an operator uses to monitor activity, review outcomes, and understand transparency.
+          </p>
+          <p class="section-copy">
+            When the dashboard HTML is ready, it will slot into the content area here without changing the page structure around it.
+          </p>
+        </div>
+
+        <div class="demo-shell" style="padding: 0; min-height: auto; border-radius: 22px; overflow: hidden;">
+          <!-- Static Atested Dashboard demo with realistic sample data -->
+          <style>
+            .dash { font-family: Inter, system-ui, sans-serif; font-size: 0.82rem; color: #e4e6eb; }
+            .dash-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(15,20,30,0.6); }
+            .dash-tab { padding: 0.6rem 0.9rem; color: #8a95a5; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid transparent; }
+            .dash-tab.active { color: #e4e6eb; border-bottom-color: var(--accent); }
+            .dash-body { padding: 0.9rem; display: grid; gap: 0.7rem; }
+            .dash-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+            .dash-stat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 0.7rem; }
+            .dash-stat-val { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
+            .dash-stat-label { color: #8a95a5; font-size: 0.68rem; margin-top: 0.15rem; }
+            .dash-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+            .dash-table th { text-align: left; color: #8a95a5; font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; }
+            .dash-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+            .dash-badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; }
+            .dash-badge-allow { background: rgba(127,188,161,0.12); color: #b5e2cb; border: 1px solid rgba(127,188,161,0.2); }
+            .dash-badge-deny { background: rgba(215,164,164,0.12); color: #edc1c1; border: 1px solid rgba(215,164,164,0.2); }
+            .dash-badge-ok { background: rgba(127,188,161,0.12); color: #b5e2cb; border: 1px solid rgba(127,188,161,0.2); }
+            .dash-section-label { color: #8a95a5; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+            .dash-bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; margin-top: 0.4rem; }
+            .dash-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+          </style>
+          <div class="dash">
+            <div class="dash-tabs">
+              <div class="dash-tab active">Overview</div>
+              <div class="dash-tab">Activity</div>
+              <div class="dash-tab">Approvals</div>
+              <div class="dash-tab">Audit</div>
+              <div class="dash-tab">Health</div>
             </div>
-            <div class="record-visual">
-              <div class="record-visual-header">
-                <span>attestation.json</span>
-                <span class="badge badge-signed">PERSONAL</span>
+            <div class="dash-body">
+              <div class="dash-row">
+                <div class="dash-stat">
+                  <div class="dash-stat-val">31</div>
+                  <div class="dash-stat-label">Chain records</div>
+                </div>
+                <div class="dash-stat">
+                  <div class="dash-stat-val">24 / 7</div>
+                  <div class="dash-stat-label">ALLOW / DENY</div>
+                </div>
+                <div class="dash-stat">
+                  <div class="dash-stat-val">75%</div>
+                  <div class="dash-stat-label">Transparency</div>
+                  <div class="dash-bar-track"><div class="dash-bar-fill" style="width: 75%;"></div></div>
+                </div>
+                <div class="dash-stat">
+                  <div class="dash-stat-val" style="color: var(--success);">Healthy</div>
+                  <div class="dash-stat-label">Chain integrity</div>
+                </div>
               </div>
-              <pre><code>{
-  <span class="json-key">"unique_users"</span>:     <span class="json-number">1</span>,
-  <span class="json-key">"total_operations"</span>: <span class="json-number">347</span>,
-  <span class="json-key">"operations_by_category"</span>: {
-    <span class="json-key">"FS_READ"</span>:  <span class="json-number">142</span>,
-    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">89</span>,
-    <span class="json-key">"FS_LIST"</span>:  <span class="json-number">78</span>,
-    <span class="json-key">"FS_DELETE"</span>:<span class="json-number"> 15</span>
-  },
-  <span class="json-key">"license_status"</span>:   <span class="json-string">"personal"</span>,
-  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"personal"</span>,
-  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:a1b2c3d4..."</span>
-}</code></pre>
+
+              <div class="dash-row" style="grid-template-columns: 1fr 1fr;">
+                <div class="dash-stat">
+                  <div class="dash-stat-val">3</div>
+                  <div class="dash-stat-label">Unique users</div>
+                  <div style="margin-top: 0.3rem; color: #8a95a5; font-size: 0.68rem;">
+                    bearer:e1f2a3b4 (14) · bearer:c8d9e0f1 (11) · bearer:a2b3c4d5 (6)
+                  </div>
+                </div>
+                <div class="dash-stat">
+                  <div class="dash-stat-val">2</div>
+                  <div class="dash-stat-label">Active approvals</div>
+                  <div style="margin-top: 0.3rem; color: #8a95a5; font-size: 0.68rem;">
+                    deploy-script.sh (sha256:4f2a…) · ci-runner.py (sha256:8b1c…)
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="dash-section-label">Recent activity</div>
+                <table class="dash-table">
+                  <thead>
+                    <tr><th>Time</th><th>Tool</th><th>User</th><th>Decision</th><th>Intent</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>13:42</td><td>fs_write</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>update deployment config</td></tr>
+                    <tr><td>13:38</td><td>fs_write</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>edit /etc/hosts</td></tr>
+                    <tr><td>13:35</td><td>fs_read</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>read project README</td></tr>
+                    <tr><td>13:31</td><td>msg_send</td><td>bearer:a2b3c4d5</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>notify team channel</td></tr>
+                    <tr><td>13:28</td><td>fs_delete</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>remove .env.production</td></tr>
+                    <tr><td>13:24</td><td>fs_write</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>update test fixtures</td></tr>
+                    <tr><td>13:19</td><td>capabilities_execute</td><td>bearer:a2b3c4d5</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>run lint check</td></tr>
+                    <tr><td>13:15</td><td>fs_write</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>write outside workspace</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- Trial to licensed -->
-        <div class="tab-panel" id="tab-trial">
-          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
-            <div>
-              <h4>Scenario</h4>
-              <p>
-                A startup team of 3 developers. On day 25 of the trial, they activated a
-                Team license. The decision chain shows the exact moment the license status
-                transitioned from <code>trial</code> to <code>licensed</code>, with the
-                organization ID populated.
-              </p>
-            </div>
-            <div class="record-visual">
-              <div class="record-visual-header">
-                <span>attestation.json</span>
-                <span class="badge badge-signed">TEAM</span>
-              </div>
-              <pre><code>{
-  <span class="json-key">"unique_users"</span>:     <span class="json-number">3</span>,
-  <span class="json-key">"total_operations"</span>: <span class="json-number">512</span>,
-  <span class="json-key">"license_status"</span>:   <span class="json-string">"licensed"</span>,
-  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
-  <span class="json-key">"organization_id"</span>:  <span class="json-string">"startup-co"</span>,
-  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
-  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:e2f3a4b5..."</span>
-}</code></pre>
-            </div>
-          </div>
+    <section>
+      <div class="container callout">
+        <h2>Why this matters operationally</h2>
+        <p class="section-copy">
+          Without a governance layer, AI operations often become reconstruction work after something goes wrong. With Atested, many unsupported actions can be denied before they land, and the resulting record gives operators and managers a usable account of what happened instead of a black box and a pile of logs.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/pricing.html">See pricing</a>
+          <a class="btn btn-secondary" href="/implementation.html">Read implementation guidance</a>
+          <a class="btn btn-secondary" href="https://github.com/atested/governance-layer" target="_blank" rel="noopener">View GitHub</a>
         </div>
-
-        <!-- Team -->
-        <div class="tab-panel" id="tab-team">
-          <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
-            <div>
-              <h4>Scenario</h4>
-              <p>
-                An established engineering team of 5 developers sharing a governed HTTP
-                deployment. 2,104 operations across filesystem, messaging, and governance
-                categories. The attestation confirms the Team tier matches actual usage.
-              </p>
-            </div>
-            <div class="record-visual">
-              <div class="record-visual-header">
-                <span>attestation.json</span>
-                <span class="badge badge-signed">TEAM</span>
-              </div>
-              <pre><code>{
-  <span class="json-key">"unique_users"</span>:     <span class="json-number">5</span>,
-  <span class="json-key">"total_operations"</span>: <span class="json-number">2104</span>,
-  <span class="json-key">"operations_by_category"</span>: {
-    <span class="json-key">"FS_READ"</span>:  <span class="json-number">612</span>,
-    <span class="json-key">"FS_WRITE"</span>: <span class="json-number">489</span>,
-    <span class="json-key">"MSG_SEND"</span>: <span class="json-number">187</span>,
-    <span class="json-key">"MSG_REPLY"</span>:<span class="json-number"> 142</span>
-  },
-  <span class="json-key">"license_tier"</span>:     <span class="json-string">"team"</span>,
-  <span class="json-key">"organization_id"</span>:  <span class="json-string">"acme-engineering"</span>,
-  <span class="json-key">"recommended_tier"</span>: <span class="json-string">"team"</span>,
-  <span class="json-key">"artifact_hash"</span>:    <span class="json-string">"sha256:b4c2d5e6..."</span>
-}</code></pre>
-            </div>
-          </div>
-        </div>
-
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="container">
-      <div class="footer-inner">
-        <span class="footer-copy">&copy; 2026 Atested</span>
-        <ul class="footer-links">
-          <li><a href="terms.html">Terms</a></li>
-          <li><a href="pricing.html">Pricing</a></li>
-          <li><a href="https://github.com/GregKeeter/governance-layer" target="_blank" rel="noopener">GitHub</a></li>
-        </ul>
-      </div>
-    </div>
-  </footer>
+  <div id="site-footer"></div>
 
-  <script src="assets/js/nav.js"></script>
-  <script src="assets/js/tabs.js"></script>
+  <script defer src="/assets/js/site.js"></script>
 </body>
 </html>
