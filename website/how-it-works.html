@@ -183,105 +183,189 @@
     </section>
 
     <section>
-      <div class="container grid-2">
-        <div>
+      <div class="container">
+        <div style="text-align: center; margin-bottom: 2rem;">
           <div class="eyebrow">Operator surface</div>
           <h2>What the operator sees</h2>
-          <p class="section-copy">
-            Operators need a usable view of governance activity, not just raw records. This section is reserved for a static recreation of the Atested dashboard with demo data. It should show the live governance surface an operator uses to monitor activity, review outcomes, and understand transparency.
-          </p>
-          <p class="section-copy">
-            When the dashboard HTML is ready, it will slot into the content area here without changing the page structure around it.
+          <p class="section-copy" style="margin: 0.9rem auto 0; text-align: center;">
+            The Atested Dashboard gives operators a live view of governance activity, decisions, approvals, audit results, and system health — all backed by the same signed chain the governance engine produces.
           </p>
         </div>
 
-        <div class="demo-shell" style="padding: 0; min-height: auto; border-radius: 22px; overflow: hidden;">
-          <!-- Static Atested Dashboard demo with realistic sample data -->
+        <!-- Full-width dashboard demo -->
+        <div style="border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 60px rgba(0,0,0,0.35);">
           <style>
-            .dash { font-family: Inter, system-ui, sans-serif; font-size: 0.82rem; color: #e4e6eb; }
-            .dash-tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(15,20,30,0.6); }
-            .dash-tab { padding: 0.6rem 0.9rem; color: #8a95a5; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 2px solid transparent; }
-            .dash-tab.active { color: #e4e6eb; border-bottom-color: var(--accent); }
-            .dash-body { padding: 0.9rem; display: grid; gap: 0.7rem; }
-            .dash-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
-            .dash-stat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 0.7rem; }
-            .dash-stat-val { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
-            .dash-stat-label { color: #8a95a5; font-size: 0.68rem; margin-top: 0.15rem; }
-            .dash-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
-            .dash-table th { text-align: left; color: #8a95a5; font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; }
-            .dash-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
-            .dash-badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; }
-            .dash-badge-allow { background: rgba(127,188,161,0.12); color: #b5e2cb; border: 1px solid rgba(127,188,161,0.2); }
-            .dash-badge-deny { background: rgba(215,164,164,0.12); color: #edc1c1; border: 1px solid rgba(215,164,164,0.2); }
-            .dash-badge-ok { background: rgba(127,188,161,0.12); color: #b5e2cb; border: 1px solid rgba(127,188,161,0.2); }
-            .dash-section-label { color: #8a95a5; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
-            .dash-bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; margin-top: 0.4rem; }
-            .dash-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+            .dd { --dd-bg: #1a1d23; --dd-surface: #22262e; --dd-raised: #2a2f38; --dd-ink: #e4e6eb; --dd-muted: #8b919a; --dd-line: rgba(255,255,255,0.08); --dd-accent: #5b8af5; --dd-ok: #4ade80; --dd-warn: #f59e42; --dd-danger: #ef4444; font-family: "Inter", system-ui, sans-serif; background: var(--dd-bg); color: var(--dd-ink); font-size: 0.85rem; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+            .dd code, .dd pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+            .dd-topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: var(--dd-surface); border-bottom: 1px solid var(--dd-line); }
+            .dd-brand { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em; }
+            .dd-brand-sub { color: var(--dd-muted); font-size: 0.78rem; margin-left: 0.5rem; }
+            .dd-demo-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.7rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: rgba(245,158,66,0.12); color: #f5c478; border: 1px solid rgba(245,158,66,0.25); }
+            .dd-nav { display: flex; gap: 4px; padding: 8px 20px 0; background: var(--dd-surface); border-bottom: 1px solid var(--dd-line); }
+            .dd-nav-tab { padding: 10px 14px; border-radius: 8px 8px 0 0; font-size: 0.82rem; font-weight: 500; color: var(--dd-muted); border: 1px solid transparent; border-bottom: none; cursor: default; }
+            .dd-nav-tab.active { background: rgba(91,138,245,0.12); border-color: rgba(91,138,245,0.25); color: var(--dd-accent); }
+            .dd-page { padding: 16px 20px 20px; display: grid; gap: 14px; }
+            .dd-explainer { color: var(--dd-muted); font-size: 0.84rem; line-height: 1.6; max-width: 72ch; margin: 0 0 4px; }
+            .dd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+            .dd-card { background: var(--dd-surface); border: 1px solid var(--dd-line); border-radius: 10px; padding: 14px 16px; }
+            .dd-card-raised { background: var(--dd-raised); }
+            .dd-val { display: block; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+            .dd-label { display: block; color: var(--dd-muted); font-size: 0.72rem; margin-top: 2px; }
+            .dd-section-head { font-size: 0.92rem; font-weight: 600; margin: 0 0 8px; }
+            .dd-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+            .dd-table th { text-align: left; color: var(--dd-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--dd-line); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+            .dd-table td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+            .dd-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+            .dd-pill { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.03em; }
+            .dd-pill-allow { background: rgba(74,222,128,0.10); color: var(--dd-ok); border: 1px solid rgba(74,222,128,0.18); }
+            .dd-pill-deny { background: rgba(239,68,68,0.10); color: #f87171; border: 1px solid rgba(239,68,68,0.18); }
+            .dd-pill-ok { background: rgba(74,222,128,0.10); color: var(--dd-ok); border: 1px solid rgba(74,222,128,0.18); }
+            .dd-bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+            .dd-bar-fill { height: 100%; border-radius: 999px; }
+            .dd-health-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .dd-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 600; background: rgba(255,255,255,0.04); color: var(--dd-muted); border: 1px solid var(--dd-line); font-family: "JetBrains Mono", monospace; }
           </style>
-          <div class="dash">
-            <div class="dash-tabs">
-              <div class="dash-tab active">Overview</div>
-              <div class="dash-tab">Activity</div>
-              <div class="dash-tab">Approvals</div>
-              <div class="dash-tab">Audit</div>
-              <div class="dash-tab">Health</div>
-            </div>
-            <div class="dash-body">
-              <div class="dash-row">
-                <div class="dash-stat">
-                  <div class="dash-stat-val">31</div>
-                  <div class="dash-stat-label">Chain records</div>
-                </div>
-                <div class="dash-stat">
-                  <div class="dash-stat-val">24 / 7</div>
-                  <div class="dash-stat-label">ALLOW / DENY</div>
-                </div>
-                <div class="dash-stat">
-                  <div class="dash-stat-val">75%</div>
-                  <div class="dash-stat-label">Transparency</div>
-                  <div class="dash-bar-track"><div class="dash-bar-fill" style="width: 75%;"></div></div>
-                </div>
-                <div class="dash-stat">
-                  <div class="dash-stat-val" style="color: var(--success);">Healthy</div>
-                  <div class="dash-stat-label">Chain integrity</div>
-                </div>
-              </div>
 
-              <div class="dash-row" style="grid-template-columns: 1fr 1fr;">
-                <div class="dash-stat">
-                  <div class="dash-stat-val">3</div>
-                  <div class="dash-stat-label">Unique users</div>
-                  <div style="margin-top: 0.3rem; color: #8a95a5; font-size: 0.68rem;">
-                    bearer:e1f2a3b4 (14) · bearer:c8d9e0f1 (11) · bearer:a2b3c4d5 (6)
-                  </div>
-                </div>
-                <div class="dash-stat">
-                  <div class="dash-stat-val">2</div>
-                  <div class="dash-stat-label">Active approvals</div>
-                  <div style="margin-top: 0.3rem; color: #8a95a5; font-size: 0.68rem;">
-                    deploy-script.sh (sha256:4f2a…) · ci-runner.py (sha256:8b1c…)
-                  </div>
-                </div>
-              </div>
-
+          <div class="dd">
+            <!-- Top bar -->
+            <div class="dd-topbar">
               <div>
-                <div class="dash-section-label">Recent activity</div>
-                <table class="dash-table">
+                <span class="dd-brand">Atested Dashboard</span>
+                <span class="dd-brand-sub">Governance overview</span>
+              </div>
+              <div class="dd-demo-badge">Demo &mdash; sample data</div>
+            </div>
+
+            <!-- Navigation tabs -->
+            <div class="dd-nav">
+              <div class="dd-nav-tab active">Overview</div>
+              <div class="dd-nav-tab">Activity</div>
+              <div class="dd-nav-tab">Approvals</div>
+              <div class="dd-nav-tab">Audit</div>
+              <div class="dd-nav-tab">Reports</div>
+              <div class="dd-nav-tab">Health</div>
+            </div>
+
+            <!-- Overview page -->
+            <div class="dd-page">
+              <p class="dd-explainer">
+                This dashboard shows governance activity for your organization. Every governed action produces a signed record in the decision chain. The metrics below reflect the current state of the governance surface.
+              </p>
+
+              <!-- Status cards -->
+              <div class="dd-grid">
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">47</span>
+                  <span class="dd-label">Chain Events</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val" style="color: var(--dd-ok);">Healthy</span>
+                  <span class="dd-label">Chain Integrity</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">2</span>
+                  <span class="dd-label">Active Approvals</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">3</span>
+                  <span class="dd-label">Unique Users</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">36 / 11</span>
+                  <span class="dd-label">ALLOW / DENY</span>
+                </div>
+                <div class="dd-card dd-card-raised">
+                  <span class="dd-val">72%</span>
+                  <span class="dd-label">Transparency</span>
+                  <div class="dd-bar-track"><div class="dd-bar-fill" style="width: 72%; background: var(--dd-accent);"></div></div>
+                  <span style="font-size: 0.68rem; color: var(--dd-muted); margin-top: 4px; display: block;">47 governed / 18 ungoverned observed</span>
+                </div>
+              </div>
+
+              <!-- Users -->
+              <div class="dd-card">
+                <div class="dd-section-head">Users</div>
+                <div style="display: flex; gap: 1.5rem; font-size: 0.82rem;">
+                  <div><span class="dd-tag">bearer:e1f2a3b4</span> <span style="color: var(--dd-muted); margin-left: 4px;">21 actions</span></div>
+                  <div><span class="dd-tag">bearer:c8d9e0f1</span> <span style="color: var(--dd-muted); margin-left: 4px;">16 actions</span></div>
+                  <div><span class="dd-tag">bearer:a2b3c4d5</span> <span style="color: var(--dd-muted); margin-left: 4px;">10 actions</span></div>
+                </div>
+              </div>
+
+              <!-- Active Approvals -->
+              <div class="dd-card">
+                <div class="dd-section-head">Active Approvals</div>
+                <table class="dd-table">
                   <thead>
-                    <tr><th>Time</th><th>Tool</th><th>User</th><th>Decision</th><th>Intent</th></tr>
+                    <tr><th>Artifact</th><th>Hash</th><th>Granted</th><th>Status</th></tr>
                   </thead>
                   <tbody>
-                    <tr><td>13:42</td><td>fs_write</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>update deployment config</td></tr>
-                    <tr><td>13:38</td><td>fs_write</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>edit /etc/hosts</td></tr>
-                    <tr><td>13:35</td><td>fs_read</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>read project README</td></tr>
-                    <tr><td>13:31</td><td>msg_send</td><td>bearer:a2b3c4d5</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>notify team channel</td></tr>
-                    <tr><td>13:28</td><td>fs_delete</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>remove .env.production</td></tr>
-                    <tr><td>13:24</td><td>fs_write</td><td>bearer:e1f2a3b4</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>update test fixtures</td></tr>
-                    <tr><td>13:19</td><td>capabilities_execute</td><td>bearer:a2b3c4d5</td><td><span class="dash-badge dash-badge-allow">ALLOW</span></td><td>run lint check</td></tr>
-                    <tr><td>13:15</td><td>fs_write</td><td>bearer:c8d9e0f1</td><td><span class="dash-badge dash-badge-deny">DENY</span></td><td>write outside workspace</td></tr>
+                    <tr>
+                      <td>deploy-script.sh</td>
+                      <td><code style="font-size: 0.72rem; color: var(--dd-muted);">sha256:4f2a8b1c…</code></td>
+                      <td>Mar 28, 2:14 PM</td>
+                      <td><span class="dd-pill dd-pill-ok">Active</span></td>
+                    </tr>
+                    <tr>
+                      <td>ci-runner.py</td>
+                      <td><code style="font-size: 0.72rem; color: var(--dd-muted);">sha256:8b1ce3d7…</code></td>
+                      <td>Mar 29, 9:45 AM</td>
+                      <td><span class="dd-pill dd-pill-ok">Active</span></td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
+
+              <!-- Recent Activity -->
+              <div class="dd-card">
+                <div class="dd-section-head">Recent Activity</div>
+                <table class="dd-table">
+                  <thead>
+                    <tr><th>Time</th><th>Category</th><th>Tool</th><th>User</th><th>Decision</th><th>Intent</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Mar 30, 1:42 PM</td><td>Governed Action</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>update deployment config</td></tr>
+                    <tr><td>Mar 30, 1:38 PM</td><td>Governed Action</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>edit /etc/hosts</td></tr>
+                    <tr><td>Mar 30, 1:35 PM</td><td>Governed Action</td><td><code>fs_read</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>read project README</td></tr>
+                    <tr><td>Mar 30, 1:31 PM</td><td>Governed Action</td><td><code>msg_send</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>notify team channel</td></tr>
+                    <tr><td>Mar 30, 1:28 PM</td><td>Governed Action</td><td><code>fs_delete</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>remove .env.production</td></tr>
+                    <tr><td>Mar 30, 1:24 PM</td><td>Governed Action</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>update test fixtures</td></tr>
+                    <tr><td>Mar 30, 1:19 PM</td><td>Governed Action</td><td><code>capabilities_execute</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>run lint check</td></tr>
+                    <tr><td>Mar 30, 1:15 PM</td><td>Governed Action</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>write outside workspace</td></tr>
+                    <tr><td>Mar 30, 1:11 PM</td><td>Governed Action</td><td><code>fs_read</code></td><td><span class="dd-tag">bearer:a2b3c4d5</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>inspect build output</td></tr>
+                    <tr><td>Mar 30, 1:08 PM</td><td>Governed Action</td><td><code>fs_write</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-deny">DENY</span></td><td>modify CI pipeline</td></tr>
+                    <tr><td>Mar 30, 1:04 PM</td><td>Governed Action</td><td><code>governance_status</code></td><td><span class="dd-tag">bearer:e1f2a3b4</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>check governance status</td></tr>
+                    <tr><td>Mar 30, 12:58 PM</td><td>Governed Action</td><td><code>fs_list</code></td><td><span class="dd-tag">bearer:c8d9e0f1</span></td><td><span class="dd-pill dd-pill-allow">ALLOW</span></td><td>list project directory</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- System Health -->
+              <div class="dd-card">
+                <div class="dd-section-head">System Health</div>
+                <div class="dd-health-row">
+                  <div class="dd-card dd-card-raised">
+                    <span class="dd-val" style="color: var(--dd-ok); font-size: 1.1rem;">Healthy</span>
+                    <span class="dd-label">Overall status &mdash; 0 alerts</span>
+                  </div>
+                  <div class="dd-card dd-card-raised">
+                    <span class="dd-val" style="font-size: 1.1rem;">47</span>
+                    <span class="dd-label">Chain records &mdash; verified, no breaks</span>
+                  </div>
+                </div>
+                <div class="dd-health-row" style="margin-top: 10px;">
+                  <div class="dd-card dd-card-raised">
+                    <span style="font-size: 0.82rem; font-weight: 600;">DENY Rate</span>
+                    <span class="dd-label" style="margin-top: 4px;">23.4% (11 of 47) &mdash; within normal range</span>
+                    <div class="dd-bar-track"><div class="dd-bar-fill" style="width: 23.4%; background: var(--dd-warn);"></div></div>
+                  </div>
+                  <div class="dd-card dd-card-raised">
+                    <span style="font-size: 0.82rem; font-weight: 600;">Storage</span>
+                    <span class="dd-label" style="margin-top: 4px;">Chain: 12.4 KB &middot; Stability log: 1.8 KB &middot; Records: 84.2 KB</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
