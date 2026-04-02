@@ -149,6 +149,96 @@ Call `capabilities_list` or `governance_status` from your client to see the live
 
 ---
 
+## Configuring your governance boundary
+
+The governance boundary — what your AI tools are allowed to do — is controlled by a single file: `capabilities/capability-registry.json`. This is the most security-critical configuration file in Atested.
+
+### What it controls
+
+Each entry in the `tools` array defines one governed tool:
+
+| Field | What it does |
+|---|---|
+| `allow_base_dirs` | Directories the tool can access. Paths outside this list are denied. |
+| `deny_hidden_paths` | Block access to dot-prefixed paths (`.git/`, `.env`, etc.) |
+| `deny_overwrite_by_default` | Require explicit `overwrite: true` for writes to existing files |
+| `deny_executable_outputs` | Block creation of executable files |
+| `caps` | Hard limits (max bytes, max entries, etc.) |
+
+### Out-of-the-box defaults
+
+Without changing anything, Atested:
+- Limits all tools to the project repository and runtime directory
+- Blocks hidden paths, overwrites, and executable outputs
+- Caps file reads at 64KB and directory listings at 500 entries
+- Blocks recursive deletes and cross-root moves
+
+### Adding a directory to scope
+
+To let `fs_write` write to `/home/deploy/staging`, edit the registry:
+
+```json
+{
+  "tool": "FS_WRITE",
+  "allow_base_dirs": [
+    "__GOV_CANONICAL_REPO_PATH__",
+    "__GOV_RUNTIME_PATH__",
+    "/home/deploy/staging"
+  ]
+}
+```
+
+The placeholders `__GOV_CANONICAL_REPO_PATH__` and `__GOV_RUNTIME_PATH__` resolve at runtime from your environment variables.
+
+### Adjusting per-tool constraints
+
+To allow recursive deletes (use with caution):
+
+```json
+{
+  "tool": "FS_DELETE",
+  "caps": {
+    "recursive_allowed": true
+  }
+}
+```
+
+To increase the read size limit:
+
+```json
+{
+  "tool": "FS_READ",
+  "caps": {
+    "max_bytes_default": 8192,
+    "max_bytes_hard": 131072
+  }
+}
+```
+
+### Applying changes
+
+After editing the registry, use the governed reload process:
+
+```
+1. registry_check    — Validate your changes (catches errors before they take effect)
+2. registry_reload   — Apply the new configuration through governance
+3. registry_status   — Confirm the new hash is active
+```
+
+Do not restart the server to apply registry changes — use `registry_reload` so the change is recorded as a governance event with the old and new configuration hashes.
+
+### Integrity protections
+
+The registry is protected with the same rigor as the governance chain:
+
+- **Startup verification**: SHA-256 hash computed and stored; schema validated; file permissions checked (0600 enforced)
+- **Per-call verification**: Every governed tool call verifies the registry hasn't changed — fail closed on mismatch
+- **Tamper detection**: Modifications without `registry_reload` are logged as SUSPICIOUS events in the stability log
+- **Configuration change recording**: Every reload records old hash → new hash as a governance event
+- **Backup**: A copy is stored in `gov_runtime/registry_backup.json` at startup
+
+---
+
 ## Troubleshooting
 
 ### DENY is correct behavior

@@ -41,6 +41,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "opaque_invocation_decision",
     "usage_attestation",
     "ungoverned_operation_observed",
+    "registry_config_change",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

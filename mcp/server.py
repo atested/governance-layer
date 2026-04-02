@@ -43,6 +43,7 @@ from tool_event_link_store import upsert_receipt_tool_event_links
 from tool_event_link_store import get_receipts_for_tool_event, get_tool_events_for_receipt
 from capabilities import build_registry
 from licensing import resolve_posture, activate_license, trial_days_remaining, load_license
+from registry_integrity import RegistryIntegrity
 from storage_contract import describe_storage_contract, runtime_root
 
 REPO = Path(__file__).resolve().parents[1]
@@ -555,6 +556,17 @@ def _cap_container(reg: dict) -> dict:
 _CAP_REG = _load_cap_registry()
 _CAPS = _cap_container(_CAP_REG)
 
+# ---------------------------------------------------------------------------
+# Registry integrity protection
+# ---------------------------------------------------------------------------
+_REGISTRY_INTEGRITY = RegistryIntegrity(CAP_REGISTRY_PATH, RUNTIME)
+_REGISTRY_INIT_RESULT = _REGISTRY_INTEGRITY.initialize(
+    enforce_permissions=True,
+)
+# Print startup warnings (visible in server logs)
+for _w in _REGISTRY_INIT_RESULT.get("warnings", []):
+    print(f"[registry-integrity] {_w}", file=sys.stderr)
+
 def get_capability(capability: str) -> dict:
     if capability not in _CAPS:
         raise KeyError(f"Unknown capability: {capability}")
@@ -1029,6 +1041,10 @@ def governed_tool(
     Returns:
         Dict with policy_decision, policy_reasons, decision_record, and optional action results.
     """
+    # Registry integrity: verify the configuration file hasn't been tampered with.
+    # Fail closed if the registry was modified without a governed reload.
+    _REGISTRY_INTEGRITY.verify_or_fail()
+
     req_id = str(uuid.uuid4())
     governed_family = _governed_family()
     verification_state = check_verification_state(governed_family, _verification_tracker())
@@ -1441,6 +1457,85 @@ def license_activate(license_key: str, organization_id: str = "") -> Dict[str, A
     """Activate a license key. Memorializes the activation as a governance record."""
     result = activate_license(RUNTIME, license_key, organization_id)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Registry integrity tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def registry_status() -> Dict[str, Any]:
+    """Report current capability registry integrity status.
+
+    Returns the registry hash, last verification time, reload count,
+    and whether the current file matches the active configuration.
+    """
+    status = _REGISTRY_INTEGRITY.status()
+    # Also check if the file currently matches
+    try:
+        from registry_integrity import _sha256_file
+        file_hash = _sha256_file(CAP_REGISTRY_PATH)
+        status["file_matches_active"] = file_hash == status["current_hash"]
+        status["file_hash"] = file_hash
+    except OSError:
+        status["file_matches_active"] = None
+        status["file_hash"] = None
+    return status
+
+
+@mcp.tool()
+def registry_reload() -> Dict[str, Any]:
+    """Reload the capability registry through a governed process.
+
+    Validates the file is well-formed JSON with a valid schema before
+    accepting changes. Records the configuration change (old hash → new hash)
+    as a governance event. If the file is malformed or fails validation,
+    the previous configuration remains in effect — fail closed.
+    """
+    global _CAP_REG, _CAPS
+    result = _REGISTRY_INTEGRITY.reload()
+
+    # Record the configuration change as a governance event
+    identity = _current_user_identity.get(None)
+    payload = {
+        "governed_family": _governed_family(),
+        "deployment_context": _deployment_context(),
+        "policy_version": _policy_version(),
+        "old_registry_hash": result["old_hash"],
+        "new_registry_hash": result["new_hash"],
+        "changed": result["changed"],
+        "tool_count": result["tool_count"],
+    }
+    if identity:
+        payload["operator_identity"] = identity
+
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            "registry_config_change",
+            payload,
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        _append_non_action_event(event)
+        _verify_chain()
+
+    # Reload the in-memory registry used by server.py
+    _CAP_REG = _load_cap_registry()
+    _CAPS = _cap_container(_CAP_REG)
+
+    result["governance_event_id"] = event.get("event_id")
+    return result
+
+
+@mcp.tool()
+def registry_check() -> Dict[str, Any]:
+    """Validate the current capability registry file without reloading.
+
+    Use this to verify your configuration is valid before calling
+    registry_reload. Reports whether the file is well-formed JSON,
+    passes schema validation, and what tools it defines.
+    """
+    return _REGISTRY_INTEGRITY.check()
 
 
 @mcp.tool()
