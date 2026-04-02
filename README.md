@@ -1,6 +1,6 @@
 # Atested
 
-Governance infrastructure for AI operations. Every action your AI agents take is evaluated against policy, signed into an immutable record, and available as auditable proof.
+Governance infrastructure for AI operations. Atested evaluates actions against verifiable conditions — the same logic a well-informed engineer would apply — before your AI agents execute them. Every decision is signed into an immutable record and available as auditable proof.
 
 **Website**: [atested.com](https://atested.com) — pricing, documentation, and the business case for governance.
 
@@ -12,11 +12,11 @@ Governance infrastructure for AI operations. Every action your AI agents take is
 
 Atested is a policy enforcement layer for AI tool execution. It sits between your AI agents and the actions they take, evaluating every action against a capability registry and producing a tamper-evident audit record.
 
-- **Policy evaluation**: Every tool call is evaluated against your policy before execution. ALLOW or DENY.
+- **Deterministic evaluation**: Governance decisions are deterministic wherever possible — given the same action, scope, and evidence, the same decision is produced every time. Where a decision cannot be made deterministically, the system marks it explicitly as requiring judgment rather than guessing.
 - **Signed records**: Every decision is cryptographically signed (Ed25519) into an immutable hash chain.
 - **Proof packets**: Generate verifiable attestation artifacts for any audit or review.
 
-The system exposes 46 governed tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP).
+The system exposes 55 governed tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP).
 
 ---
 
@@ -53,18 +53,30 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full guide.
 
 ---
 
-## Governed tools
+## Governed tools (55)
 
-| Category | Tools | Purpose |
-|---|---|---|
-| **Filesystem** (6) | `fs_read`, `fs_write`, `fs_list`, `fs_mkdir`, `fs_move`, `fs_delete` | Policy-governed file operations |
-| **Messaging** (2) | `msg_send`, `msg_reply` | Governed message dispatch |
-| **Capabilities** (16) | `capabilities_list`, `capabilities_execute`, `capabilities_receipt`, `capabilities_replay_check`, ... | Capability registry, execution, attestation |
-| **Tool catalog** (12) | `capabilities_tool_register`, `capabilities_tool_get`, `capabilities_tool_catalog_*`, ... | Tool registration, event tracking, bundle export |
-| **Governance** (4) | `governance_status`, `governance_approvals`, `governance_verification`, `governance_activity` | System status, approval state, audit |
-| **Surface management** (6) | `approve_artifact`, `revoke_artifact`, `certify_surface`, `recertify_surface`, `report_drift`, `run_probe_and_apply` | Artifact approval, surface certification |
+| Category | Count | Tools | Purpose |
+|---|---|---|---|
+| **Filesystem** | 6 | `fs_read`, `fs_write`, `fs_list`, `fs_mkdir`, `fs_move`, `fs_delete` | Policy-governed file operations |
+| **Messaging** | 2 | `msg_send`, `msg_reply` | Governed message dispatch |
+| **Capabilities** | 16 | `capabilities_list`, `capabilities_execute`, `capabilities_receipt`, `capabilities_replay_check`, ... | Capability registry, execution, attestation |
+| **Tool catalog** | 12 | `capabilities_tool_register`, `capabilities_tool_get`, `capabilities_tool_catalog_*`, ... | Tool registration, event tracking, bundle export |
+| **Governance** | 6 | `governance_status`, `governance_approvals`, `governance_verification`, `governance_activity`, `governance_user_report`, `atested_dashboard` | System status, approval state, audit |
+| **Audit** | 3 | `audit_query`, `audit_record_detail`, `audit_report` | Chain query, record inspection, reporting |
+| **Surface management** | 6 | `approve_artifact`, `revoke_artifact`, `certify_surface`, `recertify_surface`, `report_drift`, `run_probe_and_apply` | Artifact approval, surface certification |
+| **Licensing & health** | 4 | `license_status`, `license_activate`, `usage_attestation`, `system_health` | License management, health monitoring |
 
 Every tool call produces a policy decision record appended to a tamper-evident decision chain.
+
+## Compatibility
+
+**MCP clients (works now):** Claude Code, Cursor, Cline, Windsurf, Codex — any tool that supports custom MCP servers.
+
+**LLM providers:** Any model behind those clients — Claude, GPT, DeepSeek, Kimi, local models. The governance layer sits between the client and the tools, regardless of which model powers the client.
+
+**OpenClaw (beta):** Via the [Atested skill](https://clawhub.com/skills/atested) on ClawHub.
+
+**Does NOT work:** ChatGPT (no custom MCP support), Claude.ai chat (custom MCP connector has known platform issues).
 
 ---
 

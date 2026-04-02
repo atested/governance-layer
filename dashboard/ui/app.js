@@ -156,9 +156,8 @@ function globalNav(currentPath) {
       ${tabs.map(t => {
         const isActive = currentPath === t.path;
         const cls = isActive ? "active" : "";
-        const tipAttr = isActive ? ` title="${t.tip}"` : "";
-        return `<a class="${cls}"${tipAttr}
-           href="${navHref(t.path, { page: null, record_id: null })}">${t.label}</a>`;
+        return `<a class="${cls}"
+           href="${navHref(t.path, { page: null, record_id: null })}"><span class="tab-tip-wrap">${t.label}<span class="tab-tip-text">${escapeHtml(t.tip)}</span></span></a>`;
       }).join("")}
     </nav>
   `;
@@ -226,7 +225,7 @@ async function renderOverview() {
           <span class="status-value">${status.opacity_posture.opaque_count}</span>
         </div>
         <div class="status-card denied-highlight">
-          <span class="eyebrow">${tip("Actions Denied", "Actions that were evaluated and denied before execution because required conditions were not met. This is governance working as intended — preventing unsupported actions before they land.")}</span>
+          <span class="eyebrow">${tip("Actions Denied Before Execution", "Every DENY is a prevented action — stopped before it could execute because required conditions were not met. This is governance working as intended.")}</span>
           <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
         </div>
         <div class="status-card">
@@ -362,7 +361,7 @@ async function renderActivity() {
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
-                    <td>${decision ? `<span class="${isDeny ? "status-danger" : "status-ok"}">${decision}</span>` : "\u2014"}</td>
+                    <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"}</td>
                     <td>${escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
@@ -718,7 +717,7 @@ async function renderHealth() {
       ${alertsHtml}
 
       <div class="card">
-        <h3>${tip("Chain Integrity", "Structural health of the governance chain. Verifies hash linkage and record validity. Breaks are classified as known (auto-repairable) or suspicious (requires investigation).")}</h3>
+        <h3>${tip("Chain Integrity", "Structural health of the governance chain. Chain breaks are classified and handled automatically. Known issues are self-repaired. Suspicious or repeated breaks trigger an alert for your review.")}</h3>
         <div class="status-grid">
           <div class="status-card">
             <span class="eyebrow">Status</span>
@@ -739,7 +738,7 @@ async function renderHealth() {
 
       <div class="status-grid">
         <div class="card">
-          <h3>${tip("Policy Trends", "ALLOW vs DENY ratio from recent governance decisions. A sudden spike in DENY rate may indicate misconfigured policy or a compromised agent.")}</h3>
+          <h3>${tip("DENY Rate Trend", "Rate of denied actions over time. A sudden spike may indicate a misconfigured scope, a compromised agent, or an unusual workflow change.")}</h3>
           <div class="status-grid">
             <div class="status-card">
               <span class="eyebrow">ALLOW</span>
@@ -761,7 +760,7 @@ async function renderHealth() {
         </div>
 
         <div class="card">
-          <h3>${tip("Observations", "Status of ungoverned operation observation hooks. Gap detection flags when governed operations continue but observations stop.")}</h3>
+          <h3>${tip("Transparency Trend", "Ratio of governed operations to total observed AI activity over time. Higher means more of your operations are under governance.")}</h3>
           <div class="status-grid">
             <div class="status-card">
               <span class="eyebrow">${tip("Hook Data", "Whether any observation hooks are reporting ungoverned operations.")}</span>
@@ -785,7 +784,7 @@ async function renderHealth() {
 
       <div class="status-grid">
         <div class="card">
-          <h3>${tip("Storage", "Disk usage of governance data files. Monitor to ensure the system has adequate storage for the configured retention window.")}</h3>
+          <h3>${tip("Storage", "Governance chain size, archive size, and retention window status.")}</h3>
           <div class="status-grid">
             <div class="status-card">
               <span class="eyebrow">${tip("Chain Size", "Size of the active governance chain file.")}</span>

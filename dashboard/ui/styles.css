@@ -727,6 +727,52 @@ input {
   background: var(--accent-soft);
 }
 
+/* Tab tooltips — CSS-only, Safari/iOS compatible */
+
+.tab-tip-wrap {
+  position: relative;
+}
+
+.tab-tip-text {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #353a44;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+  padding: 8px 12px;
+  border-radius: 8px;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  z-index: 300;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tab-tip-text::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: #353a44;
+}
+
+.nav a:hover .tab-tip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
 /* Tab bar */
 
 .tab-bar {
@@ -874,6 +920,19 @@ pre {
 
 .status-danger {
   color: var(--danger);
+}
+
+/* DENY badge for activity rows */
+
+.deny-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: var(--danger);
 }
 
 /* Denied actions highlight card */
