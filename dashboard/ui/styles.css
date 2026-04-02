@@ -875,3 +875,21 @@ pre {
 .status-danger {
   color: var(--danger);
 }
+
+/* Denied actions highlight card */
+
+.denied-highlight {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+}
+
+/* DENY row styling in activity/audit tables */
+
+.audit-results-table tr.deny-row td {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+.audit-results-table tr.deny-row:hover td {
+  background: rgba(239, 68, 68, 0.15);
+}

@@ -132,19 +132,22 @@ function categoryLabel(cat) {
 
 function globalNav(currentPath) {
   const tabs = [
-    { path: "/overview", label: "Overview" },
-    { path: "/activity", label: "Activity" },
-    { path: "/approvals", label: "Approvals" },
-    { path: "/audit", label: "Audit" },
-    { path: "/report", label: "Reports" },
-    { path: "/health", label: "Health" },
+    { path: "/overview", label: "Overview", tip: "High-level governance posture: chain health, user counts, transparency, and denied actions." },
+    { path: "/activity", label: "Activity", tip: "Chronological feed of every governed event — actions, approvals, verifications, and observations." },
+    { path: "/approvals", label: "Approvals", tip: "Active artifact approvals and their governed categories, operators, and contexts." },
+    { path: "/audit", label: "Audit", tip: "Query the governance chain by time, user, tool, decision, or event category. Export results as JSON." },
+    { path: "/report", label: "Reports", tip: "Aggregate views of governance activity grouped by tool, user, decision, or category." },
+    { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, observation coverage, and license." },
   ];
   return `
     <nav class="nav">
-      ${tabs.map(t => `
-        <a class="${currentPath === t.path ? "active" : ""}"
-           href="${navHref(t.path, { page: null, record_id: null })}">${t.label}</a>
-      `).join("")}
+      ${tabs.map(t => {
+        const isActive = currentPath === t.path;
+        const cls = isActive ? "active" : "";
+        const tipAttr = isActive ? ` title="${t.tip}"` : "";
+        return `<a class="${cls}"${tipAttr}
+           href="${navHref(t.path, { page: null, record_id: null })}">${t.label}</a>`;
+      }).join("")}
     </nav>
   `;
 }
@@ -154,11 +157,12 @@ function globalNav(currentPath) {
 // ---------------------------------------------------------------------------
 
 async function renderOverview() {
-  const [status, approvals, activity, users] = await Promise.all([
+  const [status, approvals, activity, users, health] = await Promise.all([
     cached("status", () => api("status")),
     cached("approvals", () => api("approvals")),
     cached("activity", () => api("activity", { limit: 8 })),
     cached("users", () => api("users")),
+    cached("health", () => api("health")).catch(() => null),
   ]);
 
   const integ = status.chain_integrity === "ok"
@@ -208,6 +212,10 @@ async function renderOverview() {
         <div class="status-card">
           <span class="eyebrow">${tip("Opaque Invocations", "Actions that were invoked through opaque (non-transparent) resolution paths, such as operator intervention or approved lookups.")}</span>
           <span class="status-value">${status.opacity_posture.opaque_count}</span>
+        </div>
+        <div class="status-card denied-highlight">
+          <span class="eyebrow">${tip("Actions Denied", "Actions that were evaluated and denied before execution because required conditions were not met. This is governance working as intended — preventing unsupported actions before they land.")}</span>
+          <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
         </div>
         <div class="status-card">
           <span class="eyebrow">${tip("Transparency", "Percentage of total observed operations that flowed through governance. Higher is better. Requires observation hooks to be configured.")}</span>
@@ -312,20 +320,25 @@ async function renderActivity() {
               <tr>
                 <th>${tip("#", "Sequence position in the governance chain.")}</th>
                 <th>${tip("Time", "UTC timestamp when the event was recorded.")}</th>
-                <th>${tip("Category", "The type of governance event: governed action, approval, verification change, etc.")}</th>
+                <th>${tip("Event Type", "The type of governance event: governed action, approval, verification change, observation, etc.")}</th>
+                <th>${tip("Decision", "Whether the action was allowed or denied. Only applies to governed action events.")}</th>
                 <th>${tip("Summary", "Human-readable description of what happened.")}</th>
                 <th>${tip("Category", "The governed category this event belongs to, if applicable.")}</th>
-                <th>Detail</th>
+                <th>${tip("Detail", "Link to the full record in the governance chain.")}</th>
               </tr>
             </thead>
             <tbody>
               ${data.entries.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
+                const decision = e.evidence?.policy_decision || "";
+                const isDeny = decision === "DENY" || e.summary?.includes("DENY");
+                const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : ""].filter(Boolean).join(" ");
                 return `
-                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
+                  <tr class="${rowCls}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
+                    <td>${decision ? `<span class="${isDeny ? "status-danger" : "status-ok"}">${decision}</span>` : "\u2014"}</td>
                     <td>${escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "\u2014"}</td>
@@ -404,10 +417,10 @@ async function renderAudit() {
               <tr>
                 <th>${tip("#", "Sequence position in the chain.")}</th>
                 <th>${tip("Time", "When the event was recorded.")}</th>
-                <th>${tip("Category", "Type of governance event.")}</th>
+                <th>${tip("Event Type", "Type of governance event: governed action, approval, verification, observation.")}</th>
                 <th>${tip("Summary", "What happened.")}</th>
                 <th>${tip("User", "Identity of the user who triggered the action.")}</th>
-                <th>Detail</th>
+                <th>${tip("Detail", "Link to the full record in the governance chain.")}</th>
               </tr>
             </thead>
             <tbody>
@@ -803,8 +816,8 @@ async function renderHealth() {
             <thead>
               <tr>
                 <th>${tip("Time", "When the health event occurred.")}</th>
-                <th>${tip("Type", "Category of health event.")}</th>
-                <th>Detail</th>
+                <th>${tip("Type", "Category of health event: checkpoint, break_detected, auto_repair, etc.")}</th>
+                <th>${tip("Detail", "Summary of the health event — repair strategy, break source, or checkpoint info.")}</th>
               </tr>
             </thead>
             <tbody>
@@ -853,7 +866,7 @@ async function render() {
     <div class="shell">
       <header class="topbar">
         <div class="brand">
-          <h1>Atested Dashboard</h1>
+          <h1 title="Activating this UI is as simple as asking any AI connected to Atested to display it.">Atested Dashboard</h1>
         </div>
         ${globalNav(context.path)}
       </header>
