@@ -1181,3 +1181,85 @@ pre {
   font-size: 1.1rem;
   padding: 0 4px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Feedback & Telemetry tab                                           */
+/* ------------------------------------------------------------------ */
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.feedback-form label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.feedback-form textarea {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  resize: vertical;
+}
+
+.feedback-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.feedback-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.feedback-result {
+  font-size: 0.85rem;
+  padding: 8px 0;
+  min-height: 1.5em;
+}
+
+.feedback-success {
+  color: var(--ok);
+}
+
+.feedback-error {
+  color: var(--danger);
+}
+
+.telemetry-opt-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}

@@ -202,6 +202,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_update()
             elif parsed.path == "/api/config/verify-license":
                 self._handle_config_verify_license()
+            elif parsed.path == "/api/feedback/submit":
+                self._handle_feedback_submit()
+            elif parsed.path == "/api/telemetry/submit":
+                self._handle_telemetry_submit()
+            elif parsed.path == "/api/telemetry/opt-in":
+                self._handle_telemetry_opt_in()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -474,6 +480,165 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "expiry": info.get("expiry_iso"),
         })
 
+    def _handle_feedback_submit(self):
+        """POST /api/feedback/submit — create and optionally send a feedback artifact."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 16384:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        message = str(data.get("message", "")).strip()
+        if not message:
+            _json_response(self, {"error": "message required"}, 400)
+            return
+
+        experience_note = str(data.get("experience_note", "")).strip()
+        permission_to_use = bool(data.get("permission_to_use", False))
+        send_to_remote = bool(data.get("send_to_remote", False))
+
+        try:
+            sys.path.insert(0, str(MCP_DIR))
+            from feedback_signing import build_feedback_artifact, write_artifact, send_artifact_to_remote
+
+            artifact = build_feedback_artifact(
+                message=message,
+                experience_note=experience_note,
+                permission_to_use=permission_to_use,
+                runtime_root=RUNTIME,
+            )
+
+            feedback_dir = RUNTIME / "LOGS" / "feedback"
+            out_path = write_artifact(artifact, feedback_dir)
+
+            # Append chain event
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "feedback_submitted",
+                {
+                    "artifact_id": artifact["artifact_id"],
+                    "artifact_hash": artifact["artifact_hash"],
+                    "sent_to_remote": send_to_remote,
+                },
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+
+            result = {
+                "artifact_id": artifact["artifact_id"],
+                "artifact_hash": artifact["artifact_hash"],
+                "signed": artifact.get("signed", False),
+                "stored_at": str(out_path),
+            }
+
+            if send_to_remote and artifact.get("signed"):
+                remote_result = send_artifact_to_remote(
+                    artifact, "https://license.atested.com/api/feedback"
+                )
+                result["remote"] = remote_result
+
+            _json_response(self, result)
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_telemetry_submit(self):
+        """POST /api/telemetry/submit — create and optionally send a telemetry artifact."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        send_to_remote = bool(data.get("send_to_remote", False))
+
+        try:
+            sys.path.insert(0, str(MCP_DIR))
+            from feedback_signing import build_telemetry_artifact, write_artifact, send_artifact_to_remote
+
+            artifact = build_telemetry_artifact(
+                chain_path=CHAIN,
+                runtime_root=RUNTIME,
+            )
+
+            telemetry_dir = RUNTIME / "LOGS" / "telemetry"
+            out_path = write_artifact(artifact, telemetry_dir)
+
+            # Append chain event
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "telemetry_submitted",
+                {
+                    "artifact_id": artifact["artifact_id"],
+                    "artifact_hash": artifact["artifact_hash"],
+                    "sent_to_remote": send_to_remote,
+                },
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+
+            result = {
+                "artifact_id": artifact["artifact_id"],
+                "artifact_hash": artifact["artifact_hash"],
+                "signed": artifact.get("signed", False),
+                "stored_at": str(out_path),
+                "total_allow": artifact["total_allow"],
+                "total_deny": artifact["total_deny"],
+                "total_deterministic": artifact["total_deterministic"],
+                "total_judgment": artifact["total_judgment"],
+            }
+
+            if send_to_remote and artifact.get("signed"):
+                remote_result = send_artifact_to_remote(
+                    artifact, "https://license.atested.com/api/telemetry"
+                )
+                result["remote"] = remote_result
+
+            _json_response(self, result)
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_telemetry_opt_in(self):
+        """POST /api/telemetry/opt-in — toggle telemetry opt-in."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 1024:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        opted_in = bool(data.get("opted_in", False))
+        opt_in_file = RUNTIME / "telemetry_opt_in"
+
+        try:
+            opt_in_file.parent.mkdir(parents=True, exist_ok=True)
+            opt_in_file.write_text("1" if opted_in else "0", encoding="utf-8")
+
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "telemetry_opt_in_changed",
+                {"opted_in": opted_in},
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+
+            _json_response(self, {"opted_in": opted_in})
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
     def log_message(self, format, *args):
         pass  # Silence request logs
 
@@ -630,6 +795,33 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "release_url": "",
                     "error": "could not check for updates",
                 })
+
+        elif path == "/api/feedback":
+            feedback_dir = RUNTIME / "LOGS" / "feedback"
+            artifacts = []
+            if feedback_dir.exists():
+                for fp in sorted(feedback_dir.glob("fb_*.json"), reverse=True):
+                    try:
+                        artifacts.append(json.loads(fp.read_text(encoding="utf-8")))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+            _json_response(self, {"artifacts": artifacts[:100]})
+
+        elif path == "/api/telemetry":
+            telemetry_dir = RUNTIME / "LOGS" / "telemetry"
+            artifacts = []
+            if telemetry_dir.exists():
+                for fp in sorted(telemetry_dir.glob("tm_*.json"), reverse=True):
+                    try:
+                        artifacts.append(json.loads(fp.read_text(encoding="utf-8")))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+            _json_response(self, {"artifacts": artifacts[:100]})
+
+        elif path == "/api/telemetry/status":
+            opt_in_file = RUNTIME / "telemetry_opt_in"
+            opted_in = opt_in_file.exists() and opt_in_file.read_text(encoding="utf-8").strip() == "1"
+            _json_response(self, {"opted_in": opted_in})
 
         elif path == "/api/config":
             try:

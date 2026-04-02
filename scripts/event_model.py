@@ -42,6 +42,10 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "usage_attestation",
     "ungoverned_operation_observed",
     "registry_config_change",
+    "help_query",
+    "feedback_submitted",
+    "telemetry_submitted",
+    "telemetry_opt_in_changed",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

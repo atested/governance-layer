@@ -3476,6 +3476,258 @@ def _is_dashboard_alive() -> bool:
 
 
 @mcp.tool()
+def atested_help(query: str = "", topic: str = "") -> Dict[str, Any]:
+    """Return contextual documentation and guidance for Atested governance.
+
+    Accepts a question or topic and returns relevant help content drawn from
+    the installed documentation.  Covers: adding directories to scope,
+    adjusting constraints, reading the dashboard, activating a license,
+    granting scoped approvals, ALLOW/DENY meaning, configuring observation
+    hooks, and more.
+
+    Args:
+        query: A free-text question (e.g. "how do I add a directory?").
+        topic: An optional topic keyword to narrow results.  Valid topics
+               include: quickstart, configuration, policy, licensing,
+               invariants, threat-model, scope, hooks, approvals,
+               governance-overview.
+    """
+    TOPIC_MAP = {
+        "quickstart": "QUICKSTART.md",
+        "configuration": "CONFIGURATION.md",
+        "config": "CONFIGURATION.md",
+        "policy": "POLICY.md",
+        "licensing": "LICENSING.md",
+        "license": "LICENSING.md",
+        "invariants": "INVARIANTS.md",
+        "threat-model": "THREAT-MODEL.md",
+        "threat": "THREAT-MODEL.md",
+        "scope": "SCOPE.md",
+        "hooks": "INTEGRATION_HOOKS.md",
+        "observation": "INTEGRATION_HOOKS.md",
+        "approvals": "RESIDUAL_DISCRETION_DOCTRINE.md",
+        "approval": "RESIDUAL_DISCRETION_DOCTRINE.md",
+        "governance-overview": "GOVERNANCE_OVERVIEW.md",
+        "overview": "GOVERNANCE_OVERVIEW.md",
+        "distribution": "DISTRIBUTION.md",
+        "introduction": "INTRODUCTION_FOR_EVERYONE.md",
+        "intro": "INTRODUCTION_FOR_EVERYONE.md",
+    }
+
+    docs_dir = REPO / "docs"
+    q = (query or "").strip().lower()
+    t = (topic or "").strip().lower()
+
+    # Determine which files to search
+    if t and t in TOPIC_MAP:
+        target_files = [docs_dir / TOPIC_MAP[t]]
+    elif t:
+        # Fuzzy match topic
+        target_files = [docs_dir / v for k, v in TOPIC_MAP.items() if t in k]
+        if not target_files:
+            target_files = sorted(docs_dir.glob("*.md"))
+    else:
+        target_files = sorted(docs_dir.glob("*.md"))
+
+    results = []
+    seen = set()
+    for fp in target_files:
+        if not fp.exists() or fp.name in seen:
+            continue
+        seen.add(fp.name)
+        try:
+            text = fp.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        # If there's a query, score relevance by keyword matches
+        if q:
+            keywords = [w for w in q.split() if len(w) > 2]
+            text_lower = text.lower()
+            score = sum(1 for kw in keywords if kw in text_lower)
+            if score == 0:
+                continue
+        else:
+            score = 1
+
+        # Extract relevant sections (headings + nearby content)
+        sections = []
+        current_heading = ""
+        current_content = []
+        for line in text.splitlines():
+            if line.startswith("#"):
+                if current_heading and current_content:
+                    section_text = "\n".join(current_content).strip()
+                    if q:
+                        if any(kw in section_text.lower() for kw in keywords):
+                            sections.append({"heading": current_heading, "content": section_text[:600]})
+                    else:
+                        sections.append({"heading": current_heading, "content": section_text[:400]})
+                current_heading = line.lstrip("#").strip()
+                current_content = []
+            else:
+                current_content.append(line)
+        # Last section
+        if current_heading and current_content:
+            section_text = "\n".join(current_content).strip()
+            if q:
+                if any(kw in section_text.lower() for kw in keywords):
+                    sections.append({"heading": current_heading, "content": section_text[:600]})
+            else:
+                sections.append({"heading": current_heading, "content": section_text[:400]})
+
+        if sections:
+            results.append({
+                "file": fp.name,
+                "relevance_score": score,
+                "sections": sections[:5],
+            })
+
+    results.sort(key=lambda x: x["relevance_score"], reverse=True)
+    results = results[:5]
+
+    # Record in chain as non-action event
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            "help_query",
+            {"query": query, "topic": topic, "results_count": len(results)},
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        _append_non_action_event(event)
+        _verify_chain()
+
+    return {
+        "query": query,
+        "topic": topic,
+        "results": results,
+        "available_topics": sorted(set(TOPIC_MAP.keys())),
+    }
+
+
+@mcp.tool()
+def submit_feedback(
+    message: str,
+    experience_note: str = "",
+    permission_to_use: bool = False,
+    send_to_remote: bool = False,
+) -> Dict[str, Any]:
+    """Submit feedback about Atested with a signed artifact.
+
+    Creates a signed feedback artifact and writes it locally.  If
+    send_to_remote is True, also transmits the artifact to atested.com
+    for the development team.
+
+    Args:
+        message: Free-form feedback text.
+        experience_note: Optional — "What has Atested helped you avoid or improve?"
+        permission_to_use: If True, Atested may use the feedback anonymously in marketing.
+        send_to_remote: If True, POST the signed artifact to atested.com/api/feedback.
+    """
+    from feedback_signing import build_feedback_artifact, write_artifact, send_artifact_to_remote
+
+    artifact = build_feedback_artifact(
+        message=message,
+        experience_note=experience_note,
+        permission_to_use=permission_to_use,
+        runtime_root=RUNTIME,
+    )
+
+    # Write locally
+    feedback_dir = RUNTIME / "LOGS" / "feedback"
+    out_path = write_artifact(artifact, feedback_dir)
+
+    # Record in chain
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            "feedback_submitted",
+            {
+                "artifact_id": artifact["artifact_id"],
+                "artifact_hash": artifact["artifact_hash"],
+                "sent_to_remote": send_to_remote,
+            },
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        _append_non_action_event(event)
+        _verify_chain()
+
+    result = {
+        "artifact_id": artifact["artifact_id"],
+        "artifact_hash": artifact["artifact_hash"],
+        "signed": artifact.get("signed", False),
+        "stored_at": str(out_path),
+    }
+
+    if send_to_remote:
+        remote_result = send_artifact_to_remote(
+            artifact, "https://license.atested.com/api/feedback"
+        )
+        result["remote"] = remote_result
+
+    return result
+
+
+@mcp.tool()
+def submit_telemetry(send_to_remote: bool = False) -> Dict[str, Any]:
+    """Generate and submit a signed telemetry artifact with aggregated usage counts.
+
+    Produces anonymous, aggregated data: total ALLOW/DENY decisions,
+    deterministic vs judgment counts.  No user identities, file paths,
+    or organization names are included.
+
+    Args:
+        send_to_remote: If True, POST the signed artifact to atested.com/api/telemetry.
+    """
+    from feedback_signing import build_telemetry_artifact, write_artifact, send_artifact_to_remote
+
+    artifact = build_telemetry_artifact(
+        chain_path=CHAIN,
+        runtime_root=RUNTIME,
+    )
+
+    # Write locally
+    telemetry_dir = RUNTIME / "LOGS" / "telemetry"
+    out_path = write_artifact(artifact, telemetry_dir)
+
+    # Record in chain
+    with _CHAIN_LOCK:
+        _verify_chain()
+        event = build_non_action_event(
+            "telemetry_submitted",
+            {
+                "artifact_id": artifact["artifact_id"],
+                "artifact_hash": artifact["artifact_hash"],
+                "sent_to_remote": send_to_remote,
+                "total_allow": artifact["total_allow"],
+                "total_deny": artifact["total_deny"],
+            },
+            prev_record_hash=_chain_head_record_hash(),
+        )
+        _append_non_action_event(event)
+        _verify_chain()
+
+    result = {
+        "artifact_id": artifact["artifact_id"],
+        "artifact_hash": artifact["artifact_hash"],
+        "signed": artifact.get("signed", False),
+        "stored_at": str(out_path),
+        "total_allow": artifact["total_allow"],
+        "total_deny": artifact["total_deny"],
+        "total_deterministic": artifact["total_deterministic"],
+        "total_judgment": artifact["total_judgment"],
+    }
+
+    if send_to_remote:
+        remote_result = send_artifact_to_remote(
+            artifact, "https://license.atested.com/api/telemetry"
+        )
+        result["remote"] = remote_result
+
+    return result
+
+
+@mcp.tool()
 def atested_dashboard() -> Dict[str, Any]:
     """Start the Atested Dashboard and return the URL.
 
