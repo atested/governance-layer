@@ -149,6 +149,21 @@ Call `capabilities_list` or `governance_status` from your client to see the live
 
 ---
 
+## License Key Security
+
+Your license key is also your admin credential. It controls who can modify
+the governance configuration through the dashboard.
+
+- **Store it securely.** Treat it like a password.
+- **Do not share it** with team members who should not have configuration access.
+- **If compromised,** request a replacement immediately at [atested.com](https://atested.com/pricing.html).
+
+The dashboard allows read-only access without a license key. Editing the
+capability registry (allowed directories, constraint flags, hard caps)
+requires providing your license key in the dashboard Configuration tab.
+
+---
+
 ## Configuring your governance boundary
 
 The governance boundary — what your AI tools are allowed to do — is controlled by a single file: `capabilities/capability-registry.json`. This is the most security-critical configuration file in Atested.

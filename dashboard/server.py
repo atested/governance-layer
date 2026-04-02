@@ -198,6 +198,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_observe()
             elif parsed.path == "/api/health/acknowledge":
                 self._handle_acknowledge()
+            elif parsed.path == "/api/config/update":
+                self._handle_config_update()
+            elif parsed.path == "/api/config/verify-license":
+                self._handle_config_verify_license()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -295,6 +299,180 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "message": str(data.get("message", "")),
         })
         _json_response(self, {"acknowledged": True, "event_id": evt["stability_event_id"]})
+
+    def _handle_config_update(self):
+        """POST /api/config/update — validate and write an updated capability registry.
+
+        Accepts JSON body: {"registry": {...}, "license_key": "..."}
+        If no license_key is provided (trial mode), enforces trial limits:
+          - max 3 additional allow_base_dirs beyond defaults per tool
+          - no cap field changes
+          - basic boolean toggles only
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 65536:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        registry = data.get("registry")
+        if not isinstance(registry, dict):
+            _json_response(self, {"error": "registry must be a JSON object"}, 400)
+            return
+
+        license_key = str(data.get("license_key", "")).strip()
+
+        from registry_integrity import validate_registry_schema
+        from licensing import validate_license_key, resolve_posture
+
+        # Determine access tier
+        licensed = False
+        license_info = None
+        if license_key:
+            license_info = validate_license_key(license_key)
+            if license_info is None:
+                _json_response(self, {"error": "invalid license key"}, 403)
+                return
+            licensed = True
+
+        # Schema validation is always required
+        valid, schema_error = validate_registry_schema(registry)
+        if not valid:
+            _json_response(self, {"error": schema_error}, 400)
+            return
+
+        # Trial-mode constraints
+        if not licensed:
+            posture = resolve_posture(RUNTIME)
+            if posture.get("license_status") not in ("trial", "personal"):
+                _json_response(self, {
+                    "error": "license required for registry edits",
+                    "license_status": posture.get("license_status"),
+                }, 403)
+                return
+
+            # Load existing registry to compute diffs
+            registry_path = REPO / "capabilities" / "capability-registry.json"
+            existing = {}
+            if registry_path.exists():
+                try:
+                    existing = json.loads(registry_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    existing = {}
+
+            existing_tools = {t["tool"]: t for t in existing.get("tools", []) if isinstance(t, dict)}
+            _DEFAULT_MAX_EXTRA_DIRS = 3
+            _CAP_FIELDS = {"max_bytes", "max_bytes_hard", "max_entries", "max_entries_hard"}
+
+            for tool_entry in registry.get("tools", []):
+                if not isinstance(tool_entry, dict):
+                    continue
+                tool_name = tool_entry.get("tool", "")
+                existing_entry = existing_tools.get(tool_name, {})
+
+                # Check for cap field changes (not allowed on trial)
+                for cap_field in _CAP_FIELDS:
+                    if cap_field in tool_entry and tool_entry[cap_field] != existing_entry.get(cap_field):
+                        _json_response(self, {
+                            "error": f"trial: cap field '{cap_field}' changes require a license",
+                            "tool": tool_name,
+                        }, 403)
+                        return
+
+                # Check extra allow_base_dirs
+                new_dirs = set(tool_entry.get("allow_base_dirs", []))
+                old_dirs = set(existing_entry.get("allow_base_dirs", []))
+                extra_dirs = new_dirs - old_dirs
+                if len(extra_dirs) > _DEFAULT_MAX_EXTRA_DIRS:
+                    _json_response(self, {
+                        "error": (
+                            f"trial: max {_DEFAULT_MAX_EXTRA_DIRS} additional directories "
+                            f"per tool; {len(extra_dirs)} requested for '{tool_name}'"
+                        ),
+                        "tool": tool_name,
+                    }, 403)
+                    return
+
+        # Write the registry atomically
+        registry_path = REPO / "capabilities" / "capability-registry.json"
+        try:
+            import hashlib
+            import tempfile
+            import stat as _stat
+
+            content = json.dumps(registry, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+            content_bytes = content.encode("utf-8")
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(registry_path.parent), suffix=".tmp"
+            )
+            try:
+                os.write(fd, content_bytes)
+                os.fchmod(fd, _stat.S_IRUSR | _stat.S_IWUSR)
+                os.close(fd)
+                os.rename(tmp_path, str(registry_path))
+            except Exception:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+
+            new_hash = "sha256:" + hashlib.sha256(content_bytes).hexdigest()
+        except OSError as exc:
+            _json_response(self, {"error": f"write failed: {exc}"}, 500)
+            return
+
+        result = {
+            "success": True,
+            "registry_hash": new_hash,
+            "tools_count": len(registry.get("tools", [])),
+        }
+        if license_info:
+            result["license_tier"] = license_info.get("tier")
+        _json_response(self, result)
+
+    def _handle_config_verify_license(self):
+        """POST /api/config/verify-license — validate a license key.
+
+        Accepts JSON body: {"license_key": "..."}
+        Returns {"valid": true/false, "tier": "...", "expiry": "..."}
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        license_key = str(data.get("license_key", "")).strip()
+        if not license_key:
+            _json_response(self, {"error": "license_key required"}, 400)
+            return
+
+        from licensing import validate_license_key
+        info = validate_license_key(license_key)
+        if info is None:
+            _json_response(self, {"valid": False, "tier": None, "expiry": None})
+            return
+
+        _json_response(self, {
+            "valid": True,
+            "tier": info.get("tier"),
+            "expiry": info.get("expiry_iso"),
+        })
 
     def log_message(self, format, *args):
         pass  # Silence request logs
@@ -425,6 +603,75 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "unique_users": len(users),
                 "users": [{"identity": k, "count": v} for k, v in users.most_common()],
             })
+
+        elif path == "/api/update-check":
+            import urllib.request
+            import urllib.error
+            try:
+                req = urllib.request.Request(
+                    "https://api.github.com/repos/atested/governance-layer/releases/latest",
+                    headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "atested-dashboard"},
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    release = json.loads(resp.read().decode("utf-8"))
+                tag = release.get("tag_name", "").lstrip("v")
+                _json_response(self, {
+                    "latest_version": tag,
+                    "current_version": "1.0.0",
+                    "update_available": tag != "1.0.0" and bool(tag),
+                    "release_url": release.get("html_url", ""),
+                    "published_at": release.get("published_at", ""),
+                })
+            except Exception:
+                _json_response(self, {
+                    "latest_version": None,
+                    "current_version": "1.0.0",
+                    "update_available": False,
+                    "release_url": "",
+                    "error": "could not check for updates",
+                })
+
+        elif path == "/api/config":
+            try:
+                from registry_integrity import validate_registry_schema
+                from licensing import resolve_posture
+
+                registry_path = REPO / "capabilities" / "capability-registry.json"
+                messaging_map_path = REPO / "capabilities" / "messaging-tool-map.v1.json"
+
+                # Read capability registry
+                registry_data = {}
+                registry_hash = None
+                if registry_path.exists():
+                    try:
+                        raw = registry_path.read_bytes()
+                        import hashlib
+                        registry_hash = "sha256:" + hashlib.sha256(raw).hexdigest()
+                        registry_data = json.loads(raw.decode("utf-8"))
+                    except (json.JSONDecodeError, OSError) as exc:
+                        registry_data = {"error": str(exc)}
+
+                # Read messaging map
+                messaging_map = {}
+                if messaging_map_path.exists():
+                    try:
+                        messaging_map = json.loads(
+                            messaging_map_path.read_text(encoding="utf-8")
+                        )
+                    except (json.JSONDecodeError, OSError):
+                        messaging_map = {}
+
+                # Resolve license posture
+                posture = resolve_posture(RUNTIME)
+
+                _json_response(self, {
+                    "registry": registry_data,
+                    "registry_hash": registry_hash,
+                    "messaging_map": messaging_map,
+                    "license_posture": posture,
+                })
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
 
         else:
             _json_response(self, {"error": "unknown endpoint"}, 404)

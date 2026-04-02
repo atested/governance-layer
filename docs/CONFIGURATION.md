@@ -1,3 +1,47 @@
+# Configuration Guide
+
+## Dashboard Configuration
+
+The Atested Dashboard includes a Configuration tab where you can view and
+modify the capability registry without editing JSON files manually.
+
+### Viewing Configuration (no license required)
+
+All users can view:
+- Governed tools and their allowed directories
+- Constraint flags (deny hidden paths, deny overwrites, deny executables)
+- Hard caps (max bytes, max entries, recursive limits)
+- Registry integrity status (current hash, last verification time)
+
+### Editing Configuration (license required)
+
+To edit configuration through the dashboard:
+
+1. Navigate to the **Configuration** tab.
+2. Click **Unlock Editing** and enter your license key.
+3. Make changes: add/remove directories, toggle constraints, adjust caps.
+4. Click **Save Configuration** to apply.
+
+All configuration changes go through the governed registry reload process:
+- Schema validation runs before the change is applied.
+- The old and new registry hashes are recorded as a governance event.
+- If validation fails, the change is rejected and the previous configuration remains.
+
+### Trial Limits
+
+Trial users (no license key) can:
+- View the full configuration
+- Add up to 3 directories beyond the defaults
+- Toggle basic constraint flags
+
+Trial users cannot:
+- Adjust hard caps
+- Add unlimited directory scopes
+
+Full configuration requires an active license from [atested.com](https://atested.com/pricing.html).
+
+---
+
 # Configuration Reference
 
 Complete reference for all Atested configuration surfaces.

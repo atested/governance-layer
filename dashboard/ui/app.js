@@ -2,6 +2,8 @@
 
 const API = "";  // relative to current origin
 const pageSize = 20;
+const ATESTED_VERSION = "1.0.0";
+let _updateDismissed = false;
 
 // Bearer token injected by the server into the HTML meta tag at startup
 function _getAuthToken() {
@@ -150,6 +152,7 @@ function globalNav(currentPath) {
     { path: "/audit", label: "Audit", tip: "Query the governance chain by time, user, tool, decision, or event category. Export results as JSON." },
     { path: "/report", label: "Reports", tip: "Aggregate views of governance activity grouped by tool, user, decision, or category." },
     { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, observation coverage, and license." },
+    { path: "/configuration", label: "Configuration", tip: "View and manage the capability registry — governed tool directories, constraints, and hard caps." },
   ];
   return `
     <nav class="nav">
@@ -164,16 +167,25 @@ function globalNav(currentPath) {
 }
 
 // ---------------------------------------------------------------------------
+// Configuration edit state
+// ---------------------------------------------------------------------------
+
+let _configEditMode = false;
+let _configLicenseKey = "";
+let _configData = null;
+
+// ---------------------------------------------------------------------------
 // Pages
 // ---------------------------------------------------------------------------
 
 async function renderOverview() {
-  const [status, approvals, activity, users, health] = await Promise.all([
+  const [status, approvals, activity, users, health, updateInfo] = await Promise.all([
     cached("status", () => api("status")),
     cached("approvals", () => api("approvals")),
     cached("activity", () => api("activity", { limit: 8 })),
     cached("users", () => api("users")),
     cached("health", () => api("health")).catch(() => null),
+    cached("update-check", () => api("update-check")).catch(() => null),
   ]);
 
   const integ = status.chain_integrity === "ok"
@@ -184,8 +196,19 @@ async function renderOverview() {
     ? Math.round(status.transparency_metric.transparency_pct * 100) + "%"
     : '<span class="muted" style="font-size:0.75rem">No observation data</span>';
 
+  const updateBanner = (updateInfo && updateInfo.update_available && !_updateDismissed)
+    ? `<div class="update-banner">
+         <span>Atested <strong>v${escapeHtml(updateInfo.latest_version)}</strong> is available. You are running v${escapeHtml(ATESTED_VERSION)}.</span>
+         <span>
+           <a href="${escapeHtml(updateInfo.release_url)}" target="_blank" rel="noopener"><button>View release</button></a>
+           <button class="dismiss-btn" onclick="_updateDismissed=true;clearCache();render();">&times;</button>
+         </span>
+       </div>`
+    : "";
+
   return `
     <section class="page">
+      ${updateBanner}
       <div class="card">
         <span class="eyebrow">Governance Status</span>
         <h2>System Overview</h2>
@@ -895,6 +918,225 @@ function _attachHealthListeners() {
 }
 
 // ---------------------------------------------------------------------------
+// Configuration page
+// ---------------------------------------------------------------------------
+
+async function renderConfiguration() {
+  let data;
+  try {
+    data = await cached("config", () => api("config"));
+    _configData = data;
+  } catch (err) {
+    return `
+      <section class="page">
+        <div class="card">
+          <span class="eyebrow">Configuration</span>
+          <h2>Capability Registry</h2>
+          <p class="status-warn">Unable to load configuration: ${escapeHtml(err.message)}</p>
+        </div>
+      </section>
+    `;
+  }
+
+  const registry = data.registry || {};
+  const tools = registry.tools || data.tools || [];
+  const integrity = data.integrity || {};
+  const license = data.license || {};
+  const isTrial = license.status === "trial" || license.tier === "personal";
+
+  const integrityBadge = integrity.status === "ok"
+    ? '<span class="status-ok">OK</span>'
+    : (integrity.status ? `<span class="status-warn">${escapeHtml(integrity.status)}</span>` : '<span class="muted">\u2014</span>');
+
+  const toolRowsView = tools.map((t, idx) => {
+    const name = t.name || t.tool_name || t.id || "\u2014";
+    const risk = t.risk_level || t.risk || "\u2014";
+    const dirs = (t.allow_base_dirs || t.allowed_dirs || []).join(", ") || "\u2014";
+    const denyHidden = t.deny_hidden_paths !== undefined ? t.deny_hidden_paths : (t.constraints?.deny_hidden ?? "\u2014");
+    const denyOverwrite = t.deny_overwrite_by_default !== undefined ? t.deny_overwrite_by_default : (t.constraints?.deny_overwrite ?? "\u2014");
+    const denyExec = t.deny_executable_outputs !== undefined ? t.deny_executable_outputs : (t.constraints?.deny_executable ?? "\u2014");
+    const maxBytes = t.max_bytes_hard !== undefined ? t.max_bytes_hard : (t.hard_caps?.max_bytes ?? "\u2014");
+
+    function boolBadge(val) {
+      if (val === true) return '<span class="status-ok">Yes</span>';
+      if (val === false) return '<span class="muted">No</span>';
+      return `<span class="muted">${escapeHtml(String(val))}</span>`;
+    }
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(name)}</strong></td>
+        <td>${escapeHtml(String(risk))}</td>
+        <td style="font-size:0.82rem;word-break:break-all">${escapeHtml(dirs)}</td>
+        <td>${boolBadge(denyHidden)}</td>
+        <td>${boolBadge(denyOverwrite)}</td>
+        <td>${boolBadge(denyExec)}</td>
+        <td>${escapeHtml(String(maxBytes))}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const toolRowsEdit = tools.map((t, idx) => {
+    const name = t.name || t.tool_name || t.id || "";
+    const risk = t.risk_level || t.risk || "";
+    const dirs = t.allow_base_dirs || t.allowed_dirs || [];
+    const denyHidden = t.deny_hidden_paths !== undefined ? t.deny_hidden_paths : (t.constraints?.deny_hidden ?? false);
+    const denyOverwrite = t.deny_overwrite_by_default !== undefined ? t.deny_overwrite_by_default : (t.constraints?.deny_overwrite ?? false);
+    const denyExec = t.deny_executable_outputs !== undefined ? t.deny_executable_outputs : (t.constraints?.deny_executable ?? false);
+    const maxBytes = t.max_bytes_hard !== undefined ? t.max_bytes_hard : (t.hard_caps?.max_bytes ?? "");
+
+    const dirInputs = dirs.map((d, di) => `
+      <div class="config-dir-row" data-tool-idx="${idx}" data-dir-idx="${di}">
+        <input type="text" class="config-dir-input" value="${escapeHtml(d)}"
+          data-tool-idx="${idx}" data-dir-idx="${di}"
+          style="width:280px;font-size:0.82rem">
+        <button class="pill" onclick="window.removeDirectory(${idx}, ${di})" style="margin-left:4px">Remove</button>
+      </div>
+    `).join("");
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(name)}</strong><input type="hidden" name="tool_name_${idx}" value="${escapeHtml(name)}"></td>
+        <td><span class="muted" style="font-size:0.82rem">${escapeHtml(risk)}</span></td>
+        <td>
+          <div id="config-dirs-${idx}">${dirInputs}</div>
+          <button class="pill" onclick="window.addDirectory(${idx})" style="margin-top:4px;font-size:0.8rem">+ Add Directory</button>
+        </td>
+        <td><label><input type="checkbox" name="deny_hidden_${idx}" ${denyHidden ? "checked" : ""}> deny_hidden</label></td>
+        <td><label><input type="checkbox" name="deny_overwrite_${idx}" ${denyOverwrite ? "checked" : ""}> deny_overwrite</label></td>
+        <td><label><input type="checkbox" name="deny_exec_${idx}" ${denyExec ? "checked" : ""}> deny_exec</label></td>
+        <td><input type="number" name="max_bytes_${idx}" value="${escapeHtml(String(maxBytes))}" style="width:90px"></td>
+      </tr>
+    `;
+  }).join("");
+
+  const trialBanner = isTrial ? `
+    <div class="card" style="border-left:3px solid var(--warn,#e8a000);padding-left:16px">
+      <span class="eyebrow">Trial License</span>
+      <p style="margin:4px 0 0">
+        Configuration editing requires a paid license.
+        You are currently on the <strong>${escapeHtml(license.tier || "trial")}</strong> tier.
+        ${license.trial_days_remaining !== undefined
+          ? `<span class="status-warn">${license.trial_days_remaining} days remaining.</span>`
+          : ""}
+        Unlock editing by entering a valid license key below.
+      </p>
+    </div>
+  ` : "";
+
+  const lockSection = !_configEditMode ? `
+    <div class="card">
+      <h3>${tip("Unlock Editing", "Configuration editing requires a valid license key. Enter your key to enable edit mode.")}</h3>
+      ${trialBanner}
+      <form class="audit-form" id="config-unlock-form" onsubmit="return false">
+        <label>${tip("License Key", "Your Atested license key. Starts with atested-.")}
+          <input type="text" id="config-license-key-input" placeholder="atested-xxxx-xxxx-xxxx"
+            style="width:320px" value="${escapeHtml(_configLicenseKey)}">
+        </label>
+        <button type="button" onclick="window.unlockConfigEditing()">Unlock Editing</button>
+      </form>
+      <p id="config-unlock-error" class="status-warn" style="display:none;margin-top:8px"></p>
+    </div>
+  ` : "";
+
+  const viewTable = !_configEditMode ? `
+    <div class="card">
+      <h3>${tip("Governed Tools", "All tools registered in the capability registry with their current constraints and hard caps.")}</h3>
+      ${tools.length ? `
+        <table class="audit-results-table">
+          <thead>
+            <tr>
+              <th>${tip("Tool", "The governed tool name (e.g. FS_READ, FS_WRITE).")}</th>
+              <th>${tip("Risk Level", "The risk classification for this tool: low, medium, or high.")}</th>
+              <th>${tip("Allowed Directories", "Base directories this tool is permitted to operate within.")}</th>
+              <th>${tip("deny_hidden", "Whether access to hidden paths (dot-files) is denied.")}</th>
+              <th>${tip("deny_overwrite", "Whether overwriting existing files is denied by default.")}</th>
+              <th>${tip("deny_exec", "Whether producing executable output files is denied.")}</th>
+              <th>${tip("Max Bytes (hard cap)", "Hard cap on bytes read or written in a single operation.")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${toolRowsView}
+          </tbody>
+        </table>
+      ` : '<p class="muted">No tools registered in the capability registry.</p>'}
+    </div>
+  ` : "";
+
+  const editForm = _configEditMode ? `
+    <div class="card">
+      <h3>Edit Configuration <span class="status-ok" style="font-size:0.8rem;margin-left:8px">Edit Mode Active</span></h3>
+      <p class="explainer">Changes are applied immediately when you click Save Configuration. Each tool's directories, constraint flags, and hard caps can be adjusted below.</p>
+      <form id="config-edit-form" onsubmit="return false">
+        <table class="audit-results-table" id="config-tools-table">
+          <thead>
+            <tr>
+              <th>${tip("Tool", "The governed tool name.")}</th>
+              <th>${tip("Risk Level", "Risk classification (read-only).")}</th>
+              <th>${tip("Allowed Directories", "Directories this tool may access. Add or remove entries.")}</th>
+              <th>${tip("deny_hidden", "Deny hidden path access.")}</th>
+              <th>${tip("deny_overwrite", "Deny overwriting files by default.")}</th>
+              <th>${tip("deny_exec", "Deny executable output.")}</th>
+              <th>${tip("Max Bytes", "Hard cap on bytes per operation.")}</th>
+            </tr>
+          </thead>
+          <tbody id="config-tools-tbody">
+            ${toolRowsEdit}
+          </tbody>
+        </table>
+        <div style="margin-top:16px">
+          <button type="button" onclick="window.saveConfiguration()">Save Configuration</button>
+          <button type="button" class="pill" onclick="window._configEditMode=false;clearCache();render()" style="margin-left:8px">Cancel</button>
+        </div>
+        <p id="config-save-status" style="margin-top:8px;display:none"></p>
+      </form>
+    </div>
+  ` : "";
+
+  return `
+    <section class="page">
+      <div class="card">
+        <span class="eyebrow">Configuration</span>
+        <h2>Capability Registry</h2>
+        <p class="explainer">
+          The capability registry defines which governed tools are active, what directories they may
+          access, and what constraint flags and hard caps are enforced. The registry hash is included
+          in every governance chain record for tamper-evidence.
+        </p>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-card">
+          <span class="eyebrow">${tip("Registry Hash", "SHA-256 of the capability registry at last load. Included in every governance decision record.")}</span>
+          <span class="status-value" style="font-size:0.75rem;word-break:break-all">${escapeHtml(truncate(integrity.hash || data.registry_hash || "\u2014", 20))}</span>
+        </div>
+        <div class="status-card">
+          <span class="eyebrow">${tip("Integrity", "Whether the registry file matches its expected hash.")}</span>
+          <span class="status-value">${integrityBadge}</span>
+        </div>
+        <div class="status-card">
+          <span class="eyebrow">${tip("Last Verified", "When the registry integrity was last checked.")}</span>
+          <span class="status-value" style="font-size:0.85rem">${formatTime(integrity.last_verified || data.last_verified || null)}</span>
+        </div>
+        <div class="status-card">
+          <span class="eyebrow">${tip("Governed Tools", "Total number of tools registered in the capability registry.")}</span>
+          <span class="status-value">${tools.length}</span>
+        </div>
+      </div>
+
+      ${lockSection}
+      ${viewTable}
+      ${editForm}
+    </section>
+  `;
+}
+
+function _attachConfigListeners() {
+  // No delegated-event listeners needed for configuration page;
+  // all interactions use window.* handlers attached inline.
+}
+
+// ---------------------------------------------------------------------------
 // Render dispatcher
 // ---------------------------------------------------------------------------
 
@@ -906,6 +1148,7 @@ const contentMap = {
   "/record": renderRecordDetail,
   "/report": renderReport,
   "/health": renderHealth,
+  "/configuration": renderConfiguration,
 };
 
 async function render() {
@@ -937,6 +1180,7 @@ async function render() {
   _attachActivityListeners();
   _attachAuditListeners();
   _attachHealthListeners();
+  _attachConfigListeners();
 }
 
 // ---------------------------------------------------------------------------
@@ -1024,6 +1268,133 @@ window.acknowledgeAlert = async function(source, message) {
   } catch (err) {
     console.error("Failed to acknowledge alert:", err);
   }
+};
+
+window.unlockConfigEditing = async function() {
+  const input = document.getElementById("config-license-key-input");
+  const errorEl = document.getElementById("config-unlock-error");
+  if (!input) return;
+  const key = input.value.trim();
+  if (!key) {
+    if (errorEl) { errorEl.textContent = "Please enter a license key."; errorEl.style.display = ""; }
+    return;
+  }
+  try {
+    const resp = await fetch(`${API}/api/config/verify-license`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ..._authHeaders() },
+      body: JSON.stringify({ license_key: key }),
+    });
+    const result = await resp.json();
+    if (result.valid) {
+      _configLicenseKey = key;
+      _configEditMode = true;
+      if (errorEl) errorEl.style.display = "none";
+      clearCache();
+      render();
+    } else {
+      _configEditMode = false;
+      if (errorEl) {
+        errorEl.textContent = result.message || "License key is not valid. Editing is restricted to paid tiers.";
+        errorEl.style.display = "";
+      }
+    }
+  } catch (err) {
+    _configEditMode = false;
+    if (errorEl) {
+      errorEl.textContent = "License verification failed: " + err.message;
+      errorEl.style.display = "";
+    }
+  }
+};
+
+window.saveConfiguration = async function() {
+  const statusEl = document.getElementById("config-save-status");
+  const tools = _configData ? (_configData.registry?.tools || _configData.tools || []) : [];
+
+  const updates = tools.map((t, idx) => {
+    const name = t.name || t.tool_name || t.id || "";
+    // Collect directory inputs
+    const dirContainer = document.getElementById(`config-dirs-${idx}`);
+    const dirs = dirContainer
+      ? Array.from(dirContainer.querySelectorAll(".config-dir-input"))
+          .map(inp => inp.value.trim())
+          .filter(Boolean)
+      : (t.allow_base_dirs || t.allowed_dirs || []);
+
+    const denyHiddenEl = document.querySelector(`[name="deny_hidden_${idx}"]`);
+    const denyOverwriteEl = document.querySelector(`[name="deny_overwrite_${idx}"]`);
+    const denyExecEl = document.querySelector(`[name="deny_exec_${idx}"]`);
+    const maxBytesEl = document.querySelector(`[name="max_bytes_${idx}"]`);
+
+    return {
+      tool_name: name,
+      allow_base_dirs: dirs,
+      deny_hidden_paths: denyHiddenEl ? denyHiddenEl.checked : undefined,
+      deny_overwrite_by_default: denyOverwriteEl ? denyOverwriteEl.checked : undefined,
+      deny_executable_outputs: denyExecEl ? denyExecEl.checked : undefined,
+      max_bytes_hard: maxBytesEl && maxBytesEl.value !== "" ? Number(maxBytesEl.value) : undefined,
+    };
+  });
+
+  if (statusEl) { statusEl.textContent = "Saving\u2026"; statusEl.className = ""; statusEl.style.display = ""; }
+
+  try {
+    const resp = await fetch(`${API}/api/config/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ..._authHeaders() },
+      body: JSON.stringify({ license_key: _configLicenseKey, tools: updates }),
+    });
+    const result = await resp.json();
+    if (resp.ok && (result.success !== false)) {
+      if (statusEl) { statusEl.textContent = "Configuration saved successfully."; statusEl.className = "status-ok"; }
+      _configEditMode = false;
+      clearCache();
+      render();
+    } else {
+      if (statusEl) {
+        statusEl.textContent = "Save failed: " + (result.message || result.error || "Unknown error.");
+        statusEl.className = "status-warn";
+      }
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = "Save failed: " + err.message;
+      statusEl.className = "status-warn";
+    }
+  }
+};
+
+window.addDirectory = function(toolIdx) {
+  const container = document.getElementById(`config-dirs-${toolIdx}`);
+  if (!container) return;
+  const newIdx = container.querySelectorAll(".config-dir-row").length;
+  const row = document.createElement("div");
+  row.className = "config-dir-row";
+  row.setAttribute("data-tool-idx", toolIdx);
+  row.setAttribute("data-dir-idx", newIdx);
+  row.innerHTML = `
+    <input type="text" class="config-dir-input" value=""
+      data-tool-idx="${toolIdx}" data-dir-idx="${newIdx}"
+      style="width:280px;font-size:0.82rem" placeholder="/path/to/directory">
+    <button class="pill" onclick="window.removeDirectory(${toolIdx}, ${newIdx})" style="margin-left:4px">Remove</button>
+  `;
+  container.appendChild(row);
+};
+
+window.removeDirectory = function(toolIdx, dirIdx) {
+  const container = document.getElementById(`config-dirs-${toolIdx}`);
+  if (!container) return;
+  const row = container.querySelector(`.config-dir-row[data-dir-idx="${dirIdx}"]`);
+  if (row) row.remove();
+  // Re-index remaining rows so removeDirectory callbacks stay consistent
+  container.querySelectorAll(".config-dir-row").forEach((r, i) => {
+    r.setAttribute("data-dir-idx", i);
+    const inp = r.querySelector(".config-dir-input");
+    if (inp) inp.setAttribute("data-dir-idx", i);
+    const btn = r.querySelector("button");
+    if (btn) btn.setAttribute("onclick", `window.removeDirectory(${toolIdx}, ${i})`);
+  });
 };
 
 // ---------------------------------------------------------------------------
