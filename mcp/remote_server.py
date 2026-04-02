@@ -610,6 +610,125 @@ def _wrap_with_diagnostic_cors(app):
     )
 
 
+_EVALUATE_ENDPOINT_REGISTERED = False
+
+# Mapping from user-friendly action names to internal tool names.
+_ACTION_TOOL_MAP = {
+    "write_file": "FS_WRITE",
+    "read_file": "FS_READ",
+    "delete_file": "FS_DELETE",
+    "list_files": "FS_LIST",
+    "move_file": "FS_MOVE",
+    "make_directory": "FS_MKDIR",
+    "send_message": "MSG_SEND",
+    "reply_message": "MSG_REPLY",
+}
+
+
+def _resolve_tool_name(action: str) -> str:
+    """Resolve an action string to an internal tool name."""
+    normalized = action.strip()
+    upper = normalized.upper()
+    # Direct match (e.g., "FS_WRITE")
+    if upper.startswith("FS_") or upper.startswith("MSG_"):
+        return upper
+    # Friendly name lookup (e.g., "write_file")
+    lower = normalized.lower()
+    if lower in _ACTION_TOOL_MAP:
+        return _ACTION_TOOL_MAP[lower]
+    # Fallback: uppercase the input
+    return upper
+
+
+def _build_preflight_args(tool_name: str, target: str, evidence: dict) -> dict:
+    """Build tool args for a pre-flight evaluation from API request fields."""
+    args: dict = {}
+
+    if tool_name in ("FS_MOVE", "FS_COPY", "FS_PROMOTE"):
+        args["src_path"] = target
+        args["dst_path"] = evidence.get("destination", "")
+    else:
+        if target:
+            args["path"] = target
+
+    # For FS_WRITE, policy-eval needs content to hash — use a placeholder.
+    if tool_name == "FS_WRITE" and "content" not in args:
+        args["content"] = "<preflight-evaluation>"
+
+    return args
+
+
+def _register_evaluate_endpoint() -> None:
+    """Register the /api/evaluate HTTP endpoint for external governance evaluation."""
+    global _EVALUATE_ENDPOINT_REGISTERED
+    if _EVALUATE_ENDPOINT_REGISTERED:
+        return
+
+    @govmcp_server.mcp.custom_route("/api/evaluate", methods=["POST"])
+    async def api_evaluate(request: Request) -> Response:
+        # Parse request body
+        try:
+            body = await request.body()
+            if not body:
+                return JSONResponse({"error": "empty request body"}, status_code=400)
+            payload = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "request body must be a JSON object"}, status_code=400)
+
+        # Extract fields
+        action = payload.get("action")
+        if not action or not isinstance(action, str):
+            return JSONResponse(
+                {"error": "missing or invalid 'action' field"},
+                status_code=400,
+            )
+
+        target = str(payload.get("target", "")).strip()
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+        context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+
+        # Resolve tool name
+        tool_name = _resolve_tool_name(action)
+
+        # Build tool args
+        args = _build_preflight_args(tool_name, target, evidence)
+
+        # Build intent
+        goal = evidence.get("goal", f"Evaluate {action} via /api/evaluate")
+        intent = {
+            "goal": str(goal),
+            "constraints": {},
+            "requested_action": tool_name,
+            "inputs": [],
+            "expected_outputs": [{"ref": "file:path", "value": target}] if target else [],
+        }
+        if context:
+            intent["api_context"] = context
+
+        identity = govmcp_server._current_user_identity.get(None)
+
+        try:
+            result = await asyncio.to_thread(
+                govmcp_server.evaluate_action,
+                tool_name,
+                args,
+                intent,
+                user_identity=identity,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"error": f"evaluation failed: {exc}"},
+                status_code=500,
+            )
+
+        return JSONResponse(result)
+
+    _EVALUATE_ENDPOINT_REGISTERED = True
+
+
 def _register_oidc_compatibility_routes() -> None:
     global _OIDC_COMPAT_ROUTES_REGISTERED
     if _OIDC_COMPAT_ROUTES_REGISTERED:
@@ -670,6 +789,8 @@ def build_remote_app():
             "Disable in production by unsetting GOVMCP_OIDC_DIAGNOSTICS.",
             file=sys.stderr, flush=True,
         )
+    # Register /api/evaluate endpoint (available in all auth modes).
+    _register_evaluate_endpoint()
     govmcp_server.mcp.settings.transport_security = _remote_transport_security()
     if _auth_mode() == _AUTH_MODE_OIDC:
         _register_oidc_compatibility_routes()

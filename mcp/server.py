@@ -1200,6 +1200,106 @@ def governed_tool(
     }
 
 
+def evaluate_action(
+    tool_name: str,
+    args: Dict[str, Any],
+    intent: Dict[str, Any],
+    user_identity: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Evaluate an action against governance policy without executing it.
+
+    Routes through the same policy evaluation engine as governed MCP tools,
+    producing an identical chain record. No action is executed — this is a
+    pre-flight check only.
+
+    Returns a dict with: decision, reason, record_hash, missing.
+    """
+    _REGISTRY_INTEGRITY.verify_or_fail()
+
+    # Validate tool exists in capability registry
+    if tool_name not in _CAPS:
+        return {
+            "decision": "DENY",
+            "reason": f"Unknown tool: {tool_name}",
+            "record_hash": None,
+            "missing": ["valid_tool_name"],
+        }
+
+    req_id = str(uuid.uuid4())
+
+    # Normalize args against capability spec
+    norm_args, norm_constraints = normalize_args(tool_name, args)
+    if isinstance(norm_constraints, dict) and norm_constraints.get("_missing"):
+        return {
+            "decision": "DENY",
+            "reason": "Missing required fields: " + ", ".join(norm_constraints["_missing"]),
+            "record_hash": None,
+            "missing": norm_constraints["_missing"],
+        }
+
+    intent_obj = {
+        "tool": tool_name,
+        "args": norm_args,
+        "intent": intent,
+    }
+    if user_identity is not None:
+        intent_obj["user_identity"] = user_identity
+
+    INTENTS_DIR.mkdir(parents=True, exist_ok=True)
+    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
+
+    intent_path = INTENTS_DIR / f"{req_id}.intent.json"
+    _write_json(intent_path, intent_obj)
+
+    with _CHAIN_LOCK:
+        _verify_chain()
+        rec = _append_decision(intent_path)
+        _verify_chain()
+
+    if user_identity is not None:
+        rec["user_identity"] = user_identity
+
+    posture = resolve_posture(RUNTIME)
+    rec["license_status"] = posture["license_status"]
+    rec["license_tier"] = posture["license_tier"]
+    rec["organization_id"] = posture["organization_id"]
+    rec["license_expiry"] = posture["license_expiry"]
+
+    record_path = RECORDS_DIR / f"{req_id}.record.json"
+    _write_json(record_path, rec)
+
+    decision = rec.get("policy_decision", "UNKNOWN")
+    reasons = rec.get("policy_reasons", [])
+
+    # Build human-readable reason string
+    if reasons:
+        reason_parts = []
+        for r in reasons:
+            code = r.get("code", "")
+            detail = r.get("detail", {})
+            if isinstance(detail, dict) and detail:
+                reason_parts.append(f"{code}")
+            else:
+                reason_parts.append(code)
+        reason_str = "; ".join(reason_parts)
+    elif decision == "ALLOW":
+        reason_str = "Action meets all required conditions."
+    else:
+        reason_str = "Action does not meet required conditions."
+
+    # Build missing conditions list for DENY
+    missing = None
+    if decision == "DENY":
+        missing = [r.get("code", "") for r in reasons if r.get("code")]
+
+    return {
+        "decision": decision,
+        "reason": reason_str,
+        "record_hash": rec.get("record_hash"),
+        "missing": missing,
+    }
+
+
 @mcp.tool()
 def approve_artifact(artifact_identity: str, operator_identity: str) -> Dict[str, Any]:
     """Record an opaque artifact approval event in the active governance scope."""
