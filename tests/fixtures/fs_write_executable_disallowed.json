@@ -1,7 +1,7 @@
 {
   "tool": "FS_WRITE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_092_exec_probe.txt",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs/TASK_092_exec_probe.txt",
     "content": "echo hello",
     "overwrite": false,
     "request_executable": true
@@ -16,7 +16,7 @@
     "expected_outputs": [
       {
         "ref": "file:path",
-        "value": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_092_exec_probe.txt"
+        "value": "__GOV_CANONICAL_REPO_PATH__/docs/TASK_092_exec_probe.txt"
       }
     ]
   }

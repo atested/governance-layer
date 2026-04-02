@@ -71,7 +71,7 @@ The Governance Layer is a deterministic policy enforcement system for tool execu
 - Reason code taxonomy (12 filesystem rejection codes)
 - Evidence bundle requirements
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
+<!-- See [CHANGELOG.md](CHANGELOG.md) for detailed progress — not included in public release -->
 
 ---
 
@@ -190,8 +190,7 @@ python3 scripts/verify-record.py record.json  # Phase 3
 python3 scripts/verify-chain.py decision-chain.jsonl  # Full chain
 ```
 
-**See also**:
-- [EPIC_SIGNING.md](EPIC_SIGNING.md) - Technical specification and design rationale
+<!-- See also: EPIC_SIGNING.md — not included in public release -->
 
 ## Key Concepts
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
+TEST_KEY_FILE="$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem"
 HELPER="$ROOT/tests/helpers/signing_key_probe.py"
 TMPDIR=$(mktemp -d)
 cleanup(){ rm -rf "$TMPDIR"; }
@@ -12,11 +13,7 @@ mkdir -p "$test_home/.config/gov-layer"
 
 expected_fatal="FATAL: cryptography module required for signing but not installed"
 key_path="$TMPDIR/key.pem"
-cat <<'PEM' > "$key_path"
------BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIKY6z3CMVvjJkqQW3AX6mEGoVYLRsKcJsteU8h1Hn0pG
------END PRIVATE KEY-----
-PEM
+cp "$TEST_KEY_FILE" "$key_path"
 
 run_probe(){
   local env_args=("HOME=$test_home" "$@")

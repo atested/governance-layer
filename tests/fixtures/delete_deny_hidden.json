@@ -1,14 +1,14 @@
 {
   "tool": "FS_DELETE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/.git/config",
+    "path": "__GOV_CANONICAL_REPO_PATH__/.git/config",
     "recursive": false
   },
   "intent": {
     "goal": "Attempt delete hidden path segment.",
     "constraints": { "recursive": false },
     "requested_action": "FS_DELETE",
-    "inputs": [{ "ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/.git/config" }],
+    "inputs": [{ "ref": "file:path", "value": "__GOV_CANONICAL_REPO_PATH__/.git/config" }],
     "expected_outputs": []
   }
 }

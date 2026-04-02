@@ -88,47 +88,47 @@ cat > "$ROOT/LOGS/t-fs-001.json" <<'JSON'
 JSON
 
 # T-FS-002 Hidden path
-cat > "$ROOT/LOGS/t-fs-002.json" <<'JSON'
+cat > "$ROOT/LOGS/t-fs-002.json" <<JSON
 {
   "intent": {
     "goal": "Attempt write to hidden path inside repo.",
     "constraints": { "overwrite": false },
     "requested_action": "FS_WRITE",
     "inputs": [],
-    "expected_outputs": [{"ref":"file:path","value":"/Volumes/SSD/archive/gov/governance-layer/.ssh/config"}]
+    "expected_outputs": [{"ref":"file:path","value":"$ROOT/.ssh/config"}]
   },
   "tool": "FS_WRITE",
-  "args": { "path": "/Volumes/SSD/archive/gov/governance-layer/.ssh/config", "content": "x", "request_executable": false }
+  "args": { "path": "$ROOT/.ssh/config", "content": "x", "request_executable": false }
 }
 JSON
 
 # T-FS-003 Traversal attempt into hidden path
-cat > "$ROOT/LOGS/t-fs-003.json" <<'JSON'
+cat > "$ROOT/LOGS/t-fs-003.json" <<JSON
 {
   "intent": {
     "goal": "Attempt traversal into hidden path.",
     "constraints": { "overwrite": false },
     "requested_action": "FS_WRITE",
     "inputs": [],
-    "expected_outputs": [{"ref":"file:path","value":"/Volumes/SSD/archive/gov/governance-layer/docs/../.git/config"}]
+    "expected_outputs": [{"ref":"file:path","value":"$ROOT/docs/../.git/config"}]
   },
   "tool": "FS_WRITE",
-  "args": { "path": "/Volumes/SSD/archive/gov/governance-layer/docs/../.git/config", "content": "x", "request_executable": false }
+  "args": { "path": "$ROOT/docs/../.git/config", "content": "x", "request_executable": false }
 }
 JSON
 
 # T-FS-004 Overwrite mismatch (intent says overwrite true but args overwrite false)
-cat > "$ROOT/LOGS/t-fs-004.json" <<'JSON'
+cat > "$ROOT/LOGS/t-fs-004.json" <<JSON
 {
   "intent": {
   "goal": "Attempt overwrite without explicit args overwrite.",
     "constraints": { "overwrite": true },
     "requested_action": "FS_WRITE",
     "inputs": [],
-    "expected_outputs": [{"ref":"file:path","value":"/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md"}]
+    "expected_outputs": [{"ref":"file:path","value":"$ROOT/docs/SCOPE.md"}]
   },
   "tool": "FS_WRITE",
-  "args": { "path": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md", "content": "x", "request_executable": false, "overwrite": false }
+  "args": { "path": "$ROOT/docs/SCOPE.md", "content": "x", "request_executable": false, "overwrite": false }
 }
 JSON
 

@@ -11,9 +11,9 @@ from tool_event_store import upsert_tool_event_index
 
 MAX_EVENT_BYTES = 16384
 MAX_OUTPUTS = 64
-_RUN_ID_RE = re.compile(r"[A-Za-z0-9._-]+$")
-_TOOL_NAME_RE = re.compile(r"[A-Za-z0-9._:-]+$")
-_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class IngestToolEventCapabilityModule(CapabilityModule):

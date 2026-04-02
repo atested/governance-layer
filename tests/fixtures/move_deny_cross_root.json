@@ -1,15 +1,15 @@
 {
   "tool": "FS_MOVE",
   "args": {
-    "src_path": "/Volumes/SSD/archive/gov/runtime/tmp/move-src.txt",
-    "dst_path": "/Volumes/SSD/archive/gov/governance-layer/LOGS/move-dst.txt",
+    "src_path": "__GOV_RUNTIME_PATH__/tmp/move-src.txt",
+    "dst_path": "__GOV_CANONICAL_REPO_PATH__/LOGS/move-dst.txt",
     "overwrite": false
   },
   "intent": {
     "goal": "Attempt cross-root move from runtime root to governance-layer root.",
     "constraints": {"overwrite": false},
     "requested_action": "FS_MOVE",
-    "inputs": [{"ref": "file:src_path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/move-src.txt"}],
-    "expected_outputs": [{"ref": "file:dst_path", "value": "/Volumes/SSD/archive/gov/governance-layer/LOGS/move-dst.txt"}]
+    "inputs": [{"ref": "file:src_path", "value": "__GOV_RUNTIME_PATH__/tmp/move-src.txt"}],
+    "expected_outputs": [{"ref": "file:dst_path", "value": "__GOV_CANONICAL_REPO_PATH__/LOGS/move-dst.txt"}]
   }
 }

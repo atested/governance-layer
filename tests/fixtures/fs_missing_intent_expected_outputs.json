@@ -1,7 +1,7 @@
 {
   "tool": "FS_WRITE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_066_missing_outputs.txt",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs/TASK_066_missing_outputs.txt",
     "content": "x",
     "overwrite": false,
     "request_executable": false

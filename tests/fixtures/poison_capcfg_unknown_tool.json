@@ -1,7 +1,7 @@
 {
   "tool": "FS_DELETE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs/SCOPE.md",
     "recursive": false
   },
   "intent": {
@@ -9,7 +9,7 @@
     "constraints": {},
     "requested_action": "FS_DELETE",
     "inputs": [],
-    "expected_outputs": [{"ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md"}]
+    "expected_outputs": [{"ref": "file:path", "value": "__GOV_CANONICAL_REPO_PATH__/docs/SCOPE.md"}]
   },
   "cap_cfg": {
     "tools": [

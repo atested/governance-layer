@@ -62,13 +62,22 @@ VALID_TIERS = ("personal", "team", "business", "enterprise")
 #   print(pub_bytes.hex())
 #
 # Set GOV_LICENSE_VERIFY_KEY_HEX to override for testing.
-_DEFAULT_VERIFY_KEY_HEX = os.environ.get(
-    "GOV_LICENSE_VERIFY_KEY_HEX",
-    # Production public key.  The corresponding private key is held by the
-    # license issuer (NOT in this repo).  See docs/LICENSING.md for rotation
-    # procedure.  Store the issuer private key at $GOV_LICENSE_SIGNING_KEY_PATH.
-    "ec1ebd3ac6ff62e352f327820b56bddec423d594a9ddfce5117106536bf16bae",
+_PRODUCTION_VERIFY_KEY_HEX = (
+    "ec1ebd3ac6ff62e352f327820b56bddec423d594a9ddfce5117106536bf16bae"
 )
+_env_override = os.environ.get("GOV_LICENSE_VERIFY_KEY_HEX")
+if _env_override is not None:
+    if not os.environ.get("GOV_LICENSE_OVERRIDE_ACKNOWLEDGED"):
+        import sys as _sys
+        print(
+            "WARNING: GOV_LICENSE_VERIFY_KEY_HEX is overridden via environment. "
+            "License verification uses a non-production public key. "
+            "Set GOV_LICENSE_OVERRIDE_ACKNOWLEDGED=1 to suppress this warning.",
+            file=_sys.stderr,
+        )
+    _DEFAULT_VERIFY_KEY_HEX = _env_override
+else:
+    _DEFAULT_VERIFY_KEY_HEX = _PRODUCTION_VERIFY_KEY_HEX
 
 
 def _b64url_encode(data: bytes) -> str:

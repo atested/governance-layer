@@ -9,6 +9,7 @@ MCP tool; not intended for direct invocation by operators.
 
 import json
 import os
+import secrets
 import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -62,7 +63,9 @@ def _json_response(handler, data, status=200):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    cors_origin = handler._cors_origin() if hasattr(handler, "_cors_origin") else ""
+    if cors_origin:
+        handler.send_header("Access-Control-Allow-Origin", cors_origin)
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -106,6 +109,20 @@ def _append_observation_event(event):
 
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui"
 
+# Static UI filenames served without authentication
+_STATIC_FILES = {"index.html", "app.js", "styles.css", ""}
+
+_DASHBOARD_TOKEN = None
+_DASHBOARD_PORT = None
+
+CSP_HEADER = (
+    "default-src 'self'; "
+    "font-src https://fonts.googleapis.com https://fonts.gstatic.com; "
+    "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
+    "script-src 'self'; "
+    "connect-src 'self'"
+)
+
 
 class DashboardHandler(SimpleHTTPRequestHandler):
     """Serves dashboard UI files and /api/* JSON endpoints."""
@@ -113,30 +130,88 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DASHBOARD_UI_DIR), **kwargs)
 
+    def _check_auth(self):
+        """Return True if the request carries a valid bearer token."""
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return False
+        return auth[len("Bearer "):] == _DASHBOARD_TOKEN
+
+    def _origin_allowed(self):
+        """Return True if the Origin header (if present) is localhost."""
+        origin = self.headers.get("Origin", "")
+        if not origin:
+            return True
+        allowed = {
+            f"http://127.0.0.1:{_DASHBOARD_PORT}",
+            f"http://localhost:{_DASHBOARD_PORT}",
+        }
+        return origin in allowed
+
+    def _cors_origin(self):
+        """Return the specific allowed Origin value for CORS, or empty string."""
+        origin = self.headers.get("Origin", "")
+        allowed = {
+            f"http://127.0.0.1:{_DASHBOARD_PORT}",
+            f"http://localhost:{_DASHBOARD_PORT}",
+        }
+        return origin if origin in allowed else ""
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/"):
+            if not self._check_auth():
+                _json_response(self, {"error": "Unauthorized"}, 401)
+                return
             self._handle_api(parsed)
+        elif parsed.path in ("/", "/index.html", ""):
+            self._serve_index_html()
         else:
             super().do_GET()
 
+    def _serve_index_html(self):
+        """Serve index.html with the dashboard token injected as a meta tag."""
+        index_path = DASHBOARD_UI_DIR / "index.html"
+        try:
+            html = index_path.read_text(encoding="utf-8")
+        except OSError:
+            self.send_error(404)
+            return
+        # Inject token meta tag before </head>
+        token_meta = f'  <meta name="dashboard-token" content="{_DASHBOARD_TOKEN}">\n'
+        html = html.replace("</head>", token_meta + "</head>", 1)
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Security-Policy", CSP_HEADER)
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/observe":
-            self._handle_observe()
-        elif parsed.path == "/api/health/acknowledge":
-            self._handle_acknowledge()
-        elif parsed.path.startswith("/api/"):
-            _json_response(self, {"error": "method not allowed"}, 405)
+        if parsed.path.startswith("/api/"):
+            if not self._check_auth():
+                _json_response(self, {"error": "Unauthorized"}, 401)
+                return
+            if parsed.path == "/api/observe":
+                self._handle_observe()
+            elif parsed.path == "/api/health/acknowledge":
+                self._handle_acknowledge()
+            else:
+                _json_response(self, {"error": "method not allowed"}, 405)
         else:
             self.send_error(405)
 
     def do_OPTIONS(self):
+        cors_origin = self._cors_origin()
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        if cors_origin:
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.end_headers()
+
 
     def _handle_observe(self):
         """POST /api/observe — record an ungoverned operation observation.
@@ -356,7 +431,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    global _DASHBOARD_TOKEN, _DASHBOARD_PORT
+
     port = int(os.environ.get("DASHBOARD_PORT", "9700"))
+    _DASHBOARD_PORT = port
+
+    # Generate a random bearer token for this session
+    token = secrets.token_hex(32)
+    _DASHBOARD_TOKEN = token
+    print(f"Dashboard auth token: {token}", file=sys.stderr)
+
+    # Write token to runtime dir so callers (e.g. MCP tool) can retrieve it
+    runtime_dir = os.environ.get("GOV_RUNTIME_DIR", "")
+    if runtime_dir:
+        token_path = Path(runtime_dir) / "dashboard_token"
+        try:
+            token_path.parent.mkdir(parents=True, exist_ok=True)
+            token_path.write_text(token, encoding="utf-8")
+        except OSError as exc:
+            print(f"Warning: could not write dashboard_token: {exc}", file=sys.stderr)
+
     server = HTTPServer(("127.0.0.1", port), DashboardHandler)
     server.serve_forever()
 

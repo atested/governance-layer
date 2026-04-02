@@ -12,10 +12,7 @@ tool_catalog_reset_dir "$TMP_ROOT"
 tool_catalog_reset_catalog_runtime
 rm -rf "$OUT1" "$OUT2"
 
-PRIVATE_PEM='-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIPFVBLmFaiKlEPwC2vjcA6z2OTsG0euiU2Gq4CzhG+7D
------END PRIVATE KEY-----
-'
+PRIVATE_PEM="$(cat "$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem")"
 PUBLIC_PEM='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAAag0f+gOBBZ4T3SxK6bGhC2IW4MhNHvvg8cWuUcOc6k=
 -----END PUBLIC KEY-----

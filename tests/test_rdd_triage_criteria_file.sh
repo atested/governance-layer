@@ -7,6 +7,7 @@ VERIFY="$ROOT/scripts/verify-record.py"
 FIXTURES="$ROOT/tests/fixtures"
 LOG_DIR="$ROOT/LOGS"
 RUNTIME_DIR="$ROOT/out/rdd"
+TEST_KEY_FILE="$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem"
 
 pass=0
 fail=0
@@ -40,11 +41,7 @@ PY
 
 mk_signing_pair () {
   local key_path="$1" pub_path="$2"
-  cat > "$key_path" <<'PEM'
------BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIKY6z3CMVvjJkqQW3AX6mEGoVYLRsKcJsteU8h1Hn0pG
------END PRIVATE KEY-----
-PEM
+  cp "$TEST_KEY_FILE" "$key_path"
   python3 <<PY
 from pathlib import Path
 from cryptography.hazmat.primitives import serialization

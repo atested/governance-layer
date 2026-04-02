@@ -7,7 +7,7 @@ This document lists the minimum files and outputs needed to distribute and valid
 - `README.md` (quickstart + output interpretation)
 - `docs/EXTERNAL_CONTRACTS.md` (proof-bundle external contract)
 - `docs/TEST-SUITE.md` (test catalogue)
-- `docs/dev/ATTESTATION_SPEC.md` (attestation/proof-packet linkage reference)
+- `docs/dev/ATTESTATION_SPEC.md` (attestation/proof-packet linkage reference) <!-- not included in public release -->
 - `system/scripts/bootstrap-run.sh` (one-command setup / runner)
 - `system/scripts/release-gate.sh` (proof-bundle emitter)
 - `system/scripts/validate-proof-bundle.sh` (external contract validator)

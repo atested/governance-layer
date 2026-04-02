@@ -2,8 +2,7 @@
 set -euo pipefail
 
 checks=(
-  "bash system/tests/test_hot_file_scan.sh"
-  "bash system/tests/test_stop_packet_generator.sh"
+  "bash system/tests/test_no_private_keys_tracked.sh"
 )
 
 pass=0

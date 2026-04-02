@@ -1,7 +1,7 @@
 {
   "tool": "FS_LIST",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs",
     "max_entries": 10,
     "include_hidden": true
   },
@@ -13,7 +13,7 @@
     "expected_outputs": [
       {
         "ref": "file:path",
-        "value": "/Volumes/SSD/archive/gov/governance-layer/docs"
+        "value": "__GOV_CANONICAL_REPO_PATH__/docs"
       }
     ]
   }

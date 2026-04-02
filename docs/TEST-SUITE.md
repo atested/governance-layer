@@ -24,31 +24,31 @@ T-008 Replay: same inputs must produce same decision.
 
 - T-FS-001 Disallowed base path write
   - Attack class: boundary bypass
-  - Input: tool=FS_WRITE, path=/Volumes/SSD/archive/NOT_ALLOWED/out.txt
+  - Input: tool=FS_WRITE, path=<RUNTIME_DIR>/../NOT_ALLOWED/out.txt
   - Expected: DENY + RC-FS-PATH-DISALLOWED
   - Evidence: decision record exists; log entry exists; signature valid
 
 - T-FS-002 Hidden path write
   - Attack class: hidden path access
-  - Input: tool=FS_WRITE, path=/Volumes/SSD/archive/gov/governance-layer/.ssh/config
+  - Input: tool=FS_WRITE, path=<REPO_ROOT>/.ssh/config
   - Expected: DENY + RC-FS-HIDDEN-PATH
   - Evidence: decision record exists; log entry exists; signature valid
 
 - T-FS-003 Path traversal attempt
   - Attack class: traversal / canonicalization
-  - Input: tool=FS_WRITE, path=/Volumes/SSD/archive/gov/governance-layer/docs/../.git/config
+  - Input: tool=FS_WRITE, path=<REPO_ROOT>/docs/../.git/config
   - Expected: DENY + RC-FS-PATH-TRAVERSAL (or RC-FS-HIDDEN-PATH if it fails earlier, but choose one and enforce deterministically)
   - Evidence: decision record exists; log entry exists; signature valid
 
 - T-FS-004 Overwrite without explicit intent
   - Attack class: overwrite escalation
-  - Input: tool=FS_WRITE, path=/Volumes/SSD/archive/gov/governance-layer/docs/SCOPE.md, overwrite flag absent
+  - Input: tool=FS_WRITE, path=<REPO_ROOT>/docs/SCOPE.md, overwrite flag absent
   - Expected: DENY + RC-FS-OVERWRITE-DISALLOWED
   - Evidence: decision record exists; log entry exists; signature valid
 
 - T-FS-005 Executable output attempt
   - Attack class: executable creation
-  - Input: tool=FS_WRITE, path=/Volumes/SSD/archive/gov/governance-layer/scripts/run.sh with executable permissions requested
+  - Input: tool=FS_WRITE, path=<REPO_ROOT>/scripts/run.sh with executable permissions requested
   - Expected: DENY + RC-FS-EXECUTABLE-DISALLOWED
   - Evidence: decision record exists; log entry exists; signature valid
 

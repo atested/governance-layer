@@ -3,6 +3,17 @@
 const API = "";  // relative to current origin
 const pageSize = 20;
 
+// Bearer token injected by the server into the HTML meta tag at startup
+function _getAuthToken() {
+  const meta = document.querySelector('meta[name="dashboard-token"]');
+  return meta ? meta.getAttribute("content") : null;
+}
+
+function _authHeaders() {
+  const token = _getAuthToken();
+  return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
 // ---------------------------------------------------------------------------
 // Tooltip helper
 // ---------------------------------------------------------------------------
@@ -25,7 +36,7 @@ async function api(endpoint, params = {}) {
     if (v !== null && v !== undefined && v !== "") qs.set(k, String(v));
   }
   const url = `${API}/api/${endpoint}${qs.toString() ? "?" + qs : ""}`;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { headers: _authHeaders() });
   if (!resp.ok) throw new Error(`API ${resp.status}: ${endpoint}`);
   return resp.json();
 }
@@ -107,9 +118,10 @@ function decisionTag(decision) {
 }
 
 function escapeHtml(s) {
+  if (s == null) return "";
   const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
+  div.textContent = String(s);
+  return div.innerHTML.replace(/'/g, "&#39;");
 }
 
 // Human-readable category names
@@ -286,19 +298,31 @@ async function renderOverview() {
 
       <div class="card">
         <h3>Recent Activity</h3>
+        <div id="overview-recent-activity">
         ${activity.entries.length ? activity.entries.map(e => {
           const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
           const href = rid ? navHref("/record", { record_id: rid }) : "";
           return `
-            <div class="activity-entry${href ? " clickable" : ""}" ${href ? `onclick="window.location.hash='${href}'"` : ""}>
+            <div class="activity-entry${href ? " clickable" : ""}" ${href ? `data-nav-href="${escapeHtml(href)}"` : ""}>
               <strong>${escapeHtml(e.summary)}</strong>
               <span class="muted"> \u00b7 ${categoryLabel(e.event_category)} \u00b7 ${formatTime(e.timestamp_utc)}</span>
             </div>
           `;
         }).join("") : '<p class="muted">No activity recorded yet.</p>'}
+        </div>
       </div>
     </section>
   `;
+}
+
+function _attachOverviewActivityListeners() {
+  const container = document.getElementById("overview-recent-activity");
+  if (!container) return;
+  container.querySelectorAll(".activity-entry[data-nav-href]").forEach(el => {
+    el.addEventListener("click", () => {
+      window.location.hash = el.getAttribute("data-nav-href");
+    });
+  });
 }
 
 async function renderActivity() {
@@ -327,21 +351,21 @@ async function renderActivity() {
                 <th>${tip("Detail", "Link to the full record in the governance chain.")}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="activity-tbody">
               ${data.entries.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 const decision = e.evidence?.policy_decision || "";
                 const isDeny = decision === "DENY" || e.summary?.includes("DENY");
                 const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : ""].filter(Boolean).join(" ");
                 return `
-                  <tr class="${rowCls}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
+                  <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${decision ? `<span class="${isDeny ? "status-danger" : "status-ok"}">${decision}</span>` : "\u2014"}</td>
                     <td>${escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
-                    <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "\u2014"}</td>
+                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
                   </tr>
                 `;
               }).join("")}
@@ -356,6 +380,16 @@ async function renderActivity() {
       </div>
     </section>
   `;
+}
+
+function _attachActivityListeners() {
+  const tbody = document.getElementById("activity-tbody");
+  if (!tbody) return;
+  tbody.querySelectorAll("tr[data-nav-href]").forEach(row => {
+    row.addEventListener("click", () => {
+      window.location.hash = row.getAttribute("data-nav-href");
+    });
+  });
 }
 
 async function renderApprovals() {
@@ -423,17 +457,17 @@ async function renderAudit() {
                 <th>${tip("Detail", "Link to the full record in the governance chain.")}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="audit-tbody">
               ${data.entries.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 return `
-                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `onclick="window.location.hash='${navHref("/record", { record_id: rid })}'"` : ""}>
+                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.user_identity || "\u2014")}</td>
-                    <td>${rid ? `<a href="${navHref("/record", { record_id: rid })}">View</a>` : "\u2014"}</td>
+                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
                   </tr>
                 `;
               }).join("")}
@@ -461,7 +495,7 @@ async function renderAudit() {
         <form class="audit-form" id="audit-form" onsubmit="return handleAuditSubmit(event)">
           <label>${tip("Start time", "Filter to events on or after this time.")}<input type="datetime-local" name="start_time" value="${ctx.startTime ? ctx.startTime.replace("Z","").replace("+00:00","") : ""}"></label>
           <label>${tip("End time", "Filter to events on or before this time.")}<input type="datetime-local" name="end_time" value="${ctx.endTime ? ctx.endTime.replace("Z","").replace("+00:00","") : ""}"></label>
-          <label>${tip("User identity", "Filter by the user who triggered the action.")}<input type="text" name="user" value="${escapeHtml(ctx.user)}" placeholder="e.g. gkeeter"></label>
+          <label>${tip("User identity", "Filter by the user who triggered the action.")}<input type="text" name="user" value="${escapeHtml(ctx.user)}" placeholder="e.g. operator-1"></label>
           <label>${tip("Tool name", "Filter by the governed tool that was invoked.")}<input type="text" name="tool" value="${escapeHtml(ctx.tool)}" placeholder="e.g. FS_WRITE"></label>
           <label>${tip("Decision", "Filter by policy outcome: ALLOW or DENY.")}
             <select name="decision">
@@ -487,6 +521,16 @@ async function renderAudit() {
       ${resultsHtml}
     </section>
   `;
+}
+
+function _attachAuditListeners() {
+  const tbody = document.getElementById("audit-tbody");
+  if (!tbody) return;
+  tbody.querySelectorAll("tr[data-nav-href]").forEach(row => {
+    row.addEventListener("click", () => {
+      window.location.hash = row.getAttribute("data-nav-href");
+    });
+  });
 }
 
 async function renderRecordDetail() {
@@ -600,7 +644,7 @@ async function renderHealth() {
   const data = await api("health");
 
   const alertsHtml = data.alerts && data.alerts.length ? `
-    <div class="card">
+    <div class="card" id="health-alerts-container">
       <h3>Active Alerts</h3>
       ${data.alerts.map(a => `
         <div class="health-alert health-alert--${a.severity}">
@@ -610,7 +654,9 @@ async function renderHealth() {
           </div>
           <p>${escapeHtml(a.message)}</p>
           ${a.guidance ? `<p class="muted" style="font-size:0.85rem">${escapeHtml(a.guidance)}</p>` : ""}
-          <button class="export-link" style="margin-top:8px" onclick="acknowledgeAlert('${escapeHtml(a.source)}', '${escapeHtml(a.message)}')">Acknowledge</button>
+          <button class="export-link ack-alert-btn" style="margin-top:8px"
+            data-alert-source="${escapeHtml(a.source)}"
+            data-alert-message="${escapeHtml(a.message)}">Acknowledge</button>
         </div>
       `).join("")}
     </div>
@@ -836,6 +882,19 @@ async function renderHealth() {
   `;
 }
 
+function _attachHealthListeners() {
+  const container = document.getElementById("health-alerts-container");
+  if (!container) return;
+  container.querySelectorAll(".ack-alert-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      window.acknowledgeAlert(
+        btn.getAttribute("data-alert-source"),
+        btn.getAttribute("data-alert-message")
+      );
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Render dispatcher
 // ---------------------------------------------------------------------------
@@ -873,6 +932,12 @@ async function render() {
       ${content}
     </div>
   `;
+
+  // Attach event listeners for elements that replaced inline onclick attributes
+  _attachOverviewActivityListeners();
+  _attachActivityListeners();
+  _attachAuditListeners();
+  _attachHealthListeners();
 }
 
 // ---------------------------------------------------------------------------
@@ -952,7 +1017,7 @@ window.acknowledgeAlert = async function(source, message) {
   try {
     await fetch(`${API}/api/health/acknowledge`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ..._authHeaders() },
       body: JSON.stringify({ source, message }),
     });
     clearCache();

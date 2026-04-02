@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EVAL="$ROOT/scripts/policy-eval.py"
 REPLAY="$ROOT/scripts/replay-record.py"
 FIXTURE="$ROOT/tests/fixtures/canon_001a.json"
+TEST_KEY_FILE="$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem"
 
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/gov-replay-trust.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -49,11 +50,7 @@ run_capture() {
 
 mk_signing_pair() {
   local key_path="$1" pub_path="$2"
-  cat > "$key_path" <<'PEM'
------BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIMxX0vVwSzM2G6kqj0VW06bAPl23xv7P3cu4S4fvm4l4
------END PRIVATE KEY-----
-PEM
+  cp "$TEST_KEY_FILE" "$key_path"
   python3 <<PY
 from pathlib import Path
 from cryptography.hazmat.primitives import serialization

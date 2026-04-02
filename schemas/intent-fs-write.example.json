@@ -9,12 +9,12 @@
       {"ref": "inline:text", "value": "hello"}
     ],
     "expected_outputs": [
-      {"ref": "file:path", "value": "/Volumes/SSD/archive/gov/governance-layer/LOGS/example.txt"}
+      {"ref": "file:path", "value": "<REPO_ROOT>/LOGS/example.txt"}
     ]
   },
   "tool": "FS_WRITE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/LOGS/example.txt",
+    "path": "<REPO_ROOT>/LOGS/example.txt",
     "content": "hello",
     "request_executable": false
   }

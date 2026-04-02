@@ -12,10 +12,7 @@ SUMDIR="out/test_export_receipt_bundle_signature_parity_out"
 rm -rf "$TMP_ROOT" "$OUTA" "$OUTB" "$SUMDIR" out/mcp_exec
 mkdir -p "$TMP_ROOT" "$SUMDIR"
 
-PRIVATE_PEM='-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIPFVBLmFaiKlEPwC2vjcA6z2OTsG0euiU2Gq4CzhG+7D
------END PRIVATE KEY-----
-'
+PRIVATE_PEM="$(cat "$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem")"
 
 make_receipt() {
   local run_id="$1"

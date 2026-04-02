@@ -1,7 +1,7 @@
 {
   "tool": "FS_MKDIR",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/runtime/tmp/test-mkdir-T001",
+    "path": "__GOV_RUNTIME_PATH__/tmp/test-mkdir-T001",
     "parents": false,
     "exist_ok": false
   },
@@ -10,6 +10,6 @@
     "constraints": {"parents": false, "exist_ok": false},
     "requested_action": "FS_MKDIR",
     "inputs": [],
-    "expected_outputs": [{"ref": "directory:path", "value": "/Volumes/SSD/archive/gov/runtime/tmp/test-mkdir-T001"}]
+    "expected_outputs": [{"ref": "directory:path", "value": "__GOV_RUNTIME_PATH__/tmp/test-mkdir-T001"}]
   }
 }

@@ -3,12 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_VENV_PY="$ROOT/mcp/.venv/bin/python3"
-ARCHIVE_VENV_PY="/Volumes/SSD/archive/gov/governance-layer/mcp/.venv/bin/python3"
 
 if [ -x "$DEFAULT_VENV_PY" ]; then
   VENV_PY="$DEFAULT_VENV_PY"
-elif [ -x "$ARCHIVE_VENV_PY" ]; then
-  VENV_PY="$ARCHIVE_VENV_PY"
 else
   echo "ERROR: missing interpreter for Inspector CORS test" >&2
   exit 1
@@ -98,7 +95,7 @@ import remote_server
 os.environ["GOVMCP_REMOTE_AUTH_MODE"] = "oidc"
 os.environ["GOVMCP_OIDC_ISSUER_URL"] = os.environ["ISSUER_URL"]
 os.environ["GOVMCP_OIDC_AUDIENCE"] = "https://govmcp.local/api"
-os.environ["GOVMCP_PUBLIC_BASE_URL"] = "https://mac-mini.tail341fb0.ts.net"
+os.environ["GOVMCP_PUBLIC_BASE_URL"] = "https://govmcp.example.test"
 os.environ["GOVMCP_HOST"] = "127.0.0.1"
 os.environ["GOVMCP_PORT"] = "6100"
 os.environ["GOVMCP_STREAMABLE_HTTP_PATH"] = "/mcp"

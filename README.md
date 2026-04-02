@@ -25,7 +25,7 @@ The system exposes 46 governed tools via the [Model Context Protocol](https://mo
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/GregKeeter/governance-layer.git
+git clone https://github.com/atested/governance-layer.git
 cd governance-layer
 python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt

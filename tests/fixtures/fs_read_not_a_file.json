@@ -1,7 +1,7 @@
 {
   "tool": "FS_READ",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs",
     "max_bytes": 4096,
     "offset": 0,
     "as_text": true
@@ -14,7 +14,7 @@
     "expected_outputs": [
       {
         "ref": "file:path",
-        "value": "/Volumes/SSD/archive/gov/governance-layer/docs"
+        "value": "__GOV_CANONICAL_REPO_PATH__/docs"
       }
     ]
   }

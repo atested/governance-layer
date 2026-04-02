@@ -220,9 +220,9 @@ The following are **implementation details** and may change:
 
 ## For More Details
 
-- **Full rationale:** See [design memo](dev/design-memos/2026-02-25__external-usability-contracts__decision.md)
-- **Schema specs:** See [ATTESTATION_SPEC.md](dev/ATTESTATION_SPEC.md)
-- **Operational usage:** See [RUNBOOK.md](dev/RUNBOOK.md)
+<!-- - **Full rationale:** See design memo (not included in public release) -->
+<!-- - **Schema specs:** See ATTESTATION_SPEC.md (not included in public release) -->
+<!-- - **Operational usage:** See RUNBOOK.md (not included in public release) -->
 - **Quickstart:** See [README.md](README.md)
 
 ---

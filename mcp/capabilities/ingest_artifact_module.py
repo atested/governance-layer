@@ -10,7 +10,7 @@ from typing import Any, Dict
 from capabilities.base import CapabilityDescribe, CapabilityModule
 
 MAX_ARTIFACT_BYTES = 4096
-_RUN_ID_RE = re.compile(r"[A-Za-z0-9._-]+$")
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 class IngestArtifactCapabilityModule(CapabilityModule):

@@ -495,3 +495,191 @@ class RegistryIntegrity:
         except Exception:
             # Stability logging is best-effort — never block governance operations
             pass
+
+
+# ---------------------------------------------------------------------------
+# Generic config file integrity (for messaging-tool-map and similar files)
+# ---------------------------------------------------------------------------
+
+def validate_messaging_map_schema(data: dict) -> Tuple[bool, Optional[str]]:
+    """Validate messaging-tool-map.v1.json against the expected schema."""
+    if not isinstance(data, dict):
+        return False, "Messaging map must be a JSON object"
+    if "mapping_schema_version" not in data:
+        return False, "Missing required field: mapping_schema_version"
+    if "entries" not in data:
+        return False, "Missing required field: entries"
+    entries = data["entries"]
+    if not isinstance(entries, list):
+        return False, "entries must be an array"
+    if len(entries) == 0:
+        return False, "entries must not be empty"
+    seen_ids = set()
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            return False, f"entries[{i}] must be a JSON object"
+        for req in ("mapping_id", "capability_class"):
+            if req not in entry:
+                return False, f"entries[{i}] missing required field: {req}"
+        mid = entry["mapping_id"]
+        if mid in seen_ids:
+            return False, f"entries[{i}] duplicate mapping_id: {mid}"
+        seen_ids.add(mid)
+    return True, None
+
+
+class ConfigFileIntegrity:
+    """Generic integrity protection for security-critical config files.
+
+    Same model as RegistryIntegrity but with a pluggable schema validator.
+    Used for messaging-tool-map.v1.json and similar configuration surfaces.
+    """
+
+    def __init__(
+        self,
+        config_path: Path,
+        runtime_dir: Path,
+        *,
+        name: str = "config",
+        validate_fn=None,
+        backup_filename: str = "config_backup.json",
+    ):
+        self._config_path = config_path
+        self._runtime_dir = runtime_dir
+        self._name = name
+        self._validate_fn = validate_fn
+        self._stability_log_path = runtime_dir / "LOGS" / "chain_stability.jsonl"
+        self._backup_path = runtime_dir / backup_filename
+        self._lock = threading.Lock()
+
+        self._startup_hash: Optional[str] = None
+        self._current_hash: Optional[str] = None
+        self._last_verified: Optional[str] = None
+        self._startup_time: Optional[str] = None
+        self._reload_count: int = 0
+
+    def initialize(self, *, enforce_permissions: bool = True) -> Dict[str, Any]:
+        """Initialize integrity at startup. Raises RuntimeError on fatal errors."""
+        result = {"config_path": str(self._config_path), "status": "ok", "warnings": []}
+
+        if not self._config_path.exists():
+            raise RuntimeError(
+                f"{self._name.upper()}_MISSING: {self._config_path} not found."
+            )
+        if not self._config_path.is_file():
+            raise RuntimeError(
+                f"{self._name.upper()}_NOT_FILE: {self._config_path} is not a regular file."
+            )
+
+        # Permission check
+        try:
+            mode = self._config_path.stat().st_mode & 0o777
+            if mode & 0o077:
+                msg = (
+                    f"{self._name.upper()}_PERMISSIONS_TOO_OPEN: "
+                    f"{self._config_path} has mode {oct(mode)}. Expected 0600."
+                )
+                if enforce_permissions:
+                    result["warnings"].append(msg)
+                    try:
+                        os.chmod(str(self._config_path), stat.S_IRUSR | stat.S_IWUSR)
+                        result["warnings"].append(
+                            f"Auto-fixed permissions to 0600 on {self._config_path}"
+                        )
+                    except OSError as e:
+                        raise RuntimeError(f"{msg} Failed to auto-fix: {e}")
+                else:
+                    result["warnings"].append(msg + " (enforcement disabled)")
+        except OSError:
+            pass
+
+        # Read and hash
+        try:
+            raw = self._config_path.read_bytes()
+        except OSError as e:
+            raise RuntimeError(f"{self._name.upper()}_UNREADABLE: {e}")
+
+        file_hash = _sha256_bytes(raw)
+
+        # Parse and validate
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise RuntimeError(f"{self._name.upper()}_INVALID_JSON: {e}")
+
+        if self._validate_fn:
+            valid, err = self._validate_fn(data)
+            if not valid:
+                raise RuntimeError(f"{self._name.upper()}_SCHEMA_INVALID: {err}")
+
+        with self._lock:
+            self._startup_hash = file_hash
+            self._current_hash = file_hash
+            self._last_verified = _now_utc_z()
+            self._startup_time = _now_utc_z()
+
+        result["hash"] = file_hash
+
+        # Backup
+        try:
+            self._runtime_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(self._config_path), str(self._backup_path))
+        except OSError as e:
+            result["warnings"].append(f"Failed to create backup: {e}")
+
+        self._log_stability_event("server_start", {
+            "description": f"{self._name} integrity initialized",
+            "config_hash": file_hash,
+        })
+
+        return result
+
+    def verify_or_fail(self) -> str:
+        """Verify file hasn't changed. Raises RuntimeError on mismatch."""
+        if self._current_hash is None:
+            raise RuntimeError(
+                f"{self._name.upper()}_NOT_INITIALIZED: Integrity not initialized."
+            )
+        try:
+            current = _sha256_file(self._config_path)
+        except OSError as e:
+            raise RuntimeError(f"{self._name.upper()}_UNREADABLE: {e}")
+
+        with self._lock:
+            self._last_verified = _now_utc_z()
+            if current != self._current_hash:
+                self._log_stability_event("suspicious_event", {
+                    "description": f"{self._name} modified without governed reload",
+                    "source": f"{self._name}_integrity",
+                    "expected_hash": self._current_hash,
+                    "actual_hash": current,
+                })
+                raise RuntimeError(
+                    f"{self._name.upper()}_TAMPERED: {self._config_path} modified "
+                    f"without governed reload. Expected: {self._current_hash}, "
+                    f"found: {current}. Fail closed."
+                )
+            return current
+
+    def status(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "config_path": str(self._config_path),
+                "name": self._name,
+                "startup_hash": self._startup_hash,
+                "current_hash": self._current_hash,
+                "last_verified": self._last_verified,
+                "reload_count": self._reload_count,
+                "initialized": self._startup_hash is not None,
+            }
+
+    def _log_stability_event(self, event_type: str, detail: Dict[str, Any]) -> None:
+        try:
+            import sys as _sys
+            scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+            if str(scripts_dir) not in _sys.path:
+                _sys.path.insert(0, str(scripts_dir))
+            from chain_health import append_stability_event
+            append_stability_event(self._stability_log_path, event_type, detail)
+        except Exception:
+            pass

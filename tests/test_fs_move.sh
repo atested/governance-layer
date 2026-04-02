@@ -87,7 +87,8 @@ replay_check () {
 
 mkdir -p "$ROOT/LOGS"
 # Ensure runtime/tmp exists for ALLOW test path
-mkdir -p /Volumes/SSD/archive/gov/runtime/tmp
+RUNTIME_TMP="${GOV_RUNTIME_PATH:-$ROOT/gov_runtime}/tmp"
+mkdir -p "$RUNTIME_TMP"
 
 # ---------------------------------------------------------------------------
 # T-MOVE-001: ALLOW within same allowed root

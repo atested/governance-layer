@@ -3,12 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_VENV_PY="$ROOT/mcp/.venv/bin/python3"
-ARCHIVE_VENV_PY="/Volumes/SSD/archive/gov/governance-layer/mcp/.venv/bin/python3"
 
 if [ -x "$DEFAULT_VENV_PY" ]; then
   VENV_PY="$DEFAULT_VENV_PY"
-elif [ -x "$ARCHIVE_VENV_PY" ]; then
-  VENV_PY="$ARCHIVE_VENV_PY"
 else
   echo "ERROR: missing interpreter for OIDC verifier test" >&2
   exit 1
@@ -35,7 +32,7 @@ PY
 ISSUER_PORT="$PORT"
 ISSUER_URL="http://127.0.0.1:${ISSUER_PORT}"
 CANONICAL_AUDIENCE="https://govmcp.local/api"
-RESOURCE_AUDIENCE="https://mac-mini.tail341fb0.ts.net/mcp"
+RESOURCE_AUDIENCE="https://govmcp.example.test/mcp"
 WRONG_AUDIENCE="https://example.invalid/not-allowed"
 SCOPE="govmcp:invoke"
 

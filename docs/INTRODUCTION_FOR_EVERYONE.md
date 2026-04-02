@@ -299,8 +299,8 @@ The Governance Layer is an active project implementing these principles in pract
 
 For more technical detail, see:
 - [GOVERNANCE_OVERVIEW.md](GOVERNANCE_OVERVIEW.md) - System architecture and guarantees
-- [Verified AI Taxonomy](dev/design-memos/2026-02-24__verified-ai-taxonomy__eval.md) - Classification framework for trustworthy AI
-- [Case Strength System](dev/design-memos/2026-02-24__case-strength-system__eval.md) - Argument evaluation application
+<!-- - Verified AI Taxonomy — not included in public release -->
+<!-- - Case Strength System — not included in public release -->
 
 ---
 

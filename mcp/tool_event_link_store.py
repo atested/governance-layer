@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -8,8 +9,8 @@ from typing import Any
 from storage_contract import tool_event_link_index_path
 from tool_event_store import get_tool_event_by_digest, list_tool_events_for_receipt
 
-_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
-_RECEIPT_ID_RE = re.compile(r"[A-Za-z0-9._:-]{1,128}$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RECEIPT_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _INDEX_VERSION = "v1"
 
 
@@ -114,6 +115,7 @@ def _write(repo_root: Path, payload: dict[str, Any]) -> None:
         "tool_event_to_receipts": normalized["tool_event_to_receipts"],
     }
     path.write_text(_canonical_json(out) + "\n", encoding="utf-8")
+    os.chmod(str(path), 0o600)
 
 
 def upsert_receipt_tool_event_links(repo_root: Path, receipt_id: str, tool_event_digests: list[Any]) -> None:

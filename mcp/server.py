@@ -43,7 +43,7 @@ from tool_event_link_store import upsert_receipt_tool_event_links
 from tool_event_link_store import get_receipts_for_tool_event, get_tool_events_for_receipt
 from capabilities import build_registry
 from licensing import resolve_posture, activate_license, trial_days_remaining, load_license
-from registry_integrity import RegistryIntegrity
+from registry_integrity import RegistryIntegrity, ConfigFileIntegrity, validate_messaging_map_schema
 from storage_contract import describe_storage_contract, runtime_root
 
 REPO = Path(__file__).resolve().parents[1]
@@ -95,6 +95,10 @@ _VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 # threading.Lock is correct here because FastMCP runs sync @mcp.tool() handlers
 # in a thread pool — asyncio.Lock cannot be acquired from sync thread context.
 _CHAIN_LOCK = threading.Lock()
+
+# Registry reload lock: prevents concurrent reads and writes of the in-memory
+# capability registry (_CAP_REG, _CAPS) from racing during a governed reload.
+_REGISTRY_LOCK = threading.Lock()
 
 # Per-request user identity, set by remote_server.py middleware for HTTP
 # transport.  Defaults to None for stdio (single-user) transport.
@@ -482,7 +486,9 @@ def _run_stdio_capabilities_execute() -> int:
 
 
 def _cap_registry():
-    return build_registry(CAP_REGISTRY_PATH)
+    _REGISTRY_INTEGRITY.verify_or_fail()
+    with _REGISTRY_LOCK:
+        return build_registry(CAP_REGISTRY_PATH)
 
 
 @mcp.tool()
@@ -566,6 +572,21 @@ _REGISTRY_INIT_RESULT = _REGISTRY_INTEGRITY.initialize(
 # Print startup warnings (visible in server logs)
 for _w in _REGISTRY_INIT_RESULT.get("warnings", []):
     print(f"[registry-integrity] {_w}", file=sys.stderr)
+
+# Messaging tool map integrity protection (same model as capability registry)
+_MSG_MAP_PATH = REPO / "capabilities" / "messaging-tool-map.v1.json"
+_MSG_MAP_INTEGRITY = ConfigFileIntegrity(
+    _MSG_MAP_PATH, RUNTIME,
+    name="messaging_map",
+    validate_fn=validate_messaging_map_schema,
+    backup_filename="messaging_map_backup.json",
+)
+try:
+    _MSG_MAP_INIT = _MSG_MAP_INTEGRITY.initialize(enforce_permissions=True)
+    for _w in _MSG_MAP_INIT.get("warnings", []):
+        print(f"[messaging-map-integrity] {_w}", file=sys.stderr)
+except RuntimeError as _e:
+    print(f"[messaging-map-integrity] WARNING: {_e}", file=sys.stderr)
 
 def get_capability(capability: str) -> dict:
     if capability not in _CAPS:
@@ -999,7 +1020,7 @@ def _verify_chain() -> None:
     # M1: Check for truncation before hash verification.
     _check_chain_truncation()
     proc = subprocess.run(
-        ["python3", str(VERIFY_CHAIN), str(CHAIN)],
+        [sys.executable, str(VERIFY_CHAIN), str(CHAIN)],
         capture_output=True,
         text=True,
     )
@@ -1041,9 +1062,11 @@ def governed_tool(
     Returns:
         Dict with policy_decision, policy_reasons, decision_record, and optional action results.
     """
-    # Registry integrity: verify the configuration file hasn't been tampered with.
-    # Fail closed if the registry was modified without a governed reload.
+    # Registry integrity: verify configuration files haven't been tampered with.
+    # Fail closed if modified without a governed reload.
     _REGISTRY_INTEGRITY.verify_or_fail()
+    if tool_name in ("MSG_SEND", "MSG_REPLY"):
+        _MSG_MAP_INTEGRITY.verify_or_fail()
 
     req_id = str(uuid.uuid4())
     governed_family = _governed_family()
@@ -1520,8 +1543,9 @@ def registry_reload() -> Dict[str, Any]:
         _verify_chain()
 
     # Reload the in-memory registry used by server.py
-    _CAP_REG = _load_cap_registry()
-    _CAPS = _cap_container(_CAP_REG)
+    with _REGISTRY_LOCK:
+        _CAP_REG = _load_cap_registry()
+        _CAPS = _cap_container(_CAP_REG)
 
     result["governance_event_id"] = event.get("event_id")
     return result

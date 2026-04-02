@@ -1,8 +1,8 @@
 #!/bin/bash
 # Start the Atested Governance Dashboard.
-# Preferred method: ask the AI agent to open the dashboard (governance_dashboard MCP tool).
+# Preferred method: ask the AI agent to open the dashboard (atested_dashboard MCP tool).
 # This script is a manual fallback.
-cd /Volumes/SSD/archive/gov/governance-layer || exit 1
+cd "$(cd "$(dirname "$0")" && pwd)" || exit 1
 DASHBOARD_PORT="${DASHBOARD_PORT:-9700}" \
   GOV_RUNTIME_DIR="${GOV_RUNTIME_DIR:-$(pwd)/gov_runtime}" \
   GOV_CANONICAL_REPO_PATH="${GOV_CANONICAL_REPO_PATH:-$(pwd)}" \

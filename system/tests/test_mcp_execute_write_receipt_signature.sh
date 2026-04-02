@@ -11,10 +11,7 @@ mkdir -p "$TMP_ROOT"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-PRIVATE_PEM='-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIPFVBLmFaiKlEPwC2vjcA6z2OTsG0euiU2Gq4CzhG+7D
------END PRIVATE KEY-----
-'
+PRIVATE_PEM="$(cat "$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem")"
 
 run_once() {
   local out_file="$1"

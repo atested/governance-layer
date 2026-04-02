@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REG="$ROOT/capabilities/capability-registry.json"
 EVAL="$ROOT/scripts/policy-eval.py"
 
-RUNTIME="${GOV_RUNTIME_DIR:-/Volumes/SSD/archive/gov/runtime}"
+RUNTIME="${GOV_RUNTIME_DIR:?GOV_RUNTIME_DIR must be set}"
 CHAIN="$RUNTIME/LOGS/decision-chain.jsonl"
 
 # Resolve placeholder tokens for policy-eval allow_base_dirs

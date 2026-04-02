@@ -1,7 +1,7 @@
 {
   "tool": "FS_WRITE",
   "args": {
-    "path": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_066_missing_goal.txt",
+    "path": "__GOV_CANONICAL_REPO_PATH__/docs/TASK_066_missing_goal.txt",
     "content": "x",
     "overwrite": false,
     "request_executable": false
@@ -15,7 +15,7 @@
     "expected_outputs": [
       {
         "ref": "file:path",
-        "value": "/Volumes/SSD/archive/gov/governance-layer/docs/TASK_066_missing_goal.txt"
+        "value": "__GOV_CANONICAL_REPO_PATH__/docs/TASK_066_missing_goal.txt"
       }
     ]
   }

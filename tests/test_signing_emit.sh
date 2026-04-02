@@ -2,17 +2,14 @@
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel)
+TEST_KEY_FILE="$ROOT/system/tests/fixtures/keys/ed25519_test_private.pem"
 TMPDIR=$(mktemp -d)
 cleanup(){ rm -rf "$TMPDIR"; }
 trap cleanup EXIT
 
 KEY_PATH="$TMPDIR/key.pem"
 PUB_PATH="$TMPDIR/key.pub.pem"
-cat <<'PEM' > "$KEY_PATH"
------BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIKY6z3CMVvjJkqQW3AX6mEGoVYLRsKcJsteU8h1Hn0pG
------END PRIVATE KEY-----
-PEM
+cp "$TEST_KEY_FILE" "$KEY_PATH"
 
 python3 <<PY
 from pathlib import Path

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from storage_contract import tool_catalog_store_root
 
 _MAX_DOC_BYTES = 32768
 _CREATED_FROM_VALUES = {"ingest", "manual", "external"}
-_TOOL_ID_RE = re.compile(r"tool_[0-9a-f]{16}$")
+_TOOL_ID_RE = re.compile(r"^tool_[0-9a-f]{16}$")
 _SCHEMA_SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _CAPABILITY_TOKEN_RE = re.compile(r"^[A-Z0-9_]{2,64}$")
 
@@ -161,13 +162,16 @@ def _write_index(repo_root: Path, obj: dict[str, Any]) -> None:
     p = _index_path(repo_root)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(_canonical_json(obj), encoding="utf-8")
+    os.chmod(str(p), 0o600)
 
 
 def put(repo_root: Path, payload: dict[str, Any]) -> str:
     doc = normalize_tool_doc(payload)
     tools_dir = _tools_dir(repo_root)
     tools_dir.mkdir(parents=True, exist_ok=True)
-    (tools_dir / f"{doc['tool_id']}.json").write_text(_canonical_json(doc), encoding="utf-8")
+    tool_file = tools_dir / f"{doc['tool_id']}.json"
+    tool_file.write_text(_canonical_json(doc), encoding="utf-8")
+    os.chmod(str(tool_file), 0o600)
     index = _load_index(repo_root)
     seq = int(index["next_seq"])
     index["events"].append({"seq": seq, "tool_id": doc["tool_id"]})

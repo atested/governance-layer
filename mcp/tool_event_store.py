@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -9,7 +10,7 @@ from storage_contract import runtime_root as contract_runtime_root
 from storage_contract import tool_event_bundle_store_root as contract_tool_event_bundle_store_root
 from storage_contract import tool_event_store_root as contract_tool_event_store_root
 
-_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _BUNDLE_ID_RE = re.compile(r"^teb_[0-9a-f]{64}$")
 _HEX_PREFIX_RE = re.compile(r"^[0-9a-f]{4,64}$")
@@ -121,6 +122,7 @@ def _write_entries(repo_root: Path, entries: list[dict[str, Any]]) -> None:
     }
     tmp = path.with_suffix(".tmp")
     tmp.write_text(_canonical_json(payload) + "\n", encoding="utf-8")
+    os.chmod(str(tmp), 0o600)
     tmp.replace(path)
 
 
@@ -190,6 +192,7 @@ def _write_bundle_entries(repo_root: Path, entries: list[dict[str, Any]]) -> Non
     payload = {"tool_event_bundle_index_version": "v1", "entries": _normalize_bundle_entries(entries)}
     tmp = path.with_suffix(".tmp")
     tmp.write_text(_canonical_json(payload) + "\n", encoding="utf-8")
+    os.chmod(str(tmp), 0o600)
     tmp.replace(path)
 
 

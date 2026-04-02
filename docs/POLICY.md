@@ -28,7 +28,7 @@ POL-003 Deny if tool args include forbidden paths/patterns (capability-specific)
 
 ### Allowlist boundary (Option A)
 - Allowed base directory:
-  - `/Volumes/SSD/archive/gov/governance-layer/`
+  - `<REPO_ROOT>/`
 - Default deny for any write target that is not under the allowed base directory after canonicalization.
 
 ### Canonicalization requirements
