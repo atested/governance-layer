@@ -247,7 +247,7 @@ async function renderOverview() {
           <h3>${tip("Verification State", "Current verification status of registered proof surfaces. Verified means the surface matches its certified configuration.")}</h3>
           <table class="audit-results-table">
             <thead><tr>
-              <th>${tip("Surface", "The proof surface identifier (e.g. a governed family or deployment context).")}</th>
+              <th>${tip("Surface", "The proof surface identifier (e.g. a governed category or deployment context).")}</th>
               <th>${tip("State", "Current verification state: verified, unverified, or drift_detected.")}</th>
             </tr></thead>
             <tbody>
@@ -314,7 +314,7 @@ async function renderActivity() {
                 <th>${tip("Time", "UTC timestamp when the event was recorded.")}</th>
                 <th>${tip("Category", "The type of governance event: governed action, approval, verification change, etc.")}</th>
                 <th>${tip("Summary", "Human-readable description of what happened.")}</th>
-                <th>${tip("Family", "The governed family this event belongs to, if applicable.")}</th>
+                <th>${tip("Category", "The governed category this event belongs to, if applicable.")}</th>
                 <th>Detail</th>
               </tr>
             </thead>
@@ -352,7 +352,7 @@ async function renderApprovals() {
       <div class="card">
         <span class="eyebrow">Approvals</span>
         <h2>Active Approvals (${data.total_count})</h2>
-        <p class="explainer">Artifact approvals authorize specific artifacts for use within a governed family. Approvals can be revoked at any time.</p>
+        <p class="explainer">Artifact approvals authorize specific artifacts for use within a governed category. Approvals can be revoked at any time.</p>
       </div>
       ${data.active_approvals.length ? `
         <div class="approval-grid">
@@ -361,7 +361,7 @@ async function renderApprovals() {
               <span class="eyebrow">Active approval</span>
               <h3>${truncate(a.artifact_identity, 40)}</h3>
               <ul class="kv">
-                <li><span>Family</span><strong>${escapeHtml(a.governed_family || "\u2014")}</strong></li>
+                <li><span>Category</span><strong>${escapeHtml(a.governed_family || "\u2014")}</strong></li>
                 <li><span>Operator</span><strong>${escapeHtml(a.approving_operator)}</strong></li>
                 <li><span>Context</span><strong>${escapeHtml(a.deployment_context || "\u2014")}</strong></li>
                 <li><span>Policy</span><strong>${escapeHtml(a.policy_version || "\u2014")}</strong></li>
