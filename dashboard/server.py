@@ -109,6 +109,20 @@ def _append_observation_event(event):
 
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui"
 
+# Cache-busting version derived from static asset content hashes.
+# Computed once at import time; changes whenever files are modified and
+# the server is restarted.
+def _compute_asset_version() -> str:
+    import hashlib
+    h = hashlib.sha256()
+    for name in ("app.js", "styles.css"):
+        p = DASHBOARD_UI_DIR / name
+        if p.exists():
+            h.update(p.read_bytes())
+    return h.hexdigest()[:12]
+
+_ASSET_VERSION = _compute_asset_version()
+
 # Static UI filenames served without authentication
 _STATIC_FILES = {"index.html", "app.js", "styles.css", ""}
 
@@ -184,6 +198,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # Inject token meta tag before </head>
         token_meta = f'  <meta name="dashboard-token" content="{_DASHBOARD_TOKEN}">\n'
         html = html.replace("</head>", token_meta + "</head>", 1)
+        # Cache-busting: append version query to static asset URLs
+        html = html.replace("./styles.css", f"./styles.css?v={_ASSET_VERSION}")
+        html = html.replace("./app.js", f"./app.js?v={_ASSET_VERSION}")
         body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
