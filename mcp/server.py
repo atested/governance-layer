@@ -126,11 +126,16 @@ def _append_v2_record(record: dict) -> None:
 
     Must be called under _CHAIN_LOCK. Uses the same cross-process file lock
     as append-record-runtime.sh for consistency.
+    D-024 fix: Re-reads prev_record_hash inside the file lock to prevent
+    cross-process races with the dashboard server.
     """
+    from policy_eval_v2 import _compute_record_hash
     import stat as _stat
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
     lockdir = _acquire_chain_file_lock()
     try:
+        record["prev_record_hash"] = _chain_head_record_hash()
+        record["record_hash"] = _compute_record_hash(record)
         line = json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
         fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
                       _stat.S_IRUSR | _stat.S_IWUSR)
@@ -924,13 +929,16 @@ def _append_non_action_event(event: Dict[str, Any]) -> Dict[str, Any]:
     event["license_tier"] = posture["license_tier"]
     event["organization_id"] = posture["organization_id"]
     event["license_expiry"] = posture["license_expiry"]
-    # Recompute record_hash now that all fields are set.
-    from event_model import _compute_event_record_hash
-    event["record_hash"] = _compute_event_record_hash(event)
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
-    # H6: Acquire cross-process file lock (same lock as append-record-runtime.sh)
+    # H6: Acquire cross-process file lock (same lock as append-record-runtime.sh).
+    # D-024 fix: Re-read prev_record_hash INSIDE the file lock to prevent
+    # concurrent writers (dashboard, hook) from reading the same head hash.
     lockdir = _acquire_chain_file_lock()
     try:
+        event["prev_record_hash"] = _chain_head_record_hash()
+        # Recompute record_hash now that all fields (including prev) are set.
+        from event_model import _compute_event_record_hash
+        event["record_hash"] = _compute_event_record_hash(event)
         line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
         # H8 (D-019): Ensure chain file is 0600.
         import stat as _stat

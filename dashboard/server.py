@@ -88,12 +88,72 @@ def _json_response(handler, data, status=200):
 
 
 import threading
+import time as _time_mod
 
 _chain_lock = threading.Lock()
 
 
+def _acquire_chain_file_lock():
+    """Acquire cross-process mkdir lock (same protocol as mcp/server.py)."""
+    lockdir = Path(str(CHAIN) + ".lock.d")
+    lock_meta = lockdir / "lock_owner.json"
+    max_wait = 50
+
+    def _try_acquire():
+        try:
+            lockdir.mkdir(exist_ok=False)
+            try:
+                meta = json.dumps({"pid": os.getpid(), "ts": _time_mod.time()})
+                lock_meta.write_text(meta, encoding="utf-8")
+            except OSError:
+                pass
+            return True
+        except FileExistsError:
+            return False
+
+    def _holder_is_alive():
+        try:
+            data = json.loads(lock_meta.read_text(encoding="utf-8"))
+            pid = data.get("pid")
+            if not isinstance(pid, int):
+                return True
+            os.kill(pid, 0)
+            return True
+        except (OSError, json.JSONDecodeError, KeyError):
+            return False
+
+    waited = 0
+    while True:
+        if _try_acquire():
+            return lockdir
+        waited += 1
+        if waited >= max_wait:
+            if not _holder_is_alive():
+                try:
+                    lock_meta.unlink(missing_ok=True)
+                    lockdir.rmdir()
+                except OSError:
+                    pass
+                if _try_acquire():
+                    return lockdir
+            raise TimeoutError(f"timed out waiting for chain lock ({lockdir})")
+        _time_mod.sleep(0.1)
+
+
+def _release_chain_file_lock(lockdir):
+    try:
+        (lockdir / "lock_owner.json").unlink(missing_ok=True)
+        lockdir.rmdir()
+    except OSError:
+        pass
+
+
 def _get_chain_head_hash():
-    """Read the record_hash from the last line of the chain."""
+    """Read the record_hash from the last line of the chain.
+
+    Must be called under both _chain_lock and the cross-process file lock
+    to prevent concurrent writers from reading the same prev_record_hash.
+    """
     if not CHAIN.exists():
         return None
     last_line = ""
@@ -110,18 +170,31 @@ def _get_chain_head_hash():
         return None
 
 
-def _append_observation_event(event):
-    """Append a pre-built observation event to the chain (lightweight)."""
+def _append_chain_record_atomic(event):
+    """Atomically read head hash, set prev_record_hash, and append to chain.
+
+    Uses both a threading lock (intra-process) and a cross-process mkdir
+    lock to ensure no two writers read the same prev_record_hash.
+    """
+    from event_model import _compute_event_record_hash
     import stat as _stat
+
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
     with _chain_lock:
-        fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
-                      _stat.S_IRUSR | _stat.S_IWUSR)
+        lockdir = _acquire_chain_file_lock()
         try:
-            os.write(fd, line.encode("utf-8"))
+            # Read head hash INSIDE the lock
+            event["prev_record_hash"] = _get_chain_head_hash()
+            event["record_hash"] = _compute_event_record_hash(event)
+            line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+            fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                          _stat.S_IRUSR | _stat.S_IWUSR)
+            try:
+                os.write(fd, line.encode("utf-8"))
+            finally:
+                os.close(fd)
         finally:
-            os.close(fd)
+            _release_chain_file_lock(lockdir)
 
 
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui"
@@ -304,16 +377,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         # Append to chain (lightweight — no policy eval)
         try:
-            from event_model import _compute_event_record_hash
-            import threading
-            import stat as _stat
-
             event = build_non_action_event(
                 "ungoverned_operation_observed",
                 payload,
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
             _json_response(self, {
                 "recorded": True,
                 "event_id": event.get("event_id"),
@@ -353,9 +422,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             event = build_non_action_event(
                 "opaque_artifact_approval",
                 payload,
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
             _invalidate_approval_store()
             _json_response(self, {
                 "approved": True,
@@ -396,9 +465,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             event = build_non_action_event(
                 "opaque_artifact_revocation",
                 payload,
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
             _invalidate_approval_store()
             _json_response(self, {
                 "revoked": True,
@@ -653,9 +722,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "artifact_hash": artifact["artifact_hash"],
                     "sent_to_remote": send_to_remote,
                 },
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
 
             result = {
                 "artifact_id": artifact["artifact_id"],
@@ -710,9 +779,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "artifact_hash": artifact["artifact_hash"],
                     "sent_to_remote": send_to_remote,
                 },
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
 
             result = {
                 "artifact_id": artifact["artifact_id"],
@@ -759,9 +828,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             event = build_non_action_event(
                 "telemetry_opt_in_changed",
                 {"opted_in": opted_in},
-                prev_record_hash=_get_chain_head_hash(),
+                prev_record_hash=None,
             )
-            _append_observation_event(event)
+            _append_chain_record_atomic(event)
 
             _json_response(self, {"opted_in": opted_in})
         except Exception as exc:
