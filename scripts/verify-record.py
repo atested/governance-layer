@@ -384,6 +384,32 @@ def verify_non_action_event_dict(rec: dict):
     return 0, ["PASS: non-action event verified"]
 
 
+def _verify_v2_mediated_decision(rec: dict):
+    """Verify a v2 mediated_decision record. Returns (exit_code, output_lines)."""
+    # v2 records use a simpler hash: sha256 of the record with record_hash=None.
+    expected = rec.get("record_hash")
+    if not isinstance(expected, str) or not expected.startswith("sha256:"):
+        return 1, ["FAIL: record_hash missing or invalid"]
+
+    hashable = dict(rec)
+    hashable["record_hash"] = None
+    canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    actual = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if actual != expected:
+        return 1, [
+            "FAIL: v2 record_hash mismatch",
+            f" expected: {expected}",
+            f" actual:   {actual}",
+        ]
+
+    # Validate required fields.
+    for field in ("classification", "policy_decision", "matched_rule", "original_tool"):
+        if field not in rec:
+            return 1, [f"FAIL: v2 record missing required field: {field}"]
+
+    return 0, ["PASS: v2 mediated_decision record verified"]
+
+
 def verify_record_dict(
     rec: dict,
     require_coverage_stamp: Optional[bool] = None,
@@ -394,6 +420,10 @@ def verify_record_dict(
     # Non-action events use a separate verification path.
     if is_non_action_event(rec):
         return verify_non_action_event_dict(rec)
+
+    # v2 mediated_decision records use a separate verification path.
+    if rec.get("record_version") == "2.0" and rec.get("record_type") == "mediated_decision":
+        return _verify_v2_mediated_decision(rec)
 
     mode_err = _validate_signing_mode_flags()
     if mode_err is not None:

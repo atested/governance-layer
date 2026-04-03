@@ -59,7 +59,10 @@ from messaging_surface import (
     sha256_prefixed_bytes,
 )
 from approval_store import ApprovalStore, load_approval_store_from_chain
+from classifier import classify as v2_classify
 from event_model import build_non_action_event
+from policy_eval_v2 import evaluate as v2_evaluate, load_policy_rules as v2_load_policy_rules
+from policy_eval_shared import canonicalize
 from transparency import classify_action_transparency, handle_opaque_action
 from verification import (
     VerificationStateTracker,
@@ -105,6 +108,41 @@ _REGISTRY_LOCK = threading.Lock()
 _current_user_identity: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "_current_user_identity", default=None
 )
+
+# v2 policy rules — loaded once at import time, base_dirs resolved at call time.
+_V2_POLICY_RULES: Optional[dict] = None
+
+
+def _v2_policy() -> dict:
+    """Load and cache v2 policy rules with resolved base_dirs."""
+    global _V2_POLICY_RULES
+    if _V2_POLICY_RULES is None:
+        _V2_POLICY_RULES = v2_load_policy_rules()
+    policy = dict(_V2_POLICY_RULES)
+    policy["base_dirs"] = [str(REPO), str(RUNTIME)]
+    return policy
+
+
+def _append_v2_record(record: dict) -> None:
+    """Append a v2 decision record to the chain file.
+
+    Must be called under _CHAIN_LOCK. Uses the same cross-process file lock
+    as append-record-runtime.sh for consistency.
+    """
+    import stat as _stat
+    CHAIN.parent.mkdir(parents=True, exist_ok=True)
+    lockdir = _acquire_chain_file_lock()
+    try:
+        line = json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+        fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                      _stat.S_IRUSR | _stat.S_IWUSR)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+    finally:
+        _release_chain_file_lock(lockdir)
+    _update_chain_meta_length(_chain_line_count())
 
 
 def _ensure_runtime_permissions() -> None:
@@ -1131,7 +1169,7 @@ def governed_tool(
             **action_result,
         }
 
-    # Transparent path: normalize args against capability spec.
+    # Transparent path: v2 classify → evaluate → record → execute.
     norm_args, norm_constraints = normalize_args(tool_name, args)
     if isinstance(norm_constraints, dict) and norm_constraints.get("_missing"):
         return {
@@ -1140,42 +1178,76 @@ def governed_tool(
             "decision_record": None,
         }
 
+    # Canonicalize path for TOCTOU defense and classifier accuracy.
+    # The canonical_path is stored in norm_args for action callbacks and
+    # in the v2 record's normalized_args for post-hoc TOCTOU verification.
+    path_val = norm_args.get("path", "")
+    canonical_path = ""
+    if path_val:
+        try:
+            canonical_path = canonicalize(path_val)
+        except (ValueError, OSError):
+            canonical_path = path_val
+        norm_args["canonical_path"] = canonical_path
+
+    # For FS_MOVE, canonicalize both src and dst.
+    src_val = norm_args.get("source", "")
+    dst_val = norm_args.get("destination", "")
+    if src_val:
+        try:
+            norm_args["canonical_src_path"] = canonicalize(src_val)
+        except (ValueError, OSError):
+            norm_args["canonical_src_path"] = src_val
+    if dst_val:
+        try:
+            norm_args["canonical_dst_path"] = canonicalize(dst_val)
+        except (ValueError, OSError):
+            norm_args["canonical_dst_path"] = dst_val
+
+    # v2 classification: evidence-based, inspects parameters.
+    classifier_args = dict(norm_args)
+    classification = v2_classify(tool_name, classifier_args)
+
     identity = _current_user_identity.get(None)
-    intent_obj = {
-        "tool": tool_name,
-        "args": norm_args,
-        "intent": intent,
-    }
-    if identity is not None:
-        intent_obj["user_identity"] = identity
+    session_id = f"sess-{req_id[:8]}"
 
-    INTENTS_DIR.mkdir(parents=True, exist_ok=True)
-    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
-
-    intent_path = INTENTS_DIR / f"{req_id}.intent.json"
-    _write_json(intent_path, intent_obj)
-
-    # Locked verify→append→verify: prevents interleaving under concurrent
-    # HTTP clients.  For stdio (single-client) the lock is uncontended.
+    # Locked verify → evaluate → append → verify.
     with _CHAIN_LOCK:
         _verify_chain()
-        rec = _append_decision(intent_path)
+        prev_hash = _chain_head_record_hash()
+        rec = v2_evaluate(
+            classification,
+            _v2_policy(),
+            prev_record_hash=prev_hash,
+            user_identity=identity,
+            session_id=session_id,
+        )
+
+        # Enrich with licensing posture before appending.
+        posture = resolve_posture(RUNTIME)
+        rec["license_status"] = posture["license_status"]
+        rec["license_tier"] = posture["license_tier"]
+        rec["organization_id"] = posture["organization_id"]
+        rec["license_expiry"] = posture["license_expiry"]
+
+        # Add normalized_args for TOCTOU defense in action callbacks.
+        rec["normalized_args"] = {
+            "canonical_path": canonical_path,
+        }
+        if norm_args.get("canonical_src_path"):
+            rec["normalized_args"]["canonical_src_path"] = norm_args["canonical_src_path"]
+        if norm_args.get("canonical_dst_path"):
+            rec["normalized_args"]["canonical_dst_path"] = norm_args["canonical_dst_path"]
+
+        # Recompute hash after enrichment.
+        from policy_eval_v2 import _compute_record_hash
+        rec["record_hash"] = _compute_record_hash(rec)
+
+        _append_v2_record(rec)
         _verify_chain()
 
-    # Enrich record with user identity (additive — included in sidecar
-    # record and API response for attribution).
-    if identity is not None:
-        rec["user_identity"] = identity
-
-    # Enrich record with licensing posture (additive metadata — does not
-    # affect policy decisions, only records the truth about license state).
-    posture = resolve_posture(RUNTIME)
-    rec["license_status"] = posture["license_status"]
-    rec["license_tier"] = posture["license_tier"]
-    rec["organization_id"] = posture["organization_id"]
-    rec["license_expiry"] = posture["license_expiry"]
-
-    # Persist a pretty record copy (optional convenience, not part of the chain)
+    # Persist a pretty record copy (optional convenience, not part of the chain).
+    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
     record_path = RECORDS_DIR / f"{req_id}.record.json"
     _write_json(record_path, rec)
     rec_with_verification = dict(rec)
@@ -1208,8 +1280,8 @@ def evaluate_action(
 ) -> Dict[str, Any]:
     """Evaluate an action against governance policy without executing it.
 
-    Routes through the same policy evaluation engine as governed MCP tools,
-    producing an identical chain record. No action is executed — this is a
+    Routes through the v2 classification and evaluation engine,
+    producing a v2 chain record. No action is executed — this is a
     pre-flight check only.
 
     Returns a dict with: decision, reason, record_hash, missing.
@@ -1237,34 +1309,42 @@ def evaluate_action(
             "missing": norm_constraints["_missing"],
         }
 
-    intent_obj = {
-        "tool": tool_name,
-        "args": norm_args,
-        "intent": intent,
-    }
-    if user_identity is not None:
-        intent_obj["user_identity"] = user_identity
+    # Canonicalize path for classifier accuracy.
+    path_val = norm_args.get("path", "")
+    if path_val:
+        try:
+            norm_args["canonical_path"] = canonicalize(path_val)
+        except (ValueError, OSError):
+            norm_args["canonical_path"] = path_val
 
-    INTENTS_DIR.mkdir(parents=True, exist_ok=True)
-    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
-
-    intent_path = INTENTS_DIR / f"{req_id}.intent.json"
-    _write_json(intent_path, intent_obj)
+    # v2 classification + evaluation.
+    classification = v2_classify(tool_name, norm_args)
+    session_id = f"sess-{req_id[:8]}"
 
     with _CHAIN_LOCK:
         _verify_chain()
-        rec = _append_decision(intent_path)
+        prev_hash = _chain_head_record_hash()
+        rec = v2_evaluate(
+            classification,
+            _v2_policy(),
+            prev_record_hash=prev_hash,
+            user_identity=user_identity,
+            session_id=session_id,
+        )
+
+        posture = resolve_posture(RUNTIME)
+        rec["license_status"] = posture["license_status"]
+        rec["license_tier"] = posture["license_tier"]
+        rec["organization_id"] = posture["organization_id"]
+        rec["license_expiry"] = posture["license_expiry"]
+
+        from policy_eval_v2 import _compute_record_hash
+        rec["record_hash"] = _compute_record_hash(rec)
+
+        _append_v2_record(rec)
         _verify_chain()
 
-    if user_identity is not None:
-        rec["user_identity"] = user_identity
-
-    posture = resolve_posture(RUNTIME)
-    rec["license_status"] = posture["license_status"]
-    rec["license_tier"] = posture["license_tier"]
-    rec["organization_id"] = posture["organization_id"]
-    rec["license_expiry"] = posture["license_expiry"]
-
+    RECORDS_DIR.mkdir(parents=True, exist_ok=True)
     record_path = RECORDS_DIR / f"{req_id}.record.json"
     _write_json(record_path, rec)
 
