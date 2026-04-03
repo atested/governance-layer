@@ -126,6 +126,43 @@ function escapeHtml(s) {
   return div.innerHTML.replace(/'/g, "&#39;");
 }
 
+// Copy-to-clipboard helper
+const _clipboardSvg = '<svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 0 1 2 9.5v-7A1.5 1.5 0 0 1 3.5 1h7A1.5 1.5 0 0 1 12 2.5V5"/></svg>';
+const _checkSvg = '<svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg>';
+
+function copyBtnHtml(dataAttr) {
+  return `<button class="copy-btn" data-copy="${escapeHtml(dataAttr)}">${_clipboardSvg} Copy</button>`;
+}
+
+function preWithCopy(json) {
+  const formatted = typeof json === "string" ? json : JSON.stringify(json, null, 2);
+  return `<div class="pre-wrapper"><button class="copy-btn" data-copy-pre="true">${_clipboardSvg} Copy JSON</button><pre>${escapeHtml(formatted)}</pre></div>`;
+}
+
+function _attachCopyListeners() {
+  document.querySelectorAll(".copy-btn[data-copy-pre]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const pre = btn.closest(".pre-wrapper")?.querySelector("pre");
+      if (!pre) return;
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        btn.innerHTML = _checkSvg + " Copied";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.innerHTML = _clipboardSvg + " Copy JSON"; btn.classList.remove("copied"); }, 1500);
+      });
+    });
+  });
+  document.querySelectorAll(".copy-btn[data-copy-record]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const text = btn.getAttribute("data-copy-record");
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = _checkSvg + " Copied";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.innerHTML = _clipboardSvg + " Copy JSON"; btn.classList.remove("copied"); }, 1500);
+      });
+    });
+  });
+}
+
 // Human-readable category names
 function categoryLabel(cat) {
   const map = {
@@ -193,9 +230,9 @@ async function renderOverview() {
     ? '<span class="status-ok">OK</span>'
     : '<span class="status-warn">BROKEN</span>';
 
-  const transparencyVal = status.transparency_metric && status.transparency_metric.observation_data
-    ? Math.round(status.transparency_metric.transparency_pct * 100) + "%"
-    : '<span class="muted" style="font-size:0.75rem">No observation data</span>';
+  const hasObsData = status.transparency_metric && status.transparency_metric.observation_data;
+  const noObsHtml = '<span class="muted" style="font-size:0.75rem">No observation data</span>';
+  const noObsTip = "Observation hooks are not configured. Install the PostToolUse hook so ungoverned operations are recorded and this metric has data.";
 
   const updateBanner = (updateInfo && updateInfo.update_available && !_updateDismissed)
     ? `<div class="update-banner">
@@ -216,74 +253,71 @@ async function renderOverview() {
         <p class="explainer">
           This dashboard provides real-time visibility into your governance chain \u2014
           the tamper-evident log of every governed operation, approval, and verification event.
-          Each metric below reflects the current state of the chain and connected systems.
+          Each section below reflects the current state of the chain and connected systems.
         </p>
       </div>
-      <div class="status-grid">
-        <div class="status-card">
-          <span class="eyebrow">${tip("Chain Events", "Total number of records in the governance chain, including governed actions, approvals, verifications, and observations.")}</span>
-          <span class="status-value">${status.chain_event_count}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Chain Integrity", "Whether the hash-linked chain is structurally valid. OK means every record's hash links correctly to its predecessor.")}</span>
-          <span class="status-value">${integ}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Active Approvals", "Number of artifact approvals currently in effect. Approvals authorize specific artifacts for use within governed families.")}</span>
-          <span class="status-value">${status.active_approvals_count}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Surfaces with Drift", "Proof surfaces whose current state has diverged from their last certified configuration. Drift may indicate unauthorized changes.")}</span>
-          <span class="status-value ${status.surfaces_in_drift.length ? "status-warn" : "status-ok"}">${status.surfaces_in_drift.length}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Unique Users", "Distinct user identities that have generated governed actions or events in the chain.")}</span>
-          <span class="status-value">${users.unique_users}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Governed Actions", "Actions that were evaluated by the governance policy engine and recorded with a full decision trail.")}</span>
-          <span class="status-value">${status.opacity_posture.transparent_count}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Opaque Invocations", "Actions that were invoked through opaque (non-transparent) resolution paths, such as operator intervention or approved lookups.")}</span>
-          <span class="status-value">${status.opacity_posture.opaque_count}</span>
-        </div>
-        <div class="status-card denied-highlight">
-          <span class="eyebrow">${tip("Actions Denied Before Execution", "Every DENY is a prevented action — stopped before it could execute because required conditions were not met. This is governance working as intended.")}</span>
-          <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
-        </div>
-        <div class="status-card">
-          <span class="eyebrow">${tip("Transparency", "Percentage of total observed operations that flowed through governance. Higher is better. Requires observation hooks to be configured.")}</span>
-          <span class="status-value">${transparencyVal}</span>
+
+      <div class="overview-section">
+        <div class="overview-section-title">Chain Health</div>
+        <div class="overview-metrics">
+          <div class="status-card">
+            <span class="eyebrow">${tip("Chain Events", "Total number of records in the governance chain, including governed actions, approvals, verifications, and observations.")}</span>
+            <span class="status-value">${status.chain_event_count}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Chain Integrity", "Whether the hash-linked chain is structurally valid. OK means every record\u2019s hash links correctly to its predecessor.")}</span>
+            <span class="status-value">${integ}</span>
+          </div>
         </div>
       </div>
 
-      ${status.transparency_metric ? `
-        <div class="card">
-          <h3>${tip("Transparency Metric", "Measures how much of your AI tool usage is captured by the governance chain. transparency% = governed / (governed + ungoverned).")}</h3>
-          <p class="explainer">Ratio of governed operations to total observed operations (governed + ungoverned). Configure observation hooks to start collecting data.</p>
-          <div class="status-grid">
-            <div class="status-card">
-              <span class="eyebrow">${tip("Governed Ops", "Operations that passed through governance policy evaluation and were recorded in the chain.")}</span>
-              <span class="status-value">${status.transparency_metric.governed_operations}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">${tip("Ungoverned Obs.", "Operations reported by observation hooks that bypassed governance. These were detected but not policy-evaluated.")}</span>
-              <span class="status-value">${status.transparency_metric.ungoverned_observations}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">${tip("Total Observed", "Sum of governed operations and ungoverned observations. The denominator for the transparency percentage.")}</span>
-              <span class="status-value">${status.transparency_metric.total_observed}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">${tip("Hook Data", "Whether any ungoverned operation observations have been received. No means observation hooks are not yet configured.")}</span>
-              <span class="status-value">${status.transparency_metric.observation_data
-                ? '<span class="status-ok">Yes</span>'
-                : '<span class="muted">No</span>'}</span>
-            </div>
+      <div class="overview-section">
+        <div class="overview-section-title">Governance Activity</div>
+        <div class="overview-metrics">
+          <div class="status-card">
+            <span class="eyebrow">${tip("Governed Actions", "Actions that were evaluated by the governance policy engine and recorded with a full decision trail.")}</span>
+            <span class="status-value">${status.opacity_posture.transparent_count}</span>
+          </div>
+          <div class="status-card denied-highlight">
+            <span class="eyebrow">${tip("Actions Denied", "Every DENY is a prevented action \u2014 stopped before it could execute because required conditions were not met. This is governance working as intended.")}</span>
+            <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Active Approvals", "Number of artifact approvals currently in effect. Approvals authorize specific artifacts for use within governed families.")}</span>
+            <span class="status-value">${status.active_approvals_count}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Operator-Approved Artifacts", "Artifacts that were approved by an operator for use within governed categories. These follow the approval chain and are recorded in the governance log.")}</span>
+            <span class="status-value">${status.opacity_posture.opaque_count}</span>
           </div>
         </div>
-      ` : ""}
+      </div>
+
+      <div class="overview-section">
+        <div class="overview-section-title">Transparency & Coverage</div>
+        <div class="overview-metrics">
+          <div class="status-card">
+            <span class="eyebrow">${tip("Governed Operations", "Operations that passed through governance policy evaluation and were recorded in the chain.")}</span>
+            <span class="status-value">${status.transparency_metric ? status.transparency_metric.governed_operations : 0}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Ungoverned Operations", hasObsData ? "Operations reported by observation hooks that bypassed governance. These were detected but not policy-evaluated." : noObsTip)}</span>
+            <span class="status-value">${hasObsData ? status.transparency_metric.ungoverned_observations : noObsHtml}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Total Operations", hasObsData ? "Sum of governed operations and ungoverned observations. The denominator for the transparency percentage." : noObsTip)}</span>
+            <span class="status-value">${hasObsData ? status.transparency_metric.total_observed : noObsHtml}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Transparency Rate", "Percentage of total observed operations that flowed through governance. Higher is better. Requires observation hooks to be configured.")}</span>
+            <span class="status-value">${hasObsData ? Math.round(status.transparency_metric.transparency_pct * 100) + "%" : noObsHtml}</span>
+          </div>
+          <div class="status-card">
+            <span class="eyebrow">${tip("Unique Users", "Distinct user identities that have generated governed actions or events in the chain.")}</span>
+            <span class="status-value">${users.unique_users}</span>
+          </div>
+        </div>
+      </div>
 
       ${status.verification_state && Object.keys(status.verification_state).length ? `
         <div class="card">
@@ -574,12 +608,12 @@ async function renderRecordDetail() {
       </div>
       <div class="card">
         <h3>Chain Record</h3>
-        <pre>${escapeHtml(JSON.stringify(data.chain_record, null, 2))}</pre>
+        ${preWithCopy(data.chain_record)}
       </div>
       ${data.sidecar_record ? `
         <div class="card">
           <h3>Sidecar Record</h3>
-          <pre>${escapeHtml(JSON.stringify(data.sidecar_record, null, 2))}</pre>
+          ${preWithCopy(data.sidecar_record)}
         </div>
       ` : ""}
     </section>
@@ -1362,6 +1396,7 @@ async function render() {
   _attachHealthListeners();
   _attachConfigListeners();
   _attachFeedbackListeners();
+  _attachCopyListeners();
 }
 
 // ---------------------------------------------------------------------------

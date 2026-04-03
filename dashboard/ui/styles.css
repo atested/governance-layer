@@ -1263,3 +1263,83 @@ pre {
   margin-bottom: 12px;
   line-height: 1.5;
 }
+
+/* ------------------------------------------------------------------ */
+/* Overview sections                                                   */
+/* ------------------------------------------------------------------ */
+
+.overview-section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.overview-section + .overview-section {
+  margin-top: 4px;
+}
+
+.overview-section-title {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.overview-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .overview-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Copy button for detail views                                        */
+/* ------------------------------------------------------------------ */
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-btn:hover {
+  color: var(--ink);
+  background: var(--accent-soft);
+  border-color: rgba(91, 138, 245, 0.25);
+}
+
+.copy-btn .copy-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.copy-btn.copied {
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.25);
+}
+
+.pre-wrapper {
+  position: relative;
+}
+
+.pre-wrapper .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
