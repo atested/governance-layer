@@ -26,6 +26,7 @@ import json
 import logging
 import os
 import sys
+import time as _time_mod
 import threading
 from http import HTTPStatus
 from pathlib import Path
@@ -62,36 +63,115 @@ ANTHROPIC_API_BASE = "https://api.anthropic.com"
 
 
 class ChainRecorder:
-    """Appends v2 decision records to the governance chain file."""
+    """Appends v2 decision records to the governance chain file.
+
+    Uses the same cross-process mkdir lock as mcp/server.py and
+    dashboard/server.py to prevent concurrent writers from reading
+    the same prev_record_hash (D-024 / D-026 fix).
+    """
 
     def __init__(self, chain_path: Path):
         self._chain_path = chain_path
         self._lock = threading.Lock()
 
-    def append(self, record: dict) -> None:
-        with self._lock:
-            line = json.dumps(
-                record, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-            )
-            self._chain_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._chain_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+    def append_atomic(self, record: dict) -> None:
+        """Atomically read prev_record_hash, set it, recompute hash, and append.
 
-    def get_prev_hash(self) -> Optional[str]:
+        This ensures no two processes can read the same head hash.
+        """
+        import stat as _stat
+        self._chain_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
-            return self._last_hash()
+            lockdir = self._acquire_file_lock()
+            try:
+                record["prev_record_hash"] = self._last_hash()
+                record["record_hash"] = _compute_record_hash(record)
+                line = json.dumps(
+                    record, sort_keys=True, separators=(",", ":"),
+                    ensure_ascii=False,
+                )
+                fd = os.open(
+                    str(self._chain_path),
+                    os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                    _stat.S_IRUSR | _stat.S_IWUSR,
+                )
+                try:
+                    os.write(fd, (line + "\n").encode("utf-8"))
+                finally:
+                    os.close(fd)
+            finally:
+                self._release_file_lock(lockdir)
 
     def _last_hash(self) -> Optional[str]:
+        """Read the record_hash from the last line. Must be called under lock."""
         if not self._chain_path.exists():
             return None
         try:
-            text = self._chain_path.read_text(encoding="utf-8").strip()
-            if not text:
+            last_line = ""
+            with open(self._chain_path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    stripped = line.strip()
+                    if stripped:
+                        last_line = stripped
+            if not last_line:
                 return None
-            last_line = text.rsplit("\n", 1)[-1]
             return json.loads(last_line).get("record_hash")
         except (OSError, json.JSONDecodeError, KeyError):
             return None
+
+    def _acquire_file_lock(self) -> Path:
+        """Acquire cross-process mkdir lock (same protocol as mcp/server.py)."""
+        lockdir = Path(str(self._chain_path) + ".lock.d")
+        lock_meta = lockdir / "lock_owner.json"
+        max_wait = 50
+
+        def _try_acquire():
+            try:
+                lockdir.mkdir(exist_ok=False)
+                try:
+                    meta = json.dumps({"pid": os.getpid(), "ts": _time_mod.time()})
+                    lock_meta.write_text(meta, encoding="utf-8")
+                except OSError:
+                    pass
+                return True
+            except FileExistsError:
+                return False
+
+        def _holder_is_alive():
+            try:
+                data = json.loads(lock_meta.read_text(encoding="utf-8"))
+                pid = data.get("pid")
+                if not isinstance(pid, int):
+                    return True
+                os.kill(pid, 0)
+                return True
+            except (OSError, json.JSONDecodeError, KeyError):
+                return False
+
+        waited = 0
+        while True:
+            if _try_acquire():
+                return lockdir
+            waited += 1
+            if waited >= max_wait:
+                if not _holder_is_alive():
+                    try:
+                        lock_meta.unlink(missing_ok=True)
+                        lockdir.rmdir()
+                    except OSError:
+                        pass
+                    if _try_acquire():
+                        return lockdir
+                raise TimeoutError(f"timed out waiting for chain lock ({lockdir})")
+            _time_mod.sleep(0.1)
+
+    @staticmethod
+    def _release_file_lock(lockdir: Path) -> None:
+        try:
+            (lockdir / "lock_owner.json").unlink(missing_ok=True)
+            lockdir.rmdir()
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -150,20 +230,18 @@ def mediate_decision(
     """
     classification = classify(tool_name, args)
 
-    prev_hash = None
-    if chain_recorder is not None:
-        prev_hash = chain_recorder.get_prev_hash()
-
+    # Build the record with a placeholder prev_record_hash — the atomic
+    # append will set the real value inside the cross-process lock.
     record = evaluate(
         classification,
         policy=policy,
-        prev_record_hash=prev_hash,
+        prev_record_hash=None,
         user_identity=user_identity,
         session_id=session_id,
     )
 
     if chain_recorder is not None:
-        chain_recorder.append(record)
+        chain_recorder.append_atomic(record)
 
     return record
 
@@ -369,25 +447,15 @@ class GovernanceProxy:
         policy["base_dirs"] = [str(REPO), str(runtime)]
         return policy
 
-    async def handle_request(self, method: str, path: str, headers: dict,
-                             body: bytes) -> tuple[int, dict, bytes]:
-        """Handle a proxied HTTP request.
-
-        For non-messages endpoints, forwards as-is.
-        For messages endpoints, intercepts and governs tool_use blocks.
-        """
-        # Only govern the messages endpoint
+    def _prepare_request(self, method: str, path: str, headers: dict,
+                         body: bytes) -> tuple[str, dict, bool, bool]:
+        """Parse request and determine routing. Returns (url, headers, is_messages, is_streaming)."""
         is_messages = path.rstrip("/").endswith("/v1/messages")
-
-        # Forward the request to the upstream API
         upstream_url = f"{self._upstream_base}{path}"
-
-        # Filter hop-by-hop headers and set proper host
         forward_headers = {
             k: v for k, v in headers.items()
             if k.lower() not in ("host", "transfer-encoding", "connection")
         }
-
         is_streaming = False
         if is_messages and body:
             try:
@@ -395,15 +463,136 @@ class GovernanceProxy:
                 is_streaming = req_body.get("stream", False)
             except (json.JSONDecodeError, AttributeError):
                 pass
+        return upstream_url, forward_headers, is_messages, is_streaming
+
+    async def handle_request(self, method: str, path: str, headers: dict,
+                             body: bytes) -> tuple[int, dict, bytes]:
+        """Handle a proxied HTTP request (non-streaming or buffered fallback).
+
+        For non-messages endpoints, forwards as-is.
+        For messages endpoints, intercepts and governs tool_use blocks.
+        For streaming, use handle_streaming_to_writer() instead for real-time output.
+        """
+        url, fwd_headers, is_messages, is_streaming = self._prepare_request(
+            method, path, headers, body
+        )
 
         if is_messages and is_streaming:
-            return await self._handle_streaming_messages(
-                upstream_url, forward_headers, body
+            return await self._handle_streaming_buffered(
+                url, fwd_headers, body
             )
         else:
             return await self._handle_non_streaming(
-                upstream_url, method, forward_headers, body, is_messages
+                url, method, fwd_headers, body, is_messages
             )
+
+    async def handle_streaming_to_writer(
+        self, path: str, headers: dict, body: bytes,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Handle a streaming request, forwarding text events in real time.
+
+        Text blocks are written to the client immediately as they arrive.
+        Tool_use blocks are buffered until complete, governed, then flushed
+        (ALLOW) or replaced with denial text (DENY).
+        """
+        url, fwd_headers, is_messages, _ = self._prepare_request(
+            "POST", path, headers, body
+        )
+
+        collector = StreamingToolCollector(
+            self._policy, self._chain_recorder,
+            self._session_id, self._user_identity,
+        )
+        buffered_events: dict[int, list[bytes]] = {}
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST", url, headers=fwd_headers, content=body,
+            ) as resp:
+                if resp.status_code != 200:
+                    content = await resp.aread()
+                    writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
+                    writer.write(b"content-type: application/json\r\n")
+                    writer.write(f"content-length: {len(content)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(content)
+                    await writer.drain()
+                    return
+
+                # Send streaming response headers immediately
+                writer.write(b"HTTP/1.1 200 OK\r\n")
+                writer.write(b"content-type: text/event-stream\r\n")
+                writer.write(b"cache-control: no-cache\r\n")
+                writer.write(b"connection: keep-alive\r\n")
+                for key in ("x-request-id", "request-id"):
+                    val = resp.headers.get(key)
+                    if val:
+                        writer.write(f"{key}: {val}\r\n".encode())
+                writer.write(b"\r\n")
+                await writer.drain()
+
+                current_event_type = ""
+                async for raw_line in resp.aiter_lines():
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+
+                    if line.startswith("event:"):
+                        current_event_type = line[6:].strip()
+                        continue
+
+                    if not line.startswith("data:"):
+                        continue
+
+                    data_str = line[5:].strip()
+
+                    if data_str == "[DONE]":
+                        writer.write(b"event: done\ndata: [DONE]\n\n")
+                        await writer.drain()
+                        continue
+
+                    try:
+                        data = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        chunk = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                        writer.write(chunk)
+                        await writer.drain()
+                        continue
+
+                    action = collector.process_event(current_event_type, data)
+
+                    if action == "buffer":
+                        idx = data.get("index", 0)
+                        buffered_events.setdefault(idx, []).append(
+                            f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                        )
+
+                    elif action == "replace":
+                        idx = data.get("index", 0)
+                        for event_bytes in collector.get_replacement_events(idx):
+                            writer.write(event_bytes)
+                        await writer.drain()
+                        buffered_events.pop(idx, None)
+
+                    elif action == "pass":
+                        msg_type = data.get("type", "")
+                        idx = data.get("index", 0)
+
+                        if msg_type == "content_block_stop" and idx in buffered_events:
+                            # Tool_use ALLOWED — flush buffered events
+                            for event_bytes in buffered_events.pop(idx):
+                                writer.write(event_bytes)
+                            writer.write(
+                                f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                            )
+                            await writer.drain()
+                        else:
+                            # Text or other non-tool event — stream immediately
+                            writer.write(
+                                f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                            )
+                            await writer.drain()
 
     async def _handle_non_streaming(
         self, url: str, method: str, headers: dict, body: bytes,
@@ -470,13 +659,13 @@ class GovernanceProxy:
 
         return resp.status_code, resp_headers, resp_body
 
-    async def _handle_streaming_messages(
+    async def _handle_streaming_buffered(
         self, url: str, headers: dict, body: bytes,
     ) -> tuple[int, dict, bytes]:
-        """Handle a streaming messages request with selective tool_use buffering.
+        """Handle a streaming request with full buffering (fallback for tests).
 
-        Text blocks stream through immediately. Tool_use blocks are buffered
-        until complete, then governed and either passed or replaced.
+        Returns the complete response as bytes. For real-time streaming,
+        use handle_streaming_to_writer() instead.
         """
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
@@ -639,7 +828,6 @@ class ProxyServer:
                     reader.readexactly(content_length), timeout=60.0
                 )
 
-            # Forward through the governance proxy
             # Restore original-case headers for upstream
             forward_headers = {}
             for k, v in headers.items():
@@ -656,21 +844,34 @@ class ProxyServer:
                 elif k == "accept":
                     forward_headers["accept"] = v
 
-            status, resp_headers, resp_body = await self._proxy.handle_request(
-                method, path, forward_headers, body
-            )
+            # Check if this is a streaming messages request
+            is_streaming = False
+            if path.rstrip("/").endswith("/v1/messages") and body:
+                try:
+                    is_streaming = json.loads(body).get("stream", False)
+                except (json.JSONDecodeError, AttributeError):
+                    pass
 
-            # Write the response
-            status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
-            writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
-            for k, v in resp_headers.items():
-                if k.lower() not in ("transfer-encoding",):
-                    writer.write(f"{k}: {v}\r\n".encode())
-            if "content-length" not in {k.lower() for k in resp_headers}:
-                writer.write(f"content-length: {len(resp_body)}\r\n".encode())
-            writer.write(b"\r\n")
-            writer.write(resp_body)
-            await writer.drain()
+            if is_streaming:
+                # Stream directly to the client writer — text arrives in real time
+                await self._proxy.handle_streaming_to_writer(
+                    path, forward_headers, body, writer
+                )
+            else:
+                # Non-streaming: buffer full response then send
+                status, resp_headers, resp_body = await self._proxy.handle_request(
+                    method, path, forward_headers, body
+                )
+                status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
+                writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+                for k, v in resp_headers.items():
+                    if k.lower() not in ("transfer-encoding",):
+                        writer.write(f"{k}: {v}\r\n".encode())
+                if "content-length" not in {k.lower() for k in resp_headers}:
+                    writer.write(f"content-length: {len(resp_body)}\r\n".encode())
+                writer.write(b"\r\n")
+                writer.write(resp_body)
+                await writer.drain()
 
         except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
             pass
