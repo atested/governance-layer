@@ -130,6 +130,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DASHBOARD_UI_DIR), **kwargs)
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
+        super().end_headers()
+
     def _check_auth(self):
         """Return True if the request carries a valid bearer token."""
         auth = self.headers.get("Authorization", "")
