@@ -1,0 +1,22 @@
+{
+  "NONEXISTENT_TOOL": {
+    "first_seen_utc": "2026-04-03T06:12:21Z",
+    "maps_to": "FS_WRITE",
+    "reason": "no_pattern_match"
+  },
+  "READ_WEBPAGE": {
+    "first_seen_utc": "2026-04-03T06:12:04Z",
+    "maps_to": "FS_READ",
+    "reason": "pattern_match:read"
+  },
+  "RUN_SHELL": {
+    "first_seen_utc": "2026-04-03T06:12:04Z",
+    "maps_to": "FS_WRITE",
+    "reason": "pattern_match:run"
+  },
+  "ZXQVBN_FOOBAR": {
+    "first_seen_utc": "2026-04-03T06:12:04Z",
+    "maps_to": "FS_WRITE",
+    "reason": "no_pattern_match"
+  }
+}

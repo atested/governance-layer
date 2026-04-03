@@ -3,9 +3,11 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import sys
 import time
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse
@@ -625,19 +627,165 @@ _ACTION_TOOL_MAP = {
 }
 
 
-def _resolve_tool_name(action: str) -> str:
-    """Resolve an action string to an internal tool name."""
+# ---------------------------------------------------------------------------
+# Auto-classification: pattern-based mapping for unknown tool names
+# ---------------------------------------------------------------------------
+# INV-009: The evaluate endpoint must never return immediate DENY solely
+# because a tool name is unrecognized. Unknown tools are classified and
+# evaluated, not rejected.
+
+_CLASSIFY_LOG = logging.getLogger("govmcp.auto_classify")
+
+# Keyword patterns → governance category.  Checked in order; first match wins.
+# Each entry is (set_of_keywords, governance_tool_name).
+_CLASSIFY_PATTERNS: list[tuple[set[str], str]] = [
+    ({"read", "get", "fetch", "load", "cat", "head", "tail", "view", "show", "inspect", "peek", "dump"},
+     "FS_READ"),
+    ({"write", "put", "save", "store", "set", "create", "touch", "append", "output", "emit", "tee"},
+     "FS_WRITE"),
+    ({"delete", "remove", "rm", "unlink", "erase", "purge", "clean", "destroy", "drop"},
+     "FS_DELETE"),
+    ({"list", "ls", "dir", "find", "glob", "scan", "enumerate", "browse", "tree", "walk"},
+     "FS_LIST"),
+    ({"move", "mv", "rename"},
+     "FS_MOVE"),
+    ({"copy", "cp", "duplicate", "clone"},
+     "FS_COPY"),
+    ({"mkdir", "make_dir", "create_dir", "create_directory", "makedirs"},
+     "FS_MKDIR"),
+    ({"send", "post", "publish", "notify", "dispatch", "push", "transmit", "email", "slack"},
+     "MSG_SEND"),
+    ({"reply", "respond", "answer"},
+     "MSG_REPLY"),
+    # Shell / exec / run → FS_WRITE (high-risk: produces output that modifies state)
+    ({"exec", "execute", "run", "shell", "bash", "command", "spawn", "invoke", "call", "eval"},
+     "FS_WRITE"),
+]
+
+# Default category for tools that match no pattern.
+_CLASSIFY_DEFAULT = "FS_WRITE"
+_CLASSIFY_DEFAULT_REASON = "no_pattern_match"
+
+# Persistent learned-mappings file, stored alongside the capability registry.
+_LEARNED_MAPPINGS_PATH = (
+    Path(__file__).resolve().parents[1] / "capabilities" / "learned-tool-mappings.json"
+)
+_learned_mappings_lock = threading.Lock()
+_learned_mappings_cache: dict[str, dict] | None = None
+
+
+def _load_learned_mappings() -> dict[str, dict]:
+    """Load the persistent learned-mappings file, or return empty dict."""
+    global _learned_mappings_cache
+    if _learned_mappings_cache is not None:
+        return _learned_mappings_cache
+    if _LEARNED_MAPPINGS_PATH.exists():
+        try:
+            data = json.loads(_LEARNED_MAPPINGS_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                _learned_mappings_cache = data
+                return _learned_mappings_cache
+        except (json.JSONDecodeError, OSError):
+            pass
+    _learned_mappings_cache = {}
+    return _learned_mappings_cache
+
+
+def _save_learned_mappings(mappings: dict[str, dict]) -> None:
+    """Persist the learned-mappings dict to disk."""
+    global _learned_mappings_cache
+    content = json.dumps(mappings, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+    try:
+        import stat as _stat
+        import tempfile
+        fd, tmp = tempfile.mkstemp(
+            dir=str(_LEARNED_MAPPINGS_PATH.parent), suffix=".tmp"
+        )
+        try:
+            os.write(fd, content.encode("utf-8"))
+            os.fchmod(fd, _stat.S_IRUSR | _stat.S_IWUSR)
+            os.close(fd)
+            os.rename(tmp, str(_LEARNED_MAPPINGS_PATH))
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except OSError as exc:
+        _CLASSIFY_LOG.warning("Failed to persist learned mappings: %s", exc)
+        return
+    _learned_mappings_cache = mappings
+
+
+def _classify_tool_name(tool_name: str) -> tuple[str, str]:
+    """Classify an unknown tool name to a governance category.
+
+    Returns (governance_tool, classification_reason).
+    """
+    # Check persistent learned mappings first.
+    with _learned_mappings_lock:
+        learned = _load_learned_mappings()
+        entry = learned.get(tool_name)
+        if entry and isinstance(entry, dict) and entry.get("maps_to"):
+            return str(entry["maps_to"]), "learned_mapping"
+
+    # Tokenize the tool name for keyword matching.
+    lower = tool_name.lower()
+    tokens = set(lower.replace("-", "_").split("_"))
+    # Also check the full name as a single token.
+    tokens.add(lower)
+
+    for keywords, governance_tool in _CLASSIFY_PATTERNS:
+        if tokens & keywords:
+            reason = f"pattern_match:{sorted(tokens & keywords)[0]}"
+            _persist_learned_mapping(tool_name, governance_tool, reason)
+            return governance_tool, reason
+
+    # No pattern matched — use default high-risk category.
+    _persist_learned_mapping(tool_name, _CLASSIFY_DEFAULT, _CLASSIFY_DEFAULT_REASON)
+    return _CLASSIFY_DEFAULT, _CLASSIFY_DEFAULT_REASON
+
+
+def _persist_learned_mapping(tool_name: str, maps_to: str, reason: str) -> None:
+    """Record a learned mapping so it survives restarts."""
+    with _learned_mappings_lock:
+        learned = _load_learned_mappings()
+        if tool_name in learned:
+            return  # already persisted
+        learned[tool_name] = {
+            "maps_to": maps_to,
+            "reason": reason,
+            "first_seen_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        _save_learned_mappings(learned)
+    _CLASSIFY_LOG.info(
+        "Auto-classified unknown tool %r → %s (reason: %s)",
+        tool_name, maps_to, reason,
+    )
+
+
+def _resolve_tool_name(action: str) -> tuple[str, dict | None]:
+    """Resolve an action string to an internal tool name.
+
+    Returns (tool_name, classification_metadata_or_None).
+    classification_metadata is non-None when auto-classification was used.
+    """
     normalized = action.strip()
     upper = normalized.upper()
     # Direct match (e.g., "FS_WRITE")
     if upper.startswith("FS_") or upper.startswith("MSG_"):
-        return upper
+        return upper, None
     # Friendly name lookup (e.g., "write_file")
     lower = normalized.lower()
     if lower in _ACTION_TOOL_MAP:
-        return _ACTION_TOOL_MAP[lower]
+        return _ACTION_TOOL_MAP[lower], None
     # Fallback: uppercase the input
-    return upper
+    return upper, None
 
 
 def _build_preflight_args(tool_name: str, target: str, evidence: dict) -> dict:
@@ -691,7 +839,25 @@ def _register_evaluate_endpoint() -> None:
         context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
 
         # Resolve tool name
-        tool_name = _resolve_tool_name(action)
+        tool_name, classify_meta = _resolve_tool_name(action)
+
+        # INV-009: If tool_name is not in the capability registry,
+        # auto-classify it instead of returning immediate DENY.
+        original_action = None
+        if not govmcp_server._CAPS.get(tool_name):
+            classified_tool, classify_reason = _classify_tool_name(tool_name)
+            original_action = tool_name
+            classify_meta = {
+                "auto_classified": True,
+                "original_tool": tool_name,
+                "classified_as": classified_tool,
+                "classification_reason": classify_reason,
+            }
+            _CLASSIFY_LOG.info(
+                "Evaluate: %r not in registry, classified as %s (%s)",
+                tool_name, classified_tool, classify_reason,
+            )
+            tool_name = classified_tool
 
         # Build tool args
         args = _build_preflight_args(tool_name, target, evidence)
@@ -705,6 +871,8 @@ def _register_evaluate_endpoint() -> None:
             "inputs": [],
             "expected_outputs": [{"ref": "file:path", "value": target}] if target else [],
         }
+        if original_action:
+            intent["original_action"] = original_action
         if context:
             intent["api_context"] = context
 
@@ -723,6 +891,11 @@ def _register_evaluate_endpoint() -> None:
                 {"error": f"evaluation failed: {exc}"},
                 status_code=500,
             )
+
+        # Attach classification metadata so callers know when
+        # auto-classification was applied.
+        if classify_meta:
+            result["classification"] = classify_meta
 
         return JSONResponse(result)
 

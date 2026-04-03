@@ -155,7 +155,7 @@ async def main() -> None:
         passed += 1
         print(f"  PASS: T5 — write outside scope returns DENY with missing conditions")
 
-        # --- Test 6: DENY for unknown tool ---
+        # --- Test 6: Unknown tool is auto-classified (INV-009) ---
         total += 1
         status, body = _http_post(
             evaluate_url,
@@ -166,10 +166,15 @@ async def main() -> None:
             token=AUTH_TOKEN,
         )
         assert status == 200, f"T6: expected 200, got {status}: {body}"
-        assert body.get("decision") == "DENY", f"T6: expected DENY, got {body}"
-        assert "Unknown tool" in body.get("reason", ""), f"T6: reason should mention unknown tool: {body}"
+        # INV-009: unknown tools are auto-classified, not immediately denied.
+        # The tool may still be DENY (e.g. path outside scope) but the reason
+        # should NOT be "Unknown tool" — it should be a policy reason.
+        classification = body.get("classification", {})
+        assert classification.get("auto_classified") is True, f"T6: expected auto_classified=True: {body}"
+        assert classification.get("original_tool") == "NONEXISTENT_TOOL", f"T6: original_tool mismatch: {body}"
+        assert classification.get("classified_as"), f"T6: missing classified_as: {body}"
         passed += 1
-        print(f"  PASS: T6 — unknown tool returns DENY")
+        print(f"  PASS: T6 — unknown tool is auto-classified (INV-009)")
 
         # --- Test 7: Friendly action name resolution ---
         total += 1
