@@ -358,7 +358,7 @@ async function renderOverview() {
         <div id="overview-recent-activity">
         ${activity.entries.length ? activity.entries.map(e => {
           const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
-          const href = rid ? navHref("/record", { record_id: rid }) : "";
+          const href = rid ? navHref("/record", { record_id: rid, from: "activity" }) : "";
           return `
             <div class="activity-entry${href ? " clickable" : ""}" ${href ? `data-nav-href="${escapeHtml(href)}"` : ""}>
               <strong>${escapeHtml(e.summary)}</strong>
@@ -490,14 +490,14 @@ async function renderActivity() {
                 const isUngoverned = e.event_category === "ungoverned_observation";
                 const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : "", isUngoverned ? "ungoverned-row" : ""].filter(Boolean).join(" ");
                 return `
-                  <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid }))}"` : ""}>
+                  <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"}</td>
                     <td>${isUngoverned ? _renderUngovernedDetail(e) : escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
-                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
+                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}">View</a>` : "\u2014"}</td>
                   </tr>
                 `;
               }).join("")}
@@ -714,13 +714,13 @@ async function renderAudit() {
               ${data.entries.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 return `
-                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid }))}"` : ""}>
+                  <tr class="${rid ? "clickable-row" : ""}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid, from: "audit" }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.user_identity || "\u2014")}</td>
-                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
+                    <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "audit" }))}">View</a>` : "\u2014"}</td>
                   </tr>
                 `;
               }).join("")}
@@ -786,6 +786,88 @@ function _attachAuditListeners() {
   });
 }
 
+function _recordBackLink(ctx) {
+  const from = ctx.params.get("from");
+  if (from === "activity") return `<a class="pill" href="${navHref("/activity")}">Back to Activity</a>`;
+  if (from === "audit") return `<a class="pill" href="${navHref("/audit")}">Back to Audit</a>`;
+  return `<a class="pill" href="${navHref("/activity")}">Back to Activity</a>`;
+}
+
+function _renderUngovernedRecord(rec) {
+  const opType = rec.operation_type || "";
+  const target = rec.target || "";
+  const source = rec.source || "";
+  const governed = GOVERNED_ALTERNATIVES[opType];
+  const approveHref = target ? navHref("/approvals", { file: target }) : "";
+
+  return `
+    <div class="card record-context">
+      <h3>Ungoverned Operation</h3>
+      <p class="record-warning">This operation bypassed governance and was not recorded through the governed tool chain.</p>
+      <ul class="kv">
+        <li><span>Operation</span><strong class="ungoverned-op">${escapeHtml(opType)}</strong></li>
+        ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
+        ${source ? `<li><span>Source</span><strong>${escapeHtml(source)}</strong></li>` : ""}
+        ${governed ? `<li><span>Governed alternative</span><strong><code>${escapeHtml(governed)}</code></strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+      ${approveHref ? `<div style="margin-top:12px"><a class="pill pill-primary" href="${escapeHtml(approveHref)}">Approve This File</a></div>` : ""}
+    </div>`;
+}
+
+function _renderGovernedRecord(rec) {
+  const decision = rec.policy_decision || "unknown";
+  const isDeny = decision === "DENY";
+  const tool = rec.tool || rec.capability_class || "unknown";
+  const user = rec.user_identity || rec.approving_operator || "";
+  const target = rec.target || rec.artifact_identity || "";
+
+  return `
+    <div class="card record-context">
+      <h3>Governed Action</h3>
+      <ul class="kv">
+        <li><span>Decision</span><strong>${isDeny ? '<span class="deny-badge">DENIED</span>' : `<span class="status-ok">${escapeHtml(decision)}</span>`}</strong></li>
+        <li><span>Tool</span><strong><code>${escapeHtml(tool)}</code></strong></li>
+        ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
+        ${user ? `<li><span>User</span><strong>${escapeHtml(user)}</strong></li>` : ""}
+        ${rec.record_type ? `<li><span>Record type</span><strong>${escapeHtml(rec.record_type)}</strong></li>` : ""}
+        ${rec.verification_state ? `<li><span>Verification</span><strong>${escapeHtml(rec.verification_state)}</strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+    </div>`;
+}
+
+function _renderApprovalRecord(rec) {
+  const isRevocation = rec.event_type === "opaque_artifact_revocation";
+  const identity = rec.artifact_identity || "";
+  const operator = rec.approving_operator || rec.revoking_operator || "";
+
+  return `
+    <div class="card record-context">
+      <h3>${isRevocation ? "File Revocation" : "File Approval"}</h3>
+      <ul class="kv">
+        <li><span>File</span><strong class="mono-cell">${escapeHtml(identity)}</strong></li>
+        ${operator ? `<li><span>Operator</span><strong>${escapeHtml(operator)}</strong></li>` : ""}
+        ${rec.governed_family ? `<li><span>Scope</span><strong>${escapeHtml(rec.governed_family)}</strong></li>` : ""}
+        ${rec.deployment_context ? `<li><span>Context</span><strong>${escapeHtml(rec.deployment_context)}</strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+    </div>`;
+}
+
+function _renderVerificationRecord(rec) {
+  return `
+    <div class="card record-context">
+      <h3>Verification Change</h3>
+      <ul class="kv">
+        ${rec.governed_family ? `<li><span>Surface</span><strong>${escapeHtml(rec.governed_family)}</strong></li>` : ""}
+        ${rec.previous_state ? `<li><span>Previous state</span><strong>${escapeHtml(rec.previous_state)}</strong></li>` : ""}
+        ${rec.new_state ? `<li><span>New state</span><strong>${escapeHtml(rec.new_state)}</strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+    </div>`;
+}
+
 async function renderRecordDetail() {
   const ctx = getContext();
   if (!ctx.recordId) {
@@ -795,13 +877,29 @@ async function renderRecordDetail() {
   if (!data.found) {
     return `<div class="card"><p class="muted">Record not found: ${escapeHtml(ctx.recordId)}</p></div>`;
   }
+
+  const rec = data.chain_record || {};
+  const eventType = rec.event_type || null;
+
+  let contextCard = "";
+  if (eventType === "ungoverned_operation_observed") {
+    contextCard = _renderUngovernedRecord(rec);
+  } else if (eventType === "opaque_artifact_approval" || eventType === "opaque_artifact_revocation") {
+    contextCard = _renderApprovalRecord(rec);
+  } else if (eventType === "verification_state_transition") {
+    contextCard = _renderVerificationRecord(rec);
+  } else if (!eventType && (rec.policy_decision || rec.record_type)) {
+    contextCard = _renderGovernedRecord(rec);
+  }
+
   return `
     <section class="page">
       <div class="card">
         <span class="eyebrow">Record Detail</span>
         <h2>${escapeHtml(truncate(ctx.recordId, 48))}</h2>
-        <a class="pill" href="${navHref("/audit")}">Back to Audit</a>
+        ${_recordBackLink(ctx)}
       </div>
+      ${contextCard}
       <div class="card">
         <h3>Chain Record</h3>
         ${preWithCopy(data.chain_record)}
