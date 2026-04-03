@@ -11,7 +11,7 @@ import json
 import os
 import secrets
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -890,7 +890,7 @@ def main():
         except OSError as exc:
             print(f"Warning: could not write dashboard_token: {exc}", file=sys.stderr)
 
-    server = HTTPServer(("127.0.0.1", port), DashboardHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), DashboardHandler)
     server.serve_forever()
 
 
