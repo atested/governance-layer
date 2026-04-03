@@ -1454,3 +1454,79 @@ pre {
   padding: 1px 5px;
   border-radius: 3px;
 }
+
+.ungoverned-approve-link {
+  font-size: 0.76rem;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.ungoverned-approve-link:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Approval management form */
+
+.approve-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.approve-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.approve-form input[type="text"] {
+  font-size: 0.88rem;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  min-width: 280px;
+}
+
+.approve-form input[type="text"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.pill-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.pill-primary:hover {
+  opacity: 0.9;
+}
+
+.pill-danger {
+  background: transparent;
+  color: var(--deny, #e74c3c);
+  border: 1px solid var(--deny, #e74c3c);
+  font-size: 0.76rem;
+  padding: 3px 10px;
+}
+
+.pill-danger:hover {
+  background: var(--deny, #e74c3c);
+  color: #fff;
+}
+
+.mono-cell {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.8rem;
+}

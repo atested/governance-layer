@@ -157,7 +157,7 @@ def test_app_js_terminology():
     assert '"Invocation Decision"' in js, "Missing 'Invocation Decision' label"
     # Confirm old terminology cleaned up in visible labels
     assert "Governed Actions" in js, "Missing 'Governed Actions' card label"
-    assert "Operator-Approved Artifacts" in js, "Missing 'Operator-Approved Artifacts' card label"
+    assert "Operator-Approved Files" in js, "Missing 'Operator-Approved Files' card label"
     print("PASS: app_js_terminology")
 
 

@@ -168,8 +168,8 @@ function categoryLabel(cat) {
   const map = {
     "action_decision": "Governed Action",
     "verification_transition": "Verification Change",
-    "opaque_approval": "Artifact Approval",
-    "opaque_revocation": "Artifact Revocation",
+    "opaque_approval": "File Approval",
+    "opaque_revocation": "File Revocation",
     "opaque_invocation_decision": "Invocation Decision",
     "ungoverned_observation": "Ungoverned Observation",
     "usage_attestation": "Usage Attestation",
@@ -185,7 +185,7 @@ function globalNav(currentPath) {
   const tabs = [
     { path: "/overview", label: "Overview", tip: "High-level governance posture: chain health, user counts, transparency, and denied actions." },
     { path: "/activity", label: "Activity", tip: "Chronological feed of every governed event — actions, approvals, verifications, and observations." },
-    { path: "/approvals", label: "Approvals", tip: "Active artifact approvals and their governed categories, operators, and contexts." },
+    { path: "/approvals", label: "Approvals", tip: "Manage approved files — add new approvals, review existing ones, or revoke access." },
     { path: "/audit", label: "Audit", tip: "Query the governance chain by time, user, tool, decision, or event category. Export results as JSON." },
     { path: "/report", label: "Reports", tip: "Aggregate views of governance activity grouped by tool, user, decision, or category." },
     { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, observation coverage, and license." },
@@ -283,11 +283,11 @@ async function renderOverview() {
             <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
           </div>
           <div class="status-card">
-            <span class="eyebrow">${tip("Active Approvals", "Number of artifact approvals currently in effect. Approvals authorize specific artifacts for use within governed families.")}</span>
+            <span class="eyebrow">${tip("Approved Files", "Number of files currently approved for use within the governance scope.")}</span>
             <span class="status-value">${status.active_approvals_count}</span>
           </div>
           <div class="status-card">
-            <span class="eyebrow">${tip("Operator-Approved Artifacts", "Artifacts that were approved by an operator for use within governed categories. These follow the approval chain and are recorded in the governance log.")}</span>
+            <span class="eyebrow">${tip("Operator-Approved Files", "Files that were reviewed and approved by an operator for use within the governance scope. Recorded in the governance chain.")}</span>
             <span class="status-value">${status.opacity_posture.opaque_count}</span>
           </div>
         </div>
@@ -433,11 +433,13 @@ function _renderUngovernedDetail(entry) {
   const target = detail.target || "";
   const source = detail.source || "";
   const governed = GOVERNED_ALTERNATIVES[opType];
+  const approveHref = target ? navHref("/approvals", { file: target }) : "";
   return `<div class="ungoverned-detail">
     <span class="ungoverned-op">${escapeHtml(opType)}</span>
     ${target ? `<span class="ungoverned-target" title="${escapeHtml(target)}">${escapeHtml(truncate(target, 40))}</span>` : ""}
     ${source ? `<span class="ungoverned-source">via ${escapeHtml(truncate(source, 20))}</span>` : ""}
     ${governed ? `<span class="ungoverned-alt">Use <code>${escapeHtml(governed)}</code> instead</span>` : ""}
+    ${approveHref ? `<a class="ungoverned-approve-link" href="${escapeHtml(approveHref)}">Approve</a>` : ""}
   </div>`;
 }
 
@@ -563,33 +565,114 @@ function _attachActivityListeners() {
 }
 
 async function renderApprovals() {
-  const data = await cached("approvals", () => api("approvals"));
+  clearCache();
+  const data = await api("approvals");
+  const ctx = getContext();
+  const prefill = ctx.params.get("file") || "";
+
   return `
     <section class="page">
       <div class="card">
-        <span class="eyebrow">Approvals</span>
-        <h2>Active Approvals (${data.total_count})</h2>
-        <p class="explainer">Artifact approvals authorize specific artifacts for use within a governed category. Approvals can be revoked at any time.</p>
+        <span class="eyebrow">File Approvals</span>
+        <h2>Approved Files (${data.total_count})</h2>
+        <p class="explainer">Approved files are reviewed and authorized for use within the governance scope. You can approve new files or revoke existing approvals at any time.</p>
+      </div>
+      <div class="card">
+        <h3>Approve a File</h3>
+        <form id="approve-form" class="approve-form">
+          <label>File path or identity
+            <input type="text" name="artifact_identity" placeholder="e.g. /path/to/file.py or SHA-256 hash" value="${escapeHtml(prefill)}" required />
+          </label>
+          <label>Operator
+            <input type="text" name="operator" placeholder="your name (optional)" />
+          </label>
+          <button type="submit" class="pill pill-primary">Approve File</button>
+        </form>
+        <div id="approve-result"></div>
       </div>
       ${data.active_approvals.length ? `
-        <div class="approval-grid">
-          ${data.active_approvals.map(a => `
-            <div class="approval-card">
-              <span class="eyebrow">Active approval</span>
-              <h3>${truncate(a.artifact_identity, 40)}</h3>
-              <ul class="kv">
-                <li><span>Category</span><strong>${escapeHtml(a.governed_family || "\u2014")}</strong></li>
-                <li><span>Operator</span><strong>${escapeHtml(a.approving_operator)}</strong></li>
-                <li><span>Context</span><strong>${escapeHtml(a.deployment_context || "\u2014")}</strong></li>
-                <li><span>Policy</span><strong>${escapeHtml(a.policy_version || "\u2014")}</strong></li>
-                <li><span>Approved</span><strong>${formatTime(a.timestamp_utc)}</strong></li>
-              </ul>
-            </div>
-          `).join("")}
+        <div class="card">
+          <h3>Currently Approved</h3>
+          <table class="audit-results-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Operator</th>
+                <th>Scope</th>
+                <th>Approved</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.active_approvals.map(a => `
+                <tr>
+                  <td class="mono-cell" title="${escapeHtml(a.artifact_identity)}">${escapeHtml(truncate(a.artifact_identity, 50))}</td>
+                  <td>${escapeHtml(a.approving_operator)}</td>
+                  <td>${escapeHtml(a.governed_family || "\u2014")}</td>
+                  <td>${formatTime(a.timestamp_utc)}</td>
+                  <td><button class="pill pill-danger revoke-btn" data-artifact="${escapeHtml(a.artifact_identity)}" data-operator="${escapeHtml(a.approving_operator)}">Revoke</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
         </div>
-      ` : '<div class="card"><p class="muted">No active approvals.</p></div>'}
+      ` : '<div class="card"><p class="muted">No approved files yet. Use the form above to approve a file.</p></div>'}
     </section>
   `;
+}
+
+function _attachApprovalListeners() {
+  const form = document.getElementById("approve-form");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const body = {
+      artifact_identity: fd.get("artifact_identity"),
+      operator: fd.get("operator") || "dashboard_operator",
+    };
+    const resultEl = document.getElementById("approve-result");
+    try {
+      const resp = await fetch(`${API}/api/approvals/add`, {
+        method: "POST",
+        headers: { ...(_authHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        resultEl.innerHTML = '<p class="status-ok">File approved successfully.</p>';
+        setTimeout(() => render(), 800);
+      } else {
+        resultEl.innerHTML = `<p class="status-warn">${escapeHtml(data.error || "Failed")}</p>`;
+      }
+    } catch (err) {
+      resultEl.innerHTML = `<p class="status-warn">${escapeHtml(err.message)}</p>`;
+    }
+  });
+
+  document.querySelectorAll(".revoke-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const artifact = btn.getAttribute("data-artifact");
+      const operator = btn.getAttribute("data-operator");
+      if (!confirm(`Revoke approval for:\n${artifact}`)) return;
+      try {
+        const resp = await fetch(`${API}/api/approvals/revoke`, {
+          method: "POST",
+          headers: { ...(_authHeaders()), "Content-Type": "application/json" },
+          body: JSON.stringify({ artifact_identity: artifact, operator }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          render();
+        } else {
+          alert(data.error || "Revocation failed");
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
 }
 
 async function renderAudit() {
@@ -679,8 +762,8 @@ async function renderAudit() {
               <option value="">All</option>
               <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Governed Action</option>
               <option value="verification_transition" ${ctx.category === "verification_transition" ? "selected" : ""}>Verification Change</option>
-              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Artifact Approval</option>
-              <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>Artifact Revocation</option>
+              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>File Approval</option>
+              <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>File Revocation</option>
               <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Invocation Decision</option>
               <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Ungoverned Observation</option>
             </select>
@@ -1505,6 +1588,7 @@ async function render() {
   // Attach event listeners for elements that replaced inline onclick attributes
   _attachOverviewActivityListeners();
   _attachActivityListeners();
+  _attachApprovalListeners();
   _attachAuditListeners();
   _attachHealthListeners();
   _attachConfigListeners();

@@ -58,6 +58,23 @@ def _get_approval_store():
     return _approval_store
 
 
+def _invalidate_approval_store():
+    global _approval_store
+    _approval_store = None
+
+
+def _governed_family():
+    return str(os.environ.get("GOV_GOVERNED_FAMILY", "mcp_tools_v1")).strip() or "mcp_tools_v1"
+
+
+def _deployment_context():
+    return str(os.environ.get("GOV_DEPLOYMENT_CONTEXT", "default")).strip() or "default"
+
+
+def _policy_version():
+    return str(os.environ.get("GOV_POLICY_VERSION", "baseline-v1")).strip() or "baseline-v1"
+
+
 def _json_response(handler, data, status=200):
     body = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
@@ -217,6 +234,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
             if parsed.path == "/api/observe":
                 self._handle_observe()
+            elif parsed.path == "/api/approvals/add":
+                self._handle_approve()
+            elif parsed.path == "/api/approvals/revoke":
+                self._handle_revoke()
             elif parsed.path == "/api/health/acknowledge":
                 self._handle_acknowledge()
             elif parsed.path == "/api/config/update":
@@ -297,6 +318,92 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "recorded": True,
                 "event_id": event.get("event_id"),
                 "operation_type": op_type,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_approve(self):
+        """POST /api/approvals/add — approve a file (record approval event)."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        artifact_identity = str(data.get("artifact_identity", "")).strip()
+        operator = str(data.get("operator", "")).strip() or "dashboard_operator"
+        if not artifact_identity:
+            _json_response(self, {"error": "artifact_identity is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            payload = {
+                "artifact_identity": artifact_identity,
+                "approving_operator": operator,
+                "governed_family": _governed_family(),
+                "deployment_context": _deployment_context(),
+                "policy_version": _policy_version(),
+            }
+            event = build_non_action_event(
+                "opaque_artifact_approval",
+                payload,
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+            _invalidate_approval_store()
+            _json_response(self, {
+                "approved": True,
+                "event_id": event.get("event_id"),
+                "artifact_identity": artifact_identity,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_revoke(self):
+        """POST /api/approvals/revoke — revoke an existing file approval."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        artifact_identity = str(data.get("artifact_identity", "")).strip()
+        operator = str(data.get("operator", "")).strip() or "dashboard_operator"
+        if not artifact_identity:
+            _json_response(self, {"error": "artifact_identity is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            payload = {
+                "artifact_identity": artifact_identity,
+                "revoking_operator": operator,
+                "governed_family": _governed_family(),
+                "deployment_context": _deployment_context(),
+                "policy_version": _policy_version(),
+            }
+            event = build_non_action_event(
+                "opaque_artifact_revocation",
+                payload,
+                prev_record_hash=_get_chain_head_hash(),
+            )
+            _append_observation_event(event)
+            _invalidate_approval_store()
+            _json_response(self, {
+                "revoked": True,
+                "event_id": event.get("event_id"),
+                "artifact_identity": artifact_identity,
             })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
