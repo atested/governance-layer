@@ -382,45 +382,118 @@ function _attachOverviewActivityListeners() {
   });
 }
 
+// Ungoverned operation → governed tool mapping
+const GOVERNED_ALTERNATIVES = {
+  read: "fs_read",
+  write: "fs_write",
+  edit: "fs_write",
+  delete: "fs_delete",
+  move: "fs_move",
+  glob: "fs_list",
+  list: "fs_list",
+  grep: "fs_list",
+  execute: "capabilities_execute",
+  other: null,
+};
+
+// Activity sort state (client-side)
+let _activitySort = { col: null, dir: "asc" };
+
+function _sortIndicator(col) {
+  if (_activitySort.col !== col) return ' <span class="sort-arrow sort-inactive">\u2195</span>';
+  return _activitySort.dir === "asc"
+    ? ' <span class="sort-arrow sort-active">\u2191</span>'
+    : ' <span class="sort-arrow sort-active">\u2193</span>';
+}
+
+function _sortEntries(entries) {
+  if (!_activitySort.col) return entries;
+  const col = _activitySort.col;
+  const dir = _activitySort.dir === "asc" ? 1 : -1;
+  const keyFn = {
+    seq: e => e.sequence_position || 0,
+    time: e => e.timestamp_utc || "",
+    type: e => categoryLabel(e.event_category),
+    decision: e => e.evidence?.policy_decision || "",
+    summary: e => e.summary || "",
+    category: e => e.governed_family || "",
+  }[col];
+  if (!keyFn) return entries;
+  return [...entries].sort((a, b) => {
+    const va = keyFn(a), vb = keyFn(b);
+    if (va < vb) return -dir;
+    if (va > vb) return dir;
+    return 0;
+  });
+}
+
+function _renderUngovernedDetail(entry) {
+  const detail = entry.detail || {};
+  const opType = detail.operation_type || "";
+  const target = detail.target || "";
+  const source = detail.source || "";
+  const governed = GOVERNED_ALTERNATIVES[opType];
+  return `<div class="ungoverned-detail">
+    <span class="ungoverned-op">${escapeHtml(opType)}</span>
+    ${target ? `<span class="ungoverned-target" title="${escapeHtml(target)}">${escapeHtml(truncate(target, 40))}</span>` : ""}
+    ${source ? `<span class="ungoverned-source">via ${escapeHtml(truncate(source, 20))}</span>` : ""}
+    ${governed ? `<span class="ungoverned-alt">Use <code>${escapeHtml(governed)}</code> instead</span>` : ""}
+  </div>`;
+}
+
 async function renderActivity() {
   const ctx = getContext();
   const offset = (ctx.page - 1) * pageSize;
-  const data = await api("activity", { limit: pageSize, offset });
+  const params = { limit: pageSize, offset };
+  if (ctx.params.get("act_start")) params.start_time = ctx.params.get("act_start");
+  if (ctx.params.get("act_end")) params.end_time = ctx.params.get("act_end");
+  const data = await api("activity", params);
   const totalPages = Math.ceil(data.total_matching / pageSize) || 1;
+  const sorted = _sortEntries(data.entries);
+
+  const actStart = ctx.params.get("act_start") || "";
+  const actEnd = ctx.params.get("act_end") || "";
 
   return `
     <section class="page">
       <div class="card">
         <span class="eyebrow">Governance Activity</span>
         <h2>All Events (${data.total_matching} total)</h2>
+        <div class="activity-date-range">
+          <label>From <input type="datetime-local" id="act-start" value="${escapeHtml(actStart)}" /></label>
+          <label>To <input type="datetime-local" id="act-end" value="${escapeHtml(actEnd)}" /></label>
+          <button class="pill" id="act-date-apply">Apply</button>
+          ${actStart || actEnd ? '<button class="pill pill-outline" id="act-date-clear">Clear</button>' : ""}
+        </div>
       </div>
       <div class="card">
-        ${data.entries.length ? `
-          <table class="audit-results-table">
+        ${sorted.length ? `
+          <table class="audit-results-table activity-sortable">
             <thead>
               <tr>
-                <th>${tip("#", "Sequence position in the governance chain.")}</th>
-                <th>${tip("Time", "UTC timestamp when the event was recorded.")}</th>
-                <th>${tip("Event Type", "The type of governance event: governed action, approval, verification change, observation, etc.")}</th>
-                <th>${tip("Decision", "Whether the action was allowed or denied. Only applies to governed action events.")}</th>
-                <th>${tip("Summary", "Human-readable description of what happened.")}</th>
-                <th>${tip("Category", "The governed category this event belongs to, if applicable.")}</th>
+                <th class="sortable-th" data-sort="seq">${tip("#", "Sequence position in the governance chain.")}${_sortIndicator("seq")}</th>
+                <th class="sortable-th" data-sort="time">${tip("Time", "UTC timestamp when the event was recorded.")}${_sortIndicator("time")}</th>
+                <th class="sortable-th" data-sort="type">${tip("Event Type", "The type of governance event.")}${_sortIndicator("type")}</th>
+                <th class="sortable-th" data-sort="decision">${tip("Decision", "Whether the action was allowed or denied.")}${_sortIndicator("decision")}</th>
+                <th class="sortable-th" data-sort="summary">${tip("Summary", "Human-readable description of what happened.")}${_sortIndicator("summary")}</th>
+                <th class="sortable-th" data-sort="category">${tip("Category", "The governed category this event belongs to.")}${_sortIndicator("category")}</th>
                 <th>${tip("Detail", "Link to the full record in the governance chain.")}</th>
               </tr>
             </thead>
             <tbody id="activity-tbody">
-              ${data.entries.map(e => {
+              ${sorted.map(e => {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 const decision = e.evidence?.policy_decision || "";
                 const isDeny = decision === "DENY" || e.summary?.includes("DENY");
-                const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : ""].filter(Boolean).join(" ");
+                const isUngoverned = e.event_category === "ungoverned_observation";
+                const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : "", isUngoverned ? "ungoverned-row" : ""].filter(Boolean).join(" ");
                 return `
                   <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"}</td>
-                    <td>${escapeHtml(e.summary)}</td>
+                    <td>${isUngoverned ? _renderUngovernedDetail(e) : escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid }))}">View</a>` : "\u2014"}</td>
                   </tr>
@@ -447,6 +520,46 @@ function _attachActivityListeners() {
       window.location.hash = row.getAttribute("data-nav-href");
     });
   });
+
+  // Column sorting
+  document.querySelectorAll(".sortable-th").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.getAttribute("data-sort");
+      if (_activitySort.col === col) {
+        _activitySort.dir = _activitySort.dir === "asc" ? "desc" : "asc";
+      } else {
+        _activitySort.col = col;
+        _activitySort.dir = "asc";
+      }
+      render();
+    });
+  });
+
+  // Date range
+  const applyBtn = document.getElementById("act-date-apply");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      const startEl = document.getElementById("act-start");
+      const endEl = document.getElementById("act-end");
+      const startVal = startEl ? startEl.value : "";
+      const endVal = endEl ? endEl.value : "";
+      window.location.hash = navHref("/activity", {
+        page: 1,
+        act_start: startVal || null,
+        act_end: endVal || null,
+      });
+    });
+  }
+  const clearBtn = document.getElementById("act-date-clear");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      window.location.hash = navHref("/activity", {
+        page: 1,
+        act_start: null,
+        act_end: null,
+      });
+    });
+  }
 }
 
 async function renderApprovals() {

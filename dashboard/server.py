@@ -696,6 +696,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 governed_family=qs("governed_family") or None,
                 event_category=qs("event_category") or None,
                 resolution=qs("resolution") or None,
+                start_time=qs("start_time") or None,
+                end_time=qs("end_time") or None,
             )
             _json_response(self, data)
 

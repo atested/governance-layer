@@ -1343,3 +1343,114 @@ pre {
   top: 8px;
   right: 8px;
 }
+
+/* Activity tab — sortable columns */
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th:hover {
+  color: var(--accent);
+}
+
+.sort-arrow {
+  font-size: 0.7rem;
+  margin-left: 3px;
+}
+
+.sort-inactive {
+  opacity: 0.35;
+}
+
+.sort-active {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Activity tab — date range controls */
+
+.activity-date-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.activity-date-range label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.activity-date-range input[type="datetime-local"] {
+  font-size: 0.82rem;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.pill-outline {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.pill-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Activity tab — ungoverned observation rows */
+
+.ungoverned-row td {
+  background: rgba(255, 170, 50, 0.04);
+}
+
+.ungoverned-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.ungoverned-op {
+  font-weight: 600;
+  color: var(--warn, #e6a320);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 170, 50, 0.1);
+}
+
+.ungoverned-target {
+  color: var(--fg);
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+}
+
+.ungoverned-source {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.ungoverned-alt {
+  font-size: 0.76rem;
+  color: var(--accent);
+}
+
+.ungoverned-alt code {
+  font-size: 0.76rem;
+  background: var(--accent-soft, rgba(91, 138, 245, 0.08));
+  padding: 1px 5px;
+  border-radius: 3px;
+}

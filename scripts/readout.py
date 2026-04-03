@@ -409,6 +409,8 @@ def governance_activity_view(
     governed_family: Optional[str] = None,
     event_category: Optional[str] = None,
     resolution: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
 ) -> dict:
     """Assemble a Governance Activity Projection (GAP).
 
@@ -437,6 +439,10 @@ def governance_activity_view(
             if e["event_category"] == "opaque_invocation_decision"
             and e["detail"].get("resolution") == resolution
         ]
+    if start_time:
+        entries = [e for e in entries if e["timestamp_utc"] >= start_time]
+    if end_time:
+        entries = [e for e in entries if e["timestamp_utc"] <= end_time]
 
     # Reverse chronological order (most recent first).
     entries.reverse()
@@ -461,6 +467,8 @@ def governance_activity_view(
             "governed_family": governed_family,
             "event_category": event_category,
             "resolution": resolution,
+            "start_time": start_time,
+            "end_time": end_time,
         },
     }
 
