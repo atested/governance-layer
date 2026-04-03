@@ -1,0 +1,130 @@
+{
+  "policy_version": "2.0",
+  "description": "GovMCP v2 action-based policy rules. Evaluated in order; first matching rule wins.",
+  "default_decision": "DENY",
+  "default_reason": "No matching policy rule",
+  "rules": [
+    {
+      "id": "tier4-deny",
+      "description": "Uninspectable operations are denied by default",
+      "match": {
+        "confidence_tier": [4]
+      },
+      "decision": "DENY",
+      "reason": "Uninspectable operation — encoded or obfuscated payload detected"
+    },
+    {
+      "id": "sensitive-path-deny",
+      "description": "Operations targeting sensitive paths require explicit approval",
+      "match": {
+        "scope": ["privileged"]
+      },
+      "decision": "DENY",
+      "reason": "Target path is in a sensitive location (credentials, SSH keys, system config)"
+    },
+    {
+      "id": "read-source-allow",
+      "description": "File reads within allowed base directories are permitted",
+      "match": {
+        "action_type": ["read"],
+        "confidence_tier": [1, 2],
+        "target_within_base_dirs": true
+      },
+      "decision": "ALLOW",
+      "reason": "Read operation within allowed directories"
+    },
+    {
+      "id": "list-source-allow",
+      "description": "Directory listing and search within allowed base directories",
+      "match": {
+        "action_type": ["list", "create_directory"],
+        "confidence_tier": [1, 2],
+        "target_within_base_dirs": true
+      },
+      "decision": "ALLOW",
+      "reason": "List/search operation within allowed directories"
+    },
+    {
+      "id": "write-source-allow",
+      "description": "File writes within allowed base directories (no hidden paths, no executables)",
+      "match": {
+        "action_type": ["write"],
+        "confidence_tier": [1, 2],
+        "target_within_base_dirs": true,
+        "no_hidden_paths": true,
+        "no_executable_output": true
+      },
+      "decision": "ALLOW",
+      "reason": "Write operation within allowed directories"
+    },
+    {
+      "id": "move-source-allow",
+      "description": "File moves within allowed base directories",
+      "match": {
+        "action_type": ["move"],
+        "confidence_tier": [1, 2],
+        "target_within_base_dirs": true,
+        "no_hidden_paths": true
+      },
+      "decision": "ALLOW",
+      "reason": "Move operation within allowed directories"
+    },
+    {
+      "id": "delete-source-allow",
+      "description": "File deletes within allowed base directories (no hidden paths)",
+      "match": {
+        "action_type": ["delete"],
+        "confidence_tier": [1, 2],
+        "target_within_base_dirs": true,
+        "no_hidden_paths": true
+      },
+      "decision": "ALLOW",
+      "reason": "Delete operation within allowed directories"
+    },
+    {
+      "id": "network-deny",
+      "description": "Network operations require explicit approval",
+      "match": {
+        "action_type": ["network"],
+        "scope": ["remote"]
+      },
+      "decision": "DENY",
+      "reason": "Network operations require operator approval"
+    },
+    {
+      "id": "execute-tier2-allow",
+      "description": "Well-understood execution (git, make, pytest) within repository scope",
+      "match": {
+        "action_type": ["execute", "read", "write", "network"],
+        "confidence_tier": [2],
+        "scope": ["local", "repository"]
+      },
+      "decision": "ALLOW",
+      "reason": "Well-understood command within local/repository scope"
+    },
+    {
+      "id": "tier3-approval-required",
+      "description": "Opaque execution requires operator approval",
+      "match": {
+        "confidence_tier": [3]
+      },
+      "decision": "DENY",
+      "reason": "Opaque execution — internal behavior not deterministically known. Operator approval required."
+    },
+    {
+      "id": "outside-base-dirs-deny",
+      "description": "Operations outside allowed base directories are denied",
+      "match": {
+        "target_within_base_dirs": false
+      },
+      "decision": "DENY",
+      "reason": "Target path is outside allowed base directories"
+    }
+  ],
+  "base_dirs": [
+    "__GOV_CANONICAL_REPO_PATH__",
+    "__GOV_RUNTIME_PATH__"
+  ],
+  "deny_hidden_paths": true,
+  "deny_executable_outputs": true
+}
