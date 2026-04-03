@@ -166,15 +166,21 @@ function _attachCopyListeners() {
 // Human-readable category names
 function categoryLabel(cat) {
   const map = {
-    "action_decision": "Governed Action",
+    "action_decision": "Mediated Decision",
     "verification_transition": "Verification Change",
     "opaque_approval": "File Approval",
     "opaque_revocation": "File Revocation",
     "opaque_invocation_decision": "Invocation Decision",
-    "ungoverned_observation": "Ungoverned Observation",
+    "ungoverned_observation": "Boundary Observation",
     "usage_attestation": "Usage Attestation",
   };
   return map[cat] || cat || "\u2014";
+}
+
+function tierBadge(tier) {
+  if (tier == null) return "";
+  const cls = tier <= 2 ? "status-ok" : "status-warn";
+  return `<span class="${cls}" style="font-size:0.8rem">Tier\u00a0${tier}</span>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +281,7 @@ async function renderOverview() {
         <div class="overview-section-title">Governance Activity</div>
         <div class="overview-metrics">
           <div class="status-card">
-            <span class="eyebrow">${tip("Governed Actions", "Actions that were evaluated by the governance policy engine and recorded with a full decision trail.")}</span>
+            <span class="eyebrow">${tip("Mediated Operations", "Operations that were classified, policy-evaluated, and recorded with a full decision trail at the mediation boundary.")}</span>
             <span class="status-value">${status.opacity_posture.transparent_count}</span>
           </div>
           <div class="status-card denied-highlight">
@@ -287,7 +293,7 @@ async function renderOverview() {
             <span class="status-value">${status.active_approvals_count}</span>
           </div>
           <div class="status-card">
-            <span class="eyebrow">${tip("Operator-Approved Files", "Files that were reviewed and approved by an operator for use within the governance scope. Recorded in the governance chain.")}</span>
+            <span class="eyebrow">${tip("Approval-Gated Operations", "Operations requiring operator approval (Tier 3/4 confidence). Recorded in the governance chain.")}</span>
             <span class="status-value">${status.opacity_posture.opaque_count}</span>
           </div>
         </div>
@@ -382,19 +388,7 @@ function _attachOverviewActivityListeners() {
   });
 }
 
-// Ungoverned operation → governed tool mapping
-const GOVERNED_ALTERNATIVES = {
-  read: "fs_read",
-  write: "fs_write",
-  edit: "fs_write",
-  delete: "fs_delete",
-  move: "fs_move",
-  glob: "fs_list",
-  list: "fs_list",
-  grep: "fs_list",
-  execute: "capabilities_execute",
-  other: null,
-};
+// (GOVERNED_ALTERNATIVES removed in v2 — boundary observations no longer suggest alternatives)
 
 // Activity sort state (client-side)
 let _activitySort = { col: null, dir: "asc" };
@@ -432,14 +426,10 @@ function _renderUngovernedDetail(entry) {
   const opType = detail.operation_type || "";
   const target = detail.target || "";
   const source = detail.source || "";
-  const governed = GOVERNED_ALTERNATIVES[opType];
-  const approveHref = target ? navHref("/approvals", { file: target }) : "";
   return `<div class="ungoverned-detail">
     <span class="ungoverned-op">${escapeHtml(opType)}</span>
     ${target ? `<span class="ungoverned-target" title="${escapeHtml(target)}">${escapeHtml(truncate(target, 40))}</span>` : ""}
     ${source ? `<span class="ungoverned-source">via ${escapeHtml(truncate(source, 20))}</span>` : ""}
-    ${governed ? `<span class="ungoverned-alt">Use <code>${escapeHtml(governed)}</code> instead</span>` : ""}
-    ${approveHref ? `<a class="ungoverned-approve-link" href="${escapeHtml(approveHref)}">Approve</a>` : ""}
   </div>`;
 }
 
@@ -488,13 +478,14 @@ async function renderActivity() {
                 const decision = e.evidence?.policy_decision || "";
                 const isDeny = decision === "DENY" || e.summary?.includes("DENY");
                 const isUngoverned = e.event_category === "ungoverned_observation";
+                const tier = e.detail?.confidence_tier;
                 const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : "", isUngoverned ? "ungoverned-row" : ""].filter(Boolean).join(" ");
                 return `
                   <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
-                    <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"}</td>
+                    <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"} ${tierBadge(tier)}</td>
                     <td>${isUngoverned ? _renderUngovernedDetail(e) : escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}">View</a>` : "\u2014"}</td>
@@ -760,12 +751,12 @@ async function renderAudit() {
           <label>${tip("Category", "Filter by event type.")}
             <select name="category">
               <option value="">All</option>
-              <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Governed Action</option>
+              <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Mediated Decision</option>
               <option value="verification_transition" ${ctx.category === "verification_transition" ? "selected" : ""}>Verification Change</option>
               <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>File Approval</option>
               <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>File Revocation</option>
               <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Invocation Decision</option>
-              <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Ungoverned Observation</option>
+              <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Boundary Observation</option>
             </select>
           </label>
           <button type="submit">Search</button>
@@ -797,39 +788,41 @@ function _renderUngovernedRecord(rec) {
   const opType = rec.operation_type || "";
   const target = rec.target || "";
   const source = rec.source || "";
-  const governed = GOVERNED_ALTERNATIVES[opType];
-  const approveHref = target ? navHref("/approvals", { file: target }) : "";
 
   return `
     <div class="card record-context">
-      <h3>Ungoverned Operation</h3>
-      <p class="record-warning">This operation bypassed governance and was not recorded through the governed tool chain.</p>
+      <h3>Boundary Observation</h3>
+      <p class="record-warning">This operation was observed outside the mediation boundary and was not policy-evaluated.</p>
       <ul class="kv">
         <li><span>Operation</span><strong class="ungoverned-op">${escapeHtml(opType)}</strong></li>
         ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
         ${source ? `<li><span>Source</span><strong>${escapeHtml(source)}</strong></li>` : ""}
-        ${governed ? `<li><span>Governed alternative</span><strong><code>${escapeHtml(governed)}</code></strong></li>` : ""}
         <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
       </ul>
-      ${approveHref ? `<div style="margin-top:12px"><a class="pill pill-primary" href="${escapeHtml(approveHref)}">Approve This File</a></div>` : ""}
     </div>`;
 }
 
 function _renderGovernedRecord(rec) {
   const decision = rec.policy_decision || "unknown";
   const isDeny = decision === "DENY";
-  const tool = rec.tool || rec.capability_class || "unknown";
+  const isV2 = rec.record_version === "2.0";
+  const tool = rec.original_tool || rec.tool || rec.capability_class || "unknown";
   const user = rec.user_identity || rec.approving_operator || "";
   const target = rec.target || rec.artifact_identity || "";
+  const cls = rec.classification || {};
 
   return `
     <div class="card record-context">
-      <h3>Governed Action</h3>
+      <h3>${isV2 ? "Mediated Decision" : "Governed Action"}</h3>
       <ul class="kv">
         <li><span>Decision</span><strong>${isDeny ? '<span class="deny-badge">DENIED</span>' : `<span class="status-ok">${escapeHtml(decision)}</span>`}</strong></li>
         <li><span>Tool</span><strong><code>${escapeHtml(tool)}</code></strong></li>
         ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
         ${user ? `<li><span>User</span><strong>${escapeHtml(user)}</strong></li>` : ""}
+        ${cls.confidence_tier != null ? `<li><span>Confidence Tier</span><strong>${tierBadge(cls.confidence_tier)}</strong></li>` : ""}
+        ${cls.action_type ? `<li><span>Action Type</span><strong>${escapeHtml(cls.action_type)}</strong></li>` : ""}
+        ${cls.scope ? `<li><span>Scope</span><strong>${escapeHtml(cls.scope)}</strong></li>` : ""}
+        ${rec.matched_rule ? `<li><span>Matched Rule</span><strong><code>${escapeHtml(rec.matched_rule)}</code></strong></li>` : ""}
         ${rec.record_type ? `<li><span>Record type</span><strong>${escapeHtml(rec.record_type)}</strong></li>` : ""}
         ${rec.verification_state ? `<li><span>Verification</span><strong>${escapeHtml(rec.verification_state)}</strong></li>` : ""}
         <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>

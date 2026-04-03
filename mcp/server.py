@@ -80,12 +80,10 @@ from readout import (
     governance_verification_view,
 )
 
-APPEND = REPO / "scripts" / "append-record-runtime.sh"
 CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
 
 VERIFY_CHAIN = REPO / "scripts" / "verify-chain.py"
 RUNTIME = runtime_root(REPO)
-INTENTS_DIR = RUNTIME / "LOGS" / "intents"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 _VERIFICATION_TRACKER: Optional[VerificationStateTracker] = None
@@ -1066,20 +1064,6 @@ def _verify_chain() -> None:
         msg = (proc.stdout.strip() or proc.stderr.strip() or "unknown")
         qpath = _quarantine_chain("CHAIN_VERIFY_FAIL: " + msg)
         raise RuntimeError("CHAIN_VERIFY_FAIL: " + msg + (" | quarantined=" + qpath if qpath else ""))
-
-def _append_decision(intent_path: Path) -> Dict[str, Any]:
-    env = os.environ.copy()
-    env["GOV_RUNTIME_DIR"] = str(RUNTIME)
-
-    proc = subprocess.run(
-        [str(APPEND), str(intent_path)],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=True,
-    )
-    rec = json.loads(proc.stdout.strip().splitlines()[-1])
-    return rec
 
 def governed_tool(
     tool_name: str,

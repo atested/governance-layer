@@ -295,20 +295,40 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
     evidence: dict = {}
 
     if category == "action_decision":
-        tool_name = rec.get("tool", rec.get("capability_class", "unknown"))
+        is_v2 = rec.get("record_version") == "2.0"
+        tool_name = rec.get("original_tool") if is_v2 else None
+        if not tool_name:
+            tool_name = rec.get("tool", rec.get("capability_class", "unknown"))
         policy_decision = rec.get("policy_decision", "unknown")
         record_type = rec.get("record_type", "")
         governed_family = rec.get("governed_family", "")
-        summary = f"{tool_name} \u2192 {policy_decision}"
+
+        classification = rec.get("classification", {})
+        confidence_tier = classification.get("confidence_tier") if is_v2 else None
+        action_type = classification.get("action_type", "") if is_v2 else ""
+        matched_rule = rec.get("matched_rule", "") if is_v2 else ""
+
+        if confidence_tier is not None:
+            summary = f"{tool_name} \u2192 {policy_decision} (Tier {confidence_tier})"
+        else:
+            summary = f"{tool_name} \u2192 {policy_decision}"
+
         detail = {
             "tool_name": tool_name,
             "policy_decision": policy_decision,
             "record_type": record_type,
             "verification_state": rec.get("verification_state", ""),
         }
+        if is_v2:
+            detail["confidence_tier"] = confidence_tier
+            detail["action_type"] = action_type
+            detail["matched_rule"] = matched_rule
+            detail["scope"] = classification.get("scope", "")
+
         evidence = {
             "request_id": rec.get("request_id", ""),
             "record_hash": rec.get("record_hash", ""),
+            "policy_decision": policy_decision,
         }
 
     elif category == "verification_transition":
@@ -616,10 +636,11 @@ def audit_query(
             if user_identity not in (rec_user, sidecar_user):
                 continue
 
-        # Tool filter
+        # Tool filter (check original_tool for v2 records too)
         if tool_name:
             rec_tool = rec.get("tool", rec.get("capability_class", ""))
-            if rec_tool != tool_name:
+            rec_original = rec.get("original_tool", "")
+            if rec_tool != tool_name and rec_original != tool_name:
                 continue
 
         # Policy decision filter

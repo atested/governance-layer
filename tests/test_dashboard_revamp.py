@@ -149,15 +149,19 @@ def test_app_js_tooltips():
 
 
 def test_app_js_terminology():
-    """app.js uses updated terminology."""
+    """app.js uses updated terminology (v2)."""
     js = (REPO / "dashboard" / "ui" / "app.js").read_text()
     assert "categoryLabel" in js, "Missing categoryLabel function"
-    assert '"Governed Action"' in js, "Missing 'Governed Action' label"
+    assert '"Mediated Decision"' in js, "Missing 'Mediated Decision' label"
     assert '"Verification Change"' in js, "Missing 'Verification Change' label"
     assert '"Invocation Decision"' in js, "Missing 'Invocation Decision' label"
-    # Confirm old terminology cleaned up in visible labels
-    assert "Governed Actions" in js, "Missing 'Governed Actions' card label"
-    assert "Operator-Approved Files" in js, "Missing 'Operator-Approved Files' card label"
+    assert '"Boundary Observation"' in js, "Missing 'Boundary Observation' label"
+    # Confirm v2 terminology in overview
+    assert "Mediated Operations" in js, "Missing 'Mediated Operations' card label"
+    assert "Approval-Gated Operations" in js, "Missing 'Approval-Gated Operations' card label"
+    # Confirm v2 record rendering
+    assert "tierBadge" in js, "Missing tierBadge function for confidence tier display"
+    assert "Confidence Tier" in js, "Missing confidence tier in record detail"
     print("PASS: app_js_terminology")
 
 
