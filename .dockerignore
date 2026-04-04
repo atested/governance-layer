@@ -1,0 +1,6 @@
+mcp/.venv
+.git
+__pycache__
+*.pyc
+gov_runtime
+out

@@ -1,0 +1,36 @@
+# fly.toml app configuration file generated for govmcp on 2026-04-03T01:01:23-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'govmcp'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  GOVMCP_HOST = '0.0.0.0'
+  GOVMCP_LOG_LEVEL = 'INFO'
+  GOVMCP_PORT = '8080'
+  GOVMCP_REMOTE_AUTH_MODE = 'bearer'
+  GOVMCP_STREAMABLE_HTTP_PATH = '/mcp'
+  GOV_RUNTIME_DIR = '/data'
+  GOV_SIGNING_DEV_MODE = '1'
+
+[[mounts]]
+  source = 'govmcp_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512

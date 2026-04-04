@@ -1,6 +1,6 @@
 # Atested
 
-Governance infrastructure for AI operations. Atested evaluates actions against verifiable conditions — the same logic a well-informed engineer would apply — before your AI agents execute them. Every decision is signed into an immutable record and available as auditable proof.
+Governance infrastructure for AI operations. Atested is an API governance proxy that sits between your AI agents and their model providers. It intercepts every tool call before execution, classifies it by observable evidence, evaluates it against policy, and records the decision in a tamper-evident chain. One environment variable. Every tool call governed. The agent never knows governance is in the path.
 
 **Website**: [atested.com](https://atested.com) — pricing, documentation, and the business case for governance.
 
@@ -8,15 +8,29 @@ Governance infrastructure for AI operations. Atested evaluates actions against v
 
 ---
 
-## What it does
+## How it works
 
-Atested is a policy enforcement layer for AI tool execution. It sits between your AI agents and the actions they take, evaluating every action against a capability registry and producing a tamper-evident audit record.
+AI agents work in a loop: send context to the model API, receive tool calls back, execute them locally. Atested sits in this loop at the API transport layer. When the model responds with tool calls, Atested intercepts them before the agent sees them.
 
-- **Deterministic evaluation**: Governance decisions are deterministic wherever possible — given the same action, scope, and evidence, the same decision is produced every time. Where a decision cannot be made deterministically, the system marks it explicitly as requiring judgment rather than guessing.
-- **Signed records**: Every decision is cryptographically signed (Ed25519) into an immutable hash chain.
-- **Proof packets**: Generate verifiable attestation artifacts for any audit or review.
+```
+Agent → Atested Proxy → Model Provider API
+                ↓
+        Model responds with tool calls
+                ↓
+        Classify each tool call (evidence inference)
+                ↓
+        Evaluate against policy rules
+                ↓
+        Record decision in governance chain
+                ↓
+        ALLOW → pass tool call to agent unchanged
+        DENY  → replace with denial message
+```
 
-The system exposes 55 governed tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP).
+- **Evidence-based classification.** Every tool call is classified by what its parameters contain — file paths, commands, URLs — not by tool names or agent claims. Classification carries an explicit confidence tier (1–4).
+- **Deterministic evaluation.** Same action, same evidence, same decision. Where a decision cannot be made deterministically, the system marks it explicitly as requiring operator judgment.
+- **Signed records.** Every decision is recorded with a SHA-256 hash linking to the previous record, forming a tamper-evident chain.
+- **Streaming support.** Text streams through in real time. Tool calls are buffered, governed, then passed or replaced. Sub-millisecond classification latency.
 
 ---
 
@@ -31,75 +45,101 @@ python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
 ```
 
-### 2. Run the release gate
+### 2. Start the proxy
 
 ```bash
-bash system/scripts/release-gate.sh
+ANTHROPIC_API_KEY=sk-... python3 -m proxy.server
 ```
 
-This runs the test suite, compiles all policy scripts, and produces a proof packet.
+The proxy starts on `http://127.0.0.1:8080`. It forwards to the Anthropic API by default.
 
-### 3. Start the MCP server
+### 3. Point your agent at the proxy
+
+Set one environment variable before launching your AI agent:
 
 ```bash
-# Local (stdio transport)
-mcp/.venv/bin/python3 mcp/server.py
-
-# Remote (HTTP transport with bearer auth)
-mcp/.venv/bin/python3 mcp/remote_server.py
+export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
 ```
 
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full guide.
+That's it. Your agent talks to Atested instead of the Anthropic API directly. Every tool call is now governed.
+
+### Options
+
+```bash
+# Custom port and bind address
+python3 -m proxy.server --port 9000 --host 0.0.0.0
+
+# Custom upstream (for non-Anthropic providers)
+python3 -m proxy.server --upstream https://api.openai.com
+
+# Friendly identity label (default: system hostname)
+python3 -m proxy.server --user-identity "dev-machine-1"
+# Or via environment variable:
+ATESTED_USER_LABEL="dev-machine-1" python3 -m proxy.server
+```
 
 ---
 
-## Governed tools (55)
+## What gets governed
 
-| Category | Count | Tools | Purpose |
-|---|---|---|---|
-| **Filesystem** | 6 | `fs_read`, `fs_write`, `fs_list`, `fs_mkdir`, `fs_move`, `fs_delete` | Policy-governed file operations |
-| **Messaging** | 2 | `msg_send`, `msg_reply` | Governed message dispatch |
-| **Capabilities** | 16 | `capabilities_list`, `capabilities_execute`, `capabilities_receipt`, `capabilities_replay_check`, ... | Capability registry, execution, attestation |
-| **Tool catalog** | 12 | `capabilities_tool_register`, `capabilities_tool_get`, `capabilities_tool_catalog_*`, ... | Tool registration, event tracking, bundle export |
-| **Governance** | 6 | `governance_status`, `governance_approvals`, `governance_verification`, `governance_activity`, `governance_user_report`, `atested_dashboard` | System status, approval state, audit |
-| **Audit** | 3 | `audit_query`, `audit_record_detail`, `audit_report` | Chain query, record inspection, reporting |
-| **Surface management** | 6 | `approve_artifact`, `revoke_artifact`, `certify_surface`, `recertify_surface`, `report_drift`, `run_probe_and_apply` | Artifact approval, surface certification |
-| **Licensing & health** | 4 | `license_status`, `license_activate`, `usage_attestation`, `system_health` | License management, health monitoring |
+The proxy sees every tool call in the API conversation: file reads, file writes, shell commands, git operations, search queries, network requests — anything the model asks the agent to do.
 
-Every tool call produces a policy decision record appended to a tamper-evident decision chain.
+Each tool call is classified into a confidence tier:
+
+| Tier | Meaning | Policy |
+|---|---|---|
+| **Tier 1** | Directly observable (file paths, URLs) | Automatic ALLOW/DENY by rule |
+| **Tier 2** | High-confidence inferred (git, make, known commands) | Automatic ALLOW/DENY by rule |
+| **Tier 3** | Opaque execution (scripts, interpreters) | Candidate for operator approval |
+| **Tier 4** | Uninspectable (encoded payloads) | Default DENY |
+
+Policy rules are declarative JSON (`capabilities/policy-rules.json`). First matching rule wins.
+
+---
+
+## Dashboard
+
+Atested includes a live dashboard for real-time visibility into governance activity.
+
+```bash
+# Start via the MCP governance-broker, or directly:
+python3 dashboard/server.py
+```
+
+The dashboard shows: chain health, mediated decisions, denied actions, operation approvals, audit queries, and reports — all backed by the governance chain.
+
+---
 
 ## Compatibility
 
-**MCP clients (works now):** Claude Code, Cursor, Cline, Windsurf, Codex — any tool that supports custom MCP servers.
+**AI agents:** Any agent that allows configuring its API endpoint — coding assistants, CLI agents, IDE integrations, custom agents.
 
-**LLM providers:** Any model behind those clients — Claude, GPT, DeepSeek, Kimi, local models. The governance layer sits between the client and the tools, regardless of which model powers the client.
+**Model providers:** Anthropic API (native support). OpenAI-compatible APIs (with `--upstream`). Any provider using the standard tool call format.
 
-**OpenClaw (beta):** Via the [Atested skill](https://clawhub.com/skills/atested) on ClawHub.
-
-**Does NOT work:** ChatGPT (no custom MCP support), Claude.ai chat (custom MCP connector has known platform issues).
-
----
-
-## How it works
-
-1. An AI agent requests an action through MCP.
-2. The governance layer evaluates the action against the capability registry.
-3. The decision (ALLOW or DENY) is recorded with a SHA-256 hash linking to the previous record.
-4. The record is cryptographically signed with Ed25519.
-5. At any point, an attestation artifact can summarize all governance activity.
-6. A proof packet bundles everything into a verifiable deliverable.
-
-See [How it works](https://atested.com/how-it-works.html) on the website for the full walkthrough.
+**MCP governance (complementary):** The MCP server (`mcp/server.py`) remains available for governing upstream MCP tool servers. The API proxy governs the agent; the MCP proxy governs tool servers. Different layers, both useful.
 
 ---
 
 ## Documentation
 
-- [Quickstart Guide](docs/QUICKSTART.md) — get running in under 5 minutes
-- [Governance Overview](docs/GOVERNANCE_OVERVIEW.md) — system guarantees, architecture, key concepts
+- [Quickstart Guide](docs/QUICKSTART.md) — detailed setup and configuration
+- [V3 Architecture Design](docs/design/atested-v3-design.md) — API proxy architecture, design principles, deployment models
+- [Governance Overview](docs/GOVERNANCE_OVERVIEW.md) — system guarantees, classification, policy evaluation
 - [Licensing](docs/LICENSING.md) — license terms and commercial use
 - [External Contracts](docs/EXTERNAL_CONTRACTS.md) — stability guarantees for CI/CD integration
-- [Example proof packets](docs/examples/proof-packets/) — real attestation artifacts from three scenarios
+
+---
+
+## Architecture
+
+| Component | File | Purpose |
+|---|---|---|
+| API governance proxy | `proxy/server.py` | HTTP proxy that intercepts and governs tool calls |
+| Evidence classifier | `scripts/classifier.py` | Tier 1–4 classification by parameter inspection |
+| Policy rules | `capabilities/policy-rules.json` | Declarative action-based rules (first match wins) |
+| Policy evaluator | `scripts/policy_eval_v2.py` | Evaluate classification against policy |
+| Dashboard | `dashboard/server.py` | Live web UI for governance visibility |
+| MCP server | `mcp/server.py` | MCP tools for governance operations |
 
 ---
 
@@ -112,7 +152,7 @@ $GOV_RUNTIME_DIR/
 ├── LOGS/
 │   ├── decision-chain.jsonl   # append-only tamper-evident chain
 │   └── quarantine/            # broken chains preserved on integrity failure
-└── tmp/                       # scratch space for governed tool operations
+└── tmp/                       # scratch space
 ```
 
 ---

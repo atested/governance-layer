@@ -1,5 +1,12 @@
 # Configuration Guide
 
+> **v3 note:** The capability registry described below applies to the MCP
+> server surface. The API governance proxy (`proxy/server.py`) uses
+> `capabilities/policy-rules.json` for policy evaluation. Both share the
+> same classification and path validation logic. See
+> [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
+> current architecture.
+
 ## Dashboard Configuration
 
 The Atested Dashboard includes a Configuration tab where you can view and

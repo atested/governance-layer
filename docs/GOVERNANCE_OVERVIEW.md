@@ -1,8 +1,18 @@
 # Governance Layer Overview
 
+> **v3 architecture note:** Atested now operates as an API governance proxy
+> (`proxy/server.py`) that intercepts tool calls at the HTTP transport layer.
+> The classification, policy evaluation, and chain recording described below
+> are unchanged — only the interception point has moved from MCP to the API
+> layer. References to "capability registry" and specific governed tool names
+> (e.g., `FS_WRITE`) below describe the MCP server surface, which remains
+> available as a complementary layer. See
+> [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
+> current architecture.
+
 ## What is the Governance Layer?
 
-The Governance Layer is a deterministic policy enforcement system for tool execution. It evaluates every tool request against a capability registry and policy rules, produces auditable decision records, and maintains tamper-evident chains. The system guarantees reproducible policy decisions and complete audit trails.
+The Governance Layer is a deterministic policy enforcement system for tool execution. It evaluates every tool request against policy rules, classifies operations by observable evidence, produces auditable decision records, and maintains tamper-evident chains. The system guarantees reproducible policy decisions and complete audit trails.
 
 ## Core Guarantees
 

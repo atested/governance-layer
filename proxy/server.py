@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import sys
 import time as _time_mod
 import threading
@@ -80,6 +81,10 @@ class ChainRecorder:
         This ensures no two processes can read the same head hash.
         """
         import stat as _stat
+        logger.info("Chain append: tool=%s decision=%s chain=%s",
+                     record.get("original_tool", "?"),
+                     record.get("policy_decision", "?"),
+                     self._chain_path)
         self._chain_path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
             lockdir = self._acquire_file_lock()
@@ -507,6 +512,9 @@ class GovernanceProxy:
             self._session_id, self._user_identity,
         )
         buffered_events: dict[int, list[bytes]] = {}
+        _tool_use_count = 0
+
+        logger.info("Streaming handler entered for path=%s", path)
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -550,6 +558,7 @@ class GovernanceProxy:
                     data_str = line[5:].strip()
 
                     if data_str == "[DONE]":
+                        logger.info("Stream complete: %d tool_use blocks mediated", _tool_use_count)
                         writer.write(b"event: done\ndata: [DONE]\n\n")
                         await writer.drain()
                         continue
@@ -566,12 +575,19 @@ class GovernanceProxy:
 
                     if action == "buffer":
                         idx = data.get("index", 0)
+                        msg_type = data.get("type", "")
+                        if msg_type == "content_block_start":
+                            _tool_use_count += 1
+                            block_name = data.get("content_block", {}).get("name", "?")
+                            logger.info("Tool use #%d detected: %s (idx=%d)", _tool_use_count, block_name, idx)
                         buffered_events.setdefault(idx, []).append(
                             f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                         )
 
                     elif action == "replace":
                         idx = data.get("index", 0)
+                        decision = collector.get_decision(idx)
+                        logger.info("Tool DENIED (idx=%d): %s", idx, decision.get("matched_rule", "") if decision else "?")
                         for event_bytes in collector.get_replacement_events(idx):
                             writer.write(event_bytes)
                         await writer.drain()
@@ -582,6 +598,11 @@ class GovernanceProxy:
                         idx = data.get("index", 0)
 
                         if msg_type == "content_block_stop" and idx in buffered_events:
+                            decision = collector.get_decision(idx)
+                            if decision:
+                                logger.info("Tool ALLOWED (idx=%d): %s → %s",
+                                            idx, decision.get("original_tool", "?"),
+                                            decision.get("policy_decision", "?"))
                             # Tool_use ALLOWED — flush buffered events
                             for event_bytes in buffered_events.pop(idx):
                                 writer.write(event_bytes)
@@ -609,6 +630,7 @@ class GovernanceProxy:
         resp_headers = dict(resp.headers)
         resp_body = resp.content
 
+        logger.info("Non-streaming response: status=%d is_messages=%s", resp.status_code, is_messages)
         if not is_messages or resp.status_code != 200:
             return resp.status_code, resp_headers, resp_body
 
@@ -822,13 +844,30 @@ class ProxyServer:
                     key, value = line_str.split(":", 1)
                     headers[key.strip().lower()] = value.strip()
 
-            # Read body if content-length present
+            # Read body if content-length present or chunked transfer encoding
             body = b""
             content_length = int(headers.get("content-length", "0"))
             if content_length > 0:
                 body = await asyncio.wait_for(
                     reader.readexactly(content_length), timeout=60.0
                 )
+            elif headers.get("transfer-encoding", "").lower() == "chunked":
+                # Read chunked transfer encoding
+                chunks = []
+                while True:
+                    size_line = await asyncio.wait_for(
+                        reader.readline(), timeout=30.0
+                    )
+                    chunk_size = int(size_line.strip(), 16)
+                    if chunk_size == 0:
+                        await reader.readline()  # trailing CRLF
+                        break
+                    chunk_data = await asyncio.wait_for(
+                        reader.readexactly(chunk_size), timeout=30.0
+                    )
+                    await reader.readline()  # trailing CRLF after chunk
+                    chunks.append(chunk_data)
+                body = b"".join(chunks)
 
             # Restore original-case headers for upstream
             forward_headers = {}
@@ -850,11 +889,15 @@ class ProxyServer:
             # Strip query parameters for endpoint detection (SDK may send ?beta=...)
             is_streaming = False
             path_base = path.split("?")[0]
-            if path_base.rstrip("/").endswith("/v1/messages") and body:
+            is_messages = path_base.rstrip("/").endswith("/v1/messages")
+            if is_messages and body:
                 try:
                     is_streaming = json.loads(body).get("stream", False)
-                except (json.JSONDecodeError, AttributeError):
-                    pass
+                except (json.JSONDecodeError, AttributeError) as e:
+                    logger.warning("Failed to parse request body for streaming detection: %s (body_len=%d)", e, len(body))
+
+            logger.info("Request: %s %s messages=%s streaming=%s body_len=%d",
+                        method, path[:60], is_messages, is_streaming, len(body))
 
             if is_streaming:
                 # Stream directly to the client writer — text arrives in real time
@@ -925,7 +968,8 @@ def main():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Bind port")
     parser.add_argument("--upstream", default=ANTHROPIC_API_BASE,
                         help="Upstream API base URL")
-    parser.add_argument("--user-identity", default="", help="User identity for chain records")
+    parser.add_argument("--user-identity", default="",
+                        help="User identity for chain records (default: system hostname)")
     parser.add_argument("--session-id", default="", help="Session ID for chain records")
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"])
@@ -946,11 +990,19 @@ def main():
     chain_path = runtime / "LOGS" / "decision-chain.jsonl"
     chain_recorder = ChainRecorder(chain_path)
 
+    # Resolve user identity: explicit flag > env var > hostname
+    user_identity = (
+        args.user_identity
+        or os.environ.get("ATESTED_USER_LABEL", "")
+        or platform.node()
+    )
+    logger.info("User identity: %s", user_identity)
+
     proxy = GovernanceProxy(
         upstream_base=args.upstream,
         chain_recorder=chain_recorder,
         session_id=args.session_id,
-        user_identity=args.user_identity,
+        user_identity=user_identity,
     )
 
     server = ProxyServer(proxy, args.host, args.port)

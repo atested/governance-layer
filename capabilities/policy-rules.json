@@ -23,6 +23,16 @@
       "reason": "Target path is in a sensitive location (credentials, SSH keys, system config)"
     },
     {
+      "id": "agent-internal-allow",
+      "description": "Agent internal operations (planning, task management, search) are allowed by default",
+      "match": {
+        "action_type": ["agent_internal"],
+        "confidence_tier": [1]
+      },
+      "decision": "ALLOW",
+      "reason": "Agent internal operation with no external side effects"
+    },
+    {
       "id": "read-source-allow",
       "description": "File reads within allowed base directories are permitted",
       "match": {

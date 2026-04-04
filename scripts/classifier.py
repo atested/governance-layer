@@ -40,6 +40,7 @@ ACTION_LIST = "list"
 ACTION_CREATE_DIR = "create_directory"
 ACTION_CONFIG = "configuration_change"
 ACTION_CREDENTIAL = "credential_access"
+ACTION_AGENT_INTERNAL = "agent_internal"
 ACTION_UNKNOWN = "unknown"
 
 # ---------------------------------------------------------------------------
@@ -493,6 +494,18 @@ def classify(tool_name: str, args: Optional[dict] = None) -> dict:
             original_tool=tool_name,
         )
 
+    # --- Agent internal operations (planning, task management, etc.) ---
+    if _is_agent_internal(tool_name, args):
+        return _result(
+            action_type=ACTION_AGENT_INTERNAL,
+            targets=[],
+            scope=SCOPE_LOCAL,
+            confidence_tier=TIER_DIRECT,
+            evidence_source="agent_internal_operation",
+            evidence_details={"tool_name": tool_name, "arg_keys": list(args.keys())},
+            original_tool=tool_name,
+        )
+
     # --- No recognizable evidence → Tier 3 (opaque) ---
     return _result(
         action_type=ACTION_UNKNOWN,
@@ -536,6 +549,51 @@ _LIST_INDICATORS = frozenset({
 _MKDIR_INDICATORS = frozenset({
     "mkdir", "make_dir", "create_dir", "create_directory", "makedirs",
 })
+
+# Agent internal operations: tools that are part of the agent's own workflow
+# (planning, task management, session management, internal bookkeeping).
+# These have no external side effects and should not require operator approval.
+_AGENT_INTERNAL_TOOLS = frozenset({
+    # Planning and task management
+    "EnterPlanMode", "ExitPlanMode",
+    "TaskCreate", "TaskUpdate", "TaskGet", "TaskList",
+    # Agent orchestration
+    "Agent",
+    # Search and exploration (no side effects)
+    "WebSearch", "WebFetch",
+    # User interaction
+    "AskUserQuestion",
+    # Session and configuration
+    "EnterWorktree",
+    # Scheduling
+    "CronCreate", "CronDelete", "CronList",
+    # Task output
+    "TaskOutput", "TaskStop",
+    # Skills
+    "Skill",
+    # MCP resource listing
+    "ListMcpResourcesTool", "ReadMcpResourceTool",
+    # Notebook operations (with no file path — cell-level edits have paths)
+    "NotebookEdit",
+})
+
+# Patterns that indicate agent-internal operations by name convention
+_AGENT_INTERNAL_PATTERNS = [
+    re.compile(r"^(Enter|Exit)(Plan|Worktree)", re.IGNORECASE),
+    re.compile(r"^Task(Create|Update|Get|List|Output|Stop)$", re.IGNORECASE),
+    re.compile(r"^Cron(Create|Delete|List)$", re.IGNORECASE),
+    re.compile(r"^AskUser", re.IGNORECASE),
+]
+
+
+def _is_agent_internal(tool_name: str, args: dict) -> bool:
+    """Check if a tool call is an agent-internal operation with no external side effects."""
+    if tool_name in _AGENT_INTERNAL_TOOLS:
+        return True
+    for pattern in _AGENT_INTERNAL_PATTERNS:
+        if pattern.search(tool_name):
+            return True
+    return False
 
 
 def _tokenize_tool_name(name: str) -> set[str]:

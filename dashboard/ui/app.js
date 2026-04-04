@@ -168,8 +168,8 @@ function categoryLabel(cat) {
   const map = {
     "action_decision": "Mediated Decision",
     "verification_transition": "Verification Change",
-    "opaque_approval": "File Approval",
-    "opaque_revocation": "File Revocation",
+    "opaque_approval": "Operation Approval",
+    "opaque_revocation": "Operation Revocation",
     "opaque_invocation_decision": "Invocation Decision",
     "ungoverned_observation": "Boundary Observation",
     "usage_attestation": "Usage Attestation",
@@ -191,7 +191,7 @@ function globalNav(currentPath) {
   const tabs = [
     { path: "/overview", label: "Overview", tip: "High-level governance posture: chain health, user counts, transparency, and denied actions." },
     { path: "/activity", label: "Activity", tip: "Chronological feed of every governed event — actions, approvals, verifications, and observations." },
-    { path: "/approvals", label: "Approvals", tip: "Manage approved files — add new approvals, review existing ones, or revoke access." },
+    { path: "/approvals", label: "Approvals", tip: "Manage approved operations — add new approvals, review existing ones, or revoke access." },
     { path: "/audit", label: "Audit", tip: "Query the governance chain by time, user, tool, decision, or event category. Export results as JSON." },
     { path: "/report", label: "Reports", tip: "Aggregate views of governance activity grouped by tool, user, decision, or category." },
     { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, observation coverage, and license." },
@@ -289,7 +289,7 @@ async function renderOverview() {
             <span class="status-value status-danger">${health?.deny_rate?.deny_count || 0}</span>
           </div>
           <div class="status-card">
-            <span class="eyebrow">${tip("Approved Files", "Number of files currently approved for use within the governance scope.")}</span>
+            <span class="eyebrow">${tip("Approved Operations", "Number of operations currently approved for use within the governance scope.")}</span>
             <span class="status-value">${status.active_approvals_count}</span>
           </div>
           <div class="status-card">
@@ -576,20 +576,20 @@ async function renderApprovals() {
   return `
     <section class="page">
       <div class="card">
-        <span class="eyebrow">File Approvals</span>
-        <h2>Approved Files (${data.total_count})</h2>
-        <p class="explainer">Approved files are reviewed and authorized for use within the governance scope. You can approve new files or revoke existing approvals at any time.</p>
+        <span class="eyebrow">Operation Approvals</span>
+        <h2>Approved Operations (${data.total_count})</h2>
+        <p class="explainer">Approved operations are reviewed and authorized for use within the governance scope. You can approve new operations or revoke existing approvals at any time.</p>
       </div>
       <div class="card">
-        <h3>Approve a File</h3>
+        <h3>Approve an Operation</h3>
         <form id="approve-form" class="approve-form">
-          <label>File path or identity
-            <input type="text" name="artifact_identity" placeholder="e.g. /path/to/file.py or SHA-256 hash" value="${escapeHtml(prefill)}" required />
+          <label>Tool name, file path, or identity
+            <input type="text" name="artifact_identity" placeholder="e.g. EnterPlanMode, /path/to/file.py, or SHA-256 hash" value="${escapeHtml(prefill)}" required />
           </label>
           <label>Operator
             <input type="text" name="operator" placeholder="your name (optional)" />
           </label>
-          <button type="submit" class="pill pill-primary">Approve File</button>
+          <button type="submit" class="pill pill-primary">Approve</button>
         </form>
         <div id="approve-result"></div>
       </div>
@@ -599,7 +599,7 @@ async function renderApprovals() {
           <table class="audit-results-table">
             <thead>
               <tr>
-                <th>File</th>
+                <th>Operation</th>
                 <th>Operator</th>
                 <th>Scope</th>
                 <th>Approved</th>
@@ -619,7 +619,7 @@ async function renderApprovals() {
             </tbody>
           </table>
         </div>
-      ` : '<div class="card"><p class="muted">No approved files yet. Use the form above to approve a file.</p></div>'}
+      ` : '<div class="card"><p class="muted">No approved operations yet. Use the form above to approve an operation.</p></div>'}
     </section>
   `;
 }
@@ -644,7 +644,7 @@ function _attachApprovalListeners() {
       });
       const data = await resp.json();
       if (resp.ok) {
-        resultEl.innerHTML = '<p class="status-ok">File approved successfully.</p>';
+        resultEl.innerHTML = '<p class="status-ok">Operation approved successfully.</p>';
         setTimeout(() => render(), 800);
       } else {
         resultEl.innerHTML = `<p class="status-warn">${escapeHtml(data.error || "Failed")}</p>`;
@@ -765,7 +765,7 @@ async function renderAudit() {
               <option value="">All</option>
               <option value="action_decision" ${ctx.category === "action_decision" ? "selected" : ""}>Mediated Decision</option>
               <option value="verification_transition" ${ctx.category === "verification_transition" ? "selected" : ""}>Verification Change</option>
-              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>File Approval</option>
+              <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Operation Approval</option>
               <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>File Revocation</option>
               <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Invocation Decision</option>
               <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Boundary Observation</option>
@@ -823,6 +823,17 @@ function _renderGovernedRecord(rec) {
   const cls = rec.classification || {};
   const target = (isV2 && cls.targets && cls.targets[0]) || rec.target || rec.artifact_identity || "";
 
+  const denyReasons = rec.policy_reasons || [];
+  const denyReasonText = denyReasons.length
+    ? (typeof denyReasons[0].detail === "object" ? denyReasons[0].detail.reason : denyReasons[0].detail)
+    : "";
+
+  // For denied operations, determine the best identifier to pre-fill in the approval form
+  const approveTarget = tool || target || "";
+  const approveHref = isDeny && approveTarget
+    ? navHref("/approvals", { file: approveTarget })
+    : "";
+
   return `
     <div class="card record-context">
       <h3>${isV2 ? "Mediated Decision" : "Governed Action"}</h3>
@@ -835,11 +846,14 @@ function _renderGovernedRecord(rec) {
         ${cls.action_type ? `<li><span>Action Type</span><strong>${escapeHtml(cls.action_type)}</strong></li>` : ""}
         ${cls.scope ? `<li><span>Scope</span><strong>${escapeHtml(cls.scope)}</strong></li>` : ""}
         ${rec.matched_rule ? `<li><span>Matched Rule</span><strong><code>${escapeHtml(rec.matched_rule)}</code></strong></li>` : ""}
+        ${denyReasonText ? `<li><span>Denial Reason</span><strong>${escapeHtml(denyReasonText)}</strong></li>` : ""}
         ${rec.record_type ? `<li><span>Record type</span><strong>${escapeHtml(rec.record_type)}</strong></li>` : ""}
         ${rec.verification_state ? `<li><span>Verification</span><strong>${escapeHtml(rec.verification_state)}</strong></li>` : ""}
         <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
       </ul>
+      ${approveHref ? `<div class="deny-action"><a href="${escapeHtml(approveHref)}" class="pill pill-primary">Approve this operation</a></div>` : ""}
     </div>`;
+}
 }
 
 function _renderApprovalRecord(rec) {
@@ -849,9 +863,9 @@ function _renderApprovalRecord(rec) {
 
   return `
     <div class="card record-context">
-      <h3>${isRevocation ? "File Revocation" : "File Approval"}</h3>
+      <h3>${isRevocation ? "Operation Revocation" : "Operation Approval"}</h3>
       <ul class="kv">
-        <li><span>File</span><strong class="mono-cell">${escapeHtml(identity)}</strong></li>
+        <li><span>Operation</span><strong class="mono-cell">${escapeHtml(identity)}</strong></li>
         ${operator ? `<li><span>Operator</span><strong>${escapeHtml(operator)}</strong></li>` : ""}
         ${rec.governed_family ? `<li><span>Scope</span><strong>${escapeHtml(rec.governed_family)}</strong></li>` : ""}
         ${rec.deployment_context ? `<li><span>Context</span><strong>${escapeHtml(rec.deployment_context)}</strong></li>` : ""}

@@ -1,5 +1,10 @@
 # Threat Model (v0.1)
-Updated: 2026-02-15
+Updated: 2026-04-04
+
+> **v3 note:** Atested now operates as an API governance proxy that intercepts
+> tool calls at the HTTP transport layer, eliminating the "native tool bypass"
+> threat from v1/v2. The threat model below is updated to reflect this.
+> See [docs/design/atested-v3-design.md](design/atested-v3-design.md).
 
 ## Assets to protect
 1. Integrity of privileged actions (no unauthorized execution).
