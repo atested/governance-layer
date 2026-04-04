@@ -7,10 +7,12 @@ governance chain readout functions.  Started by the governance_dashboard
 MCP tool; not intended for direct invocation by operators.
 """
 
+import importlib
 import json
 import os
 import secrets
 import sys
+import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -61,6 +63,75 @@ def _get_approval_store():
 def _invalidate_approval_store():
     global _approval_store
     _approval_store = None
+
+
+# ---------------------------------------------------------------------------
+# Source file auto-reload
+# ---------------------------------------------------------------------------
+
+# Modules to reload when their source files change on disk (dependency order).
+_RELOAD_MODULES = [
+    "storage_contract",
+    "verification",
+    "approval_store",
+    "chain_health",
+    "readout",
+]
+
+_source_mtimes: dict[str, float] = {}
+_reload_lock = threading.Lock()
+
+
+def _check_and_reload():
+    """Reload Python modules and recompute asset version if source files changed."""
+    global _ASSET_VERSION, _verification_tracker, _approval_store
+
+    py_changed = False
+    ui_changed = False
+
+    # Check Python source files in scripts/ and mcp/
+    for search_dir in (SCRIPTS_DIR, MCP_DIR):
+        if not search_dir.exists():
+            continue
+        for py_file in search_dir.glob("*.py"):
+            key = str(py_file)
+            try:
+                mtime = py_file.stat().st_mtime
+            except OSError:
+                continue
+            prev = _source_mtimes.get(key)
+            _source_mtimes[key] = mtime
+            if prev is not None and prev != mtime:
+                py_changed = True
+
+    # Check UI assets
+    for name in ("app.js", "styles.css", "index.html"):
+        p = DASHBOARD_UI_DIR / name
+        key = str(p)
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            continue
+        prev = _source_mtimes.get(key)
+        _source_mtimes[key] = mtime
+        if prev is not None and prev != mtime:
+            ui_changed = True
+
+    if py_changed:
+        with _reload_lock:
+            for mod_name in _RELOAD_MODULES:
+                mod = sys.modules.get(mod_name)
+                if mod is not None:
+                    try:
+                        importlib.reload(mod)
+                    except Exception as exc:
+                        print(f"Auto-reload {mod_name}: {exc}", file=sys.stderr)
+            # Invalidate cached state objects so they're rebuilt from fresh modules
+            _verification_tracker = None
+            _approval_store = None
+
+    if ui_changed:
+        _ASSET_VERSION = _compute_asset_version()
 
 
 def _governed_family():
@@ -266,6 +337,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         return origin if origin in allowed else ""
 
     def do_GET(self):
+        _check_and_reload()
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/"):
             if not self._check_auth():
@@ -300,6 +372,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        _check_and_reload()
         parsed = urlparse(self.path)
         if parsed.path.startswith("/api/"):
             if not self._check_auth():
@@ -1088,6 +1161,10 @@ def main():
             token_path.write_text(token, encoding="utf-8")
         except OSError as exc:
             print(f"Warning: could not write dashboard_token: {exc}", file=sys.stderr)
+
+    # Snapshot current source file mtimes so the first request doesn't
+    # trigger a spurious reload.
+    _check_and_reload()
 
     server = ThreadingHTTPServer(("127.0.0.1", port), DashboardHandler)
     server.serve_forever()
