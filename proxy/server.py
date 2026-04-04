@@ -43,6 +43,7 @@ if str(SCRIPTS) not in sys.path:
 
 from classifier import classify
 from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash
+from approval_store import ApprovalStore, load_approval_store_from_chain
 
 # Storage contract for chain path
 sys.path.insert(0, str(REPO / "mcp"))
@@ -219,12 +220,61 @@ def replace_tool_use_with_denial(
 # ---------------------------------------------------------------------------
 
 
+def _load_approval_store(chain_path: Path) -> ApprovalStore:
+    """Load the approval store from the governance chain."""
+    if chain_path.exists():
+        return load_approval_store_from_chain(str(chain_path))
+    return ApprovalStore()
+
+
+def _governed_family() -> str:
+    return str(os.environ.get("GOV_GOVERNED_FAMILY", "mcp_tools_v1")).strip() or "mcp_tools_v1"
+
+
+def _deployment_context() -> str:
+    return str(os.environ.get("GOV_DEPLOYMENT_CONTEXT", "default")).strip() or "default"
+
+
+def _policy_version() -> str:
+    return str(os.environ.get("GOV_POLICY_VERSION", "baseline-v1")).strip() or "baseline-v1"
+
+
+def _check_approval(
+    approval_store: ApprovalStore,
+    tool_name: str,
+    targets: list[str],
+) -> Optional[dict]:
+    """Check if an operation is approved by tool name or target path.
+
+    Tries the tool name first, then each target path. Returns the approval
+    record if found, None otherwise.
+    """
+    family = _governed_family()
+    context = _deployment_context()
+    version = _policy_version()
+
+    # Check tool name as artifact_identity
+    approval = approval_store.lookup(tool_name, family, context, version)
+    if approval:
+        return approval
+
+    # Check each target as artifact_identity
+    for target in targets:
+        if target:
+            approval = approval_store.lookup(target, family, context, version)
+            if approval:
+                return approval
+
+    return None
+
+
 def mediate_decision(
     tool_name: str,
     args: dict,
     *,
     policy: dict,
     chain_recorder: Optional[ChainRecorder] = None,
+    approval_store: Optional[ApprovalStore] = None,
     session_id: str = "",
     user_identity: str = "",
 ) -> dict:
@@ -232,6 +282,10 @@ def mediate_decision(
 
     Returns the decision record. Does NOT execute the tool — in the API proxy
     model, the agent executes its own tools. The proxy only decides.
+
+    If approval_store is provided and the policy decision is DENY, checks
+    whether the operation has been approved. Approved operations are overridden
+    to ALLOW with resolution "approved_lookup".
     """
     classification = classify(tool_name, args)
 
@@ -244,6 +298,23 @@ def mediate_decision(
         user_identity=user_identity,
         session_id=session_id,
     )
+
+    # Check approval store for denied operations
+    if record["policy_decision"] == "DENY" and approval_store is not None:
+        targets = classification.get("targets", [])
+        approval = _check_approval(approval_store, tool_name, targets)
+        if approval:
+            logger.info(
+                "Approval override: %s approved by %s (event %s)",
+                tool_name,
+                approval.get("approving_operator", "?"),
+                approval.get("event_id", "?"),
+            )
+            record["policy_decision"] = "ALLOW"
+            record["policy_reasons"] = []
+            record["matched_rule"] = "approved_lookup"
+            record["approval_event_id"] = approval.get("event_id")
+            record["record_hash"] = _compute_record_hash(record)
 
     if chain_recorder is not None:
         chain_recorder.append_atomic(record)
@@ -274,11 +345,13 @@ class StreamingToolCollector:
     """
 
     def __init__(self, policy: dict, chain_recorder: Optional[ChainRecorder],
-                 session_id: str = "", user_identity: str = ""):
+                 session_id: str = "", user_identity: str = "",
+                 approval_store: Optional[ApprovalStore] = None):
         self._policy = policy
         self._chain_recorder = chain_recorder
         self._session_id = session_id
         self._user_identity = user_identity
+        self._approval_store = approval_store
 
         # Active tool_use blocks being collected, keyed by index
         self._active_blocks: dict[int, dict] = {}
@@ -345,6 +418,7 @@ class StreamingToolCollector:
                     block.get("input", {}),
                     policy=self._policy,
                     chain_recorder=self._chain_recorder,
+                    approval_store=self._approval_store,
                     session_id=self._session_id,
                     user_identity=self._user_identity,
                 )
@@ -435,14 +509,35 @@ class GovernanceProxy:
         upstream_base: str = ANTHROPIC_API_BASE,
         policy: Optional[dict] = None,
         chain_recorder: Optional[ChainRecorder] = None,
+        chain_path: Optional[Path] = None,
         session_id: str = "",
         user_identity: str = "",
     ):
         self._upstream_base = upstream_base.rstrip("/")
         self._policy = policy or self._load_default_policy()
         self._chain_recorder = chain_recorder
+        self._chain_path = chain_path
         self._session_id = session_id
         self._user_identity = user_identity
+        self._approval_store: Optional[ApprovalStore] = None
+        self._approval_store_mtime: float = 0.0
+        self._approval_lock = threading.Lock()
+
+    def _get_approval_store(self) -> Optional[ApprovalStore]:
+        """Return a cached approval store, reloading when the chain file changes."""
+        if self._chain_path is None:
+            return None
+        with self._approval_lock:
+            try:
+                mtime = self._chain_path.stat().st_mtime if self._chain_path.exists() else 0.0
+            except OSError:
+                return self._approval_store
+            if mtime != self._approval_store_mtime or self._approval_store is None:
+                self._approval_store = _load_approval_store(self._chain_path)
+                self._approval_store_mtime = mtime
+                logger.info("Approval store reloaded: %d active approvals",
+                            len(self._approval_store.all_approvals()))
+        return self._approval_store
 
     @staticmethod
     def _load_default_policy() -> dict:
@@ -510,6 +605,7 @@ class GovernanceProxy:
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
+            approval_store=self._get_approval_store(),
         )
         buffered_events: dict[int, list[bytes]] = {}
         _tool_use_count = 0
@@ -648,12 +744,14 @@ class GovernanceProxy:
 
         # Govern each tool_use block
         modified = False
+        approval_store = self._get_approval_store()
         for block in tool_blocks:
             record = mediate_decision(
                 block["name"],
                 block.get("input", {}),
                 policy=self._policy,
                 chain_recorder=self._chain_recorder,
+                approval_store=approval_store,
                 session_id=self._session_id,
                 user_identity=self._user_identity,
             )
@@ -694,6 +792,7 @@ class GovernanceProxy:
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
+            approval_store=self._get_approval_store(),
         )
 
         output_chunks: list[bytes] = []
@@ -1001,6 +1100,7 @@ def main():
     proxy = GovernanceProxy(
         upstream_base=args.upstream,
         chain_recorder=chain_recorder,
+        chain_path=chain_path,
         session_id=args.session_id,
         user_identity=user_identity,
     )

@@ -61,17 +61,37 @@ def load_chain_rows(chain_path: Path) -> list[dict]:
     return rows
 
 
+_integrity_cache: dict[str, Any] = {"mtime": 0.0, "size": 0, "result": None}
+
+
 def check_chain_integrity(chain_path: Path) -> dict:
     """Verify structural integrity of the chain (hash linkage and record validity).
 
     This checks cryptographic hash consistency, NOT signing policy enforcement.
     Unsigned records are accepted — the integrity check verifies that hashes
     are correct and linked, not that a signing key was used.
+
+    Results are cached by file mtime + size to avoid re-verifying the entire
+    chain on every dashboard request.
     """
     if not chain_path.exists():
         return {"status": "ok", "checked": False, "chain_event_count": 0}
 
     import os as _os
+
+    try:
+        st = chain_path.stat()
+        mtime, size = st.st_mtime, st.st_size
+    except OSError:
+        mtime, size = 0.0, 0
+
+    if (
+        _integrity_cache["result"] is not None
+        and _integrity_cache["mtime"] == mtime
+        and _integrity_cache["size"] == size
+    ):
+        return _integrity_cache["result"]
+
     verify_record_mod = _load_verify_record_module()
     prev_hash: Optional[str] = None
     line_no = 0
@@ -115,7 +135,11 @@ def check_chain_integrity(chain_path: Path) -> dict:
         else:
             _os.environ["GOV_SIGNING_DEV_MODE"] = old_dev
 
-    return {"status": "ok", "checked": True, "chain_event_count": line_no}
+    result = {"status": "ok", "checked": True, "chain_event_count": line_no}
+    _integrity_cache["mtime"] = mtime
+    _integrity_cache["size"] = size
+    _integrity_cache["result"] = result
+    return result
 
 
 def _verification_evidence(rows: list[dict]) -> dict[str, Optional[str]]:

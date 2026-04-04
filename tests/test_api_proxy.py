@@ -1282,5 +1282,103 @@ class TestRecordDetailV2Target(unittest.TestCase):
         self.assertEqual(entry["detail"]["target"], "/repo/README.md")
 
 
+# ===================================================================
+# Approval override: deny → approve → allow
+# ===================================================================
+
+class TestApprovalOverride(unittest.TestCase):
+    """Proxy allows previously-denied operations when approved."""
+
+    def test_denied_then_approved_by_tool_name(self):
+        """An operation denied by policy is allowed after tool-name approval."""
+        from approval_store import ApprovalStore
+
+        policy = _make_policy(base_dirs=[_REPO_STR])
+
+        # First: verify the operation is denied without approval
+        record_deny = mediate_decision(
+            "Bash", {"command": "rm -rf /"},
+            policy=policy,
+        )
+        self.assertEqual(record_deny["policy_decision"], "DENY")
+
+        # Now create an approval store with Bash approved
+        store = ApprovalStore()
+        store.ingest_approval({
+            "artifact_identity": "Bash",
+            "approving_operator": "test_operator",
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+        })
+
+        # Same operation with approval store → ALLOW
+        record_allow = mediate_decision(
+            "Bash", {"command": "rm -rf /"},
+            policy=policy,
+            approval_store=store,
+        )
+        self.assertEqual(record_allow["policy_decision"], "ALLOW")
+        self.assertEqual(record_allow["matched_rule"], "approved_lookup")
+
+    def test_denied_not_overridden_without_matching_approval(self):
+        """Approval for a different tool does not override denial."""
+        from approval_store import ApprovalStore
+
+        policy = _make_policy(base_dirs=[_REPO_STR])
+        store = ApprovalStore()
+        store.ingest_approval({
+            "artifact_identity": "Read",
+            "approving_operator": "test_operator",
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+        })
+
+        record = mediate_decision(
+            "Bash", {"command": "rm -rf /"},
+            policy=policy,
+            approval_store=store,
+        )
+        self.assertEqual(record["policy_decision"], "DENY")
+
+    def test_allowed_operations_not_affected_by_approval_store(self):
+        """Operations allowed by policy stay allowed regardless of store."""
+        from approval_store import ApprovalStore
+
+        policy = _make_policy(base_dirs=[_REPO_STR])
+        store = ApprovalStore()
+
+        record = mediate_decision(
+            "Read", {"file_path": os.path.join(_REPO_STR, "README.md")},
+            policy=policy,
+            approval_store=store,
+        )
+        self.assertEqual(record["policy_decision"], "ALLOW")
+        self.assertNotEqual(record["matched_rule"], "approved_lookup")
+
+    def test_approval_by_target_path(self):
+        """Approval by target path overrides denial."""
+        from approval_store import ApprovalStore
+
+        policy = _make_policy(base_dirs=[_REPO_STR])
+        store = ApprovalStore()
+        store.ingest_approval({
+            "artifact_identity": "/etc/shadow",
+            "approving_operator": "test_operator",
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+        })
+
+        record = mediate_decision(
+            "Read", {"file_path": "/etc/shadow"},
+            policy=policy,
+            approval_store=store,
+        )
+        self.assertEqual(record["policy_decision"], "ALLOW")
+        self.assertEqual(record["matched_rule"], "approved_lookup")
+
+
 if __name__ == "__main__":
     unittest.main()
