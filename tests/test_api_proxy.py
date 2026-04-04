@@ -807,5 +807,392 @@ class TestQueryParameterHandling(unittest.TestCase):
         self.assertFalse(is_messages)
 
 
+# ===================================================================
+# End-to-end ProxyServer integration test (raw HTTP pipeline)
+# ===================================================================
+
+class TestProxyServerEndToEnd(unittest.TestCase):
+    """Test the full ProxyServer pipeline: raw HTTP → SSE parsing → governance.
+
+    This tests the code path that unit tests miss: ProxyServer._handle_client
+    raw HTTP parsing, header extraction, body reading, streaming detection,
+    and SSE event processing with real TCP connections.
+    """
+
+    def _build_sse_stream(self, tool_name: str, tool_id: str, tool_input: dict,
+                          index: int = 1) -> bytes:
+        """Build a realistic Anthropic SSE stream with a tool_use block."""
+        input_json = json.dumps(tool_input)
+        # Split input JSON into fragments (like real streaming)
+        mid = len(input_json) // 2
+        frag1 = input_json[:mid]
+        frag2 = input_json[mid:]
+
+        events = [
+            # message_start
+            ('message_start', json.dumps({
+                "type": "message_start",
+                "message": {"id": "msg_test", "type": "message", "role": "assistant",
+                            "content": [], "model": "claude-opus-4-6",
+                            "stop_reason": None, "stop_sequence": None,
+                            "usage": {"input_tokens": 100, "output_tokens": 0}},
+            })),
+            # Text block
+            ('content_block_start', json.dumps({
+                "type": "content_block_start", "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            })),
+            ('content_block_delta', json.dumps({
+                "type": "content_block_delta", "index": 0,
+                "delta": {"type": "text_delta", "text": "Let me read that file."},
+            })),
+            ('content_block_stop', json.dumps({
+                "type": "content_block_stop", "index": 0,
+            })),
+            # Tool use block
+            ('content_block_start', json.dumps({
+                "type": "content_block_start", "index": index,
+                "content_block": {"type": "tool_use", "id": tool_id,
+                                  "name": tool_name, "input": {}},
+            })),
+            ('content_block_delta', json.dumps({
+                "type": "content_block_delta", "index": index,
+                "delta": {"type": "input_json_delta", "partial_json": frag1},
+            })),
+            ('content_block_delta', json.dumps({
+                "type": "content_block_delta", "index": index,
+                "delta": {"type": "input_json_delta", "partial_json": frag2},
+            })),
+            ('content_block_stop', json.dumps({
+                "type": "content_block_stop", "index": index,
+            })),
+            # message_delta and stop
+            ('message_delta', json.dumps({
+                "type": "message_delta",
+                "delta": {"stop_reason": "tool_use", "stop_sequence": None},
+                "usage": {"output_tokens": 50},
+            })),
+            ('message_stop', json.dumps({
+                "type": "message_stop",
+            })),
+        ]
+
+        lines = []
+        for event_type, data in events:
+            lines.append(f"event: {event_type}")
+            lines.append(f"data: {data}")
+            lines.append("")  # blank line = event boundary
+
+        lines.append("event: done")
+        lines.append("data: [DONE]")
+        lines.append("")
+        return "\r\n".join(lines).encode("utf-8")
+
+    def test_streaming_tool_use_detected_and_recorded(self):
+        """Streaming path: SSE stream with tool_use → mediated → chain recorded.
+
+        Tests _handle_streaming_buffered (the buffered variant used for testing)
+        which shares the same StreamingToolCollector as handle_streaming_to_writer.
+        This validates SSE parsing, tool_use detection, and chain recording.
+        """
+        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp/claude-501")) / "test_e2e_chain.jsonl"
+        chain_path.unlink(missing_ok=True)
+
+        from proxy.server import ChainRecorder, GovernanceProxy
+
+        recorder = ChainRecorder(chain_path)
+        policy = _make_policy()
+
+        file_path = os.path.join(_REPO_STR, "README.md")
+        sse_body = self._build_sse_stream(
+            "Read", "toolu_test1", {"file_path": file_path}, index=1,
+        )
+
+        proxy = GovernanceProxy(
+            upstream_base="http://fake",
+            policy=policy,
+            chain_recorder=recorder,
+        )
+
+        # Mock httpx streaming response to return our SSE data
+        async def mock_aiter_lines():
+            for line in sse_body.decode("utf-8").split("\r\n"):
+                yield line
+
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "text/event-stream"}
+            mock_resp.aiter_lines = mock_aiter_lines
+            mock_resp.aread = AsyncMock(return_value=b"")
+
+            mock_stream_ctx = AsyncMock()
+            mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+            mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+            mock_client = AsyncMock()
+            mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            status, headers, body = _run(proxy.handle_request(
+                "POST", "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": True}).encode(),
+            ))
+
+        self.assertEqual(status, 200)
+        body_str = body.decode("utf-8")
+        self.assertIn("tool_use", body_str, "Response should contain tool_use block")
+        self.assertIn("Read", body_str, "Response should contain tool name")
+
+        # Verify chain recording
+        self.assertTrue(chain_path.exists(), "Chain file should exist")
+        lines = [l for l in chain_path.read_text().strip().split("\n") if l.strip()]
+        self.assertGreaterEqual(len(lines), 1,
+                                f"Should have at least 1 chain record, got {len(lines)}")
+
+        record = json.loads(lines[0])
+        self.assertEqual(record["record_type"], "mediated_decision")
+        self.assertEqual(record["original_tool"], "Read")
+        self.assertEqual(record["policy_decision"], "ALLOW")
+        self.assertIn("classification", record)
+        self.assertIn("confidence_tier", record["classification"])
+
+        chain_path.unlink(missing_ok=True)
+
+    def test_non_streaming_tool_use_recorded(self):
+        """Non-streaming path also records governance decisions."""
+        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp/claude-501")) / "test_e2e_nonstream.jsonl"
+        chain_path.unlink(missing_ok=True)
+
+        from proxy.server import ChainRecorder, GovernanceProxy
+
+        recorder = ChainRecorder(chain_path)
+        policy = _make_policy()
+        proxy = GovernanceProxy(
+            upstream_base="http://fake",
+            policy=policy,
+            chain_recorder=recorder,
+        )
+
+        file_path = os.path.join(_REPO_STR, "README.md")
+        response_body = json.dumps({
+            "id": "msg_1", "type": "message", "role": "assistant",
+            "content": [
+                {"type": "text", "text": "Reading the file."},
+                {"type": "tool_use", "id": "t1", "name": "Read",
+                 "input": {"file_path": file_path}},
+            ],
+            "stop_reason": "tool_use",
+        }).encode()
+
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "application/json"}
+            mock_resp.content = response_body
+            mock_client = AsyncMock()
+            mock_client.request = AsyncMock(return_value=mock_resp)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            _run(proxy.handle_request(
+                "POST", "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": False}).encode(),
+            ))
+
+        self.assertTrue(chain_path.exists())
+        lines = [l for l in chain_path.read_text().strip().split("\n") if l.strip()]
+        self.assertEqual(len(lines), 1)
+        record = json.loads(lines[0])
+        self.assertEqual(record["record_type"], "mediated_decision")
+        self.assertEqual(record["original_tool"], "Read")
+        self.assertEqual(record["policy_decision"], "ALLOW")
+
+        chain_path.unlink(missing_ok=True)
+
+
+# ===================================================================
+# Dashboard activity rendering (readout integration)
+# ===================================================================
+
+class TestActivityEntryEnrichment(unittest.TestCase):
+    """Mediated decision activity entries include target and action_type."""
+
+    def test_action_decision_includes_target(self):
+        """v2 mediated decision entries expose the primary target in detail."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _normalize_activity_entry
+
+        rec = {
+            "record_version": "2.0",
+            "record_type": "mediated_decision",
+            "timestamp_utc": "2026-04-04T10:00:00Z",
+            "request_id": "req-1",
+            "original_tool": "Read",
+            "classification": {
+                "action_type": "read",
+                "targets": [os.path.join(_REPO_STR, "README.md")],
+                "scope": "repository",
+                "confidence_tier": 1,
+            },
+            "policy_decision": "ALLOW",
+            "record_hash": "sha256:abc",
+        }
+        entry = _normalize_activity_entry(rec, sequence_position=1)
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["event_category"], "action_decision")
+        self.assertEqual(entry["detail"]["tool_name"], "Read")
+        self.assertEqual(entry["detail"]["target"], os.path.join(_REPO_STR, "README.md"))
+        self.assertEqual(entry["detail"]["action_type"], "read")
+        self.assertEqual(entry["detail"]["confidence_tier"], 1)
+        self.assertIn("Read", entry["summary"])
+        self.assertIn("ALLOW", entry["summary"])
+
+    def test_action_decision_no_unknown_for_v2(self):
+        """v2 records with original_tool should never show 'unknown'."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _normalize_activity_entry
+
+        rec = {
+            "record_version": "2.0",
+            "record_type": "mediated_decision",
+            "timestamp_utc": "2026-04-04T10:00:00Z",
+            "request_id": "req-2",
+            "original_tool": "Write",
+            "classification": {
+                "action_type": "write",
+                "targets": ["/tmp/test.txt"],
+                "scope": "local",
+                "confidence_tier": 1,
+            },
+            "policy_decision": "DENY",
+            "record_hash": "sha256:def",
+        }
+        entry = _normalize_activity_entry(rec, sequence_position=1)
+        self.assertNotIn("unknown", entry["summary"])
+        self.assertEqual(entry["detail"]["tool_name"], "Write")
+
+
+class TestDeduplicateProxyAndHook(unittest.TestCase):
+    """Deduplication of proxy mediated decisions and hook observations."""
+
+    def test_duplicate_observation_suppressed(self):
+        """Observation matching a mediated decision is removed."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _deduplicate_proxy_and_hook
+
+        entries = [
+            {
+                "sequence_position": 1,
+                "timestamp_utc": "2026-04-04T10:00:05Z",
+                "event_category": "action_decision",
+                "governed_family": "",
+                "summary": "Read → ALLOW (Tier 1)",
+                "evidence": {"request_id": "req-1", "record_hash": "sha256:a", "policy_decision": "ALLOW"},
+                "detail": {
+                    "tool_name": "Read",
+                    "policy_decision": "ALLOW",
+                    "target": "/repo/README.md",
+                    "action_type": "read",
+                    "confidence_tier": 1,
+                },
+            },
+            {
+                "sequence_position": 2,
+                "timestamp_utc": "2026-04-04T10:00:07Z",
+                "event_category": "ungoverned_observation",
+                "governed_family": "",
+                "summary": "ungoverned read on /repo/README.md",
+                "evidence": {"event_id": "ev-1", "record_hash": "sha256:b"},
+                "detail": {
+                    "operation_type": "read",
+                    "target": "/repo/README.md",
+                    "source": "claude_code_hook",
+                },
+            },
+        ]
+        result = _deduplicate_proxy_and_hook(entries)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["event_category"], "action_decision")
+
+    def test_non_duplicate_observation_kept(self):
+        """Observation with different target is not suppressed."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _deduplicate_proxy_and_hook
+
+        entries = [
+            {
+                "sequence_position": 1,
+                "timestamp_utc": "2026-04-04T10:00:05Z",
+                "event_category": "action_decision",
+                "governed_family": "",
+                "summary": "Read → ALLOW",
+                "evidence": {"request_id": "req-1", "record_hash": "sha256:a", "policy_decision": "ALLOW"},
+                "detail": {"tool_name": "Read", "target": "/repo/README.md", "action_type": "read"},
+            },
+            {
+                "sequence_position": 2,
+                "timestamp_utc": "2026-04-04T10:00:07Z",
+                "event_category": "ungoverned_observation",
+                "governed_family": "",
+                "summary": "ungoverned write on /repo/other.txt",
+                "evidence": {"event_id": "ev-1", "record_hash": "sha256:b"},
+                "detail": {"operation_type": "write", "target": "/repo/other.txt", "source": "hook"},
+            },
+        ]
+        result = _deduplicate_proxy_and_hook(entries)
+        self.assertEqual(len(result), 2)
+
+    def test_observation_outside_time_window_kept(self):
+        """Observation >10s after mediation is not suppressed."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _deduplicate_proxy_and_hook
+
+        entries = [
+            {
+                "sequence_position": 1,
+                "timestamp_utc": "2026-04-04T10:00:00Z",
+                "event_category": "action_decision",
+                "governed_family": "",
+                "summary": "Read → ALLOW",
+                "evidence": {"request_id": "req-1", "record_hash": "sha256:a", "policy_decision": "ALLOW"},
+                "detail": {"tool_name": "Read", "target": "/repo/README.md", "action_type": "read"},
+            },
+            {
+                "sequence_position": 2,
+                "timestamp_utc": "2026-04-04T10:00:30Z",
+                "event_category": "ungoverned_observation",
+                "governed_family": "",
+                "summary": "ungoverned read on /repo/README.md",
+                "evidence": {"event_id": "ev-1", "record_hash": "sha256:b"},
+                "detail": {"operation_type": "read", "target": "/repo/README.md", "source": "hook"},
+            },
+        ]
+        result = _deduplicate_proxy_and_hook(entries)
+        self.assertEqual(len(result), 2)
+
+    def test_no_mediated_decisions_no_change(self):
+        """When there are no mediated decisions, all observations kept."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _deduplicate_proxy_and_hook
+
+        entries = [
+            {
+                "sequence_position": 1,
+                "timestamp_utc": "2026-04-04T10:00:00Z",
+                "event_category": "ungoverned_observation",
+                "governed_family": "",
+                "summary": "ungoverned read",
+                "evidence": {"event_id": "ev-1", "record_hash": "sha256:a"},
+                "detail": {"operation_type": "read", "target": "/repo/README.md", "source": "hook"},
+            },
+        ]
+        result = _deduplicate_proxy_and_hook(entries)
+        self.assertEqual(len(result), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1407,6 +1407,42 @@ pre {
   color: var(--accent);
 }
 
+/* Activity tab — mediated decision rows */
+
+.mediated-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+}
+
+.mediated-tool {
+  font-weight: 600;
+  color: var(--accent, #5b8af5);
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft, rgba(91, 138, 245, 0.08));
+}
+
+.mediated-action {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: lowercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.mediated-target {
+  color: var(--fg);
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+}
+
 /* Activity tab — ungoverned observation rows */
 
 .ungoverned-row td {

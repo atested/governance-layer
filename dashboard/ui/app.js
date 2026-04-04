@@ -433,6 +433,18 @@ function _renderUngovernedDetail(entry) {
   </div>`;
 }
 
+function _renderMediatedDetail(entry) {
+  const detail = entry.detail || {};
+  const toolName = detail.tool_name || "unknown";
+  const actionType = detail.action_type || "";
+  const target = detail.target || "";
+  return `<div class="mediated-detail">
+    <span class="mediated-tool">${escapeHtml(toolName)}</span>
+    ${actionType ? `<span class="mediated-action">${escapeHtml(actionType)}</span>` : ""}
+    ${target ? `<span class="mediated-target" title="${escapeHtml(target)}">${escapeHtml(truncate(target, 40))}</span>` : ""}
+  </div>`;
+}
+
 async function renderActivity() {
   const ctx = getContext();
   const offset = (ctx.page - 1) * pageSize;
@@ -486,7 +498,7 @@ async function renderActivity() {
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"} ${tierBadge(tier)}</td>
-                    <td>${isUngoverned ? _renderUngovernedDetail(e) : escapeHtml(e.summary)}</td>
+                    <td>${isUngoverned ? _renderUngovernedDetail(e) : (e.event_category === "action_decision" ? _renderMediatedDetail(e) : escapeHtml(e.summary))}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}">View</a>` : "\u2014"}</td>
                   </tr>

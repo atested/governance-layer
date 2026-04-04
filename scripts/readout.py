@@ -313,11 +313,16 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         else:
             summary = f"{tool_name} \u2192 {policy_decision}"
 
+        # Extract primary target from classification targets list
+        targets = classification.get("targets", []) if is_v2 else []
+        target = targets[0] if targets else ""
+
         detail = {
             "tool_name": tool_name,
             "policy_decision": policy_decision,
             "record_type": record_type,
             "verification_state": rec.get("verification_state", ""),
+            "target": target,
         }
         if is_v2:
             detail["confidence_tier"] = confidence_tier
@@ -421,6 +426,76 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
     }
 
 
+# Map from classifier action_type to hook operation_type for dedup matching.
+_ACTION_TO_OP = {
+    "read": {"read"},
+    "write": {"write", "edit"},
+    "list": {"list", "glob", "grep"},
+    "execute": {"execute"},
+    "delete": {"delete"},
+    "network": {"execute"},
+}
+
+
+def _parse_ts(ts: str) -> Optional[datetime]:
+    """Parse an ISO-8601 UTC timestamp, returning None on failure."""
+    try:
+        s = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(s)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _deduplicate_proxy_and_hook(entries: list[dict]) -> list[dict]:
+    """Remove ungoverned observations that duplicate a nearby mediated decision.
+
+    When the API proxy is active, both the proxy and the hook record the same
+    tool call. The proxy's mediated decision (pre-execution) is authoritative;
+    the hook's observation (post-execution) is redundant.
+
+    Match criteria: same target, action type compatible, within 10 seconds.
+    """
+    # Build an index of mediated decision targets with parsed timestamps.
+    mediated: list[tuple[str, str, Optional[datetime]]] = []
+    for e in entries:
+        if e["event_category"] == "action_decision":
+            target = e["detail"].get("target", "")
+            action_type = e["detail"].get("action_type", "")
+            ts = _parse_ts(e["timestamp_utc"])
+            if target:
+                mediated.append((target, action_type, ts))
+
+    if not mediated:
+        return entries
+
+    def _is_duplicate_observation(entry: dict) -> bool:
+        if entry["event_category"] != "ungoverned_observation":
+            return False
+        obs_target = entry["detail"].get("target", "")
+        obs_op = entry["detail"].get("operation_type", "")
+        if not obs_target:
+            return False
+        obs_ts = _parse_ts(entry["timestamp_utc"])
+        for m_target, m_action, m_ts in mediated:
+            if obs_target != m_target:
+                continue
+            # Check action type compatibility
+            compatible_ops = _ACTION_TO_OP.get(m_action, set())
+            if obs_op and obs_op not in compatible_ops:
+                continue
+            # Check timestamp proximity (within 10 seconds)
+            if obs_ts is not None and m_ts is not None:
+                delta = abs((obs_ts - m_ts).total_seconds())
+                if delta <= 10:
+                    return True
+            else:
+                # Cannot compare timestamps — match on target alone
+                return True
+        return False
+
+    return [e for e in entries if not _is_duplicate_observation(e)]
+
+
 def governance_activity_view(
     chain_path: Path,
     *,
@@ -447,6 +522,12 @@ def governance_activity_view(
         entry = _normalize_activity_entry(rec, sequence_position=i + 1)
         if entry is not None:
             entries.append(entry)
+
+    # Deduplicate: suppress ungoverned observations that overlap with a
+    # nearby mediated decision (same target, within a short time window).
+    # When the API proxy governs pre-execution, the hook's post-execution
+    # observation of the same operation is redundant.
+    entries = _deduplicate_proxy_and_hook(entries)
 
     # Apply filters (conjunctive).
     if governed_family:
