@@ -450,7 +450,9 @@ class GovernanceProxy:
     def _prepare_request(self, method: str, path: str, headers: dict,
                          body: bytes) -> tuple[str, dict, bool, bool]:
         """Parse request and determine routing. Returns (url, headers, is_messages, is_streaming)."""
-        is_messages = path.rstrip("/").endswith("/v1/messages")
+        # Strip query parameters for endpoint detection (SDK may send ?beta=...)
+        path_base = path.split("?")[0]
+        is_messages = path_base.rstrip("/").endswith("/v1/messages")
         upstream_url = f"{self._upstream_base}{path}"
         forward_headers = {
             k: v for k, v in headers.items()
@@ -845,8 +847,10 @@ class ProxyServer:
                     forward_headers["accept"] = v
 
             # Check if this is a streaming messages request
+            # Strip query parameters for endpoint detection (SDK may send ?beta=...)
             is_streaming = False
-            if path.rstrip("/").endswith("/v1/messages") and body:
+            path_base = path.split("?")[0]
+            if path_base.rstrip("/").endswith("/v1/messages") and body:
                 try:
                     is_streaming = json.loads(body).get("stream", False)
                 except (json.JSONDecodeError, AttributeError):

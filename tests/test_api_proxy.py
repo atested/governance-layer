@@ -762,5 +762,50 @@ class TestBashToolGovernance(unittest.TestCase):
         self.assertEqual(record["policy_decision"], "DENY")
 
 
+# ===================================================================
+# Query parameter handling (D-027 regression)
+# ===================================================================
+
+class TestQueryParameterHandling(unittest.TestCase):
+    """Endpoints with query parameters must still be detected correctly."""
+
+    def _make_proxy(self):
+        policy = _make_policy([_REPO_STR])
+        return GovernanceProxy(
+            upstream_base="http://fake-api.test",
+            policy=policy,
+        )
+
+    def test_prepare_request_with_beta_query(self):
+        """_prepare_request detects messages endpoint despite ?beta= query param."""
+        proxy = self._make_proxy()
+        body = json.dumps({"messages": [], "stream": True}).encode()
+        url, _, is_messages, is_streaming = proxy._prepare_request(
+            "POST", "/v1/messages?beta=prompt_caching_2024_09_30",
+            {"content-type": "application/json"}, body,
+        )
+        self.assertTrue(is_messages, "Should detect /v1/messages with query params")
+        self.assertTrue(is_streaming, "Should detect stream=true with query params")
+        self.assertIn("?beta=", url, "Query params must be preserved in upstream URL")
+
+    def test_prepare_request_without_query(self):
+        """_prepare_request still works without query parameters."""
+        proxy = self._make_proxy()
+        body = json.dumps({"messages": [], "stream": True}).encode()
+        _, _, is_messages, is_streaming = proxy._prepare_request(
+            "POST", "/v1/messages", {"content-type": "application/json"}, body,
+        )
+        self.assertTrue(is_messages)
+        self.assertTrue(is_streaming)
+
+    def test_prepare_request_non_messages_with_query(self):
+        """Non-messages endpoints with query params are not misidentified."""
+        proxy = self._make_proxy()
+        _, _, is_messages, _ = proxy._prepare_request(
+            "GET", "/v1/models?limit=10", {}, b"",
+        )
+        self.assertFalse(is_messages)
+
+
 if __name__ == "__main__":
     unittest.main()
