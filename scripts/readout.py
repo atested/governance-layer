@@ -744,6 +744,10 @@ def audit_query(
 
         entries.append(entry)
 
+    # Deduplicate: suppress ungoverned observations that overlap with a
+    # nearby mediated decision (same operation recorded by both proxy and hook).
+    entries = _deduplicate_proxy_and_hook(entries)
+
     entries.reverse()
     total_matching = len(entries)
 

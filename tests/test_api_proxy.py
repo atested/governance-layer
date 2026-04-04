@@ -1194,5 +1194,93 @@ class TestDeduplicateProxyAndHook(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
 
+class TestAuditQueryDedup(unittest.TestCase):
+    """Audit query also applies deduplication."""
+
+    def test_audit_query_deduplicates(self):
+        """audit_query suppresses observations matching mediated decisions."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import audit_query
+        import tempfile
+
+        # Create a chain file with a mediated decision and a matching observation
+        mediated = {
+            "record_version": "2.0",
+            "record_type": "mediated_decision",
+            "timestamp_utc": "2026-04-04T10:00:05Z",
+            "request_id": "req-audit-1",
+            "session_id": "",
+            "user_identity": "",
+            "original_tool": "Read",
+            "classification": {
+                "action_type": "read",
+                "targets": ["/repo/README.md"],
+                "scope": "local",
+                "confidence_tier": 1,
+            },
+            "evidence": {"source": "parameter_file_path", "details": {"paths": ["/repo/README.md"]}},
+            "policy_decision": "ALLOW",
+            "policy_reasons": [],
+            "matched_rule": "read-source-allow",
+            "record_hash": "sha256:aaa",
+        }
+        observation = {
+            "event_id": "ev-audit-1",
+            "event_model_version": "0.1",
+            "event_type": "ungoverned_operation_observed",
+            "operation_type": "read",
+            "target": "/repo/README.md",
+            "source": "claude_code_hook",
+            "timestamp_utc": "2026-04-04T10:00:07Z",
+            "record_hash": "sha256:bbb",
+            "prev_record_hash": "sha256:aaa",
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps(mediated, sort_keys=True, separators=(",", ":")) + "\n")
+            f.write(json.dumps(observation, sort_keys=True, separators=(",", ":")) + "\n")
+            chain_path = Path(f.name)
+
+        try:
+            with tempfile.TemporaryDirectory() as records_dir:
+                result = audit_query(chain_path, Path(records_dir))
+                # Only the mediated decision should remain
+                self.assertEqual(result["total_matching"], 1)
+                self.assertEqual(result["entries"][0]["event_category"], "action_decision")
+        finally:
+            chain_path.unlink()
+
+
+class TestRecordDetailV2Target(unittest.TestCase):
+    """Record detail page should extract target from v2 classification."""
+
+    def test_v2_record_has_target_in_classification(self):
+        """_renderGovernedRecord reads classification.targets for v2 records."""
+        # This is a contract test: v2 records store targets in classification.targets,
+        # not as a top-level 'target' field. The dashboard must extract from there.
+        rec = {
+            "record_version": "2.0",
+            "record_type": "mediated_decision",
+            "original_tool": "Read",
+            "classification": {
+                "action_type": "read",
+                "targets": ["/repo/README.md"],
+                "scope": "local",
+                "confidence_tier": 1,
+            },
+            "policy_decision": "ALLOW",
+        }
+        # Verify that there is no top-level 'target' field
+        self.assertNotIn("target", rec)
+        # Verify that the target IS in classification.targets
+        self.assertEqual(rec["classification"]["targets"][0], "/repo/README.md")
+        # The normalization should extract it
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _normalize_activity_entry
+        entry = _normalize_activity_entry(rec, sequence_position=1)
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["detail"]["target"], "/repo/README.md")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -367,7 +367,7 @@ async function renderOverview() {
           const href = rid ? navHref("/record", { record_id: rid, from: "activity" }) : "";
           return `
             <div class="activity-entry${href ? " clickable" : ""}" ${href ? `data-nav-href="${escapeHtml(href)}"` : ""}>
-              <strong>${escapeHtml(e.summary)}</strong>
+              <strong>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : (e.event_category === "ungoverned_observation" ? _renderUngovernedDetail(e) : escapeHtml(e.summary))}</strong>
               <span class="muted"> \u00b7 ${categoryLabel(e.event_category)} \u00b7 ${formatTime(e.timestamp_utc)}</span>
             </div>
           `;
@@ -721,7 +721,7 @@ async function renderAudit() {
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
-                    <td>${escapeHtml(e.summary)}</td>
+                    <td>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : (e.event_category === "ungoverned_observation" ? _renderUngovernedDetail(e) : escapeHtml(e.summary))}</td>
                     <td>${escapeHtml(e.user_identity || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "audit" }))}">View</a>` : "\u2014"}</td>
                   </tr>
@@ -820,8 +820,8 @@ function _renderGovernedRecord(rec) {
   const isV2 = rec.record_version === "2.0";
   const tool = rec.original_tool || rec.tool || rec.capability_class || "unknown";
   const user = rec.user_identity || rec.approving_operator || "";
-  const target = rec.target || rec.artifact_identity || "";
   const cls = rec.classification || {};
+  const target = (isV2 && cls.targets && cls.targets[0]) || rec.target || rec.artifact_identity || "";
 
   return `
     <div class="card record-context">
