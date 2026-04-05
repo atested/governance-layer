@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from approval_store import ApprovalStore, load_approval_store_from_chain
-from verification import VerificationStateTracker, load_verification_state_from_chain
+from approval_store import ApprovalStore, load_approval_store_from_chain, load_approval_store_from_events
+from verification import VerificationStateTracker, load_verification_state_from_chain, load_verification_state_from_events
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -193,10 +193,10 @@ def assemble_governance_status_record(
     verification_states = verification_tracker.all_states()
     drift = sorted([family for family, state in verification_states.items() if state == "drift_detected"])
     reconstructed_verification = (
-        load_verification_state_from_chain(str(chain_path)).all_states() if chain_path.exists() else {}
+        load_verification_state_from_events(rows).all_states() if rows else {}
     )
     reconstructed_approval_store = (
-        load_approval_store_from_chain(str(chain_path)) if chain_path.exists() else ApprovalStore()
+        load_approval_store_from_events(rows) if rows else ApprovalStore()
     )
     approvals = _approval_projection(approval_store)
     reconstructed_approvals = _approval_projection(reconstructed_approval_store)
