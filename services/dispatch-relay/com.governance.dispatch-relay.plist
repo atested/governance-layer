@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.governance.dispatch-relay</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Volumes/SSD/archive/gov/governance-layer/services/dispatch-relay/.venv/bin/python3.12</string>
+        <string>/Volumes/SSD/archive/gov/governance-layer/services/dispatch-relay/server.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DISPATCH_BEARER_TOKEN</key>
+        <string>xzgSUpnoR7e3vVzSo0_BThLQtd7l0B4JNDrE_kH7a0o</string>
+        <key>DISPATCH_DB_PATH</key>
+        <string>/Volumes/SSD/archive/gov/governance-layer/services/dispatch-relay/dispatch.db</string>
+        <key>DISPATCH_PORT</key>
+        <string>8765</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/Volumes/SSD/archive/gov/governance-layer/services/dispatch-relay</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/gregkeeter/Library/Logs/dispatch-relay.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/gregkeeter/Library/Logs/dispatch-relay.log</string>
+</dict>
+</plist>

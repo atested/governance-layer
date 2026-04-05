@@ -1,0 +1,6 @@
+.venv/
+dispatch.db
+dispatch.db-wal
+dispatch.db-shm
+dispatch-relay.log
+__pycache__/
