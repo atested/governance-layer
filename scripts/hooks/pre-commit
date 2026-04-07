@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# pre-commit hook — JS syntax check for dashboard UI files.
+#
+# Runs `node --input-type=module --check` on every staged file matching
+# dashboard/ui/*.js. Refuses the commit on syntax error.
+#
+# Rationale: D-2026-0407-003 — a stray '}' in dashboard/ui/app.js silently
+# broke the dashboard for ~3 days because no JS validation runs at commit
+# time. This hook prevents recurrence of the same class of bug.
+#
+# Install: see docs/dev/HOOKS.md
+
+set -euo pipefail
+
+# Collect staged JS files under dashboard/ui/ (bash 3.2 compatible — no mapfile)
+staged_js=$(
+    git diff --cached --name-only --diff-filter=ACM \
+        | grep -E '^dashboard/ui/.*\.js$' || true
+)
+
+if [[ -z "$staged_js" ]]; then
+    exit 0
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+    echo "pre-commit: node is not installed; skipping JS syntax check." >&2
+    echo "pre-commit: install node or remove dashboard/ui/*.js from this commit." >&2
+    exit 1
+fi
+
+failed=0
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    # Run node --check against the staged content (not working tree),
+    # so a fixed-but-unstaged copy can't mask a broken staged copy.
+    if ! git show ":$f" | node --input-type=module --check - 2>/tmp/precommit_node_err.$$; then
+        echo "pre-commit: JS syntax error in $f:" >&2
+        sed "s|^|  |" /tmp/precommit_node_err.$$ >&2
+        failed=1
+    fi
+    rm -f /tmp/precommit_node_err.$$
+done <<< "$staged_js"
+
+if [[ $failed -ne 0 ]]; then
+    echo "" >&2
+    echo "pre-commit: commit refused. Fix the JS syntax errors above and re-stage." >&2
+    exit 1
+fi
+
+exit 0
