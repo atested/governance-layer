@@ -364,4 +364,87 @@ if __name__ == "__main__":
     test_dashboard_health_api_endpoint()
     test_mcp_system_health_tool()
     test_health_alert_styles()
-    print(f"\nAll 17 tests passed.")
+    test_check_chain_health_enumerates_two_breaks()
+    test_check_chain_health_enumerates_three_breaks()
+    test_check_chain_integrity_enumerates_three_breaks()
+    print(f"\nAll 20 tests passed.")
+
+
+# ---------------------------------------------------------------------------
+# Multi-break enumeration tests (D-2026-0407-008)
+# ---------------------------------------------------------------------------
+
+def _build_chain_with_breaks(chain_path: Path, num_breaks: int) -> int:
+    """Write a synthetic chain of 2*num_breaks+1 records, with `num_breaks`
+    prev_record_hash mismatches sprinkled in. Returns the total record count.
+    """
+    from event_model import build_non_action_event
+
+    records = []
+    prev = None
+    total = 2 * num_breaks + 1
+    for i in range(total):
+        rec = build_non_action_event(
+            "usage_attestation",
+            {"attestation_type": "test", "attestation_scope": f"unit{i}"},
+            prev_record_hash=prev,
+        )
+        # Inject a break at every odd index (1, 3, 5...) up to num_breaks total.
+        if i > 0 and (i % 2 == 1) and len([r for r in records if r.get("_broken")]) < num_breaks:
+            rec["prev_record_hash"] = "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            # Recompute record_hash so verify_record_dict still passes for this rec.
+            from event_model import _compute_event_record_hash  # type: ignore
+            rec.pop("record_hash", None)
+            rec["record_hash"] = _compute_event_record_hash(rec)
+            rec["_broken"] = True
+        records.append(rec)
+        prev = rec["record_hash"]
+
+    with open(chain_path, "w") as fh:
+        for r in records:
+            r_clean = {k: v for k, v in r.items() if k != "_broken"}
+            fh.write(json.dumps(r_clean, sort_keys=True, separators=(",", ":")) + "\n")
+    return total
+
+
+def test_check_chain_health_enumerates_two_breaks():
+    """check_chain_health collects all breaks, not just the first."""
+    from chain_health import check_chain_health
+    with tempfile.TemporaryDirectory() as tmpdir:
+        chain_path = Path(tmpdir) / "chain.jsonl"
+        total = _build_chain_with_breaks(chain_path, 2)
+        result = check_chain_health(chain_path, Path(tmpdir) / "stability.jsonl", Path(tmpdir) / "chain_meta.json")
+        assert result["chain_event_count"] == total
+        assert result["break_count"] == 2, f"expected 2 breaks, got {result['break_count']}: {result.get('breaks')}"
+        assert len(result["breaks"]) == 2
+        assert all(b["reason"] == "prev_record_hash_mismatch" for b in result["breaks"])
+        # Backward compat: break_info still populated with the first break.
+        assert result["break_info"] is not None
+        assert result["break_info"]["break_at_line"] == result["breaks"][0]["break_at_line"]
+    print("PASS: check_chain_health_enumerates_two_breaks")
+
+
+def test_check_chain_health_enumerates_three_breaks():
+    from chain_health import check_chain_health
+    with tempfile.TemporaryDirectory() as tmpdir:
+        chain_path = Path(tmpdir) / "chain.jsonl"
+        _build_chain_with_breaks(chain_path, 3)
+        result = check_chain_health(chain_path, Path(tmpdir) / "stability.jsonl", Path(tmpdir) / "chain_meta.json")
+        assert result["break_count"] == 3, f"expected 3 breaks, got {result['break_count']}: {result.get('breaks')}"
+        assert len(result["breaks"]) == 3
+    print("PASS: check_chain_health_enumerates_three_breaks")
+
+
+def test_check_chain_integrity_enumerates_three_breaks():
+    """check_chain_integrity also enumerates all breaks and preserves backward compat."""
+    from readout import check_chain_integrity
+    with tempfile.TemporaryDirectory() as tmpdir:
+        chain_path = Path(tmpdir) / "chain.jsonl"
+        _build_chain_with_breaks(chain_path, 3)
+        result = check_chain_integrity(chain_path)
+        assert result["status"] == "broken"
+        assert result["break_count"] == 3, f"expected 3 breaks, got {result['break_count']}: {result.get('breaks')}"
+        # Backward compat: broken_at and reason populated with first break.
+        assert result["broken_at"] == result["breaks"][0]["broken_at"]
+        assert result["reason"] == result["breaks"][0]["reason"]
+    print("PASS: check_chain_integrity_enumerates_three_breaks")

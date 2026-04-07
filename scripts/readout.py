@@ -95,6 +95,14 @@ def check_chain_integrity(chain_path: Path) -> dict:
     verify_record_mod = _load_verify_record_module()
     prev_hash: Optional[str] = None
     line_no = 0
+    breaks: list[dict] = []
+
+    def _record_break(rec: Optional[dict], reason: str) -> None:
+        breaks.append({
+            "line": line_no,
+            "broken_at": (rec.get("event_id") or rec.get("request_id") if rec else None) or f"line:{line_no}",
+            "reason": reason,
+        })
 
     # Temporarily allow unsigned records during integrity verification.
     # This function checks hash linkage, not signing compliance.
@@ -110,23 +118,22 @@ def check_chain_integrity(chain_path: Path) -> dict:
                 try:
                     rec = json.loads(stripped)
                 except json.JSONDecodeError:
-                    return {"status": "broken", "broken_at": f"line:{line_no}", "reason": "invalid_json"}
+                    _record_break(None, "invalid_json")
+                    # Reset linkage; can't continue from an unparseable record.
+                    prev_hash = None
+                    continue
 
                 rc, lines = verify_record_mod.verify_record_dict(rec)
                 if rc != 0:
-                    return {
-                        "status": "broken",
-                        "broken_at": rec.get("event_id") or rec.get("request_id") or f"line:{line_no}",
-                        "reason": lines[0].replace("FAIL: ", "") if lines else "record_verification_failed",
-                    }
+                    _record_break(rec, lines[0].replace("FAIL: ", "") if lines else "record_verification_failed")
+                    prev_hash = rec.get("record_hash")
+                    continue
 
                 link = rec.get("prev_record_hash")
                 if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
-                    return {
-                        "status": "broken",
-                        "broken_at": rec.get("event_id") or rec.get("request_id") or f"line:{line_no}",
-                        "reason": "prev_record_hash_mismatch",
-                    }
+                    _record_break(rec, "prev_record_hash_mismatch")
+                    prev_hash = rec.get("record_hash")
+                    continue
 
                 prev_hash = rec.get("record_hash")
     finally:
@@ -135,7 +142,23 @@ def check_chain_integrity(chain_path: Path) -> dict:
         else:
             _os.environ["GOV_SIGNING_DEV_MODE"] = old_dev
 
-    result = {"status": "ok", "checked": True, "chain_event_count": line_no}
+    if breaks:
+        first = breaks[0]
+        result = {
+            "status": "broken",
+            "checked": True,
+            "chain_event_count": line_no,
+            "broken_at": first["broken_at"],
+            "reason": first["reason"],
+            "break_count": len(breaks),
+            "breaks": breaks,
+        }
+        _integrity_cache["mtime"] = mtime
+        _integrity_cache["size"] = size
+        _integrity_cache["result"] = result
+        return result
+
+    result = {"status": "ok", "checked": True, "chain_event_count": line_no, "break_count": 0, "breaks": []}
     _integrity_cache["mtime"] = mtime
     _integrity_cache["size"] = size
     _integrity_cache["result"] = result

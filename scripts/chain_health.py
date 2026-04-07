@@ -525,6 +525,7 @@ def check_chain_health(
     prev_hash: Optional[str] = None
     line_no = 0
     break_info = None
+    breaks: list[dict] = []
 
     try:
         with open(chain_path, "r", encoding="utf-8") as fh:
@@ -536,19 +537,31 @@ def check_chain_health(
                 try:
                     rec = json.loads(stripped)
                 except json.JSONDecodeError:
-                    break_info = {"break_at_line": line_no, "reason": "invalid_json"}
-                    break
+                    b = {"break_at_line": line_no, "reason": "invalid_json"}
+                    if break_info is None:
+                        break_info = b
+                    breaks.append(b)
+                    prev_hash = None
+                    continue
 
                 rc, lines = verify_mod.verify_record_dict(rec)
                 if rc != 0:
                     reason = lines[0].replace("FAIL: ", "") if lines else "record_verification_failed"
-                    break_info = {"break_at_line": line_no, "reason": reason}
-                    break
+                    b = {"break_at_line": line_no, "reason": reason}
+                    if break_info is None:
+                        break_info = b
+                    breaks.append(b)
+                    prev_hash = rec.get("record_hash")
+                    continue
 
                 link = rec.get("prev_record_hash")
                 if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
-                    break_info = {"break_at_line": line_no, "reason": "prev_record_hash_mismatch"}
-                    break
+                    b = {"break_at_line": line_no, "reason": "prev_record_hash_mismatch"}
+                    if break_info is None:
+                        break_info = b
+                    breaks.append(b)
+                    prev_hash = rec.get("record_hash")
+                    continue
 
                 prev_hash = rec.get("record_hash")
     finally:
@@ -566,6 +579,8 @@ def check_chain_health(
             "chain_event_count": line_no,
             "checked": True,
             "break_info": None,
+            "break_count": 0,
+            "breaks": [],
             "repair_info": None,
             "pattern_alert": None,
             "recent_stability_events": recent_events,
@@ -576,6 +591,7 @@ def check_chain_health(
         chain_path, break_info["break_at_line"], break_info["reason"], chain_meta_path
     )
     break_info["classification"] = classification
+    break_count = len(breaks)
 
     # Log the break
     if stability_log_path:
@@ -596,6 +612,8 @@ def check_chain_health(
             "chain_event_count": line_no,
             "checked": True,
             "break_info": break_info,
+            "break_count": break_count,
+            "breaks": breaks,
             "repair_info": None,
             "pattern_alert": pattern_alert,
             "recent_stability_events": recent_events,
@@ -612,6 +630,8 @@ def check_chain_health(
             "chain_event_count": line_no,
             "checked": True,
             "break_info": break_info,
+            "break_count": break_count,
+            "breaks": breaks,
             "repair_info": repair_info,
             "pattern_alert": None,
             "recent_stability_events": read_stability_log(stability_log_path, limit=10),
@@ -630,6 +650,8 @@ def check_chain_health(
             "chain_event_count": line_no,
             "checked": True,
             "break_info": break_info,
+            "break_count": break_count,
+            "breaks": breaks,
             "repair_info": None,
             "pattern_alert": None,
             "recent_stability_events": read_stability_log(stability_log_path, limit=10),
