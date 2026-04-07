@@ -854,7 +854,6 @@ function _renderGovernedRecord(rec) {
       ${approveHref ? `<div class="deny-action"><a href="${escapeHtml(approveHref)}" class="pill pill-primary">Approve this operation</a></div>` : ""}
     </div>`;
 }
-}
 
 function _renderApprovalRecord(rec) {
   const isRevocation = rec.event_type === "opaque_artifact_revocation";
