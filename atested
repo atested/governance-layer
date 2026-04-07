@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# atested — CLI wrapper for governance operations.
+# Resolves the repo root and dispatches to scripts/atested_cli.py.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec python3 "${SCRIPT_DIR}/scripts/atested_cli.py" "$@"
