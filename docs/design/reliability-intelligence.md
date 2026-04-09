@@ -192,6 +192,7 @@ cross-request conversation state. The proxy remains a stateless request filter.
 | Request-response latency | Proxy timing | Measured at the proxy as round-trip time. Labeled as "round-trip time" in all product surfaces, never as "model inference time" (per D-2026-0409-004 §7.2 — the measurement includes network conditions and is confounded for cross-install comparison). |
 | Governance overhead | Proxy timing | Time spent in the classify + evaluate path. Useful for proxy performance monitoring. |
 | Malformed JSON detection | Proxy error path | The existing JSON parse failure at `server.py:408-413` is systematically recorded as a field on the chain event rather than silently logged. This is a zero-cost addition — the detection already exists; the recording is new. |
+| Hallucinated tool detection | Request body and response body | Compares tool names in response `tool_use` blocks against the `tools` array in the request body. Detects cases where the model invoked a tool that was not defined in the request. Medium complexity — requires request body parsing and per-request state, but stateless across requests. Promoted from R-12a to R-1 (D-2026-0409-006) because the §11 evaluation experience depends on this signal. |
 
 ### Deferred to later phases
 
@@ -201,7 +202,6 @@ per-request parsing or cross-request conversation state.
 
 | Signal | Complexity | Reason for deferral |
 |---|---|---|
-| Hallucinated tool detection | Medium — per-request stateless | Requires parsing the request body `tools` array and comparing defined tool names against response `tool_use` names. Nontrivial but does not require cross-request state. Phase identifier: R-12a. |
 | Tool result error rate | High — cross-request stateful | Requires correlating `tool_result` blocks in incoming requests with prior `tool_use` blocks in previous responses. Phase identifier: R-12b. |
 | Denial recovery patterns | High — cross-request stateful | Requires a conversation-level state machine to track how models respond after governance denies an operation. The most uniquely Atested signal. Phase identifier: R-12c. |
 | Repeated failure loop detection | High — cross-request stateful | Requires cross-request state to identify agents retrying the same denied operation. Phase identifier: R-12d. |
@@ -572,7 +572,12 @@ through L-6) and after telemetry (T-1 through T-8 or a compressed subset; see
 **R-1: Proxy extraction — Anthropic parser.** Implement the §5 field set for
 the Anthropic Messages API. Stateless per-request extraction. Includes
 systematic recording of the existing JSON parse failure detection. Anthropic
-parser only — this phase proves the extraction pattern end-to-end.
+parser only — this phase proves the extraction pattern end-to-end. R-1 also
+includes hallucinated tool detection, which was originally classified by the
+D-2026-0409-004 investigation as a deferred signal (R-12a) but promoted into
+R-1 (D-2026-0409-006) to support the launch evaluation experience described in
+§11. The expanded scope adds request body `tools` array parsing to the proxy,
+which is medium-complexity stateless work — bounded but nontrivial.
 
 **R-2: OpenAI parser.** Add the OpenAI Chat Completions API parser to the same
 extraction infrastructure. Sequential, not parallel with R-1.
@@ -611,9 +616,10 @@ would be a partial product.
 aggregation pipeline on atested.com, fleet-comparison metrics, cross-vendor
 reliability data. Ships after R-10 and after fleet scale justifies it.
 
-**R-12+: Deferred signals.** Hallucinated tool detection (R-12a), tool result
-error rate (R-12b), denial recovery patterns (R-12c), repeated failure loop
-detection (R-12d). Each is its own build phase.
+**R-12+: Deferred signals.** Tool result error rate (R-12b), denial recovery
+patterns (R-12c), repeated failure loop detection (R-12d). Each is its own
+build phase. (R-12a — hallucinated tool detection — was promoted into R-1; see
+above.)
 
 ---
 
