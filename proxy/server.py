@@ -541,6 +541,70 @@ def _build_denial_sse_events(
 
 
 # ---------------------------------------------------------------------------
+# Base-dirs placeholder substitution
+# ---------------------------------------------------------------------------
+
+import re as _re
+_UNKNOWN_PLACEHOLDER_PAT = _re.compile(r"^__GOV_[A-Z0-9_]+__$")
+
+
+def resolve_policy_base_dirs(
+    raw_dirs: list,
+    *,
+    repo_path: str,
+    runtime_path: str,
+) -> list[str]:
+    """Substitute placeholder tokens in base_dirs and ensure safety invariants.
+
+    - Known placeholders (__GOV_CANONICAL_REPO_PATH__, __GOV_RUNTIME_PATH__)
+      are replaced whole-string with their runtime values.
+    - Unknown __GOV_*__ placeholders are dropped with a warning.
+    - repo_path and runtime_path are guaranteed present (safety fallback).
+    - The result is deduplicated with order preserved.
+    """
+    placeholder_map = {
+        "__GOV_CANONICAL_REPO_PATH__": repo_path,
+        "__GOV_RUNTIME_PATH__": runtime_path,
+    }
+
+    substituted: list[str] = []
+    for entry in raw_dirs:
+        entry_s = str(entry)
+        if entry_s in placeholder_map:
+            substituted.append(placeholder_map[entry_s])
+        elif _UNKNOWN_PLACEHOLDER_PAT.match(entry_s):
+            logger.warning(
+                "Dropping unknown base_dirs placeholder: %s", entry_s
+            )
+        else:
+            substituted.append(entry_s)
+
+    # Safety fallback: ensure repo and runtime are always present.
+    if repo_path not in substituted:
+        logger.warning(
+            "base_dirs missing repo path; adding safety fallback: %s",
+            repo_path,
+        )
+        substituted.append(repo_path)
+    if runtime_path not in substituted:
+        logger.warning(
+            "base_dirs missing runtime path; adding safety fallback: %s",
+            runtime_path,
+        )
+        substituted.append(runtime_path)
+
+    # Deduplicate while preserving order.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for d in substituted:
+        if d not in seen:
+            seen.add(d)
+            deduped.append(d)
+
+    return deduped
+
+
+# ---------------------------------------------------------------------------
 # HTTP proxy handler
 # ---------------------------------------------------------------------------
 
@@ -589,7 +653,12 @@ class GovernanceProxy:
         policy = load_policy_rules()
         runtime = runtime_root(REPO)
         policy = dict(policy)
-        policy["base_dirs"] = [str(REPO), str(runtime)]
+        policy["base_dirs"] = resolve_policy_base_dirs(
+            policy.get("base_dirs", []),
+            repo_path=str(REPO),
+            runtime_path=str(runtime),
+        )
+        logger.info("base_dirs loaded: %s", policy["base_dirs"])
         return policy
 
     def _prepare_request(self, method: str, path: str, headers: dict,
