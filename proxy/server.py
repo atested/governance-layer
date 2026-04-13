@@ -48,8 +48,42 @@ from approval_store import ApprovalStore, load_approval_store_from_chain
 # Storage contract for chain path
 sys.path.insert(0, str(REPO / "mcp"))
 from storage_contract import runtime_root
+from receipt_signing import _read_private_key, _public_key_fingerprint, _b64url_nopad
+
+# Import signing_preimage_payload from verify-record.py (hyphenated filename)
+import importlib.util as _imputil
+_vr_spec = _imputil.spec_from_file_location("verify_record_mod", SCRIPTS / "verify-record.py")
+_vr_mod = _imputil.module_from_spec(_vr_spec)
+_vr_spec.loader.exec_module(_vr_mod)
+signing_preimage_payload = _vr_mod.signing_preimage_payload
 
 logger = logging.getLogger("atested.proxy")
+
+# ---------------------------------------------------------------------------
+# Ed25519 signing key (loaded once at startup)
+# ---------------------------------------------------------------------------
+
+_SIGNING_KEY = None        # Ed25519PrivateKey or None
+_SIGNING_KEY_ID = None     # "ed25519:<sha256hex>" or None
+_SIGNING_SERIALIZATION = None  # cryptography.hazmat.primitives.serialization
+
+def _load_signing_key():
+    """Load Ed25519 private key from GOV_SIGNING_KEY_PATH env var."""
+    global _SIGNING_KEY, _SIGNING_KEY_ID, _SIGNING_SERIALIZATION
+    key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    if not key_path:
+        logger.warning("GOV_SIGNING_KEY_PATH not set — records will be unsigned")
+        return
+    try:
+        priv, serialization = _read_private_key(Path(key_path))
+        _SIGNING_KEY = priv
+        _SIGNING_SERIALIZATION = serialization
+        _SIGNING_KEY_ID = _public_key_fingerprint(priv.public_key(), serialization)
+        logger.info("Ed25519 signing key loaded: %s", _SIGNING_KEY_ID)
+    except Exception as exc:
+        logger.warning("Failed to load signing key from %s: %s — records will be unsigned", key_path, exc)
+
+_load_signing_key()
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -91,7 +125,18 @@ class ChainRecorder:
             lockdir = self._acquire_file_lock()
             try:
                 record["prev_record_hash"] = self._last_hash()
+                # Set signature fields to null BEFORE hashing so they're
+                # included in the canonical form (stable hash regardless
+                # of signing state).
+                record["signature"] = None
+                record["signing_key_id"] = None
                 record["record_hash"] = _compute_record_hash(record)
+                # Sign the record if a key is loaded.
+                if _SIGNING_KEY is not None:
+                    preimage = signing_preimage_payload(record)
+                    sig_bytes = _SIGNING_KEY.sign(preimage.encode("utf-8"))
+                    record["signature"] = _b64url_nopad(sig_bytes)
+                    record["signing_key_id"] = _SIGNING_KEY_ID
                 line = json.dumps(
                     record, sort_keys=True, separators=(",", ":"),
                     ensure_ascii=False,

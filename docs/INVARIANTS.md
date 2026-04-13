@@ -6,7 +6,7 @@ INV-001 No privileged action without a decision record.
 INV-002 No decision record without a completed policy evaluation.
 INV-003 No policy evaluation without tool capability metadata.
 INV-004 Logs are append-only and tamper-evident via hash chaining.
-INV-005 Trust-grade records are signed; verifier must validate chain + signatures.
+INV-005 Trust-grade records are signed; verifier must validate chain + signatures. As of D-2026-0411-WIRE-ED25519-SIGNING, the proxy ChainRecorder enforces Ed25519 signing for mediated_decision records. Pre-dispatch records in the chain are unsigned (compatibility mode).
 INV-006 Any denial must include machine-parsable reason codes.
 INV-007 Any redaction must be explicit; never silently drop args/evidence.
 INV-008 Replay verifier must reproduce policy outcomes for stored inputs.

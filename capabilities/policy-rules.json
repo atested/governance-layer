@@ -133,7 +133,11 @@
   ],
   "base_dirs": [
     "__GOV_CANONICAL_REPO_PATH__",
-    "__GOV_RUNTIME_PATH__"
+    "__GOV_RUNTIME_PATH__",
+    "/Volumes/SSD/archive/project-management",
+    "/Volumes/SSD/archive/gov/atested.com",
+    "/Volumes/SSD/archive/Gregs-dev-code",
+    "/Users/gregkeeter/transport"
   ],
   "deny_hidden_paths": true,
   "deny_executable_outputs": true

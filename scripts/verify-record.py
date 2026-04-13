@@ -387,12 +387,20 @@ def verify_non_action_event_dict(rec: dict):
 def _verify_v2_mediated_decision(rec: dict):
     """Verify a v2 mediated_decision record. Returns (exit_code, output_lines)."""
     # v2 records use a simpler hash: sha256 of the record with record_hash=None.
+    # Signed records also have signature and signing_key_id fields that must be
+    # nulled for hash computation (they are null at hash time, populated after).
     expected = rec.get("record_hash")
     if not isinstance(expected, str) or not expected.startswith("sha256:"):
         return 1, ["FAIL: record_hash missing or invalid"]
 
     hashable = dict(rec)
     hashable["record_hash"] = None
+    # Null out signature fields for hash computation — signed records had
+    # these set to None when the hash was originally computed.
+    if "signature" in hashable:
+        hashable["signature"] = None
+    if "signing_key_id" in hashable:
+        hashable["signing_key_id"] = None
     canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     actual = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     if actual != expected:
@@ -406,6 +414,20 @@ def _verify_v2_mediated_decision(rec: dict):
     for field in ("classification", "policy_decision", "matched_rule", "original_tool"):
         if field not in rec:
             return 1, [f"FAIL: v2 record missing required field: {field}"]
+
+    # Verify Ed25519 signature if present (mixed chain: unsigned old + signed new).
+    # For v2 records, we do NOT enforce GOV_SIGNING_REQUIRED — pre-dispatch
+    # records have no signature fields. Only validate when a non-null signature
+    # is actually present.
+    sig_val = rec.get("signature")
+    key_id_val = rec.get("signing_key_id")
+    if sig_val is not None or key_id_val is not None:
+        # At least one signing field is non-null — validate properly.
+        sig_rc, sig_lines, did_verify_signature = _verify_signature_if_present(rec)
+        if sig_rc != 0:
+            return sig_rc, sig_lines
+        if did_verify_signature:
+            return 0, ["PASS: v2 mediated_decision record_hash + signature verified"]
 
     return 0, ["PASS: v2 mediated_decision record verified"]
 
