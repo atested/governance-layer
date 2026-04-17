@@ -269,6 +269,7 @@ def _append_chain_record_atomic(event):
 
 
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui"
+DASHBOARD_UI_NEXT_DIR = REPO / "dashboard" / "ui-next"
 
 # Cache-busting version derived from static asset content hashes.
 # Computed once at import time; changes whenever files are modified and
@@ -1142,7 +1143,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def main():
-    global _DASHBOARD_TOKEN, _DASHBOARD_PORT
+    global _DASHBOARD_TOKEN, _DASHBOARD_PORT, DASHBOARD_UI_DIR, _ASSET_VERSION
+
+    # --ui-next flag: serve the new UI from dashboard/ui-next/
+    if "--ui-next" in sys.argv:
+        DASHBOARD_UI_DIR = DASHBOARD_UI_NEXT_DIR
+        _ASSET_VERSION = _compute_asset_version()
+        print("Dashboard: serving ui-next/", file=sys.stderr)
 
     port = int(os.environ.get("DASHBOARD_PORT", "9700"))
     _DASHBOARD_PORT = port
