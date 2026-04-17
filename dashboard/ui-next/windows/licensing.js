@@ -1020,6 +1020,7 @@ function _renderRegisterSuccess(el, data, state) {
 
   // Update state mode immediately
   state.mode = 'personal_registered';
+  state.modeData = { ...state.modeData, registered: true };
   delete state.panelEls['overview'];
   _renderPanelBar(state);
 
@@ -1118,14 +1119,18 @@ function _buildPurchasePanel(state) {
 
     <div class="lp-institution-contact" style="display:none">
       <div class="lp-institution-card">
-        <h4 style="margin:0 0 8px 0">Institution Tier</h4>
+        <h4 class="lp-inst-heading">Institution Tier</h4>
         <p class="lp-text lp-text-muted" style="margin:0 0 12px 0">
-          Institution licenses are tailored to your organization. Contact us
-          to discuss your needs and receive a custom quote.
+          Institution licenses are tailored to your organization. Download
+          your case document to share with your team, then contact us to
+          discuss your needs and receive a custom quote.
         </p>
-        <a href="mailto:hello@atested.com" class="lic-action-btn lic-action-primary" style="text-decoration:none;text-align:center">
-          Contact hello@atested.com
-        </a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="lic-action-btn lp-inst-case-btn" data-nav="case-document">View Case Document</button>
+          <a href="mailto:hello@atested.com" class="lic-action-btn lic-action-primary" style="text-decoration:none;text-align:center">
+            Contact hello@atested.com
+          </a>
+        </div>
       </div>
     </div>
 
@@ -1136,6 +1141,12 @@ function _buildPurchasePanel(state) {
   `;
 
   _updateDatingNote(el, selectedTier);
+
+  // Wire institution case doc button
+  const instCaseBtn = el.querySelector('.lp-inst-case-btn');
+  if (instCaseBtn) {
+    instCaseBtn.addEventListener('click', () => _switchPanel(state, 'case-document'));
+  }
 
   // Tier selection interaction
   el.querySelectorAll('.lp-tier-option:not([disabled])').forEach(btn => {
@@ -1269,6 +1280,7 @@ function _renderPurchaseSuccess(el, data, state) {
 
   // Update state to the purchased tier mode
   state.mode = tier;
+  state.modeData = { ...state.modeData, license_status: 'licensed', license_tier: tier };
   delete state.panelEls['overview'];
   _renderPanelBar(state);
 
@@ -1455,7 +1467,11 @@ function _showConfirmDialog(confirmArea, errorEl, state, { message, action, pane
     </div>
   `;
 
-  confirmArea.querySelector('.lm-confirm-cancel').addEventListener('click', () => {
+  // Focus the cancel button so keyboard users land in the dialog
+  const cancelBtn = confirmArea.querySelector('.lm-confirm-cancel');
+  cancelBtn.focus();
+
+  cancelBtn.addEventListener('click', () => {
     confirmArea.style.display = 'none';
   });
 
@@ -1874,9 +1890,22 @@ function _tierActionButton(tierId, mode, isLicensed, isRecommended) {
 
   if (mode === 'personal_registered' && tierId !== 'personal') {
     if (tierId === 'institution') {
-      return `<div class="ltd-tier-action"><button class="lic-action-btn" disabled>Contact Atested</button></div>`;
+      return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="purchase">Get Institution Pricing</button></div>`;
     }
     return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="purchase">Purchase ${_esc(TIER_LABELS[tierId])}</button></div>`;
+  }
+
+  // Licensed users can upgrade from tier display
+  if (['personal_plus', 'crew', 'team'].includes(mode) && tierId !== 'personal') {
+    const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
+    const modeIdx = TIER_ORDER.indexOf(mode);
+    const tierIdx = TIER_ORDER.indexOf(tierId);
+    if (tierIdx > modeIdx) {
+      if (tierId === 'institution') {
+        return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="purchase">Get Institution Pricing</button></div>`;
+      }
+      return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="purchase">Upgrade to ${_esc(TIER_LABELS[tierId])}</button></div>`;
+    }
   }
 
   return '';
@@ -2580,6 +2609,10 @@ licStyles.textContent = `
   .ltd-index-item:hover {
     color: #e4e6eb;
   }
+  .ltd-index-item:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: -2px;
+  }
   .ltd-index-active {
     color: #5b8af5;
     border-left-color: #5b8af5;
@@ -2837,6 +2870,10 @@ licStyles.textContent = `
     background: rgba(91, 138, 245, 0.08);
     border-color: rgba(91, 138, 245, 0.3);
   }
+  .lr-tele-option:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: 2px;
+  }
   .lr-tele-selected {
     background: rgba(91, 138, 245, 0.10);
     border-color: #5b8af5;
@@ -2950,6 +2987,10 @@ licStyles.textContent = `
   .lp-tier-option:hover:not([disabled]) {
     background: rgba(91, 138, 245, 0.08);
     border-color: rgba(91, 138, 245, 0.3);
+  }
+  .lp-tier-option:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: 2px;
   }
   .lp-tier-selected {
     background: rgba(91, 138, 245, 0.10);
@@ -3143,7 +3184,10 @@ licStyles.textContent = `
     border-radius: 8px;
   }
   .lm-upgrade-card {
-    padding: 4px 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
   }
   .lm-pending-card {
     background: rgba(245, 158, 66, 0.06);
@@ -3183,7 +3227,15 @@ licStyles.textContent = `
     color: #e4e6eb;
     padding: 6px 10px;
     font-size: 0.85rem;
+    font-family: "Inter", system-ui, sans-serif;
     min-width: 140px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .lm-downgrade-select:focus-visible {
+    border-color: #5b8af5;
+    outline: 2px solid #5b8af5;
+    outline-offset: 1px;
   }
   .lp-institution-card {
     background: rgba(139, 92, 246, 0.06);
@@ -3191,6 +3243,12 @@ licStyles.textContent = `
     border-radius: 10px;
     padding: 20px;
     margin-bottom: 16px;
+  }
+  .lp-inst-heading {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    margin: 0 0 8px 0;
   }
 
   @media (max-width: 600px) {
@@ -3240,6 +3298,17 @@ licStyles.textContent = `
     }
     .lp-tier-grid {
       grid-template-columns: 1fr;
+    }
+    .lm-downgrade-row {
+      flex-wrap: wrap;
+    }
+    .lm-downgrade-select {
+      min-width: 120px;
+      flex: 1;
+    }
+    .lm-status-row {
+      flex-wrap: wrap;
+      gap: 2px;
     }
   }
 `;
