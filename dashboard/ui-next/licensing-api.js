@@ -113,3 +113,13 @@ export function getLicenseRenewalStatus() {
 export function requestTrialExtension() {
   return _mockNotReady();
 }
+
+/**
+ * Check whether a remote trial extension is active.
+ * Spec v1 section 12.
+ * Mock: returns { extended: false } so trials complete normally.
+ * Replace with real call when the licensing server exists.
+ */
+export function checkTrialExtension() {
+  return _mockOk({ extended: false });
+}

@@ -5,12 +5,13 @@
  * Triggers data loading for the main page via the data-access layer.
  */
 
-import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone } from './chrome.js';
-import { renderMainPage, loadMainPageData } from './main-page.js';
+import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone, updateLicenseZone } from './chrome.js';
+import { renderMainPage, loadMainPageData, setLicenseMode } from './main-page.js';
 import { modalManager } from './modal-manager.js';
 import { openNotificationsWindow } from './windows/notifications.js';
 import { openIdentitySetupWindow } from './windows/identity-setup.js';
 import { openIdentitySessionWindow } from './windows/identity-session.js';
+import { openLicensingWindow } from './windows/licensing.js';
 import * as api from './api.js';
 
 // Verify adoptedStyleSheets support
@@ -34,9 +35,9 @@ function init() {
   });
 
   const licenseZone = chrome.querySelector('.chrome-license');
-  licenseZone.addEventListener('click', (e) => _chromeOpen('Licensing', e.currentTarget));
+  licenseZone.addEventListener('click', (e) => openLicensingWindow(e.currentTarget));
   licenseZone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _chromeOpen('Licensing', e.currentTarget); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLicensingWindow(e.currentTarget); }
   });
 
   const notifZone = chrome.querySelector('.chrome-notif-indicator');
@@ -62,36 +63,9 @@ function init() {
 
   // Load identity state into chrome
   _loadIdentityState();
-}
 
-/**
- * Chrome click handler: opens a window, replacing any existing depth-1 window.
- * Spec v2 section 3.6.
- */
-function _chromeOpen(title, trigger) {
-  if (modalManager.depth > 0) {
-    modalManager.replaceChild({
-      title,
-      trigger,
-      content: _chromePlaceholder(title),
-    });
-  } else {
-    modalManager.open({
-      title,
-      trigger,
-      content: _chromePlaceholder(title),
-    });
-  }
-}
-
-function _chromePlaceholder(title) {
-  const el = document.createElement('div');
-  el.innerHTML = `
-    <p style="color: #8b919a; text-align: center; padding: 40px 0;">
-      ${title} window (opened from chrome). Content built in later phases.
-    </p>
-  `;
-  return el;
+  // Load license state into chrome and main page
+  _loadLicenseState();
 }
 
 /**
@@ -245,6 +219,60 @@ async function _loadNotifications() {
     }
   } catch {
     // Non-critical — leave indicator at 0
+  }
+}
+
+/**
+ * Refresh license state across all surfaces (chrome, main page).
+ * Exported so licensing actions (registration, trial completion) can
+ * trigger immediate propagation.
+ */
+export async function refreshLicenseState() {
+  return _loadLicenseState();
+}
+
+/**
+ * Load licensing mode and update chrome license zone + main page.
+ */
+async function _loadLicenseState() {
+  try {
+    const res = await api.getLicensingMode();
+    if (!res.ok) return;
+
+    const { license_status, license_tier } = res.data;
+
+    // Map status+tier to chrome display
+    const TIER_NAMES = {
+      personal: 'Personal', personal_plus: 'Personal Plus',
+      crew: 'Crew', team: 'Team', business: 'Business',
+      enterprise: 'Enterprise', institution: 'Institution',
+    };
+
+    let tierName, dotColor;
+    if (license_status === 'trial') {
+      tierName = 'Trial';
+      dotColor = 'var(--ok, #22c55e)';
+    } else if (license_status === 'licensed') {
+      tierName = TIER_NAMES[license_tier] || license_tier;
+      dotColor = 'var(--ok, #22c55e)';
+    } else if (license_status === 'personal') {
+      tierName = 'Personal';
+      dotColor = 'var(--warning, #f59e42)';
+    } else if (license_status === 'unlicensed') {
+      tierName = 'Unlicensed';
+      dotColor = 'var(--warning, #f59e42)';
+    } else if (license_status === 'clock_anomaly') {
+      tierName = 'Clock Issue';
+      dotColor = 'var(--danger, #ef4444)';
+    } else {
+      tierName = 'Unknown';
+      dotColor = 'var(--muted, #8b919a)';
+    }
+
+    updateLicenseZone(tierName, dotColor);
+    setLicenseMode(res.data);
+  } catch {
+    // Non-critical — chrome stays at default static values
   }
 }
 

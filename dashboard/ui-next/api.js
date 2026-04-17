@@ -361,6 +361,17 @@ export function getCaseDocument() {
   return _request('GET', '/licensing/case-document');
 }
 
+/**
+ * Register for Personal license.
+ * POST /api/licensing/register
+ * @param {Object} opts - { operator_name, context_note, telemetry_opted_in }
+ */
+export function postRegister({ operator_name, context_note, telemetry_opted_in } = {}) {
+  return _request('POST', '/licensing/register', {
+    body: { operator_name, context_note, telemetry_opted_in },
+  });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

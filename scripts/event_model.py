@@ -53,6 +53,9 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "questionnaire_response",
     "capacity_inputs",
     "case_document_generated",
+    "trial_complete",
+    "license_registered",
+    "trial_extended",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

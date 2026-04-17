@@ -409,6 +409,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_questionnaire_answer()
             elif parsed.path == "/api/licensing/capacity":
                 self._handle_capacity_inputs()
+            elif parsed.path == "/api/licensing/register":
+                self._handle_licensing_register()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1386,6 +1388,232 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": str(exc)}, 500)
 
     # ------------------------------------------------------------------
+    # Registration (Phase 4)
+    # ------------------------------------------------------------------
+
+    def _handle_licensing_register(self):
+        """POST /api/licensing/register — register for Personal license."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        operator_name = str(data.get("operator_name", "")).strip()
+        context_note = str(data.get("context_note", "")).strip()
+        telemetry_opted_in = bool(data.get("telemetry_opted_in", True))
+
+        if not operator_name:
+            _json_response(self, {"error": "operator_name is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event, now_utc_z
+            from licensing import resolve_posture
+
+            now = now_utc_z()
+
+            # Write mock license file
+            license_file = RUNTIME / "license.json"
+            RUNTIME.mkdir(parents=True, exist_ok=True)
+
+            # Read existing or create new
+            existing = {}
+            if license_file.exists():
+                try:
+                    existing = json.loads(license_file.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            # Calculate expiry: 1 year from registration
+            from datetime import datetime, timezone, timedelta
+            reg_time = datetime.now(timezone.utc)
+            expiry = (reg_time + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            existing.update({
+                "license_status": "personal",
+                "license_tier": "personal",
+                "registered": True,
+                "registration_date": now,
+                "operator_name": operator_name,
+                "context_note": context_note,
+                "telemetry_opted_in": telemetry_opted_in,
+                "license_expiry": expiry,
+            })
+
+            license_file.write_text(
+                json.dumps(existing, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            # Write license_registered chain event
+            event = build_non_action_event(
+                "license_registered",
+                {
+                    "operator_name": operator_name,
+                    "tier": "personal",
+                    "registration_date": now,
+                    "telemetry_opted_in": telemetry_opted_in,
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            # If telemetry opted in, record that too
+            if telemetry_opted_in:
+                tel_event = build_non_action_event(
+                    "telemetry_opt_in_changed",
+                    {"opted_in": True, "source": "registration"},
+                    prev_record_hash=None,
+                )
+                _append_chain_record_atomic(tel_event)
+
+            _json_response(self, {
+                "registered": True,
+                "event_id": event.get("event_id"),
+                "tier": "personal",
+                "license_status": "personal",
+                "registration_date": now,
+                "license_expiry": expiry,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    # ------------------------------------------------------------------
+    # Trial completion detection (Phase 4)
+    # ------------------------------------------------------------------
+
+    def _check_trial_completion(self):
+        """Check whether the trial threshold has been met.
+
+        Threshold: at least 1 ALLOW, 1 DENY, 3 distinct tool categories,
+        20 total governance decisions.
+
+        Returns dict with: complete, evidence, extended.
+        """
+        try:
+            allow_count = 0
+            deny_count = 0
+            tool_categories = set()
+            total_decisions = 0
+
+            if CHAIN.exists():
+                with open(CHAIN, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+
+                        # Count mediated decisions (action records with policy_decision)
+                        decision = rec.get("policy_decision")
+                        if decision in ("ALLOW", "DENY"):
+                            total_decisions += 1
+                            if decision == "ALLOW":
+                                allow_count += 1
+                            else:
+                                deny_count += 1
+
+                            # Track tool categories
+                            tool = rec.get("tool_name", "")
+                            if tool:
+                                # Category = first segment before underscore or dot
+                                cat = tool.split("_")[0].split(".")[0]
+                                tool_categories.add(cat)
+
+            evidence = {
+                "allow_count": allow_count,
+                "deny_count": deny_count,
+                "total_decisions": total_decisions,
+                "tool_category_count": len(tool_categories),
+                "tool_categories": sorted(tool_categories),
+            }
+
+            threshold_met = (
+                allow_count >= 1
+                and deny_count >= 1
+                and len(tool_categories) >= 3
+                and total_decisions >= 20
+            )
+
+            if not threshold_met:
+                return {"complete": False, "evidence": evidence}
+
+            # Check remote trial extension (mock: always returns false)
+            extended = self._check_trial_extension()
+
+            if extended:
+                # Record trial_extended event if not already recorded
+                self._record_trial_extension(evidence)
+                return {"complete": False, "extended": True, "evidence": evidence}
+
+            # Record trial_complete event
+            self._record_trial_complete(evidence)
+
+            return {"complete": True, "evidence": evidence}
+        except Exception:
+            return {"complete": False}
+
+    def _check_trial_extension(self):
+        """Check remote trial extension. Mock: always returns False."""
+        # When the licensing server exists, this will make an HTTP call.
+        # For now, return False so trials complete normally.
+        return False
+
+    def _record_trial_complete(self, evidence):
+        """Write trial_complete chain event if not already written."""
+        # Check if we already recorded trial_complete
+        if CHAIN.exists():
+            with open(CHAIN, "r", encoding="utf-8") as f:
+                for line in f:
+                    if '"trial_complete"' in line:
+                        return  # Already recorded
+
+        try:
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "trial_complete",
+                {
+                    "threshold_evidence": evidence,
+                    "recommendation_at_completion": None,  # Filled from questionnaire if available
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+        except Exception:
+            pass  # Non-critical: chain event is observational
+
+    def _record_trial_extension(self, evidence):
+        """Write trial_extended chain event if not already written."""
+        if CHAIN.exists():
+            with open(CHAIN, "r", encoding="utf-8") as f:
+                for line in f:
+                    if '"trial_extended"' in line:
+                        return  # Already recorded
+
+        try:
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "trial_extended",
+                {
+                    "threshold_evidence": evidence,
+                    "source": "remote_check",
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # Case document assembly (Phase 3)
     # ------------------------------------------------------------------
 
@@ -1832,8 +2060,38 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result = dict(posture)
                 if days is not None:
                     result["trial_days_remaining"] = days
-                # registered: placeholder for future registration state
-                result["registered"] = False
+
+                # Check registration status from license file
+                license_file = RUNTIME / "license.json"
+                registered = False
+                if license_file.exists():
+                    try:
+                        lic_data = json.loads(license_file.read_text(encoding="utf-8"))
+                        registered = lic_data.get("registered", False)
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                result["registered"] = registered
+
+                # Trial completion detection: if status is "trial",
+                # check whether chain threshold has been met
+                if result.get("license_status") == "trial":
+                    tc = self._check_trial_completion()
+                    result["trial_complete"] = tc.get("complete", False)
+                    if tc.get("complete"):
+                        # Check for remote trial extension before declaring complete
+                        extended = tc.get("extended", False)
+                        if extended:
+                            result["trial_extended"] = True
+                            result["extension_message"] = (
+                                "Atested has extended your trial to give you "
+                                "more time to evaluate."
+                            )
+                        else:
+                            result["trial_complete"] = True
+                            result["trial_evidence"] = tc.get("evidence")
+                else:
+                    result["trial_complete"] = False
+
                 _json_response(self, result)
             except Exception as exc:
                 _json_response(self, {"error": str(exc)}, 500)

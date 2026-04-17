@@ -5,10 +5,12 @@
  * Phase 1: window shell, panel bar, internal navigation, overview panel.
  * Phase 2: questionnaire panel with 6-state machine, chain persistence,
  *          and resumability.
+ * Phase 4: registration panel, trial completion handling, mode transitions.
  */
 
 import * as api from '../api.js';
 import * as licensingApi from '../licensing-api.js';
+import { refreshLicenseState } from '../app.js';
 import { modalManager } from '../modal-manager.js';
 import '../components/loading-indicator.js';
 import {
@@ -107,7 +109,19 @@ async function _loadMode(state) {
     return;
   }
 
-  state.mode = _normalizeMode(res.data);
+  // Store server response for trial extension message access
+  state.modeData = res.data;
+
+  // If trial threshold met and not extended, trigger immediate view reversion
+  if (res.data.trial_complete && !res.data.trial_extended) {
+    // Trial complete — views revert immediately to personal unlicensed
+    state.mode = 'personal';
+    // Propagate mode transition to chrome + main page
+    refreshLicenseState();
+  } else {
+    state.mode = _normalizeMode(res.data);
+  }
+
   _renderPanelBar(state);
   _switchPanel(state, 'overview');
 }
@@ -121,7 +135,11 @@ function _normalizeMode(data) {
   const tier = data.license_tier || 'personal';
 
   if (status === 'clock_anomaly') return 'clock_anomaly';
-  if (status === 'trial') return 'trial';
+  if (status === 'trial') {
+    // Check for trial extension
+    if (data.trial_extended) return 'trial';
+    return 'trial';
+  }
   if (status === 'licensed') return tier; // 'personal_plus', 'crew', 'team', 'institution'
   if (status === 'personal') {
     // Post-trial personal: check if registered
@@ -165,7 +183,7 @@ function _switchPanel(state, panelId) {
   area.innerHTML = '';
 
   // Panels that read chain data always re-render to pick up fresh state
-  if (panelId === 'questionnaire' || panelId === 'case-document' || panelId === 'tiers') {
+  if (panelId === 'questionnaire' || panelId === 'case-document' || panelId === 'tiers' || panelId === 'register') {
     delete state.panelEls[panelId];
   }
 
@@ -191,9 +209,10 @@ function _buildPanel(panelId, state) {
     el.appendChild(_buildCaseDocumentPanel(state));
   } else if (panelId === 'tiers') {
     el.appendChild(_buildTierDisplayPanel(state));
+  } else if (panelId === 'register') {
+    el.appendChild(_buildRegisterPanel(state));
   } else {
     const phaseMap = {
-      'register': 4,
       'purchase': 5,
       'management': 5,
     };
@@ -214,12 +233,21 @@ function _buildOverviewPanel(state) {
   el.className = 'lic-overview';
 
   const mode = state.mode;
+  const modeData = state.modeData || {};
+
   if (mode === 'trial') {
+    const extensionMsg = modeData.trial_extended
+      ? `<div class="lic-extension-banner">
+           Atested has extended your trial to give you more time to evaluate.
+         </div>`
+      : '';
+
     el.innerHTML = `
       <div class="lic-state-card">
         <span class="lic-state-dot" style="background: var(--ok, #22c55e)"></span>
         <span class="lic-state-label">Trial</span>
       </div>
+      ${extensionMsg}
       <p class="lic-overview-text">
         Trial in progress. Governance decisions are being recorded.
         Complete the questionnaire to receive a tier recommendation.
@@ -765,6 +793,243 @@ function _renderPreviousAnswers(qState) {
       <div class="lq-previous-list">${rows}</div>
     </details>
   `;
+}
+
+// ==========================================================================
+// Registration panel (Phase 4)
+// ==========================================================================
+
+function _buildRegisterPanel(state) {
+  const el = document.createElement('div');
+  el.className = 'lr-panel';
+
+  // 3-step state: 'info' → 'telemetry' → 'confirm'
+  let step = 'info';
+  const regData = {
+    operator_name: '',
+    context_note: '',
+    telemetry_opted_in: true,
+  };
+
+  _renderRegisterStep(el, step, regData, state);
+  return el;
+}
+
+function _renderRegisterStep(el, step, regData, state) {
+  el.innerHTML = '';
+
+  if (step === 'info') {
+    el.innerHTML = `
+      <div class="lr-step">
+        <div class="lr-step-indicator">
+          <span class="lr-step-dot lr-step-active"></span>
+          <span class="lr-step-dot"></span>
+          <span class="lr-step-dot"></span>
+        </div>
+        <h3 class="lr-heading">Register for Personal</h3>
+        <p class="lr-text lr-text-muted">
+          Personal licensing is free. Registration creates a license file
+          locally and records the event in your governance chain.
+        </p>
+        <div class="lr-field">
+          <label class="lr-label" for="lr-name">Your name or identifier</label>
+          <input class="lr-input" id="lr-name" type="text" placeholder="e.g. your name or handle"
+                 value="${_esc(regData.operator_name)}" autocomplete="off" />
+        </div>
+        <div class="lr-field">
+          <label class="lr-label" for="lr-context">What are you using Atested for? (optional)</label>
+          <input class="lr-input lr-input-wide" id="lr-context" type="text"
+                 placeholder="e.g. personal development, side project governance"
+                 value="${_esc(regData.context_note)}" autocomplete="off" />
+        </div>
+        <div class="lr-actions">
+          <button class="lic-action-btn lic-action-primary lr-next-btn">Continue</button>
+        </div>
+        <div class="lr-error" style="display:none"></div>
+      </div>
+    `;
+
+    const nameInput = el.querySelector('#lr-name');
+    const contextInput = el.querySelector('#lr-context');
+    const nextBtn = el.querySelector('.lr-next-btn');
+    const errorEl = el.querySelector('.lr-error');
+
+    nextBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      if (!name) {
+        errorEl.textContent = 'Please enter a name or identifier.';
+        errorEl.style.display = '';
+        nameInput.focus();
+        return;
+      }
+      regData.operator_name = name;
+      regData.context_note = contextInput.value.trim();
+      _renderRegisterStep(el, 'telemetry', regData, state);
+    });
+
+  } else if (step === 'telemetry') {
+    const optedClass = regData.telemetry_opted_in ? 'lr-tele-selected' : '';
+    const outClass = !regData.telemetry_opted_in ? 'lr-tele-selected' : '';
+
+    el.innerHTML = `
+      <div class="lr-step">
+        <div class="lr-step-indicator">
+          <span class="lr-step-dot lr-step-done"></span>
+          <span class="lr-step-dot lr-step-active"></span>
+          <span class="lr-step-dot"></span>
+        </div>
+        <h3 class="lr-heading">Telemetry Exchange</h3>
+        <p class="lr-text lr-text-muted">
+          Atested offers a reciprocal data exchange. Participating operators
+          share anonymous, aggregated usage data and receive shared insights
+          and routine notifications in return.
+        </p>
+        <div class="lr-tele-options">
+          <button class="lr-tele-option ${optedClass}" data-choice="in">
+            <span class="lr-tele-title">Participate</span>
+            <span class="lr-tele-desc">Share anonymous usage data. Receive shared insights, routine notifications, and community data.</span>
+          </button>
+          <button class="lr-tele-option ${outClass}" data-choice="out">
+            <span class="lr-tele-title">Decline</span>
+            <span class="lr-tele-desc">No data shared. Security and critical notifications continue regardless. No access to shared community data.</span>
+          </button>
+        </div>
+        <div class="lr-actions">
+          <button class="lic-action-btn lr-back-btn">Back</button>
+          <button class="lic-action-btn lic-action-primary lr-next-btn">Continue</button>
+        </div>
+      </div>
+    `;
+
+    const options = el.querySelectorAll('.lr-tele-option');
+    options.forEach(opt => {
+      opt.addEventListener('click', () => {
+        regData.telemetry_opted_in = opt.dataset.choice === 'in';
+        options.forEach(o => o.classList.toggle('lr-tele-selected', o === opt));
+      });
+    });
+
+    el.querySelector('.lr-back-btn').addEventListener('click', () => {
+      _renderRegisterStep(el, 'info', regData, state);
+    });
+    el.querySelector('.lr-next-btn').addEventListener('click', () => {
+      _renderRegisterStep(el, 'confirm', regData, state);
+    });
+
+  } else if (step === 'confirm') {
+    const teleLabel = regData.telemetry_opted_in ? 'Participating' : 'Declined';
+
+    el.innerHTML = `
+      <div class="lr-step">
+        <div class="lr-step-indicator">
+          <span class="lr-step-dot lr-step-done"></span>
+          <span class="lr-step-dot lr-step-done"></span>
+          <span class="lr-step-dot lr-step-active"></span>
+        </div>
+        <h3 class="lr-heading">Confirm Registration</h3>
+        <div class="lr-confirm-card">
+          <div class="lr-confirm-row">
+            <span class="lr-confirm-label">Tier</span>
+            <span class="lr-confirm-value">Personal (free)</span>
+          </div>
+          <div class="lr-confirm-row">
+            <span class="lr-confirm-label">Operator</span>
+            <span class="lr-confirm-value">${_esc(regData.operator_name)}</span>
+          </div>
+          <div class="lr-confirm-row">
+            <span class="lr-confirm-label">Telemetry</span>
+            <span class="lr-confirm-value">${_esc(teleLabel)}</span>
+          </div>
+          <div class="lr-confirm-row">
+            <span class="lr-confirm-label">Renewal</span>
+            <span class="lr-confirm-value">Annual from registration date</span>
+          </div>
+        </div>
+        <p class="lr-text lr-text-muted">
+          Governance continues uninterrupted. A license file will be created
+          locally and the registration will be recorded in the governance chain.
+          Personal tier features remain active.
+        </p>
+        <div class="lr-actions">
+          <button class="lic-action-btn lr-back-btn">Back</button>
+          <button class="lic-action-btn lic-action-primary lr-confirm-btn">Register</button>
+        </div>
+        <div class="lr-error" style="display:none"></div>
+      </div>
+    `;
+
+    el.querySelector('.lr-back-btn').addEventListener('click', () => {
+      _renderRegisterStep(el, 'telemetry', regData, state);
+    });
+
+    const confirmBtn = el.querySelector('.lr-confirm-btn');
+    const errorEl = el.querySelector('.lr-error');
+
+    confirmBtn.addEventListener('click', async () => {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Registering...';
+      errorEl.style.display = 'none';
+
+      const res = await api.postRegister({
+        operator_name: regData.operator_name,
+        context_note: regData.context_note,
+        telemetry_opted_in: regData.telemetry_opted_in,
+      });
+
+      if (!res.ok) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Register';
+        errorEl.textContent = res.error || 'Registration failed.';
+        errorEl.style.display = '';
+        return;
+      }
+
+      // Registration succeeded — show success and propagate mode change
+      _renderRegisterSuccess(el, res.data, state);
+
+      // Propagate mode transitions to chrome + main page
+      refreshLicenseState();
+    });
+  }
+}
+
+function _renderRegisterSuccess(el, data, state) {
+  el.innerHTML = `
+    <div class="lr-step lr-success">
+      <div class="lr-success-badge">Registered</div>
+      <h3 class="lr-heading">Personal License Active</h3>
+      <p class="lr-text lr-text-muted">
+        Registration complete. Your Personal license is active and governance
+        continues uninterrupted.
+      </p>
+      <div class="lr-confirm-card">
+        <div class="lr-confirm-row">
+          <span class="lr-confirm-label">Status</span>
+          <span class="lr-confirm-value" style="color: #22c55e">Personal (registered)</span>
+        </div>
+        <div class="lr-confirm-row">
+          <span class="lr-confirm-label">Expires</span>
+          <span class="lr-confirm-value">${_esc((data.license_expiry || '').slice(0, 10))}</span>
+        </div>
+      </div>
+      <div class="lr-actions" style="justify-content: center">
+        <button class="lic-action-btn" data-nav="overview">Back to Overview</button>
+        <button class="lic-action-btn" data-nav="tiers">View Tier Options</button>
+      </div>
+    </div>
+  `;
+
+  // Update state mode immediately
+  state.mode = 'personal_registered';
+  delete state.panelEls['overview'];
+  _renderPanelBar(state);
+
+  el.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.nav;
+      _switchPanel(state, target);
+    });
+  });
 }
 
 // ==========================================================================
@@ -1351,6 +1616,15 @@ licStyles.textContent = `
     opacity: 0.5;
     cursor: default;
     pointer-events: none;
+  }
+  .lic-extension-banner {
+    background: rgba(91, 138, 245, 0.10);
+    border: 1px solid rgba(91, 138, 245, 0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: #5b8af5;
+    margin-bottom: 8px;
   }
 
   /* Questionnaire panel */
@@ -2007,6 +2281,175 @@ licStyles.textContent = `
     margin-top: 8px;
   }
 
+  /* ---- Registration panel ---- */
+  .lr-panel {
+    max-width: 560px;
+  }
+  .lr-step {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .lr-step-indicator {
+    display: flex;
+    gap: 8px;
+  }
+  .lr-step-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .lr-step-active {
+    background: #5b8af5;
+  }
+  .lr-step-done {
+    background: #22c55e;
+  }
+  .lr-heading {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    color: #e4e6eb;
+  }
+  .lr-text {
+    font-size: 0.88rem;
+    color: #e4e6eb;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .lr-text-muted {
+    color: #8b919a;
+  }
+  .lr-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lr-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #e4e6eb;
+  }
+  .lr-input {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.88rem;
+    padding: 8px 12px;
+    width: 260px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .lr-input:focus {
+    border-color: #5b8af5;
+  }
+  .lr-input::placeholder {
+    color: #6b7280;
+  }
+  .lr-input-wide {
+    width: 100%;
+  }
+  .lr-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .lr-error {
+    color: #f59e42;
+    background: rgba(245, 158, 66, 0.10);
+    font-size: 0.82rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+  }
+
+  /* Telemetry choice */
+  .lr-tele-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lr-tele-option {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: #e4e6eb;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    padding: 14px 18px;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lr-tele-option:hover {
+    background: rgba(91, 138, 245, 0.08);
+    border-color: rgba(91, 138, 245, 0.3);
+  }
+  .lr-tele-selected {
+    background: rgba(91, 138, 245, 0.10);
+    border-color: #5b8af5;
+  }
+  .lr-tele-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+  .lr-tele-desc {
+    font-size: 0.82rem;
+    color: #8b919a;
+    line-height: 1.5;
+  }
+
+  /* Confirm card */
+  .lr-confirm-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lr-confirm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+  }
+  .lr-confirm-label {
+    color: #6b7280;
+    font-weight: 500;
+  }
+  .lr-confirm-value {
+    color: #e4e6eb;
+    font-weight: 600;
+  }
+
+  /* Success */
+  .lr-success {
+    text-align: center;
+    align-items: center;
+  }
+  .lr-success-badge {
+    display: inline-block;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lr-success .lr-confirm-card {
+    width: 100%;
+    max-width: 320px;
+  }
+
   @media (max-width: 600px) {
     .lic-panel-bar {
       overflow-x: auto;
@@ -2048,6 +2491,9 @@ licStyles.textContent = `
     }
     .ltd-tier-terms {
       grid-template-columns: 1fr;
+    }
+    .lr-input {
+      width: 100%;
     }
   }
 `;
