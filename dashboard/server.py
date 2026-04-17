@@ -397,6 +397,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_telemetry_submit()
             elif parsed.path == "/api/telemetry/opt-in":
                 self._handle_telemetry_opt_in()
+            elif parsed.path == "/api/notifications/dismiss":
+                self._handle_notification_dismiss()
+            elif parsed.path == "/api/notifications/viewed":
+                self._handle_notifications_viewed()
+            elif parsed.path == "/api/disclosure/acknowledge":
+                self._handle_disclosure_acknowledge()
+            elif parsed.path == "/api/identity/lock":
+                self._handle_identity_lock()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -910,6 +918,331 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
+    # ------------------------------------------------------------------
+    # Notification & disclosure endpoints (Phase 5)
+    # ------------------------------------------------------------------
+
+    def _handle_notifications_get(self):
+        """GET /api/notifications — return active notifications derived from health signals."""
+        try:
+            from chain_health import collect_health_signals
+            stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
+            chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
+            h = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
+
+            notifications = []
+
+            # Chain integrity alerts
+            if h.get("chain", {}).get("status") == "broken":
+                notifications.append({
+                    "id": "chain_broken",
+                    "severity": "security",
+                    "title": "Chain Integrity Compromised",
+                    "message": "The governance chain has detected integrity failures. Investigate immediately.",
+                    "persistent": True,
+                })
+            elif h.get("chain", {}).get("status") == "repaired":
+                notifications.append({
+                    "id": "chain_repaired",
+                    "severity": "routine",
+                    "title": "Chain Repaired",
+                    "message": "The governance chain was broken and has been repaired.",
+                    "persistent": False,
+                })
+
+            # DENY rate anomaly
+            if h.get("deny_rate", {}).get("anomaly"):
+                notifications.append({
+                    "id": "deny_rate_anomaly",
+                    "severity": "critical",
+                    "title": "DENY Rate Anomaly",
+                    "message": "The recent DENY rate is significantly above the historical average.",
+                    "persistent": False,
+                })
+
+            # Observation gap
+            if h.get("observations", {}).get("gap_detected"):
+                notifications.append({
+                    "id": "observation_gap",
+                    "severity": "critical",
+                    "title": "Observation Gap Detected",
+                    "message": "No ungoverned operation observations received recently. Check hook configuration.",
+                    "persistent": False,
+                })
+
+            # License expiry warning
+            license_info = h.get("license", {})
+            if license_info.get("status") == "expired":
+                notifications.append({
+                    "id": "license_expired",
+                    "severity": "critical",
+                    "title": "License Expired",
+                    "message": "Your Atested license has expired.",
+                    "persistent": False,
+                })
+            elif license_info.get("trial_days_remaining") is not None:
+                days = license_info["trial_days_remaining"]
+                if days <= 7:
+                    notifications.append({
+                        "id": "trial_expiring",
+                        "severity": "routine",
+                        "title": "Trial Expiring Soon",
+                        "message": f"Your trial expires in {days} day{'s' if days != 1 else ''}.",
+                        "persistent": False,
+                    })
+
+            # Health alerts promoted to notifications
+            for alert in h.get("alerts", []):
+                notifications.append({
+                    "id": f"alert_{alert.get('source', 'unknown')}",
+                    "severity": "critical" if alert.get("severity") == "critical" else "routine",
+                    "title": alert.get("source", "Alert"),
+                    "message": alert.get("message", ""),
+                    "persistent": False,
+                })
+
+            # Filter out dismissed notifications
+            dismissed = self._load_dismissed_notifications()
+            active = [n for n in notifications if n["id"] not in dismissed]
+
+            _json_response(self, {
+                "notifications": active,
+                "total": len(notifications),
+                "dismissed_count": len(dismissed),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _load_dismissed_notifications(self):
+        """Load set of dismissed notification IDs from the dismissal file."""
+        dismiss_file = RUNTIME / "notification_dismissals.json"
+        if not dismiss_file.exists():
+            return set()
+        try:
+            data = json.loads(dismiss_file.read_text(encoding="utf-8"))
+            return set(data.get("dismissed", []))
+        except (json.JSONDecodeError, OSError):
+            return set()
+
+    def _handle_notification_dismiss(self):
+        """POST /api/notifications/dismiss — dismiss a notification by ID."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        notification_id = str(data.get("notification_id", "")).strip()
+        if not notification_id:
+            _json_response(self, {"error": "notification_id is required"}, 400)
+            return
+
+        try:
+            # Persist dismissal
+            dismiss_file = RUNTIME / "notification_dismissals.json"
+            dismissed = set()
+            if dismiss_file.exists():
+                try:
+                    existing = json.loads(dismiss_file.read_text(encoding="utf-8"))
+                    dismissed = set(existing.get("dismissed", []))
+                except (json.JSONDecodeError, OSError):
+                    pass
+            dismissed.add(notification_id)
+            dismiss_file.parent.mkdir(parents=True, exist_ok=True)
+            dismiss_file.write_text(
+                json.dumps({"dismissed": sorted(dismissed)}, indent=2),
+                encoding="utf-8",
+            )
+
+            # Record to chain
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "notification_dismissed",
+                {
+                    "notification_id": notification_id,
+                    "governed_family": _governed_family(),
+                    "deployment_context": _deployment_context(),
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "dismissed": True,
+                "notification_id": notification_id,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_notifications_viewed(self):
+        """POST /api/notifications/viewed — record that notifications were viewed."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "notifications_viewed",
+                {
+                    "count": data.get("count", 0),
+                    "governed_family": _governed_family(),
+                    "deployment_context": _deployment_context(),
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "recorded": True,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_disclosure_acknowledge(self):
+        """POST /api/disclosure/acknowledge — record first-run disclosure acknowledgement."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "disclosure_shown",
+                {
+                    "operator": str(data.get("operator", "")).strip() or "dashboard_operator",
+                    "governed_family": _governed_family(),
+                    "deployment_context": _deployment_context(),
+                    "policy_version": _policy_version(),
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "acknowledged": True,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_disclosure_status(self):
+        """GET /api/disclosure/status — check if disclosure has been acknowledged."""
+        try:
+            from readout import load_chain_rows
+            rows = load_chain_rows(CHAIN)
+            acknowledged = any(
+                r.get("event_type") == "disclosure_shown" for r in rows
+            )
+            _json_response(self, {"acknowledged": acknowledged})
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    # ------------------------------------------------------------------
+    # Identity session endpoints (Phase 6)
+    # ------------------------------------------------------------------
+
+    def _handle_identity_session(self):
+        """GET /api/identity/session — return operator identity state.
+
+        When the identity backend is not yet implemented, returns
+        { configured: false } for graceful degradation.
+        """
+        try:
+            session_file = RUNTIME / "identity_session.json"
+            if not session_file.exists():
+                _json_response(self, {"configured": False})
+                return
+
+            data = json.loads(session_file.read_text(encoding="utf-8"))
+            if not data.get("configured"):
+                _json_response(self, {"configured": False})
+                return
+
+            # Return session state
+            import time
+            result = {
+                "configured": True,
+                "operator_name": data.get("operator_name", ""),
+                "operator_email": data.get("operator_email", ""),
+                "locked": data.get("locked", True),
+            }
+
+            if not data.get("locked", True):
+                unlock_time = data.get("unlock_time")
+                idle_time = data.get("last_activity_time")
+                now = time.time()
+
+                # Hard ceiling: 1 hour from unlock
+                if unlock_time:
+                    ceiling_remaining = max(0, (unlock_time + 3600) - now)
+                    result["ceiling_remaining_s"] = int(ceiling_remaining)
+                    # Auto-lock if ceiling exceeded
+                    if ceiling_remaining <= 0:
+                        data["locked"] = True
+                        session_file.write_text(
+                            json.dumps(data, indent=2), encoding="utf-8"
+                        )
+                        result["locked"] = True
+
+                # Idle timer: 30 minutes from last activity
+                if idle_time:
+                    idle_remaining = max(0, (idle_time + 1800) - now)
+                    result["idle_remaining_s"] = int(idle_remaining)
+                    if idle_remaining <= 0:
+                        data["locked"] = True
+                        session_file.write_text(
+                            json.dumps(data, indent=2), encoding="utf-8"
+                        )
+                        result["locked"] = True
+
+            _json_response(self, result)
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_identity_lock(self):
+        """POST /api/identity/lock — manually lock the operator session."""
+        try:
+            session_file = RUNTIME / "identity_session.json"
+            if not session_file.exists():
+                _json_response(self, {"error": "identity not configured"}, 400)
+                return
+
+            data = json.loads(session_file.read_text(encoding="utf-8"))
+            if not data.get("configured"):
+                _json_response(self, {"error": "identity not configured"}, 400)
+                return
+
+            data["locked"] = True
+            data.pop("unlock_time", None)
+            data.pop("last_activity_time", None)
+            session_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+            _json_response(self, {"locked": True, "operator_name": data.get("operator_name", "")})
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
     def log_message(self, format, *args):
         pass  # Silence request logs
 
@@ -1095,6 +1428,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             opt_in_file = RUNTIME / "telemetry_opt_in"
             opted_in = opt_in_file.exists() and opt_in_file.read_text(encoding="utf-8").strip() == "1"
             _json_response(self, {"opted_in": opted_in})
+
+        elif path == "/api/notifications":
+            self._handle_notifications_get()
+
+        elif path == "/api/disclosure/status":
+            self._handle_disclosure_status()
+
+        elif path == "/api/identity/session":
+            self._handle_identity_session()
 
         elif path == "/api/config":
             try:

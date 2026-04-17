@@ -265,3 +265,65 @@ export function postTelemetrySubmit({ send_to_remote } = {}) {
 export function postTelemetryOptIn({ opted_in } = {}) {
   return _request('POST', '/telemetry/opt-in', { body: { opted_in } });
 }
+
+// ---------- Notification endpoints ----------
+
+/**
+ * Get active notifications.
+ * GET /api/notifications
+ */
+export function getNotifications() {
+  return _request('GET', '/notifications');
+}
+
+/**
+ * Dismiss a notification.
+ * POST /api/notifications/dismiss
+ */
+export function postDismissNotification({ notification_id } = {}) {
+  return _request('POST', '/notifications/dismiss', { body: { notification_id } });
+}
+
+/**
+ * Record that notifications were viewed.
+ * POST /api/notifications/viewed
+ */
+export function postNotificationsViewed({ count } = {}) {
+  return _request('POST', '/notifications/viewed', { body: { count } });
+}
+
+// ---------- Disclosure endpoints ----------
+
+/**
+ * Get disclosure acknowledgement status.
+ * GET /api/disclosure/status
+ */
+export function getDisclosureStatus() {
+  return _request('GET', '/disclosure/status');
+}
+
+/**
+ * Acknowledge the first-run disclosure.
+ * POST /api/disclosure/acknowledge
+ */
+export function postDisclosureAcknowledge({ operator } = {}) {
+  return _request('POST', '/disclosure/acknowledge', { body: { operator } });
+}
+
+// ---------- Identity endpoints ----------
+
+/**
+ * Get operator identity session state.
+ * GET /api/identity/session
+ */
+export function getIdentitySession() {
+  return _request('GET', '/identity/session');
+}
+
+/**
+ * Manually lock the operator session.
+ * POST /api/identity/lock
+ */
+export function postIdentityLock() {
+  return _request('POST', '/identity/lock', { body: {} });
+}

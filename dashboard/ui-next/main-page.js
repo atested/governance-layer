@@ -22,6 +22,7 @@ import { openHealthWindow } from './windows/health.js';
 import { openReportsWindow } from './windows/reports.js';
 import { openConfigWindow } from './windows/configuration.js';
 import { openFeedbackWindow } from './windows/feedback.js';
+import { openNotificationsWindow } from './windows/notifications.js';
 
 /** Map launcher IDs to window open functions */
 const WINDOW_OPENERS = {
@@ -32,6 +33,7 @@ const WINDOW_OPENERS = {
   health: openHealthWindow,
   configuration: openConfigWindow,
   feedback: openFeedbackWindow,
+  notifications: openNotificationsWindow,
 };
 
 /** Launcher definitions for all workflow windows */
@@ -44,7 +46,7 @@ const LAUNCHERS = [
   { id: 'configuration', label: 'Configuration' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'licensing', label: 'Licensing' },
+  { id: 'licensing', label: 'Licensing', comingSoon: true },
 ];
 
 /** DOM references populated during render */
@@ -100,7 +102,13 @@ export function renderMainPage() {
   for (const launcher of LAUNCHERS) {
     const btn = document.createElement('button');
     btn.className = 'mp-launcher';
-    btn.textContent = launcher.label;
+    if (launcher.comingSoon) {
+      btn.classList.add('mp-launcher-disabled');
+      btn.textContent = `${launcher.label} (coming soon)`;
+      btn.disabled = true;
+    } else {
+      btn.textContent = launcher.label;
+    }
     btn.dataset.windowId = launcher.id;
     btn.addEventListener('click', () => {
       const opener = WINDOW_OPENERS[launcher.id];
@@ -446,6 +454,15 @@ mpStyles.textContent = `
   .mp-launcher:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: 2px;
+  }
+  .mp-launcher-disabled {
+    color: #8b919a;
+    cursor: default;
+    opacity: 0.5;
+  }
+  .mp-launcher-disabled:hover {
+    background: none;
+    border-color: rgba(255, 255, 255, 0.08);
   }
 `;
 document.head.appendChild(mpStyles);

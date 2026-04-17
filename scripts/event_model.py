@@ -46,6 +46,10 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "feedback_submitted",
     "telemetry_submitted",
     "telemetry_opt_in_changed",
+    "notification_received",
+    "notification_dismissed",
+    "notifications_viewed",
+    "disclosure_shown",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([
