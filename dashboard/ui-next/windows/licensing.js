@@ -50,7 +50,7 @@ const PANELS = [
   { id: 'questionnaire', label: 'Questionnaire', availableIn: ['trial', 'personal', 'personal_registered', 'unlicensed'] },
   { id: 'case-document', label: 'Case Document', availableIn: ['trial', 'personal', 'personal_registered', 'personal_plus', 'crew', 'team', 'institution', 'unlicensed'] },
   { id: 'register', label: 'Register', availableIn: ['trial', 'personal', 'unlicensed'] },
-  { id: 'purchase', label: 'Purchase', availableIn: ['trial', 'personal', 'personal_registered', 'unlicensed'] },
+  { id: 'purchase', label: 'Purchase', availableIn: ['trial', 'personal', 'personal_registered', 'personal_plus', 'crew', 'team', 'unlicensed'] },
   { id: 'management', label: 'License Management', availableIn: ['personal_plus', 'crew', 'team', 'institution'] },
 ];
 
@@ -1041,36 +1041,53 @@ function _buildPurchasePanel(state) {
 
   const modeData = state.modeData || {};
   const operatorName = modeData.operator_name || '';
+  const currentTier = modeData.license_tier || '';
+  const currentStatus = modeData.license_status || '';
+  const isLicensed = currentStatus === 'licensed';
 
-  // Tier options
+  // Tier options — all enabled except Institution (contact handoff)
   const TIERS_FOR_PURCHASE = [
-    { id: 'personal_plus', label: 'Personal Plus', price: '$99/yr', dating: 'From purchase date', available: true },
-    { id: 'crew', label: 'Crew', price: '$299/yr', dating: 'From trial completion', available: false },
-    { id: 'team', label: 'Team', price: '$799/yr', dating: 'From trial completion', available: false },
-    { id: 'institution', label: 'Institution', price: 'Negotiated', dating: 'From trial completion', available: false },
+    { id: 'personal_plus', label: 'Personal Plus', price: '$99/yr', dating: 'From purchase date', selfServe: true },
+    { id: 'crew', label: 'Crew', price: '$299/yr', dating: 'From trial completion', selfServe: true },
+    { id: 'team', label: 'Team', price: '$799/yr', dating: 'From trial completion', selfServe: true },
+    { id: 'institution', label: 'Institution', price: 'Contact us', dating: 'From trial completion', selfServe: false },
   ];
 
-  let selectedTier = 'personal_plus';
+  // Filter out tiers at or below current if upgrading
+  const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
+  const currentIdx = TIER_ORDER.indexOf(currentTier);
+
+  let selectedTier = isLicensed
+    ? (TIERS_FOR_PURCHASE.find(t => TIER_ORDER.indexOf(t.id) > currentIdx) || TIERS_FOR_PURCHASE[0]).id
+    : 'personal_plus';
+
+  const heading = isLicensed ? 'Upgrade License' : 'Purchase a License';
+  const subtext = isLicensed
+    ? `You are currently on ${_tierLabel(currentTier)}. Select a higher tier to upgrade.`
+    : 'Select a tier for additional features and support.';
 
   let tiersHtml = '';
   for (const t of TIERS_FOR_PURCHASE) {
+    const tierIdx = TIER_ORDER.indexOf(t.id);
+    const belowCurrent = isLicensed && tierIdx <= currentIdx;
     const selected = t.id === selectedTier ? 'lp-tier-selected' : '';
-    const disabled = !t.available ? 'lp-tier-disabled' : '';
-    const future = !t.available ? '<span class="lp-future-tag">Coming soon</span>' : '';
+    const disabled = belowCurrent ? 'lp-tier-disabled' : '';
+    const tag = belowCurrent ? '<span class="lp-future-tag">Current or lower</span>'
+      : !t.selfServe ? '<span class="lp-future-tag">Contact us</span>' : '';
     tiersHtml += `
-      <button class="lp-tier-option ${selected} ${disabled}" data-tier="${t.id}" ${!t.available ? 'disabled' : ''}>
+      <button class="lp-tier-option ${selected} ${disabled}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
         <span class="lp-tier-label">${_esc(t.label)}</span>
         <span class="lp-tier-price">${_esc(t.price)}</span>
-        ${future}
+        ${tag}
       </button>
     `;
   }
 
+  const selTierDef = TIERS_FOR_PURCHASE.find(t => t.id === selectedTier) || TIERS_FOR_PURCHASE[0];
+
   el.innerHTML = `
-    <h3 class="lp-heading">Purchase a License</h3>
-    <p class="lp-text lp-text-muted">
-      Upgrade to a paid tier for additional features and support.
-    </p>
+    <h3 class="lp-heading">${_esc(heading)}</h3>
+    <p class="lp-text lp-text-muted">${subtext}</p>
 
     <div class="lp-section">
       <div class="lp-section-label">Select Tier</div>
@@ -1081,40 +1098,61 @@ function _buildPurchasePanel(state) {
       <div class="lp-detail-card">
         <div class="lp-detail-row">
           <span class="lp-detail-label">Price</span>
-          <span class="lp-detail-value lp-detail-price">$99/yr</span>
+          <span class="lp-detail-value lp-detail-price">${_esc(selTierDef.price)}</span>
         </div>
         <div class="lp-detail-row">
           <span class="lp-detail-label">Billing</span>
-          <span class="lp-detail-value">Annual</span>
+          <span class="lp-detail-value">${selTierDef.selfServe ? 'Annual' : 'Negotiated'}</span>
         </div>
         <div class="lp-detail-row">
           <span class="lp-detail-label">License dating</span>
-          <span class="lp-detail-value">From purchase date</span>
+          <span class="lp-detail-value lp-detail-dating">${_esc(selTierDef.dating)}</span>
         </div>
         <div class="lp-detail-row">
           <span class="lp-detail-label">Auto-renewal</span>
           <span class="lp-detail-value">Enabled by default</span>
         </div>
       </div>
-      <p class="lp-dating-note">
-        Your Personal Plus license term begins on the date of purchase and
-        renews annually. This differs from Crew and higher tiers, which date
-        from trial completion.
-      </p>
+      <p class="lp-dating-note lp-dating-note-text"></p>
     </div>
 
-    <div class="lp-actions">
-      <button class="lic-action-btn lic-action-primary lp-purchase-btn">Purchase Personal Plus — $99/yr</button>
+    <div class="lp-institution-contact" style="display:none">
+      <div class="lp-institution-card">
+        <h4 style="margin:0 0 8px 0">Institution Tier</h4>
+        <p class="lp-text lp-text-muted" style="margin:0 0 12px 0">
+          Institution licenses are tailored to your organization. Contact us
+          to discuss your needs and receive a custom quote.
+        </p>
+        <a href="mailto:hello@atested.com" class="lic-action-btn lic-action-primary" style="text-decoration:none;text-align:center">
+          Contact hello@atested.com
+        </a>
+      </div>
+    </div>
+
+    <div class="lp-actions lp-purchase-actions">
+      <button class="lic-action-btn lic-action-primary lp-purchase-btn">${_purchaseBtnLabel(selectedTier, isLicensed)}</button>
     </div>
     <div class="lp-error" style="display:none"></div>
   `;
 
-  // Tier selection
+  _updateDatingNote(el, selectedTier);
+
+  // Tier selection interaction
   el.querySelectorAll('.lp-tier-option:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('.lp-tier-option').forEach(b => b.classList.remove('lp-tier-selected'));
       btn.classList.add('lp-tier-selected');
       selectedTier = btn.dataset.tier;
+      const def = TIERS_FOR_PURCHASE.find(t => t.id === selectedTier) || TIERS_FOR_PURCHASE[0];
+      el.querySelector('.lp-detail-price').textContent = def.price;
+      el.querySelector('.lp-detail-dating').textContent = def.dating;
+      el.querySelector('.lp-purchase-btn').textContent = _purchaseBtnLabel(selectedTier, isLicensed);
+      _updateDatingNote(el, selectedTier);
+
+      // Show/hide institution contact vs purchase button
+      const isInst = selectedTier === 'institution';
+      el.querySelector('.lp-institution-contact').style.display = isInst ? '' : 'none';
+      el.querySelector('.lp-purchase-actions').style.display = isInst ? 'none' : '';
     });
   });
 
@@ -1123,6 +1161,8 @@ function _buildPurchasePanel(state) {
   const errorEl = el.querySelector('.lp-error');
 
   purchaseBtn.addEventListener('click', async () => {
+    if (selectedTier === 'institution') return; // Should not happen
+
     purchaseBtn.disabled = true;
     purchaseBtn.textContent = 'Processing...';
     errorEl.style.display = 'none';
@@ -1131,7 +1171,7 @@ function _buildPurchasePanel(state) {
     const payRes = await licensingApi.initiatePurchase({ tier: selectedTier });
     if (!payRes.ok) {
       purchaseBtn.disabled = false;
-      purchaseBtn.textContent = 'Purchase Personal Plus — $99/yr';
+      purchaseBtn.textContent = _purchaseBtnLabel(selectedTier, isLicensed);
       errorEl.textContent = payRes.error || 'Payment failed.';
       errorEl.style.display = '';
       return;
@@ -1146,7 +1186,7 @@ function _buildPurchasePanel(state) {
 
     if (!res.ok) {
       purchaseBtn.disabled = false;
-      purchaseBtn.textContent = 'Purchase Personal Plus — $99/yr';
+      purchaseBtn.textContent = _purchaseBtnLabel(selectedTier, isLicensed);
       errorEl.textContent = res.error || 'Purchase failed.';
       errorEl.style.display = '';
       return;
@@ -1160,26 +1200,59 @@ function _buildPurchasePanel(state) {
   return el;
 }
 
+function _purchaseBtnLabel(tier, isUpgrade) {
+  const PRICES = { personal_plus: '$99/yr', crew: '$299/yr', team: '$799/yr' };
+  const label = _tierLabel(tier);
+  const price = PRICES[tier] || '';
+  const verb = isUpgrade ? 'Upgrade to' : 'Purchase';
+  return price ? `${verb} ${label} — ${price}` : `${verb} ${label}`;
+}
+
+function _updateDatingNote(el, tier) {
+  const noteEl = el.querySelector('.lp-dating-note-text');
+  if (!noteEl) return;
+  if (tier === 'personal_plus') {
+    noteEl.textContent = 'Personal Plus dates from purchase. Crew and higher tiers date from trial completion.';
+  } else if (tier === 'institution') {
+    noteEl.textContent = 'Institution licenses have custom terms negotiated with Atested.';
+  } else {
+    noteEl.textContent = `${_tierLabel(tier)} dates from trial completion — your 1-year term begins when the trial threshold was met, not when you purchase.`;
+  }
+}
+
+function _tierLabel(tier) {
+  const LABELS = { personal: 'Personal', personal_plus: 'Personal Plus', crew: 'Crew', team: 'Team', institution: 'Institution' };
+  return LABELS[tier] || tier;
+}
+
 function _renderPurchaseSuccess(el, data, state) {
+  const tier = data.tier || 'personal_plus';
+  const label = _tierLabel(tier);
+  const upgraded = data.upgraded || false;
+  const badge = upgraded ? 'Upgraded' : 'Purchased';
+  const headline = upgraded
+    ? `Upgraded to ${label}`
+    : `${label} License Active`;
+  const desc = upgraded
+    ? `Your license has been upgraded from ${_tierLabel(data.from_tier)} to ${label}.`
+    : `Your ${label} license has been activated.`;
+
   el.innerHTML = `
     <div class="lp-success">
-      <div class="lp-success-badge">Purchased</div>
-      <h3 class="lp-heading">Personal Plus License Active</h3>
-      <p class="lp-text lp-text-muted">
-        Your license has been activated. Multi-machine support and
-        email support are now available.
-      </p>
+      <div class="lp-success-badge">${_esc(badge)}</div>
+      <h3 class="lp-heading">${_esc(headline)}</h3>
+      <p class="lp-text lp-text-muted">${_esc(desc)}</p>
       <div class="lp-detail-card">
         <div class="lp-detail-row">
           <span class="lp-detail-label">Tier</span>
-          <span class="lp-detail-value" style="color:#22c55e">Personal Plus</span>
+          <span class="lp-detail-value" style="color:#22c55e">${_esc(label)}</span>
         </div>
         <div class="lp-detail-row">
-          <span class="lp-detail-label">Purchased</span>
-          <span class="lp-detail-value">${_esc((data.purchase_date || '').slice(0, 10))}</span>
+          <span class="lp-detail-label">Term Start</span>
+          <span class="lp-detail-value">${_esc((data.license_start || '').slice(0, 10))}</span>
         </div>
         <div class="lp-detail-row">
-          <span class="lp-detail-label">Expires</span>
+          <span class="lp-detail-label">Term End</span>
           <span class="lp-detail-value">${_esc((data.license_expiry || '').slice(0, 10))}</span>
         </div>
         <div class="lp-detail-row">
@@ -1194,8 +1267,8 @@ function _renderPurchaseSuccess(el, data, state) {
     </div>
   `;
 
-  // Update state
-  state.mode = 'personal_plus';
+  // Update state to the purchased tier mode
+  state.mode = tier;
   delete state.panelEls['overview'];
   _renderPanelBar(state);
 
@@ -1225,11 +1298,55 @@ async function _loadManagementData(el, state) {
 
   const data = res.data;
   const tier = data.license_tier || '';
-  const LABEL = { personal_plus: 'Personal Plus', crew: 'Crew', team: 'Team', institution: 'Institution' };
-  const tierLabel = LABEL[tier] || tier;
+  const tierLabel = _tierLabel(tier);
   const purchaseDate = (data.purchase_date || '').slice(0, 10) || 'N/A';
   const expiryDate = (data.license_expiry || '').slice(0, 10) || 'N/A';
   const autoRenewal = data.auto_renewal !== false;
+  const pendingDowngrade = data.pending_downgrade || null;
+
+  // Tiers the user can downgrade to
+  const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
+  const currentIdx = TIER_ORDER.indexOf(tier);
+  const downgradeTiers = TIER_ORDER.slice(0, Math.max(0, currentIdx)).filter(t => t !== 'personal');
+
+  let pendingHtml = '';
+  if (pendingDowngrade) {
+    pendingHtml = `
+      <div class="lm-section">
+        <div class="lm-section-label">Pending Downgrade</div>
+        <div class="lm-pending-card">
+          <div class="lm-pending-text">
+            Downgrade to <strong>${_esc(_tierLabel(pendingDowngrade.to_tier))}</strong>
+            scheduled for <strong>${_esc((pendingDowngrade.effective_date || '').slice(0, 10))}</strong>
+            (next renewal).
+          </div>
+          <button class="lic-action-btn lm-cancel-downgrade">Cancel Downgrade</button>
+        </div>
+      </div>
+    `;
+  }
+
+  let downgradeHtml = '';
+  if (downgradeTiers.length > 0 && !pendingDowngrade) {
+    let downgradeOptions = '';
+    for (const dt of downgradeTiers) {
+      downgradeOptions += `<option value="${dt}">${_tierLabel(dt)}</option>`;
+    }
+    downgradeHtml = `
+      <div class="lm-section">
+        <div class="lm-section-label">Downgrade</div>
+        <div class="lm-downgrade-card">
+          <p class="lm-downgrade-text">
+            Schedule a downgrade for your next renewal. You keep your current tier until then.
+          </p>
+          <div class="lm-downgrade-row">
+            <select class="lm-downgrade-select">${downgradeOptions}</select>
+            <button class="lic-action-btn lm-downgrade-btn">Schedule Downgrade</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   el.innerHTML = `
     <h3 class="lm-heading">License Management</h3>
@@ -1252,6 +1369,8 @@ async function _loadManagementData(el, state) {
       </div>
     </div>
 
+    ${pendingHtml}
+
     <div class="lm-section">
       <div class="lm-section-label">Auto-Renewal</div>
       <div class="lm-renewal-card">
@@ -1263,54 +1382,100 @@ async function _loadManagementData(el, state) {
       </div>
     </div>
 
+    <div class="lm-section">
+      <div class="lm-section-label">Upgrade</div>
+      <div class="lm-upgrade-card">
+        <button class="lic-action-btn lic-action-primary lm-upgrade-btn" data-nav="purchase">Upgrade to a Higher Tier</button>
+      </div>
+    </div>
+
+    ${downgradeHtml}
+
     <div class="lm-confirm-dialog" style="display:none"></div>
     <div class="lm-error" style="display:none"></div>
   `;
 
-  const toggleBtn = el.querySelector('.lm-renewal-toggle');
   const confirmArea = el.querySelector('.lm-confirm-dialog');
   const errorEl = el.querySelector('.lm-error');
 
+  // Auto-renewal toggle
+  const toggleBtn = el.querySelector('.lm-renewal-toggle');
   toggleBtn.addEventListener('click', () => {
-    const newState = !autoRenewal;
-    const msg = newState
-      ? `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`
-      : `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`;
+    _showConfirmDialog(confirmArea, errorEl, state, {
+      message: autoRenewal
+        ? `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`
+        : `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`,
+      action: () => api.postAutoRenewal({ auto_renewal: !autoRenewal }),
+      panel: 'management',
+    });
+  });
 
-    confirmArea.style.display = '';
-    confirmArea.innerHTML = `
-      <div class="lm-confirm-card">
-        <p class="lm-confirm-text">${_esc(msg)}</p>
-        <div class="lm-confirm-actions">
-          <button class="lic-action-btn lm-confirm-cancel">Cancel</button>
-          <button class="lic-action-btn lic-action-primary lm-confirm-ok">Confirm</button>
-        </div>
+  // Upgrade button
+  el.querySelector('.lm-upgrade-btn').addEventListener('click', () => {
+    _switchPanel(state, 'purchase');
+  });
+
+  // Cancel pending downgrade
+  const cancelBtn = el.querySelector('.lm-cancel-downgrade');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      _showConfirmDialog(confirmArea, errorEl, state, {
+        message: `Cancel the pending downgrade to ${_tierLabel(pendingDowngrade.to_tier)}? You will remain on ${tierLabel}.`,
+        action: () => api.postPurchase({ tier, payment_ref: 'cancel_downgrade', operator_name: data.operator_name || '' }),
+        panel: 'management',
+      });
+    });
+  }
+
+  // Downgrade button
+  const downgradeBtn = el.querySelector('.lm-downgrade-btn');
+  if (downgradeBtn) {
+    downgradeBtn.addEventListener('click', () => {
+      const selectEl = el.querySelector('.lm-downgrade-select');
+      const toTier = selectEl.value;
+      _showConfirmDialog(confirmArea, errorEl, state, {
+        message: `Schedule downgrade from ${tierLabel} to ${_tierLabel(toTier)}? ` +
+          `You keep ${tierLabel} until your renewal date (${expiryDate}), then switch to ${_tierLabel(toTier)}.`,
+        action: () => api.postDowngrade({ to_tier: toTier }),
+        panel: 'management',
+      });
+    });
+  }
+}
+
+function _showConfirmDialog(confirmArea, errorEl, state, { message, action, panel }) {
+  confirmArea.style.display = '';
+  confirmArea.innerHTML = `
+    <div class="lm-confirm-card">
+      <p class="lm-confirm-text">${_esc(message)}</p>
+      <div class="lm-confirm-actions">
+        <button class="lic-action-btn lm-confirm-cancel">Cancel</button>
+        <button class="lic-action-btn lic-action-primary lm-confirm-ok">Confirm</button>
       </div>
-    `;
+    </div>
+  `;
 
-    confirmArea.querySelector('.lm-confirm-cancel').addEventListener('click', () => {
-      confirmArea.style.display = 'none';
-    });
+  confirmArea.querySelector('.lm-confirm-cancel').addEventListener('click', () => {
+    confirmArea.style.display = 'none';
+  });
 
-    confirmArea.querySelector('.lm-confirm-ok').addEventListener('click', async () => {
-      const okBtn = confirmArea.querySelector('.lm-confirm-ok');
-      okBtn.disabled = true;
-      okBtn.textContent = 'Saving...';
-      errorEl.style.display = 'none';
+  confirmArea.querySelector('.lm-confirm-ok').addEventListener('click', async () => {
+    const okBtn = confirmArea.querySelector('.lm-confirm-ok');
+    okBtn.disabled = true;
+    okBtn.textContent = 'Saving...';
+    errorEl.style.display = 'none';
 
-      const res = await api.postAutoRenewal({ auto_renewal: newState });
-      if (!res.ok) {
-        okBtn.disabled = false;
-        okBtn.textContent = 'Confirm';
-        errorEl.textContent = res.error || 'Failed to update auto-renewal.';
-        errorEl.style.display = '';
-        return;
-      }
+    const res = await action();
+    if (!res.ok) {
+      okBtn.disabled = false;
+      okBtn.textContent = 'Confirm';
+      errorEl.textContent = res.error || 'Operation failed.';
+      errorEl.style.display = '';
+      return;
+    }
 
-      // Re-render the management panel with updated state
-      delete state.panelEls['management'];
-      _switchPanel(state, 'management');
-    });
+    delete state.panelEls[panel];
+    _switchPanel(state, panel);
   });
 }
 
@@ -2976,6 +3141,56 @@ licStyles.textContent = `
     font-size: 0.82rem;
     padding: 10px 14px;
     border-radius: 8px;
+  }
+  .lm-upgrade-card {
+    padding: 4px 0;
+  }
+  .lm-pending-card {
+    background: rgba(245, 158, 66, 0.06);
+    border: 1px solid rgba(245, 158, 66, 0.2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lm-pending-text {
+    font-size: 0.85rem;
+    color: #f59e42;
+    line-height: 1.5;
+  }
+  .lm-downgrade-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .lm-downgrade-text {
+    font-size: 0.85rem;
+    color: #9ca3af;
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+  }
+  .lm-downgrade-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .lm-downgrade-select {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #e4e6eb;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    min-width: 140px;
+  }
+  .lp-institution-card {
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
   }
 
   @media (max-width: 600px) {

@@ -394,6 +394,17 @@ export function postAutoRenewal({ auto_renewal } = {}) {
   });
 }
 
+/**
+ * Schedule a downgrade for next renewal.
+ * POST /api/licensing/downgrade
+ * @param {Object} opts - { to_tier }
+ */
+export function postDowngrade({ to_tier } = {}) {
+  return _request('POST', '/licensing/downgrade', {
+    body: { to_tier },
+  });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

@@ -59,6 +59,8 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "license_purchased",
     "auto_renewal_opted_out",
     "auto_renewal_opted_in",
+    "license_upgraded",
+    "license_downgraded",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

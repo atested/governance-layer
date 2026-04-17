@@ -415,6 +415,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_licensing_purchase()
             elif parsed.path == "/api/licensing/auto-renewal":
                 self._handle_auto_renewal()
+            elif parsed.path == "/api/licensing/downgrade":
+                self._handle_licensing_downgrade()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1492,8 +1494,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # Purchase (Phase 5)
     # ------------------------------------------------------------------
 
+    # Tier ordering for upgrade/downgrade determination
+    _TIER_ORDER = ["personal", "personal_plus", "crew", "team", "institution"]
+
     def _handle_licensing_purchase(self):
-        """POST /api/licensing/purchase — purchase a paid tier license."""
+        """POST /api/licensing/purchase — purchase or upgrade a paid tier license.
+
+        Dating model:
+        - personal_plus: term starts from purchase date
+        - crew, team, institution: term starts from trial completion date
+        """
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length > 4096:
@@ -1509,10 +1519,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         payment_ref = str(data.get("payment_ref", "")).strip()
         operator_name = str(data.get("operator_name", "")).strip()
 
-        PURCHASABLE_TIERS = {"personal_plus"}
+        PURCHASABLE_TIERS = {"personal_plus", "crew", "team"}
         if tier not in PURCHASABLE_TIERS:
             _json_response(self, {
-                "error": f"Tier '{tier}' is not available for purchase. "
+                "error": f"Tier '{tier}' is not available for self-serve purchase. "
                          f"Available: {sorted(PURCHASABLE_TIERS)}",
             }, 400)
             return
@@ -1523,12 +1533,33 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             now = now_utc_z()
             purchase_time = datetime.now(timezone.utc)
-            term_start = now
-            term_end = (purchase_time + timedelta(days=365)).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
 
-            # Update license file
+            # Determine term dates based on dating model
+            if tier == "personal_plus":
+                # Personal Plus dates from purchase
+                term_start = now
+                term_end = (purchase_time + timedelta(days=365)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+            else:
+                # Crew, Team: date from trial completion
+                trial_completion_date = self._find_trial_completion_date()
+                if trial_completion_date:
+                    tc_dt = datetime.fromisoformat(
+                        trial_completion_date.replace("Z", "+00:00")
+                    )
+                    term_start = trial_completion_date
+                    term_end = (tc_dt + timedelta(days=365)).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    )
+                else:
+                    # No trial completion found — fall back to purchase date
+                    term_start = now
+                    term_end = (purchase_time + timedelta(days=365)).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    )
+
+            # Read existing license to detect upgrade
             license_file = RUNTIME / "license.json"
             RUNTIME.mkdir(parents=True, exist_ok=True)
 
@@ -1541,14 +1572,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 except (json.JSONDecodeError, OSError):
                     pass
 
+            prev_tier = existing.get("license_tier", "")
+            is_upgrade = (
+                prev_tier in self._TIER_ORDER
+                and tier in self._TIER_ORDER
+                and self._TIER_ORDER.index(tier) > self._TIER_ORDER.index(prev_tier)
+                and existing.get("license_status") == "licensed"
+            )
+
             existing.update({
                 "license_status": "licensed",
                 "license_tier": tier,
                 "purchase_date": now,
                 "license_expiry": term_end,
+                "license_start": term_start,
                 "payment_ref": payment_ref or "mock_payment",
                 "auto_renewal": True,
             })
+            # Clear any pending downgrade on purchase/upgrade
+            existing.pop("pending_downgrade", None)
             if operator_name:
                 existing["operator_name"] = operator_name
 
@@ -1557,31 +1599,69 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 encoding="utf-8",
             )
 
-            # Write license_purchased chain event
-            event = build_non_action_event(
-                "license_purchased",
-                {
-                    "tier": tier,
-                    "payment_ref": payment_ref or "mock_payment",
-                    "term_start": term_start,
-                    "term_end": term_end,
-                    "operator_name": operator_name,
-                },
-                prev_record_hash=None,
-            )
+            # Write chain event
+            if is_upgrade:
+                event = build_non_action_event(
+                    "license_upgraded",
+                    {
+                        "from_tier": prev_tier,
+                        "to_tier": tier,
+                        "payment_ref": payment_ref or "mock_payment",
+                        "term_start": term_start,
+                        "term_end": term_end,
+                    },
+                    prev_record_hash=None,
+                )
+            else:
+                event = build_non_action_event(
+                    "license_purchased",
+                    {
+                        "tier": tier,
+                        "payment_ref": payment_ref or "mock_payment",
+                        "term_start": term_start,
+                        "term_end": term_end,
+                        "operator_name": operator_name,
+                    },
+                    prev_record_hash=None,
+                )
             _append_chain_record_atomic(event)
 
             _json_response(self, {
                 "purchased": True,
+                "upgraded": is_upgrade,
+                "from_tier": prev_tier if is_upgrade else "",
                 "event_id": event.get("event_id"),
                 "tier": tier,
                 "license_status": "licensed",
                 "purchase_date": now,
+                "license_start": term_start,
                 "license_expiry": term_end,
                 "auto_renewal": True,
             })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
+
+    def _find_trial_completion_date(self):
+        """Find the trial completion timestamp from the chain."""
+        if not CHAIN.exists():
+            return None
+        try:
+            with open(CHAIN, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if '"trial_complete"' not in line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("event_type") == "trial_complete":
+                            return rec.get("timestamp_utc")
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            pass
+        return None
 
     def _handle_auto_renewal(self):
         """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
@@ -1631,6 +1711,87 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             _json_response(self, {
                 "auto_renewal": auto_renewal,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_licensing_downgrade(self):
+        """POST /api/licensing/downgrade — schedule a downgrade for next renewal.
+
+        The downgrade is not immediate. The operator keeps their current tier
+        until renewal, then the new tier takes effect.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        to_tier = str(data.get("to_tier", "")).strip()
+        if not to_tier:
+            _json_response(self, {"error": "to_tier is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event, now_utc_z
+
+            license_file = RUNTIME / "license.json"
+            if not license_file.exists():
+                _json_response(self, {"error": "no license file found"}, 400)
+                return
+
+            existing = json.loads(license_file.read_text(encoding="utf-8"))
+            current_tier = existing.get("license_tier", "")
+
+            # Validate that to_tier is lower than current tier
+            if (current_tier not in self._TIER_ORDER
+                    or to_tier not in self._TIER_ORDER):
+                _json_response(self, {"error": "invalid tier"}, 400)
+                return
+
+            if self._TIER_ORDER.index(to_tier) >= self._TIER_ORDER.index(current_tier):
+                _json_response(self, {
+                    "error": "Downgrade target must be a lower tier than current.",
+                }, 400)
+                return
+
+            effective_date = existing.get("license_expiry", "")
+
+            # Store pending downgrade in license file
+            existing["pending_downgrade"] = {
+                "from_tier": current_tier,
+                "to_tier": to_tier,
+                "effective_date": effective_date,
+                "scheduled_at": now_utc_z(),
+            }
+            license_file.write_text(
+                json.dumps(existing, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            # Write chain event
+            event = build_non_action_event(
+                "license_downgraded",
+                {
+                    "from_tier": current_tier,
+                    "to_tier": to_tier,
+                    "effective_date": effective_date,
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "scheduled": True,
+                "from_tier": current_tier,
+                "to_tier": to_tier,
+                "effective_date": effective_date,
                 "event_id": event.get("event_id"),
             })
         except Exception as exc:
@@ -2227,6 +2388,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result["auto_renewal"] = lic_data.get("auto_renewal", True)
                 result["purchase_date"] = lic_data.get("purchase_date", "")
                 result["operator_name"] = lic_data.get("operator_name", "")
+                result["pending_downgrade"] = lic_data.get("pending_downgrade", None)
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met
