@@ -14,6 +14,26 @@ import './components/status-grid.js';
 import './components/decision-tag.js';
 import './components/tier-badge.js';
 
+// Import window modules
+import { openActivityWindow } from './windows/activity.js';
+import { openAuditWindow } from './windows/audit.js';
+import { openApprovalsWindow } from './windows/approvals.js';
+import { openHealthWindow } from './windows/health.js';
+import { openReportsWindow } from './windows/reports.js';
+import { openConfigWindow } from './windows/configuration.js';
+import { openFeedbackWindow } from './windows/feedback.js';
+
+/** Map launcher IDs to window open functions */
+const WINDOW_OPENERS = {
+  activity: openActivityWindow,
+  approvals: openApprovalsWindow,
+  audit: openAuditWindow,
+  reports: openReportsWindow,
+  health: openHealthWindow,
+  configuration: openConfigWindow,
+  feedback: openFeedbackWindow,
+};
+
 /** Launcher definitions for all workflow windows */
 const LAUNCHERS = [
   { id: 'activity', label: 'Activity' },
@@ -83,23 +103,28 @@ export function renderMainPage() {
     btn.textContent = launcher.label;
     btn.dataset.windowId = launcher.id;
     btn.addEventListener('click', () => {
-      _openWindow(launcher.label, btn);
+      const opener = WINDOW_OPENERS[launcher.id];
+      if (opener) {
+        opener(btn);
+      } else {
+        _openPlaceholderWindow(launcher.label, btn);
+      }
     });
     grid.appendChild(btn);
   }
 
   // Wire card click handlers to open corresponding windows
   _page.querySelector('#card-mediated').addEventListener('card:click', () => {
-    _openWindow('Activity', _page.querySelector('#card-mediated'));
+    openActivityWindow(_page.querySelector('#card-mediated'));
   });
   _page.querySelector('#card-denied').addEventListener('card:click', () => {
-    _openWindow('Activity', _page.querySelector('#card-denied'));
+    openActivityWindow(_page.querySelector('#card-denied'));
   });
   _page.querySelector('#card-approved').addEventListener('card:click', () => {
-    _openWindow('Approvals', _page.querySelector('#card-approved'));
+    openApprovalsWindow(_page.querySelector('#card-approved'));
   });
   _page.querySelector('#card-gated').addEventListener('card:click', () => {
-    _openWindow('Approvals', _page.querySelector('#card-gated'));
+    openApprovalsWindow(_page.querySelector('#card-gated'));
   });
 
   return _page;
@@ -260,12 +285,13 @@ function _renderRecentActivity(result) {
       decisionSlot.textContent = decision;
     }
 
-    // Click handler — opens Activity window (placeholder until Phase 4)
+    // Click handler — opens Activity with Record Detail for this entry
+    const recordId = entry.request_id || entry.event_id || '';
     row.addEventListener('click', () => {
-      _openWindow('Activity', row);
+      openActivityWindow(row, { scrollToRecord: recordId });
     });
     row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') _openWindow('Activity', row);
+      if (e.key === 'Enter') openActivityWindow(row, { scrollToRecord: recordId });
     });
 
     feed.appendChild(row);
@@ -288,56 +314,21 @@ function _esc(str) {
   return el.innerHTML;
 }
 
-function _openWindow(title, trigger) {
+/**
+ * Open a placeholder window for windows not yet built (Notifications, Licensing).
+ */
+function _openPlaceholderWindow(title, trigger) {
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <p style="color: #8b919a; text-align: center; padding: 40px 0;">
+      ${_esc(title)} window. Built in a later phase.
+    </p>
+  `;
   if (modalManager.depth > 0) {
-    modalManager.replaceChild({
-      title,
-      trigger,
-      content: _placeholderContent(title),
-    });
+    modalManager.replaceChild({ title, trigger, content: el });
   } else {
-    modalManager.open({
-      title,
-      trigger,
-      content: _placeholderContent(title),
-    });
+    modalManager.open({ title, trigger, content: el });
   }
-}
-
-function _placeholderContent(title) {
-  const el = document.createElement('div');
-  el.innerHTML = `
-    <p style="color: #8b919a; text-align: center; padding: 40px 0;">
-      ${_esc(title)} window content. Built in Phase 4.
-    </p>
-    <button class="test-grandchild-btn" style="
-      display: block; margin: 0 auto; padding: 8px 16px;
-      background: none; border: 1px solid rgba(255,255,255,0.08);
-      color: #8b919a; border-radius: 8px; cursor: pointer;
-      font-family: inherit; font-size: 0.82rem;
-    ">Test: Open grandchild</button>
-  `;
-  el.querySelector('.test-grandchild-btn').addEventListener('click', (e) => {
-    modalManager.open({
-      title: `Record Detail (test)`,
-      trigger: e.target,
-      content: _grandchildPlaceholder(),
-    });
-  });
-  return el;
-}
-
-function _grandchildPlaceholder() {
-  const el = document.createElement('div');
-  el.innerHTML = `
-    <p style="color: #8b919a; text-align: center; padding: 40px 0;">
-      Grandchild window (depth 2). Record Detail lives here in Phase 4.
-    </p>
-    <p style="color: #5b8af5; text-align: center; font-size: 0.82rem;">
-      Press Esc to close this grandchild, then Esc again to close the parent.
-    </p>
-  `;
-  return el;
 }
 
 // Inject main page styles
