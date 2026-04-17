@@ -310,6 +310,48 @@ export function postDisclosureAcknowledge({ operator } = {}) {
   return _request('POST', '/disclosure/acknowledge', { body: { operator } });
 }
 
+// ---------- Licensing endpoints ----------
+
+/**
+ * Get current licensing mode.
+ * GET /api/licensing/mode
+ * Returns { license_status, license_tier, organization_id, license_expiry, trial_days_remaining, registered }
+ */
+export function getLicensingMode() {
+  return _request('GET', '/licensing/mode');
+}
+
+/**
+ * Get questionnaire state from chain events.
+ * GET /api/licensing/questionnaire
+ * Returns { answers: [{question_id, answer_value, ...}], capacity: {user_count, machine_count, base_tier} | null }
+ */
+export function getQuestionnaireState() {
+  return _request('GET', '/licensing/questionnaire');
+}
+
+/**
+ * Persist a questionnaire answer to the chain.
+ * POST /api/licensing/questionnaire/answer
+ * @param {Object} opts - { question_id, answer_value, phase, tier_boundary }
+ */
+export function postQuestionnaireAnswer({ question_id, answer_value, phase, tier_boundary } = {}) {
+  return _request('POST', '/licensing/questionnaire/answer', {
+    body: { question_id, answer_value, phase, tier_boundary },
+  });
+}
+
+/**
+ * Persist capacity gate inputs to the chain.
+ * POST /api/licensing/capacity
+ * @param {Object} opts - { user_count, machine_count, base_tier }
+ */
+export function postCapacityInputs({ user_count, machine_count, base_tier } = {}) {
+  return _request('POST', '/licensing/capacity', {
+    body: { user_count, machine_count, base_tier },
+  });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

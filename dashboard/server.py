@@ -405,6 +405,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_disclosure_acknowledge()
             elif parsed.path == "/api/identity/lock":
                 self._handle_identity_lock()
+            elif parsed.path == "/api/licensing/questionnaire/answer":
+                self._handle_questionnaire_answer()
+            elif parsed.path == "/api/licensing/capacity":
+                self._handle_capacity_inputs()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1243,6 +1247,144 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
+    # ------------------------------------------------------------------
+    # Questionnaire endpoints (Phase 2)
+    # ------------------------------------------------------------------
+
+    def _handle_questionnaire_get(self):
+        """GET /api/licensing/questionnaire — reconstruct questionnaire state from chain."""
+        try:
+            answers = []
+            capacity = None
+
+            if CHAIN.exists():
+                with open(CHAIN, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        et = rec.get("event_type")
+                        if et == "questionnaire_response":
+                            answers.append({
+                                "question_id": rec.get("question_id", ""),
+                                "answer_value": rec.get("answer_value", ""),
+                                "questionnaire_phase": rec.get("questionnaire_phase"),
+                                "tier_boundary": rec.get("tier_boundary"),
+                                "timestamp": rec.get("timestamp_utc", ""),
+                            })
+                        elif et == "capacity_inputs":
+                            # Latest capacity_inputs wins
+                            capacity = {
+                                "user_count": rec.get("user_count"),
+                                "machine_count": rec.get("machine_count"),
+                                "base_tier": rec.get("base_tier", ""),
+                            }
+
+            _json_response(self, {"answers": answers, "capacity": capacity})
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_questionnaire_answer(self):
+        """POST /api/licensing/questionnaire/answer — persist a questionnaire response."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        question_id = str(data.get("question_id", "")).strip()
+        answer_value = str(data.get("answer_value", "")).strip()
+        phase = data.get("phase", 1)
+        tier_boundary = data.get("tier_boundary")
+
+        if not question_id:
+            _json_response(self, {"error": "question_id is required"}, 400)
+            return
+        if not answer_value:
+            _json_response(self, {"error": "answer_value is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            payload = {
+                "question_id": question_id,
+                "answer_value": answer_value,
+                "questionnaire_phase": phase,
+            }
+            if tier_boundary:
+                payload["tier_boundary"] = str(tier_boundary)
+
+            event = build_non_action_event(
+                "questionnaire_response",
+                payload,
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+            _json_response(self, {
+                "recorded": True,
+                "event_id": event.get("event_id"),
+                "question_id": question_id,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_capacity_inputs(self):
+        """POST /api/licensing/capacity — persist capacity gate inputs."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        user_count = data.get("user_count")
+        machine_count = data.get("machine_count")
+        base_tier = str(data.get("base_tier", "")).strip()
+
+        if not isinstance(user_count, int) or user_count < 1:
+            _json_response(self, {"error": "user_count must be a positive integer"}, 400)
+            return
+        if not isinstance(machine_count, int) or machine_count < 1:
+            _json_response(self, {"error": "machine_count must be a positive integer"}, 400)
+            return
+        if not base_tier:
+            _json_response(self, {"error": "base_tier is required"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+            payload = {
+                "user_count": user_count,
+                "machine_count": machine_count,
+                "base_tier": base_tier,
+            }
+            event = build_non_action_event(
+                "capacity_inputs",
+                payload,
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+            _json_response(self, {
+                "recorded": True,
+                "event_id": event.get("event_id"),
+                "base_tier": base_tier,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
     def log_message(self, format, *args):
         pass  # Silence request logs
 
@@ -1437,6 +1579,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/identity/session":
             self._handle_identity_session()
+
+        elif path == "/api/licensing/mode":
+            try:
+                from licensing import resolve_posture, trial_days_remaining
+                posture = resolve_posture(RUNTIME)
+                days = trial_days_remaining(RUNTIME)
+                result = dict(posture)
+                if days is not None:
+                    result["trial_days_remaining"] = days
+                # registered: placeholder for future registration state
+                result["registered"] = False
+                _json_response(self, result)
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
+
+        elif path == "/api/licensing/questionnaire":
+            self._handle_questionnaire_get()
 
         elif path == "/api/config":
             try:

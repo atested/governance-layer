@@ -50,6 +50,8 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "notification_dismissed",
     "notifications_viewed",
     "disclosure_shown",
+    "questionnaire_response",
+    "capacity_inputs",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([
