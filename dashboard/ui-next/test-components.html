@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atested UI — Phase 2 Component Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, sans-serif;
+      background: #1a1d23;
+      color: #e4e6eb;
+      padding: 32px;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: #e4e6eb;
+    }
+    .subtitle {
+      font-size: 0.82rem;
+      color: #8b919a;
+      margin-bottom: 32px;
+    }
+    section {
+      margin-bottom: 40px;
+      padding-bottom: 40px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    section:last-of-type {
+      border-bottom: none;
+    }
+    h2 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #5b8af5;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 0 0 16px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .label {
+      font-size: 0.72rem;
+      color: #8b919a;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .event-log {
+      background: #22262e;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.72rem;
+      color: #8b919a;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .max-width { max-width: 900px; }
+  </style>
+</head>
+<body>
+
+<h1>Phase 2 Component Gallery</h1>
+<p class="subtitle">All 9 components with representative governance data. Events are logged below each interactive component.</p>
+
+<!-- 1. Decision Tag -->
+<section>
+  <h2>1. Decision Tag</h2>
+  <div class="row">
+    <atd-decision-tag decision="ALLOW"></atd-decision-tag>
+    <atd-decision-tag decision="DENY"></atd-decision-tag>
+    <atd-decision-tag decision="OBSERVE"></atd-decision-tag>
+    <atd-decision-tag></atd-decision-tag>
+  </div>
+</section>
+
+<!-- 2. Tier Badge -->
+<section>
+  <h2>2. Tier Badge</h2>
+  <div class="row">
+    <atd-tier-badge tier="1"></atd-tier-badge>
+    <atd-tier-badge tier="2"></atd-tier-badge>
+    <atd-tier-badge tier="3"></atd-tier-badge>
+    <atd-tier-badge tier="4"></atd-tier-badge>
+  </div>
+</section>
+
+<!-- 3. Pill -->
+<section>
+  <h2>3. Pill</h2>
+  <div class="row">
+    <atd-pill variant="primary">Primary</atd-pill>
+    <atd-pill variant="danger">Danger</atd-pill>
+    <atd-pill variant="outline">Outline</atd-pill>
+    <atd-pill variant="primary" disabled>Disabled</atd-pill>
+  </div>
+  <div class="event-log" id="pill-log">Click a pill...</div>
+</section>
+
+<!-- 4. Status Card -->
+<section>
+  <h2>4. Status Card</h2>
+  <div class="row">
+    <atd-status-card label="Chain Events" value="1,247"></atd-status-card>
+    <atd-status-card label="Denied Actions" value="23" variant="danger"></atd-status-card>
+    <atd-status-card label="Transparency" value="94.2%" variant="success"></atd-status-card>
+    <atd-status-card label="Pending" value="5" variant="warning" clickable tooltip="Click to view pending operations"></atd-status-card>
+  </div>
+  <div class="event-log" id="card-log">Click the "Pending" card...</div>
+</section>
+
+<!-- 5. Status Grid -->
+<section>
+  <h2>5. Status Grid</h2>
+  <p class="label">Auto-fit responsive grid — resize the browser to see reflow</p>
+  <atd-status-grid id="demo-grid">
+    <atd-status-card label="Mediated Ops" value="892"></atd-status-card>
+    <atd-status-card label="Governed" value="1,103"></atd-status-card>
+    <atd-status-card label="Ungoverned" value="144" variant="warning"></atd-status-card>
+    <atd-status-card label="Unique Users" value="3"></atd-status-card>
+    <atd-status-card label="Active Approvals" value="7" variant="success"></atd-status-card>
+    <atd-status-card label="DENY Rate" value="2.6%"></atd-status-card>
+  </atd-status-grid>
+</section>
+
+<!-- 6. Pagination -->
+<section>
+  <h2>6. Pagination</h2>
+  <atd-pagination id="demo-pagination" current-page="3" total-pages="12"></atd-pagination>
+  <div class="event-log" id="pagination-log">Navigate pages...</div>
+</section>
+
+<!-- 7. KV List -->
+<section>
+  <h2>7. KV List</h2>
+  <div class="max-width">
+    <atd-kv-list id="demo-kv"></atd-kv-list>
+  </div>
+</section>
+
+<!-- 8. Code Block -->
+<section>
+  <h2>8. Code Block</h2>
+  <div class="max-width">
+    <atd-code-block id="demo-code" language="json"></atd-code-block>
+  </div>
+  <div class="event-log" id="code-log">Click copy...</div>
+</section>
+
+<!-- 9. Data Table -->
+<section>
+  <h2>9. Data Table</h2>
+  <p class="label">Sortable columns, row click, row highlighting (DENY=red, ungoverned=amber), pagination</p>
+  <div class="max-width">
+    <atd-data-table id="demo-table" page-size="5"></atd-data-table>
+  </div>
+  <div class="event-log" id="table-log">Sort, click rows, paginate...</div>
+</section>
+
+<script type="module">
+  // Import all components
+  import './components/status-card.js';
+  import './components/status-grid.js';
+  import './components/data-table.js';
+  import './components/pagination.js';
+  import './components/pill.js';
+  import './components/decision-tag.js';
+  import './components/tier-badge.js';
+  import './components/kv-list.js';
+  import './components/code-block.js';
+
+  // Helper: append to event log
+  function log(id, msg) {
+    const el = document.getElementById(id);
+    const line = document.createElement('div');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    el.prepend(line);
+    if (el.children.length > 20) el.lastChild.remove();
+  }
+
+  // --- Pill events ---
+  document.querySelectorAll('atd-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      log('pill-log', `Pill clicked: variant=${pill.getAttribute('variant')}`);
+    });
+  });
+
+  // --- Status Card events ---
+  document.addEventListener('card:click', (e) => {
+    const card = e.target;
+    log('card-log', `card:click — label="${card.getAttribute('label')}" value="${card.getAttribute('value')}"`);
+  });
+
+  // --- Pagination events ---
+  document.getElementById('demo-pagination').addEventListener('page-change', (e) => {
+    log('pagination-log', `page-change — page=${e.detail.page}`);
+    e.target.setAttribute('current-page', e.detail.page);
+  });
+
+  // --- KV List ---
+  const kv = document.getElementById('demo-kv');
+  kv.items = [
+    { key: 'Decision', value: 'ALLOW' },
+    { key: 'Tool', value: 'fs_write', variant: 'code' },
+    { key: 'Target', value: '/Volumes/SSD/archive/gov/governance-layer/dashboard/ui-next/components/status-card.js', variant: 'code' },
+    { key: 'User', value: 'cecil' },
+    { key: 'Confidence Tier', value: 'Tier 1' },
+    { key: 'Action Type', value: 'file_create' },
+    { key: 'Scope', value: 'dashboard/ui-next' },
+    { key: 'Matched Rule', value: 'allow_dashboard_ui_writes' },
+    { key: 'Denial Reason', value: '--' },
+    { key: 'Verification State', value: 'verified', variant: 'success' },
+    { key: 'Recorded', value: '2026-04-17T14:32:08Z' },
+  ];
+
+  // --- Code Block ---
+  const codeBlock = document.getElementById('demo-code');
+  codeBlock.content = {
+    "event_type": "mediated_decision",
+    "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "timestamp": "2026-04-17T14:32:08.123Z",
+    "tool_name": "fs_write",
+    "target": "/Volumes/SSD/archive/gov/governance-layer/dashboard/ui-next/components/status-card.js",
+    "user_identity": "cecil",
+    "classification": { "tier": 1, "confidence": 0.98, "evidence": ["path_match", "extension_match"] },
+    "policy_decision": "ALLOW",
+    "matched_rule": "allow_dashboard_ui_writes",
+    "chain_hash": "sha256:abc123..."
+  };
+
+  codeBlock.addEventListener('copy:success', () => log('code-log', 'copy:success — content copied to clipboard'));
+  codeBlock.addEventListener('copy:error', (e) => log('code-log', `copy:error — ${e.detail.error}`));
+
+  // --- Data Table ---
+  const table = document.getElementById('demo-table');
+
+  table.setAttribute('columns', JSON.stringify([
+    { key: 'time', label: 'Time', sortable: true, width: '140px' },
+    { key: 'tool', label: 'Tool', sortable: true },
+    { key: 'target', label: 'Target', sortable: false },
+    { key: 'decision', label: 'Decision', sortable: true, width: '100px' },
+    { key: 'tier', label: 'Tier', sortable: true, width: '80px' },
+    { key: 'user', label: 'User', sortable: true, width: '80px' },
+  ]));
+
+  // Custom cell renderer for decision tags and tier badges
+  table.cellRenderer = (row, col) => {
+    if (col.key === 'decision') {
+      return `<atd-decision-tag decision="${row.decision}"></atd-decision-tag>`;
+    }
+    if (col.key === 'tier') {
+      return `<atd-tier-badge tier="${row.tier}"></atd-tier-badge>`;
+    }
+    return null; // use default rendering
+  };
+
+  // Sample governance data
+  table.data = [
+    { time: '14:32:08', tool: 'fs_write', target: 'components/status-card.js', decision: 'ALLOW', tier: 1, user: 'cecil' },
+    { time: '14:31:55', tool: 'fs_read', target: 'tokens.js', decision: 'ALLOW', tier: 1, user: 'cecil' },
+    { time: '14:31:42', tool: 'fs_write', target: '/etc/passwd', decision: 'DENY', tier: 1, user: 'cecil', _variant: 'deny' },
+    { time: '14:31:30', tool: 'Bash', target: 'git status', decision: 'ALLOW', tier: 2, user: 'cecil' },
+    { time: '14:31:15', tool: 'fs_list', target: 'dashboard/', decision: 'ALLOW', tier: 1, user: 'cecil' },
+    { time: '14:30:58', tool: 'Read', target: 'base.js', decision: 'ALLOW', tier: 3, user: 'cecil' },
+    { time: '14:30:40', tool: 'glob', target: '**/*.js', _variant: 'ungoverned', decision: 'OBSERVE', tier: 4, user: 'system' },
+    { time: '14:30:22', tool: 'fs_write', target: 'config.json', decision: 'DENY', tier: 2, user: 'operator', _variant: 'deny' },
+    { time: '14:30:10', tool: 'fs_read', target: 'policy-rules.json', decision: 'ALLOW', tier: 1, user: 'cecil' },
+    { time: '14:29:58', tool: 'Bash', target: 'npm test', decision: 'ALLOW', tier: 2, user: 'cecil' },
+    { time: '14:29:45', tool: 'fs_mkdir', target: 'components/', decision: 'ALLOW', tier: 1, user: 'cecil' },
+    { time: '14:29:30', tool: 'grep', target: 'src/**', _variant: 'ungoverned', decision: 'OBSERVE', tier: 4, user: 'system' },
+    { time: '14:29:15', tool: 'fs_delete', target: 'temp.js', decision: 'DENY', tier: 1, user: 'operator', _variant: 'deny' },
+  ];
+
+  table.addEventListener('table:sort', (e) => {
+    log('table-log', `table:sort — column=${e.detail.column}, direction=${e.detail.direction}`);
+  });
+
+  table.addEventListener('table:row-click', (e) => {
+    log('table-log', `table:row-click — tool=${e.detail.row.tool}, decision=${e.detail.row.decision}, index=${e.detail.index}`);
+  });
+
+  table.addEventListener('table:page', (e) => {
+    log('table-log', `table:page — page=${e.detail.page}`);
+  });
+</script>
+
+</body>
+</html>
