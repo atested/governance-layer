@@ -372,6 +372,28 @@ export function postRegister({ operator_name, context_note, telemetry_opted_in }
   });
 }
 
+/**
+ * Purchase a paid tier license.
+ * POST /api/licensing/purchase
+ * @param {Object} opts - { tier, payment_ref, operator_name }
+ */
+export function postPurchase({ tier, payment_ref, operator_name } = {}) {
+  return _request('POST', '/licensing/purchase', {
+    body: { tier, payment_ref, operator_name },
+  });
+}
+
+/**
+ * Toggle auto-renewal state.
+ * POST /api/licensing/auto-renewal
+ * @param {Object} opts - { auto_renewal }
+ */
+export function postAutoRenewal({ auto_renewal } = {}) {
+  return _request('POST', '/licensing/auto-renewal', {
+    body: { auto_renewal },
+  });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

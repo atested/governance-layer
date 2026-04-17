@@ -411,6 +411,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_capacity_inputs()
             elif parsed.path == "/api/licensing/register":
                 self._handle_licensing_register()
+            elif parsed.path == "/api/licensing/purchase":
+                self._handle_licensing_purchase()
+            elif parsed.path == "/api/licensing/auto-renewal":
+                self._handle_auto_renewal()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1485,6 +1489,154 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": str(exc)}, 500)
 
     # ------------------------------------------------------------------
+    # Purchase (Phase 5)
+    # ------------------------------------------------------------------
+
+    def _handle_licensing_purchase(self):
+        """POST /api/licensing/purchase — purchase a paid tier license."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        tier = str(data.get("tier", "")).strip()
+        payment_ref = str(data.get("payment_ref", "")).strip()
+        operator_name = str(data.get("operator_name", "")).strip()
+
+        PURCHASABLE_TIERS = {"personal_plus"}
+        if tier not in PURCHASABLE_TIERS:
+            _json_response(self, {
+                "error": f"Tier '{tier}' is not available for purchase. "
+                         f"Available: {sorted(PURCHASABLE_TIERS)}",
+            }, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event, now_utc_z
+            from datetime import datetime, timezone, timedelta
+
+            now = now_utc_z()
+            purchase_time = datetime.now(timezone.utc)
+            term_start = now
+            term_end = (purchase_time + timedelta(days=365)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+
+            # Update license file
+            license_file = RUNTIME / "license.json"
+            RUNTIME.mkdir(parents=True, exist_ok=True)
+
+            existing = {}
+            if license_file.exists():
+                try:
+                    existing = json.loads(
+                        license_file.read_text(encoding="utf-8")
+                    )
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            existing.update({
+                "license_status": "licensed",
+                "license_tier": tier,
+                "purchase_date": now,
+                "license_expiry": term_end,
+                "payment_ref": payment_ref or "mock_payment",
+                "auto_renewal": True,
+            })
+            if operator_name:
+                existing["operator_name"] = operator_name
+
+            license_file.write_text(
+                json.dumps(existing, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            # Write license_purchased chain event
+            event = build_non_action_event(
+                "license_purchased",
+                {
+                    "tier": tier,
+                    "payment_ref": payment_ref or "mock_payment",
+                    "term_start": term_start,
+                    "term_end": term_end,
+                    "operator_name": operator_name,
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "purchased": True,
+                "event_id": event.get("event_id"),
+                "tier": tier,
+                "license_status": "licensed",
+                "purchase_date": now,
+                "license_expiry": term_end,
+                "auto_renewal": True,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_auto_renewal(self):
+        """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        auto_renewal = bool(data.get("auto_renewal", True))
+
+        try:
+            from event_model import build_non_action_event
+
+            # Update license file
+            license_file = RUNTIME / "license.json"
+            if not license_file.exists():
+                _json_response(self, {"error": "no license file found"}, 400)
+                return
+
+            existing = json.loads(license_file.read_text(encoding="utf-8"))
+            existing["auto_renewal"] = auto_renewal
+            license_file.write_text(
+                json.dumps(existing, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            # Write chain event
+            event_type = (
+                "auto_renewal_opted_in" if auto_renewal
+                else "auto_renewal_opted_out"
+            )
+            event = build_non_action_event(
+                event_type,
+                {
+                    "auto_renewal": auto_renewal,
+                    "tier": existing.get("license_tier", ""),
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "auto_renewal": auto_renewal,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    # ------------------------------------------------------------------
     # Trial completion detection (Phase 4)
     # ------------------------------------------------------------------
 
@@ -2061,9 +2213,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if days is not None:
                     result["trial_days_remaining"] = days
 
-                # Check registration status from license file
+                # Read license file for registration/purchase state
                 license_file = RUNTIME / "license.json"
                 registered = False
+                lic_data = {}
                 if license_file.exists():
                     try:
                         lic_data = json.loads(license_file.read_text(encoding="utf-8"))
@@ -2071,6 +2224,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     except (json.JSONDecodeError, OSError):
                         pass
                 result["registered"] = registered
+                result["auto_renewal"] = lic_data.get("auto_renewal", True)
+                result["purchase_date"] = lic_data.get("purchase_date", "")
+                result["operator_name"] = lic_data.get("operator_name", "")
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met

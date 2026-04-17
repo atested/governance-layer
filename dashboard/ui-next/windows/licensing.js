@@ -50,7 +50,7 @@ const PANELS = [
   { id: 'questionnaire', label: 'Questionnaire', availableIn: ['trial', 'personal', 'personal_registered', 'unlicensed'] },
   { id: 'case-document', label: 'Case Document', availableIn: ['trial', 'personal', 'personal_registered', 'personal_plus', 'crew', 'team', 'institution', 'unlicensed'] },
   { id: 'register', label: 'Register', availableIn: ['trial', 'personal', 'unlicensed'] },
-  { id: 'purchase', label: 'Purchase', availableIn: ['personal_registered', 'personal_plus'] },
+  { id: 'purchase', label: 'Purchase', availableIn: ['trial', 'personal', 'personal_registered', 'unlicensed'] },
   { id: 'management', label: 'License Management', availableIn: ['personal_plus', 'crew', 'team', 'institution'] },
 ];
 
@@ -183,7 +183,7 @@ function _switchPanel(state, panelId) {
   area.innerHTML = '';
 
   // Panels that read chain data always re-render to pick up fresh state
-  if (panelId === 'questionnaire' || panelId === 'case-document' || panelId === 'tiers' || panelId === 'register') {
+  if (panelId === 'questionnaire' || panelId === 'case-document' || panelId === 'tiers' || panelId === 'register' || panelId === 'purchase' || panelId === 'management') {
     delete state.panelEls[panelId];
   }
 
@@ -211,16 +211,15 @@ function _buildPanel(panelId, state) {
     el.appendChild(_buildTierDisplayPanel(state));
   } else if (panelId === 'register') {
     el.appendChild(_buildRegisterPanel(state));
+  } else if (panelId === 'purchase') {
+    el.appendChild(_buildPurchasePanel(state));
+  } else if (panelId === 'management') {
+    el.appendChild(_buildManagementPanel(state));
   } else {
-    const phaseMap = {
-      'purchase': 5,
-      'management': 5,
-    };
-    const phase = phaseMap[panelId] || '?';
     el.innerHTML = `
       <div class="lic-placeholder">
         <span class="lic-placeholder-label">${_esc(PANELS.find(p => p.id === panelId)?.label || panelId)}</span>
-        <span class="lic-placeholder-note">Panel content coming in Phase ${phase}.</span>
+        <span class="lic-placeholder-note">Panel content coming in a future phase.</span>
       </div>
     `;
   }
@@ -1028,6 +1027,289 @@ function _renderRegisterSuccess(el, data, state) {
     btn.addEventListener('click', () => {
       const target = btn.dataset.nav;
       _switchPanel(state, target);
+    });
+  });
+}
+
+// ==========================================================================
+// Purchase panel (Phase 5)
+// ==========================================================================
+
+function _buildPurchasePanel(state) {
+  const el = document.createElement('div');
+  el.className = 'lp-panel';
+
+  const modeData = state.modeData || {};
+  const operatorName = modeData.operator_name || '';
+
+  // Tier options
+  const TIERS_FOR_PURCHASE = [
+    { id: 'personal_plus', label: 'Personal Plus', price: '$99/yr', dating: 'From purchase date', available: true },
+    { id: 'crew', label: 'Crew', price: '$299/yr', dating: 'From trial completion', available: false },
+    { id: 'team', label: 'Team', price: '$799/yr', dating: 'From trial completion', available: false },
+    { id: 'institution', label: 'Institution', price: 'Negotiated', dating: 'From trial completion', available: false },
+  ];
+
+  let selectedTier = 'personal_plus';
+
+  let tiersHtml = '';
+  for (const t of TIERS_FOR_PURCHASE) {
+    const selected = t.id === selectedTier ? 'lp-tier-selected' : '';
+    const disabled = !t.available ? 'lp-tier-disabled' : '';
+    const future = !t.available ? '<span class="lp-future-tag">Coming soon</span>' : '';
+    tiersHtml += `
+      <button class="lp-tier-option ${selected} ${disabled}" data-tier="${t.id}" ${!t.available ? 'disabled' : ''}>
+        <span class="lp-tier-label">${_esc(t.label)}</span>
+        <span class="lp-tier-price">${_esc(t.price)}</span>
+        ${future}
+      </button>
+    `;
+  }
+
+  el.innerHTML = `
+    <h3 class="lp-heading">Purchase a License</h3>
+    <p class="lp-text lp-text-muted">
+      Upgrade to a paid tier for additional features and support.
+    </p>
+
+    <div class="lp-section">
+      <div class="lp-section-label">Select Tier</div>
+      <div class="lp-tier-grid">${tiersHtml}</div>
+    </div>
+
+    <div class="lp-detail-area">
+      <div class="lp-detail-card">
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Price</span>
+          <span class="lp-detail-value lp-detail-price">$99/yr</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Billing</span>
+          <span class="lp-detail-value">Annual</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">License dating</span>
+          <span class="lp-detail-value">From purchase date</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Auto-renewal</span>
+          <span class="lp-detail-value">Enabled by default</span>
+        </div>
+      </div>
+      <p class="lp-dating-note">
+        Your Personal Plus license term begins on the date of purchase and
+        renews annually. This differs from Crew and higher tiers, which date
+        from trial completion.
+      </p>
+    </div>
+
+    <div class="lp-actions">
+      <button class="lic-action-btn lic-action-primary lp-purchase-btn">Purchase Personal Plus — $99/yr</button>
+    </div>
+    <div class="lp-error" style="display:none"></div>
+  `;
+
+  // Tier selection
+  el.querySelectorAll('.lp-tier-option:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('.lp-tier-option').forEach(b => b.classList.remove('lp-tier-selected'));
+      btn.classList.add('lp-tier-selected');
+      selectedTier = btn.dataset.tier;
+    });
+  });
+
+  // Purchase button
+  const purchaseBtn = el.querySelector('.lp-purchase-btn');
+  const errorEl = el.querySelector('.lp-error');
+
+  purchaseBtn.addEventListener('click', async () => {
+    purchaseBtn.disabled = true;
+    purchaseBtn.textContent = 'Processing...';
+    errorEl.style.display = 'none';
+
+    // Mock payment via licensing-api
+    const payRes = await licensingApi.initiatePurchase({ tier: selectedTier });
+    if (!payRes.ok) {
+      purchaseBtn.disabled = false;
+      purchaseBtn.textContent = 'Purchase Personal Plus — $99/yr';
+      errorEl.textContent = payRes.error || 'Payment failed.';
+      errorEl.style.display = '';
+      return;
+    }
+
+    // Submit to dashboard server
+    const res = await api.postPurchase({
+      tier: selectedTier,
+      payment_ref: payRes.data.payment_ref,
+      operator_name: operatorName,
+    });
+
+    if (!res.ok) {
+      purchaseBtn.disabled = false;
+      purchaseBtn.textContent = 'Purchase Personal Plus — $99/yr';
+      errorEl.textContent = res.error || 'Purchase failed.';
+      errorEl.style.display = '';
+      return;
+    }
+
+    // Success — show confirmation and propagate mode change
+    _renderPurchaseSuccess(el, res.data, state);
+    refreshLicenseState();
+  });
+
+  return el;
+}
+
+function _renderPurchaseSuccess(el, data, state) {
+  el.innerHTML = `
+    <div class="lp-success">
+      <div class="lp-success-badge">Purchased</div>
+      <h3 class="lp-heading">Personal Plus License Active</h3>
+      <p class="lp-text lp-text-muted">
+        Your license has been activated. Multi-machine support and
+        email support are now available.
+      </p>
+      <div class="lp-detail-card">
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Tier</span>
+          <span class="lp-detail-value" style="color:#22c55e">Personal Plus</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Purchased</span>
+          <span class="lp-detail-value">${_esc((data.purchase_date || '').slice(0, 10))}</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Expires</span>
+          <span class="lp-detail-value">${_esc((data.license_expiry || '').slice(0, 10))}</span>
+        </div>
+        <div class="lp-detail-row">
+          <span class="lp-detail-label">Auto-renewal</span>
+          <span class="lp-detail-value">Enabled</span>
+        </div>
+      </div>
+      <div class="lp-actions" style="justify-content:center">
+        <button class="lic-action-btn" data-nav="overview">Back to Overview</button>
+        <button class="lic-action-btn" data-nav="management">Manage License</button>
+      </div>
+    </div>
+  `;
+
+  // Update state
+  state.mode = 'personal_plus';
+  delete state.panelEls['overview'];
+  _renderPanelBar(state);
+
+  el.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => _switchPanel(state, btn.dataset.nav));
+  });
+}
+
+// ==========================================================================
+// License Management panel (Phase 5)
+// ==========================================================================
+
+function _buildManagementPanel(state) {
+  const el = document.createElement('div');
+  el.className = 'lm-panel';
+  el.innerHTML = '<atd-loading-indicator label="Loading license details"></atd-loading-indicator>';
+  _loadManagementData(el, state);
+  return el;
+}
+
+async function _loadManagementData(el, state) {
+  const res = await api.getLicensingMode();
+  if (!res.ok) {
+    el.innerHTML = `<div class="lic-error">${_esc(res.error)}</div>`;
+    return;
+  }
+
+  const data = res.data;
+  const tier = data.license_tier || '';
+  const LABEL = { personal_plus: 'Personal Plus', crew: 'Crew', team: 'Team', institution: 'Institution' };
+  const tierLabel = LABEL[tier] || tier;
+  const purchaseDate = (data.purchase_date || '').slice(0, 10) || 'N/A';
+  const expiryDate = (data.license_expiry || '').slice(0, 10) || 'N/A';
+  const autoRenewal = data.auto_renewal !== false;
+
+  el.innerHTML = `
+    <h3 class="lm-heading">License Management</h3>
+    <div class="lm-status-card">
+      <div class="lm-status-row">
+        <span class="lm-status-label">Current Tier</span>
+        <span class="lm-status-value">${_esc(tierLabel)}</span>
+      </div>
+      <div class="lm-status-row">
+        <span class="lm-status-label">Purchase Date</span>
+        <span class="lm-status-value">${_esc(purchaseDate)}</span>
+      </div>
+      <div class="lm-status-row">
+        <span class="lm-status-label">Renewal Date</span>
+        <span class="lm-status-value">${_esc(expiryDate)}</span>
+      </div>
+      <div class="lm-status-row">
+        <span class="lm-status-label">License Dating</span>
+        <span class="lm-status-value">${tier === 'personal_plus' ? 'From purchase date' : 'From trial completion'}</span>
+      </div>
+    </div>
+
+    <div class="lm-section">
+      <div class="lm-section-label">Auto-Renewal</div>
+      <div class="lm-renewal-card">
+        <div class="lm-renewal-status">
+          <span class="lm-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f59e42'}"></span>
+          <span class="lm-renewal-text">${autoRenewal ? 'Enabled — your license will renew automatically on ' + _esc(expiryDate) : 'Disabled — your license will expire on ' + _esc(expiryDate) + ' and revert to Personal'}</span>
+        </div>
+        <button class="lic-action-btn lm-renewal-toggle">${autoRenewal ? 'Turn Off Auto-Renewal' : 'Turn On Auto-Renewal'}</button>
+      </div>
+    </div>
+
+    <div class="lm-confirm-dialog" style="display:none"></div>
+    <div class="lm-error" style="display:none"></div>
+  `;
+
+  const toggleBtn = el.querySelector('.lm-renewal-toggle');
+  const confirmArea = el.querySelector('.lm-confirm-dialog');
+  const errorEl = el.querySelector('.lm-error');
+
+  toggleBtn.addEventListener('click', () => {
+    const newState = !autoRenewal;
+    const msg = newState
+      ? `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`
+      : `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`;
+
+    confirmArea.style.display = '';
+    confirmArea.innerHTML = `
+      <div class="lm-confirm-card">
+        <p class="lm-confirm-text">${_esc(msg)}</p>
+        <div class="lm-confirm-actions">
+          <button class="lic-action-btn lm-confirm-cancel">Cancel</button>
+          <button class="lic-action-btn lic-action-primary lm-confirm-ok">Confirm</button>
+        </div>
+      </div>
+    `;
+
+    confirmArea.querySelector('.lm-confirm-cancel').addEventListener('click', () => {
+      confirmArea.style.display = 'none';
+    });
+
+    confirmArea.querySelector('.lm-confirm-ok').addEventListener('click', async () => {
+      const okBtn = confirmArea.querySelector('.lm-confirm-ok');
+      okBtn.disabled = true;
+      okBtn.textContent = 'Saving...';
+      errorEl.style.display = 'none';
+
+      const res = await api.postAutoRenewal({ auto_renewal: newState });
+      if (!res.ok) {
+        okBtn.disabled = false;
+        okBtn.textContent = 'Confirm';
+        errorEl.textContent = res.error || 'Failed to update auto-renewal.';
+        errorEl.style.display = '';
+        return;
+      }
+
+      // Re-render the management panel with updated state
+      delete state.panelEls['management'];
+      _switchPanel(state, 'management');
     });
   });
 }
@@ -2450,6 +2732,252 @@ licStyles.textContent = `
     max-width: 320px;
   }
 
+  /* ---- Purchase panel ---- */
+  .lp-panel {
+    max-width: 600px;
+  }
+  .lp-heading {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: #e4e6eb;
+  }
+  .lp-text {
+    font-size: 0.88rem;
+    color: #e4e6eb;
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+  }
+  .lp-text-muted {
+    color: #8b919a;
+  }
+  .lp-section {
+    margin-bottom: 20px;
+  }
+  .lp-section-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .lp-tier-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .lp-tier-option {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: #e4e6eb;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    padding: 12px 16px;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+  }
+  .lp-tier-option:hover:not([disabled]) {
+    background: rgba(91, 138, 245, 0.08);
+    border-color: rgba(91, 138, 245, 0.3);
+  }
+  .lp-tier-selected {
+    background: rgba(91, 138, 245, 0.10);
+    border-color: #5b8af5;
+  }
+  .lp-tier-disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .lp-tier-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+  .lp-tier-price {
+    font-size: 0.82rem;
+    color: #8b919a;
+  }
+  .lp-future-tag {
+    font-size: 0.68rem;
+    color: #6b7280;
+    font-style: italic;
+  }
+  .lp-detail-area {
+    margin-bottom: 20px;
+  }
+  .lp-detail-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .lp-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+  }
+  .lp-detail-label {
+    color: #6b7280;
+    font-weight: 500;
+  }
+  .lp-detail-value {
+    color: #e4e6eb;
+    font-weight: 600;
+  }
+  .lp-detail-price {
+    font-size: 1.1rem;
+    color: #5b8af5;
+  }
+  .lp-dating-note {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .lp-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .lp-error {
+    color: #f59e42;
+    background: rgba(245, 158, 66, 0.10);
+    font-size: 0.82rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 12px;
+  }
+  .lp-success {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .lp-success-badge {
+    display: inline-block;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lp-success .lp-detail-card {
+    width: 100%;
+    max-width: 340px;
+  }
+
+  /* ---- License Management panel ---- */
+  .lm-panel {
+    max-width: 600px;
+  }
+  .lm-heading {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #e4e6eb;
+  }
+  .lm-status-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .lm-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+  }
+  .lm-status-label {
+    color: #6b7280;
+    font-weight: 500;
+  }
+  .lm-status-value {
+    color: #e4e6eb;
+    font-weight: 600;
+  }
+  .lm-section {
+    margin-bottom: 20px;
+  }
+  .lm-section-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+  .lm-renewal-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lm-renewal-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #e4e6eb;
+  }
+  .lm-renewal-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .lm-renewal-text {
+    line-height: 1.5;
+  }
+  .lm-renewal-toggle {
+    align-self: flex-start;
+  }
+  .lm-confirm-card {
+    background: rgba(245, 158, 66, 0.06);
+    border: 1px solid rgba(245, 158, 66, 0.2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-top: 12px;
+  }
+  .lm-confirm-text {
+    font-size: 0.85rem;
+    color: #e4e6eb;
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+  }
+  .lm-confirm-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .lm-error {
+    color: #f59e42;
+    background: rgba(245, 158, 66, 0.10);
+    font-size: 0.82rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+  }
+
   @media (max-width: 600px) {
     .lic-panel-bar {
       overflow-x: auto;
@@ -2494,6 +3022,9 @@ licStyles.textContent = `
     }
     .lr-input {
       width: 100%;
+    }
+    .lp-tier-grid {
+      grid-template-columns: 1fr;
     }
   }
 `;

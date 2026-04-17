@@ -91,9 +91,15 @@ export function registerEmail({ email } = {}) {
 /**
  * Initiate a purchase flow.
  * Spec v1 section 6.
+ * Mock: returns a successful purchase with a mock payment reference.
+ * Replace with real Stripe integration when the licensing server exists.
  */
-export function initiatePurchase({ tier, email } = {}) {
-  return _mockNotReady();
+export function initiatePurchase({ tier } = {}) {
+  return _mockOk({
+    payment_ref: `mock_pay_${Date.now()}`,
+    tier: tier || 'personal_plus',
+    status: 'completed',
+  });
 }
 
 // ---------- License management ----------
