@@ -1,13 +1,12 @@
 /**
  * Atested Operator UI - Application entry point.
- * Phase 1: Foundation infrastructure.
  *
  * Initializes the chrome bar, main page shell, and modal manager.
- * Serves as the root module that imports all dependencies.
+ * Triggers data loading for the main page via the data-access layer.
  */
 
 import { renderChrome } from './chrome.js';
-import { renderMainPage } from './main-page.js';
+import { renderMainPage, loadMainPageData } from './main-page.js';
 import { modalManager } from './modal-manager.js';
 
 // Verify adoptedStyleSheets support
@@ -34,9 +33,14 @@ function init() {
     _chromeOpen('Notifications', e.currentTarget);
   });
 
-  // Render main page
+  // Render main page structure, then load live data
   const mainPage = renderMainPage();
   document.body.appendChild(mainPage);
+
+  // Fetch data from the data-access layer (non-blocking)
+  loadMainPageData().catch(err => {
+    console.warn('Atested: main page data load failed:', err);
+  });
 }
 
 /**
