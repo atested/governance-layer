@@ -5,7 +5,7 @@ Atested is an HTTP proxy that sits between your AI agent and the model provider.
 ## Requirements
 
 - Python 3.9 or later
-- An Anthropic API key (or another model provider's key)
+- An API key for your model provider (Anthropic, OpenAI, or another supported provider)
 - An AI agent that lets you configure its API endpoint (Claude Code, Cursor, Aider, or similar)
 
 ## Install
@@ -19,9 +19,26 @@ python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
 ```
 
+## Generate a signing key
+
+Atested signs chain records with an Ed25519 key. This makes the chain cryptographically verifiable by anyone who has the public key.
+
+```bash
+openssl genpkey -algorithm Ed25519 -out signing.key
+chmod 600 signing.key
+```
+
+Set the environment variable so the proxy finds the key on startup:
+
+```bash
+export GOV_SIGNING_KEY_PATH=./signing.key
+```
+
+The proxy logs the key fingerprint when it starts. Every chain record from this point forward is signed. If you skip this step, records are written unsigned and cannot be independently verified.
+
 ## Start the proxy
 
-The proxy needs your API key as an environment variable.
+The proxy needs your provider's API key as an environment variable. The example below uses Anthropic. For other providers, see Provider setup.
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... python3 -m proxy.server
@@ -33,55 +50,59 @@ Options:
 
 - `--port 9090` to use a different port
 - `--host 0.0.0.0` to bind to all interfaces
-- `--upstream https://api.openai.com/v1` to point at a different provider
 - `--user-identity "my-dev-machine"` to label this install in the chain (or set `ATESTED_USER_LABEL` in your environment)
 
 ## Point your agent at the proxy
 
 This is the one configuration change. Tell your agent to send API traffic through Atested instead of directly to the model provider.
 
+For Anthropic (Claude Code, agents using the Anthropic SDK):
+
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
 ```
 
-For Claude Code, add this to your shell profile (`.bashrc`, `.zshrc`, or `.bash_profile`) so it persists across sessions.
+Add this to your shell profile (`.bashrc`, `.zshrc`, or `.bash_profile`) so it persists across sessions.
 
-For other agents, find the setting that controls the API endpoint and set it to `http://localhost:8080/anthropic`. The setting name varies by agent. If the agent uses the Anthropic SDK, `ANTHROPIC_BASE_URL` is usually the right environment variable.
+For other agents, find the setting that controls the API endpoint and set it to the matching Atested route for your provider. The setting name varies by agent.
 
-## Verify governance is running
+## Verify Atested is running
 
-Run your agent normally. Open the dashboard to see what happened.
+Run your agent normally. Open the Atested Dashboard to confirm governance is active.
 
 ```bash
 python3 dashboard/server.py
 ```
 
-Open `http://localhost:9700` in a browser. You should see the Overview page with governance activity counts and a recent activity feed showing ALLOW and DENY decisions for your agent's tool calls.
+Open `http://localhost:9700` in a browser. On the Overview page, look for:
 
-If the dashboard shows data, governance is working. Every tool call your agent's model proposes is being classified, evaluated against policy, and recorded in the chain before the agent can act on it.
+- **Chain health** showing a green integrity indicator and a non-zero event count.
+- **Governance activity** showing mediated operations, with ALLOW and DENY counts.
+- **Recent activity feed** listing your agent's tool calls with their policy decisions.
 
-## Signing (optional)
+If the dashboard shows activity, governance is working. Every tool call your agent's model proposes is being classified, evaluated against policy, and recorded in the chain before the agent can act on it.
 
-Atested can sign chain records with an Ed25519 key. This makes the chain cryptographically verifiable by anyone who has the public key.
+## Provider setup
 
-Generate a key:
+Atested governs tool calls at the API transport layer. Each provider has its own API structure, authentication, and tool call format. The proxy handles these differences internally.
+
+### Anthropic
+
+Anthropic is the default upstream. Set `ANTHROPIC_API_KEY` and start the proxy with no additional flags. The proxy route is `/anthropic`.
+
+### OpenAI
 
 ```bash
-openssl genpkey -algorithm Ed25519 -out signing.key
-chmod 600 signing.key
+OPENAI_API_KEY=sk-... python3 -m proxy.server --upstream https://api.openai.com/v1
 ```
 
-Set the environment variable before starting the proxy:
+The proxy route for OpenAI is `/openai`. Point your agent's base URL to `http://localhost:8080/openai`.
 
-```bash
-export GOV_SIGNING_KEY_PATH=./signing.key
-```
+OpenAI's tool call format differs from Anthropic's. The classifier handles the structural differences, but classification confidence may vary between providers because the evidence available in tool call parameters is provider-dependent.
 
-The proxy logs the key fingerprint on startup. Records from this point forward are signed. Older unsigned records remain valid; the verifier handles the boundary.
+### Other providers
 
-## Provider configuration
-
-Atested supports Anthropic natively. Multi-provider support (OpenAI, Gemini, LiteLLM-compatible endpoints) is coming. The `--upstream` flag lets you point at any API that uses the standard tool call format, but classification accuracy depends on the provider's tool call structure matching what the classifier expects.
+Any provider whose API follows the standard chat completions format with tool calls can work with the `--upstream` flag. Classification accuracy depends on how much structural evidence the provider includes in its tool call payloads.
 
 ## What "done" looks like
 
@@ -91,4 +112,4 @@ When Atested is running correctly:
 - Every tool call the model proposes is classified by evidence (file paths, command strings, URLs) and evaluated against policy rules before the agent sees it.
 - ALLOW decisions pass through. The agent executes the tool call.
 - DENY decisions are replaced with a denial message. The agent sees the denial instead of the tool call and adapts.
-- The dashboard shows every decision in real time. The chain records everything.
+- The Atested Dashboard shows every decision in real time. The chain records everything, signed with your Ed25519 key.
