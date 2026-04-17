@@ -1385,6 +1385,250 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
+    # ------------------------------------------------------------------
+    # Case document assembly (Phase 3)
+    # ------------------------------------------------------------------
+
+    def _handle_case_document_get(self):
+        """GET /api/licensing/case-document — assemble case document from chain data."""
+        try:
+            import datetime as _dt
+
+            # --- 1. Read questionnaire answers and capacity from chain ---
+            answers_raw = []
+            capacity = None
+            total_decisions = 0
+            allow_count = 0
+            deny_count = 0
+            tool_categories = set()
+            first_decision_time = None
+            last_decision_time = None
+
+            if CHAIN.exists():
+                with open(CHAIN, "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        et = rec.get("event_type")
+
+                        if et == "questionnaire_response":
+                            answers_raw.append({
+                                "question_id": rec.get("question_id", ""),
+                                "answer_value": rec.get("answer_value", ""),
+                                "questionnaire_phase": rec.get("questionnaire_phase"),
+                                "tier_boundary": rec.get("tier_boundary"),
+                            })
+                        elif et == "capacity_inputs":
+                            capacity = {
+                                "user_count": rec.get("user_count"),
+                                "machine_count": rec.get("machine_count"),
+                                "base_tier": rec.get("base_tier", ""),
+                            }
+                        elif et == "action_decision":
+                            total_decisions += 1
+                            decision = rec.get("policy_decision", "")
+                            if decision == "ALLOW":
+                                allow_count += 1
+                            elif decision == "DENY":
+                                deny_count += 1
+                            cat = rec.get("tool_category", rec.get("governed_family", ""))
+                            if cat:
+                                tool_categories.add(cat)
+                            ts = rec.get("timestamp_utc", "")
+                            if ts:
+                                if first_decision_time is None:
+                                    first_decision_time = ts
+                                last_decision_time = ts
+
+            # --- 2. Build latest-answer map ---
+            answers = {}
+            for a in answers_raw:
+                answers[a["question_id"]] = a["answer_value"]
+
+            # --- 3. Run deterministic procedure ---
+            recommendation = None
+            verified = False
+            base_tier = None
+            climb_path = []
+            failed_boundary = None
+            why_not_lower = None
+            why_not_higher = None
+
+            if capacity:
+                base_tier = capacity.get("base_tier", "personal")
+                # Climbing procedure (mirrors questionnaire-engine.js logic)
+                TIERS = ["personal", "personal_plus", "crew", "team", "institution"]
+                BOUNDARIES = [
+                    {"key": "personal_to_personal_plus", "from": "personal", "to": "personal_plus"},
+                    {"key": "personal_plus_to_crew", "from": "personal_plus", "to": "crew"},
+                    {"key": "crew_to_team", "from": "crew", "to": "team"},
+                    {"key": "team_to_institution", "from": "team", "to": "institution"},
+                ]
+                CLIMBING_QS = {
+                    "personal_to_personal_plus": ["climb_pp_multi_machine", "climb_pp_priority"],
+                    "personal_plus_to_crew": ["climb_crew_multi_user", "climb_crew_shared_chain"],
+                    "crew_to_team": ["climb_team_scale", "climb_team_roles"],
+                    "team_to_institution": ["climb_inst_scale", "climb_inst_compliance", "climb_inst_dedicated"],
+                }
+                TIER_LABELS = {
+                    "personal": "Personal", "personal_plus": "Personal Plus",
+                    "crew": "Crew", "team": "Team", "institution": "Institution",
+                }
+
+                base_idx = TIERS.index(base_tier) if base_tier in TIERS else 0
+                current_tier = base_tier
+                climb_path = [base_tier]
+
+                for i in range(base_idx, len(TIERS) - 1):
+                    b = BOUNDARIES[i]
+                    if b["from"] != TIERS[i]:
+                        continue
+                    q_ids = CLIMBING_QS.get(b["key"], [])
+                    all_answered = all(qid in answers for qid in q_ids)
+                    if not all_answered:
+                        break  # Still climbing — not all boundary Qs answered
+                    has_yes = any(answers.get(qid) == "yes" for qid in q_ids)
+                    if has_yes:
+                        current_tier = b["to"]
+                        climb_path.append(b["to"])
+                    else:
+                        failed_boundary = b["key"]
+                        break
+
+                recommendation = current_tier
+                verified = (current_tier == "institution" or failed_boundary is not None)
+
+                # Why not lower
+                rec_idx = TIERS.index(recommendation) if recommendation in TIERS else 0
+                if rec_idx > 0:
+                    if base_tier != recommendation:
+                        climbed = [TIER_LABELS.get(t, t) for t in climb_path[1:]]
+                        why_not_lower = (
+                            f"Your answers show a need for features in {TIER_LABELS.get(recommendation, recommendation)}. "
+                            f"You climbed through {', '.join(climbed)} based on your feature needs."
+                        )
+                    elif capacity:
+                        uc = capacity.get("user_count", 1)
+                        why_not_lower = (
+                            f"Your organization size ({uc} user{'s' if uc != 1 else ''}) "
+                            f"places you at {TIER_LABELS.get(recommendation, recommendation)} as the minimum tier."
+                        )
+
+                # Why not higher
+                if recommendation == "institution":
+                    why_not_higher = "Institution is the highest tier — it includes everything."
+                elif failed_boundary:
+                    fb = next((b for b in BOUNDARIES if b["key"] == failed_boundary), None)
+                    if fb:
+                        why_not_higher = (
+                            f"Your answers indicate that {TIER_LABELS.get(fb['to'], fb['to'])} features "
+                            f"are not needed for your current situation."
+                        )
+
+            # --- 4. Determine tentative vs verified ---
+            num_answers = len(answers)
+            recommendation_status = "verified" if verified else "tentative"
+
+            # --- 5. Assemble document ---
+            now_str = _dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            document = {
+                "generated_at": now_str,
+                "recommendation_status": recommendation_status,
+                "recommendation": recommendation,
+                "recommendation_label": TIER_LABELS.get(recommendation, recommendation) if recommendation else None,
+                "questionnaire_answers_count": num_answers,
+
+                # Section 1: Recommendation
+                "recommendation_section": {
+                    "tier": recommendation,
+                    "tier_label": TIER_LABELS.get(recommendation, recommendation) if recommendation else None,
+                    "status": recommendation_status,
+                    "summary": self._case_doc_recommendation_summary(recommendation, recommendation_status, TIER_LABELS),
+                },
+
+                # Section 2: Why not lower
+                "why_not_lower": why_not_lower,
+
+                # Section 3: Why not higher
+                "why_not_higher": why_not_higher,
+
+                # Section 4: Feature explanations (IDs for client-side template lookup)
+                "feature_ids": self._case_doc_feature_ids(recommendation),
+
+                # Section 5: Commercial terms
+                "commercial_terms": self._case_doc_commercial_terms(recommendation),
+
+                # Section 6: Governance evidence
+                "governance_evidence": {
+                    "total_decisions": total_decisions,
+                    "allow_count": allow_count,
+                    "deny_count": deny_count,
+                    "tool_categories": sorted(tool_categories),
+                    "first_decision": first_decision_time,
+                    "last_decision": last_decision_time,
+                },
+
+                # Metadata
+                "capacity": capacity,
+                "base_tier": base_tier,
+                "climb_path": climb_path,
+                "failed_boundary": failed_boundary,
+                "answers": answers,
+            }
+
+            _json_response(self, {"document": document})
+
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    @staticmethod
+    def _case_doc_recommendation_summary(tier, status, labels):
+        if not tier:
+            return "No recommendation yet. Complete the questionnaire to receive a tier recommendation."
+        label = labels.get(tier, tier)
+        if status == "tentative":
+            return (
+                f"Based on partial answers, {label} appears to fit your organization. "
+                f"This recommendation is tentative — additional questions would verify it."
+            )
+        return (
+            f"{label} is the verified recommendation for your organization. "
+            f"Your questionnaire answers and organization size confirm this tier is the right fit."
+        )
+
+    @staticmethod
+    def _case_doc_feature_ids(tier):
+        """Return feature IDs for the recommended tier.
+
+        The client uses these to look up translation templates.
+        Feature sets mirror tier-definitions.js.
+        """
+        FEATURES = {
+            "personal": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_single", "sup_community"],
+            "personal_plus": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_multi_machine", "ops_single", "sup_email"],
+            "crew": ["gov_chain", "gov_policy", "gov_shared", "vis_dashboard", "vis_audit", "vis_team", "ops_multi_machine", "ops_multi_user", "sup_email"],
+            "team": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "ops_multi_machine", "ops_multi_user", "ops_rbac", "sup_priority"],
+            "institution": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "gov_compliance", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "vis_enterprise", "ops_multi_machine", "ops_multi_user", "ops_rbac", "ops_custom_int", "sup_dedicated"],
+        }
+        return FEATURES.get(tier, [])
+
+    @staticmethod
+    def _case_doc_commercial_terms(tier):
+        TERMS = {
+            "personal":      {"price": "Free",       "billing": "N/A",    "support": "Community",  "dating": "From registration",     "summary": "Single operator, full governance."},
+            "personal_plus": {"price": "$99/yr",     "billing": "Annual", "support": "Email",      "dating": "From purchase",         "summary": "Single operator, multi-machine."},
+            "crew":          {"price": "$299/yr",    "billing": "Annual", "support": "Email",      "dating": "From trial completion",  "summary": "2\u201312 operators, shared governance."},
+            "team":          {"price": "$799/yr",    "billing": "Annual", "support": "Priority",   "dating": "From trial completion",  "summary": "13\u201350 operators, role-based governance."},
+            "institution":   {"price": "Negotiated", "billing": "Annual", "support": "Dedicated",  "dating": "From trial completion",  "summary": "51+ operators, enterprise governance."},
+        }
+        return TERMS.get(tier, {})
+
     def log_message(self, format, *args):
         pass  # Silence request logs
 
@@ -1596,6 +1840,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/licensing/questionnaire":
             self._handle_questionnaire_get()
+
+        elif path == "/api/licensing/case-document":
+            self._handle_case_document_get()
 
         elif path == "/api/config":
             try:

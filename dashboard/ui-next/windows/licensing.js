@@ -26,6 +26,14 @@ import {
   TIERS,
   CAPACITY_QUESTIONS,
 } from '../questionnaire-engine.js';
+import {
+  CAPACITY_RANGES,
+  COMMERCIAL_TERMS,
+  TIER_CAPABILITIES,
+  TRANSLATION_TEMPLATES,
+  getTemplate,
+  getGroupedCapabilities,
+} from '../tier-definitions.js';
 
 // ---------- Panel definitions ----------
 
@@ -156,8 +164,8 @@ function _switchPanel(state, panelId) {
   const area = state.el.querySelector('#lic-panel-area');
   area.innerHTML = '';
 
-  // Questionnaire panel always re-renders to pick up fresh chain state
-  if (panelId === 'questionnaire') {
+  // Panels that read chain data always re-render to pick up fresh state
+  if (panelId === 'questionnaire' || panelId === 'case-document' || panelId === 'tiers') {
     delete state.panelEls[panelId];
   }
 
@@ -179,10 +187,12 @@ function _buildPanel(panelId, state) {
     el.appendChild(_buildOverviewPanel(state));
   } else if (panelId === 'questionnaire') {
     el.appendChild(_buildQuestionnairePanel(state));
+  } else if (panelId === 'case-document') {
+    el.appendChild(_buildCaseDocumentPanel(state));
+  } else if (panelId === 'tiers') {
+    el.appendChild(_buildTierDisplayPanel(state));
   } else {
     const phaseMap = {
-      'tiers': 3,
-      'case-document': 3,
       'register': 4,
       'purchase': 5,
       'management': 5,
@@ -757,6 +767,409 @@ function _renderPreviousAnswers(qState) {
   `;
 }
 
+// ==========================================================================
+// Case document panel (Phase 3)
+// ==========================================================================
+
+function _buildCaseDocumentPanel(state) {
+  const el = document.createElement('div');
+  el.className = 'lcd-panel';
+  el.innerHTML = `<atd-loading-indicator label="Assembling case document"></atd-loading-indicator>`;
+  _loadCaseDocument(el, state);
+  return el;
+}
+
+async function _loadCaseDocument(el, appState) {
+  const res = await api.getCaseDocument();
+  if (!res.ok) {
+    el.innerHTML = `<div class="lic-error">${_esc(res.error)}</div>`;
+    return;
+  }
+
+  const doc = res.data.document;
+  if (!doc) {
+    el.innerHTML = `<div class="lic-error">No case document data available.</div>`;
+    return;
+  }
+
+  _renderCaseDocument(el, doc, appState);
+}
+
+function _renderCaseDocument(el, doc, appState) {
+  const isTentative = doc.recommendation_status === 'tentative';
+  const hasRecommendation = !!doc.recommendation;
+  const tierLabel = doc.recommendation_label || doc.recommendation || 'None';
+  const ev = doc.governance_evidence || {};
+
+  el.innerHTML = `
+    <div class="lcd-document">
+      <!-- Header -->
+      <div class="lcd-header">
+        <h3 class="lcd-title">Case Document</h3>
+        <span class="lcd-timestamp">Generated ${_esc(doc.generated_at || '')}</span>
+      </div>
+
+      ${isTentative && hasRecommendation ? `
+        <div class="lcd-tentative-banner">
+          This recommendation is tentative. Additional questionnaire questions would verify it.
+        </div>
+      ` : ''}
+
+      ${!hasRecommendation ? `
+        <div class="lcd-no-rec">
+          <p class="lq-text">No recommendation yet. Complete the questionnaire to receive a tier recommendation.</p>
+          <div class="lq-actions">
+            <button class="lic-action-btn lic-action-primary" data-nav="questionnaire">Start Questionnaire</button>
+          </div>
+        </div>
+      ` : `
+        <!-- Section 1: Recommendation -->
+        <div class="lcd-recommendation">
+          <div class="lcd-rec-badge">${isTentative ? 'Tentative' : 'Verified'} Recommendation</div>
+          <h2 class="lcd-rec-tier">${_esc(tierLabel)}</h2>
+          <p class="lcd-rec-summary">${_esc(doc.recommendation_section?.summary || '')}</p>
+        </div>
+
+        <!-- Section 2: Why not lower -->
+        ${doc.why_not_lower ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Why not a lower tier?</h4>
+            <p class="lcd-section-text">${_esc(doc.why_not_lower)}</p>
+          </div>
+        ` : ''}
+
+        <!-- Section 3: Why not higher -->
+        ${doc.why_not_higher ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Why not a higher tier?</h4>
+            <p class="lcd-section-text">${_esc(doc.why_not_higher)}</p>
+          </div>
+        ` : ''}
+
+        <!-- Section 4: Features -->
+        <div class="lcd-section">
+          <h4 class="lcd-section-heading">Features at ${_esc(tierLabel)}</h4>
+          <div class="lcd-features">
+            ${(doc.feature_ids || []).map(fid => {
+              const t = getTemplate(fid);
+              return `
+                <div class="lcd-feature">
+                  <span class="lcd-feature-name">${_esc(t.name)}</span>
+                  <span class="lcd-feature-desc">${_esc(t.description)}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Section 5: Commercial terms -->
+        ${doc.commercial_terms ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Commercial Terms</h4>
+            <div class="lcd-terms-grid">
+              <div class="lcd-term"><span class="lcd-term-label">Price</span><span class="lcd-term-value">${_esc(doc.commercial_terms.price || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">Billing</span><span class="lcd-term-value">${_esc(doc.commercial_terms.billing || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">Support</span><span class="lcd-term-value">${_esc(doc.commercial_terms.support || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">License Dating</span><span class="lcd-term-value">${_esc(doc.commercial_terms.dating || '')}</span></div>
+            </div>
+            <p class="lcd-terms-summary">${_esc(doc.commercial_terms.summary || '')}</p>
+          </div>
+        ` : ''}
+
+        <!-- Section 6: Governance evidence -->
+        <div class="lcd-section">
+          <h4 class="lcd-section-heading">Governance Evidence</h4>
+          <div class="lcd-evidence-grid">
+            <div class="lcd-evidence-stat">
+              <span class="lcd-ev-number">${ev.total_decisions || 0}</span>
+              <span class="lcd-ev-label">Total Decisions</span>
+            </div>
+            <div class="lcd-evidence-stat">
+              <span class="lcd-ev-number lcd-ev-allow">${ev.allow_count || 0}</span>
+              <span class="lcd-ev-label">ALLOW</span>
+            </div>
+            <div class="lcd-evidence-stat">
+              <span class="lcd-ev-number lcd-ev-deny">${ev.deny_count || 0}</span>
+              <span class="lcd-ev-label">DENY</span>
+            </div>
+            <div class="lcd-evidence-stat">
+              <span class="lcd-ev-number">${(ev.tool_categories || []).length}</span>
+              <span class="lcd-ev-label">Tool Categories</span>
+            </div>
+          </div>
+          ${ev.first_decision && ev.last_decision ? `
+            <p class="lcd-evidence-timeline">Activity: ${_esc(ev.first_decision.slice(0, 10))} to ${_esc(ev.last_decision.slice(0, 10))}</p>
+          ` : ''}
+        </div>
+
+        <!-- Section 7: Actions -->
+        <div class="lcd-actions">
+          <button class="lic-action-btn lic-action-primary lcd-download-btn">Download Case Document</button>
+          <button class="lic-action-btn" data-nav="tiers">View Tier Details</button>
+        </div>
+      `}
+    </div>
+  `;
+
+  // Wire nav buttons
+  el.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.nav;
+      const tab = appState.el.querySelector(`.lic-tab[data-panel-id="${target}"]`);
+      if (tab) _switchPanel(appState, target);
+    });
+  });
+
+  // Wire download button
+  const dlBtn = el.querySelector('.lcd-download-btn');
+  if (dlBtn) {
+    dlBtn.addEventListener('click', () => _downloadCaseDocument(doc));
+  }
+}
+
+function _downloadCaseDocument(doc) {
+  const tierLabel = doc.recommendation_label || doc.recommendation || 'Unknown';
+  const isTentative = doc.recommendation_status === 'tentative';
+  const ev = doc.governance_evidence || {};
+  const terms = doc.commercial_terms || {};
+
+  let md = `# Atested Case Document\n\n`;
+  md += `Generated: ${doc.generated_at || 'N/A'}\n\n`;
+
+  if (isTentative) {
+    md += `> **Note:** This recommendation is tentative. Additional questionnaire questions would verify it.\n\n`;
+  }
+
+  md += `## Recommendation: ${tierLabel}\n\n`;
+  md += `Status: ${isTentative ? 'Tentative' : 'Verified'}\n\n`;
+  md += `${doc.recommendation_section?.summary || ''}\n\n`;
+
+  if (doc.why_not_lower) {
+    md += `### Why not a lower tier?\n\n${doc.why_not_lower}\n\n`;
+  }
+  if (doc.why_not_higher) {
+    md += `### Why not a higher tier?\n\n${doc.why_not_higher}\n\n`;
+  }
+
+  md += `### Features at ${tierLabel}\n\n`;
+  for (const fid of (doc.feature_ids || [])) {
+    const t = getTemplate(fid);
+    md += `- **${t.name}**: ${t.description}\n`;
+  }
+  md += `\n`;
+
+  md += `### Commercial Terms\n\n`;
+  md += `| Term | Value |\n|---|---|\n`;
+  md += `| Price | ${terms.price || 'N/A'} |\n`;
+  md += `| Billing | ${terms.billing || 'N/A'} |\n`;
+  md += `| Support | ${terms.support || 'N/A'} |\n`;
+  md += `| License Dating | ${terms.dating || 'N/A'} |\n\n`;
+  if (terms.summary) md += `${terms.summary}\n\n`;
+
+  md += `### Governance Evidence\n\n`;
+  md += `- Total decisions: ${ev.total_decisions || 0}\n`;
+  md += `- ALLOW: ${ev.allow_count || 0}\n`;
+  md += `- DENY: ${ev.deny_count || 0}\n`;
+  md += `- Tool categories: ${(ev.tool_categories || []).join(', ') || 'None'}\n`;
+  if (ev.first_decision && ev.last_decision) {
+    md += `- Activity period: ${ev.first_decision.slice(0, 10)} to ${ev.last_decision.slice(0, 10)}\n`;
+  }
+  md += `\n---\n\n*Generated by Atested. This document contains rendered text only — no raw chain data.*\n`;
+
+  // Trigger download
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `atested-case-document-${(doc.generated_at || '').slice(0, 10) || 'draft'}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ==========================================================================
+// Tier display panel (Phase 3)
+// ==========================================================================
+
+function _buildTierDisplayPanel(state) {
+  const el = document.createElement('div');
+  el.className = 'ltd-panel';
+  el.innerHTML = `<atd-loading-indicator label="Loading tier information"></atd-loading-indicator>`;
+  _loadTierDisplay(el, state);
+  return el;
+}
+
+async function _loadTierDisplay(el, appState) {
+  // Fetch questionnaire state for recommendation highlight + fit reasoning
+  const qRes = await api.getQuestionnaireState();
+  let qState = null;
+  if (qRes.ok) {
+    qState = reconstructState(qRes.data);
+  }
+
+  _renderTierDisplay(el, qState, appState);
+}
+
+function _renderTierDisplay(el, qState, appState) {
+  const recommendation = qState?.verified ? qState.recommendation : null;
+  const tentativeRec = !qState?.verified ? qState?.recommendation : null;
+  const licensedTier = _getLicensedTier(appState.mode);
+
+  // Build tier index + sections
+  let indexHtml = '';
+  let sectionsHtml = '';
+
+  for (const tierId of TIERS) {
+    const label = TIER_LABELS[tierId];
+    const isLicensed = licensedTier === tierId;
+    const isRecommended = recommendation === tierId;
+    const isTentative = tentativeRec === tierId;
+    const range = CAPACITY_RANGES[tierId];
+    const terms = COMMERCIAL_TERMS[tierId];
+    const groups = getGroupedCapabilities(tierId);
+
+    // Index entry
+    indexHtml += `<button class="ltd-index-item" data-tier="${tierId}">${_esc(label)}</button>`;
+
+    // Badges
+    let badges = '';
+    if (isLicensed) badges += `<span class="ltd-badge ltd-badge-licensed">Licensed</span>`;
+    if (isRecommended) badges += `<span class="ltd-badge ltd-badge-recommended">Recommended</span>`;
+    if (isTentative) badges += `<span class="ltd-badge ltd-badge-tentative">Tentative</span>`;
+
+    // Capabilities grouped by category
+    let capsHtml = '';
+    for (const group of groups) {
+      capsHtml += `<div class="ltd-cap-group">`;
+      capsHtml += `<div class="ltd-cap-category">${_esc(group.category)}</div>`;
+      for (const cap of group.capabilities) {
+        capsHtml += `
+          <div class="ltd-cap-row">
+            <span class="ltd-cap-name">${_esc(cap.name)}</span>
+            ${cap.isNew ? `<span class="ltd-cap-new">New at ${_esc(label)}</span>` : ''}
+            <span class="ltd-cap-desc">${_esc(cap.description)}</span>
+          </div>
+        `;
+      }
+      capsHtml += `</div>`;
+    }
+
+    // Fit reasoning (conditional)
+    let fitHtml = '';
+    if (qState && qState.verified && qState.recommendation) {
+      const reasoning = thresholdReasoning(qState);
+      if (tierId === qState.recommendation) {
+        fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">This tier is the verified recommendation for your organization.</p></div>`;
+      } else {
+        const recIdx = TIERS.indexOf(qState.recommendation);
+        const tierIdx = TIERS.indexOf(tierId);
+        if (tierIdx < recIdx && reasoning.whyNotLower) {
+          fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">${_esc(reasoning.whyNotLower)}</p></div>`;
+        } else if (tierIdx > recIdx && reasoning.whyNotHigher) {
+          fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">${_esc(reasoning.whyNotHigher)}</p></div>`;
+        }
+      }
+    }
+
+    // Action button
+    let actionHtml = _tierActionButton(tierId, appState.mode, isLicensed, isRecommended);
+
+    sectionsHtml += `
+      <div class="ltd-tier-section" id="ltd-tier-${tierId}">
+        <div class="ltd-tier-header">
+          <h3 class="ltd-tier-name">${_esc(label)}</h3>
+          ${badges}
+        </div>
+        <div class="ltd-tier-range">${_esc(range)}</div>
+        <div class="ltd-tier-caps">${capsHtml}</div>
+        <div class="ltd-tier-terms">
+          <div class="ltd-term-row"><span class="ltd-term-label">Price</span><span class="ltd-term-value">${_esc(terms.price)}</span></div>
+          <div class="ltd-term-row"><span class="ltd-term-label">Billing</span><span class="ltd-term-value">${_esc(terms.billing)}</span></div>
+          <div class="ltd-term-row"><span class="ltd-term-label">Support</span><span class="ltd-term-value">${_esc(terms.support)}</span></div>
+          <div class="ltd-term-row"><span class="ltd-term-label">License Dating</span><span class="ltd-term-value">${_esc(terms.dating)}</span></div>
+        </div>
+        ${fitHtml}
+        ${actionHtml}
+      </div>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="ltd-layout">
+      <nav class="ltd-index">${indexHtml}</nav>
+      <div class="ltd-sections">${sectionsHtml}</div>
+    </div>
+  `;
+
+  // Wire index buttons
+  el.querySelectorAll('.ltd-index-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tierId = btn.dataset.tier;
+      const section = el.querySelector(`#ltd-tier-${tierId}`);
+      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Highlight active tier on scroll
+  const sections = el.querySelector('.ltd-sections');
+  if (sections) {
+    sections.addEventListener('scroll', () => {
+      const tierSections = el.querySelectorAll('.ltd-tier-section');
+      let activeId = '';
+      for (const sec of tierSections) {
+        const rect = sec.getBoundingClientRect();
+        const parentRect = sections.getBoundingClientRect();
+        if (rect.top <= parentRect.top + 60) activeId = sec.id.replace('ltd-tier-', '');
+      }
+      el.querySelectorAll('.ltd-index-item').forEach(btn => {
+        btn.classList.toggle('ltd-index-active', btn.dataset.tier === activeId);
+      });
+    });
+  }
+
+  // Wire action buttons
+  el.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.nav;
+      const tab = appState.el.querySelector(`.lic-tab[data-panel-id="${target}"]`);
+      if (tab) _switchPanel(appState, target);
+    });
+  });
+}
+
+function _getLicensedTier(mode) {
+  if (mode === 'personal_registered') return 'personal';
+  if (['personal_plus', 'crew', 'team', 'institution'].includes(mode)) return mode;
+  return null;
+}
+
+function _tierActionButton(tierId, mode, isLicensed, isRecommended) {
+  if (isLicensed) {
+    return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="management">Manage License</button></div>`;
+  }
+
+  if (mode === 'trial') {
+    if (isRecommended) {
+      return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="questionnaire">Continue Questionnaire</button></div>`;
+    }
+    return '';
+  }
+
+  if (mode === 'personal' || mode === 'unlicensed') {
+    return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="register">Register First</button></div>`;
+  }
+
+  if (mode === 'personal_registered' && tierId !== 'personal') {
+    if (tierId === 'institution') {
+      return `<div class="ltd-tier-action"><button class="lic-action-btn" disabled>Contact Atested</button></div>`;
+    }
+    return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="purchase">Purchase ${_esc(TIER_LABELS[tierId])}</button></div>`;
+  }
+
+  return '';
+}
+
 // ---------- Identity unlock check ----------
 
 /**
@@ -1233,6 +1646,367 @@ licStyles.textContent = `
     justify-content: center;
   }
 
+  /* ---- Case Document panel ---- */
+  .lcd-panel {
+    max-width: 720px;
+  }
+  .lcd-document {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .lcd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lcd-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    color: #e4e6eb;
+  }
+  .lcd-timestamp {
+    font-size: 0.78rem;
+    color: #6b7280;
+  }
+  .lcd-tentative-banner {
+    background: rgba(245, 158, 66, 0.10);
+    border: 1px solid rgba(245, 158, 66, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    color: #f59e42;
+  }
+  .lcd-no-rec {
+    font-size: 0.88rem;
+    color: #8b919a;
+    padding: 20px 0;
+    text-align: center;
+  }
+  .lcd-recommendation {
+    text-align: center;
+    padding: 24px 20px;
+    background: rgba(91, 138, 245, 0.06);
+    border: 1px solid rgba(91, 138, 245, 0.2);
+    border-radius: 12px;
+  }
+  .lcd-rec-badge {
+    display: inline-block;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lcd-rec-tier {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: #e4e6eb;
+  }
+  .lcd-rec-summary {
+    font-size: 0.88rem;
+    color: #8b919a;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .lcd-section {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .lcd-section-heading {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #8b919a;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .lcd-section-text {
+    font-size: 0.88rem;
+    color: #e4e6eb;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .lcd-features {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .lcd-feature {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lcd-feature-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e4e6eb;
+  }
+  .lcd-feature-desc {
+    font-size: 0.82rem;
+    color: #8b919a;
+    line-height: 1.5;
+  }
+  .lcd-terms-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .lcd-term {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lcd-term-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lcd-term-value {
+    font-size: 0.88rem;
+    color: #e4e6eb;
+  }
+  .lcd-terms-summary {
+    font-size: 0.85rem;
+    color: #8b919a;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .lcd-evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .lcd-evidence-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .lcd-ev-number {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #e4e6eb;
+  }
+  .lcd-ev-allow {
+    color: #22c55e;
+  }
+  .lcd-ev-deny {
+    color: #f59e42;
+  }
+  .lcd-ev-label {
+    font-size: 0.72rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .lcd-evidence-timeline {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin: 4px 0 0 0;
+  }
+  .lcd-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- Tier Display panel ---- */
+  .ltd-panel {
+    max-width: 900px;
+  }
+  .ltd-layout {
+    display: flex;
+    gap: 20px;
+  }
+  .ltd-index {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    width: 140px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+  }
+  .ltd-index-item {
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: #8b919a;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 8px 12px;
+    text-align: left;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .ltd-index-item:hover {
+    color: #e4e6eb;
+  }
+  .ltd-index-active {
+    color: #5b8af5;
+    border-left-color: #5b8af5;
+  }
+  .ltd-sections {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+  }
+  .ltd-tier-section {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .ltd-tier-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .ltd-tier-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0;
+    color: #e4e6eb;
+  }
+  .ltd-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ltd-badge-licensed {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+  .ltd-badge-recommended {
+    background: rgba(91, 138, 245, 0.15);
+    color: #5b8af5;
+  }
+  .ltd-badge-tentative {
+    background: rgba(245, 158, 66, 0.15);
+    color: #f59e42;
+  }
+  .ltd-tier-range {
+    font-size: 0.82rem;
+    color: #6b7280;
+    margin-bottom: 14px;
+  }
+  .ltd-tier-caps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .ltd-cap-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ltd-cap-category {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ltd-cap-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .ltd-cap-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e4e6eb;
+  }
+  .ltd-cap-new {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #5b8af5;
+    background: rgba(91, 138, 245, 0.12);
+    padding: 1px 6px;
+    border-radius: 6px;
+  }
+  .ltd-cap-desc {
+    font-size: 0.82rem;
+    color: #8b919a;
+    flex-basis: 100%;
+    line-height: 1.5;
+  }
+  .ltd-tier-terms {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .ltd-term-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .ltd-term-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ltd-term-value {
+    font-size: 0.85rem;
+    color: #e4e6eb;
+  }
+  .ltd-fit {
+    background: rgba(91, 138, 245, 0.06);
+    border: 1px solid rgba(91, 138, 245, 0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .ltd-fit-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #5b8af5;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .ltd-fit-text {
+    font-size: 0.85rem;
+    color: #e4e6eb;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .ltd-tier-action {
+    margin-top: 8px;
+  }
+
   @media (max-width: 600px) {
     .lic-panel-bar {
       overflow-x: auto;
@@ -1245,6 +2019,35 @@ licStyles.textContent = `
     }
     .lic-panel-area {
       padding: 12px;
+    }
+    .lcd-evidence-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .lcd-terms-grid {
+      grid-template-columns: 1fr;
+    }
+    .ltd-layout {
+      flex-direction: column;
+    }
+    .ltd-index {
+      flex-direction: row;
+      width: auto;
+      overflow-x: auto;
+      position: static;
+    }
+    .ltd-index-item {
+      border-left: none;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      padding: 6px 10px;
+      font-size: 0.76rem;
+    }
+    .ltd-index-active {
+      border-bottom-color: #5b8af5;
+      border-left-color: transparent;
+    }
+    .ltd-tier-terms {
+      grid-template-columns: 1fr;
     }
   }
 `;

@@ -352,6 +352,15 @@ export function postCapacityInputs({ user_count, machine_count, base_tier } = {}
   });
 }
 
+/**
+ * Get assembled case document from chain data.
+ * GET /api/licensing/case-document
+ * Returns { document: CaseDocument }
+ */
+export function getCaseDocument() {
+  return _request('GET', '/licensing/case-document');
+}
+
 // ---------- Identity endpoints ----------
 
 /**
