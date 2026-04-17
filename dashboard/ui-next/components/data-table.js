@@ -37,8 +37,10 @@ const styles = `
 .table-wrap {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: var(--surface);
+  -webkit-overflow-scrolling: touch;
 }
 
 table {

@@ -13,6 +13,7 @@ import './components/status-card.js';
 import './components/status-grid.js';
 import './components/decision-tag.js';
 import './components/tier-badge.js';
+import './components/loading-indicator.js';
 
 // Import window modules
 import { openActivityWindow } from './windows/activity.js';
@@ -87,7 +88,7 @@ export function renderMainPage() {
     <section class="mp-section" id="mp-recent">
       <h2 class="mp-section-title">Recent Activity</h2>
       <div class="mp-feed" id="recent-feed">
-        <p class="mp-loading">Loading...</p>
+        <atd-loading-indicator label="Loading activity"></atd-loading-indicator>
       </div>
     </section>
 
@@ -463,6 +464,22 @@ mpStyles.textContent = `
   .mp-launcher-disabled:hover {
     background: none;
     border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Responsive: narrow viewports */
+  @media (max-width: 600px) {
+    #main-page {
+      padding: 12px;
+      padding-top: calc(48px + 12px);
+    }
+    .mp-feed-row {
+      flex-wrap: wrap;
+      gap: 4px 8px;
+    }
+    .mp-feed-time { flex: 0 0 auto; }
+    .mp-feed-decision { flex: 0 0 auto; }
+    .mp-feed-tool { flex: 1 1 100%; order: 3; }
+    .mp-feed-user { flex: 0 0 auto; text-align: left; }
   }
 `;
 document.head.appendChild(mpStyles);

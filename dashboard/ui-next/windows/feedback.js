@@ -10,6 +10,7 @@ import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import '../components/data-table.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /**
  * Open the Feedback window.
@@ -66,14 +67,14 @@ function _buildContent() {
     <div class="fb-section">
       <h3 class="fb-section-title">Feedback History</h3>
       <div id="fb-feedback-table">
-        <p class="fb-loading">Loading...</p>
+        <atd-loading-indicator label="Loading"></atd-loading-indicator>
       </div>
     </div>
 
     <div class="fb-section">
       <h3 class="fb-section-title">Telemetry History</h3>
       <div id="fb-telemetry-table">
-        <p class="fb-loading">Loading...</p>
+        <atd-loading-indicator label="Loading"></atd-loading-indicator>
       </div>
     </div>
   `;

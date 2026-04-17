@@ -22,6 +22,13 @@ const styles = `
 :host([depth="2"]) .backdrop {
   background: rgba(0, 0, 0, 0.3);
 }
+.backdrop {
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 `;
 
 export class AtdWindowBackdrop extends AtdBase {

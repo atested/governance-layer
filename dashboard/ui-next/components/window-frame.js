@@ -29,6 +29,11 @@ const styles = `
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Child window: 90% viewport width, max 1300px, 85% viewport height */

@@ -132,8 +132,10 @@ export class AtdConfirmationDialog extends AtdBase {
   }
 
   connectedCallback() {
-    document.addEventListener('keydown', this._onEsc);
-    // Focus confirm button
+    this._onTab = this._onTab.bind(this);
+    document.addEventListener('keydown', this._onEsc, true);
+    document.addEventListener('keydown', this._onTab, true);
+    // Focus cancel button
     requestAnimationFrame(() => {
       const cancel = this.shadowRoot.querySelector('.btn-cancel');
       if (cancel) cancel.focus();
@@ -141,7 +143,8 @@ export class AtdConfirmationDialog extends AtdBase {
   }
 
   disconnectedCallback() {
-    document.removeEventListener('keydown', this._onEsc);
+    document.removeEventListener('keydown', this._onEsc, true);
+    document.removeEventListener('keydown', this._onTab, true);
   }
 
   _render() {
@@ -183,6 +186,30 @@ export class AtdConfirmationDialog extends AtdBase {
       e.preventDefault();
       e.stopPropagation();
       this._cancel();
+    }
+  }
+
+  _onTab(e) {
+    if (e.key !== 'Tab') return;
+    const focusable = this.shadowRoot.querySelectorAll('button');
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this.shadowRoot.activeElement || document.activeElement;
+
+    // Trap focus within the dialog
+    if (e.shiftKey) {
+      if (active === first || !this.shadowRoot.contains(active)) {
+        e.preventDefault();
+        e.stopPropagation();
+        last.focus();
+      }
+    } else {
+      if (active === last || !this.shadowRoot.contains(active)) {
+        e.preventDefault();
+        e.stopPropagation();
+        first.focus();
+      }
     }
   }
 

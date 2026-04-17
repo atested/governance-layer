@@ -12,6 +12,7 @@ import { openRecordDetail } from './record-detail.js';
 import '../components/data-table.js';
 import '../components/decision-tag.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 const PAGE_SIZE = 50;
 
@@ -131,7 +132,7 @@ function _getFilters(el) {
 
 async function _loadData(state) {
   const resultsEl = state.el.querySelector('#au-results');
-  resultsEl.innerHTML = '<p class="au-loading">Searching...</p>';
+  resultsEl.innerHTML = '<atd-loading-indicator label="Searching"></atd-loading-indicator>';
 
   const params = {
     ..._getFilters(state.el),

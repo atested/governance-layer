@@ -11,6 +11,7 @@ import { modalManager } from '../modal-manager.js';
 import '../components/status-card.js';
 import '../components/status-grid.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /**
  * Open the Health window.
@@ -34,7 +35,7 @@ function _buildContent() {
     </div>
     <div id="hw-alerts"></div>
     <div id="hw-sections">
-      <p class="hw-loading">Loading...</p>
+      <atd-loading-indicator label="Loading health data"></atd-loading-indicator>
     </div>
   `;
   return el;
@@ -195,7 +196,7 @@ function _esc(str) {
 const hwStyles = document.createElement('style');
 hwStyles.textContent = `
   .hw-content { font-family: "Inter", system-ui, sans-serif; }
-  .hw-header { margin-bottom: 20px; }
+  .hw-header { margin-bottom: 16px; }
   .hw-eyebrow {
     display: block; font-size: 0.72rem; text-transform: uppercase;
     letter-spacing: 0.06em; color: #8b919a; margin-bottom: 4px;
@@ -240,5 +241,11 @@ hwStyles.textContent = `
   .hw-event-time { flex: 0 0 140px; font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #8b919a; }
   .hw-event-type { flex: 0 0 160px; color: #e4e6eb; }
   .hw-event-detail { flex: 1; color: #8b919a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 600px) {
+    .hw-event-row { flex-wrap: wrap; }
+    .hw-event-time { flex: 0 0 auto; }
+    .hw-event-type { flex: 0 0 auto; }
+    .hw-event-detail { flex: 1 1 100%; white-space: normal; }
+  }
 `;
 document.head.appendChild(hwStyles);

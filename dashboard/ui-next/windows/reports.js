@@ -10,6 +10,7 @@ import { modalManager } from '../modal-manager.js';
 import '../components/status-card.js';
 import '../components/status-grid.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /**
  * Open the Reports window.
@@ -68,7 +69,7 @@ function _wireControls(state) {
 async function _loadReport(state) {
   const el = state.el;
   const results = el.querySelector('#rp-results');
-  results.innerHTML = '<p class="rp-loading">Generating report...</p>';
+  results.innerHTML = '<atd-loading-indicator label="Generating report"></atd-loading-indicator>';
 
   const params = {};
   const start = el.querySelector('#rp-start').value;
@@ -200,6 +201,10 @@ rpStyles.textContent = `
   .rp-error {
     color: #f59e42; background: rgba(245,158,66,0.10);
     padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+  }
+  @media (max-width: 600px) {
+    .rp-form { grid-template-columns: 1fr; }
+    .rp-bar-label { flex: 0 0 80px; font-size: 0.72rem; }
   }
 `;
 document.head.appendChild(rpStyles);

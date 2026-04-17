@@ -13,6 +13,7 @@ import '../components/status-card.js';
 import '../components/status-grid.js';
 import '../components/data-table.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 const VIEW_COLUMNS = [
   { key: 'name', label: 'Tool', sortable: false },
@@ -59,7 +60,7 @@ function _buildContent() {
     <div id="cf-tools-section">
       <h3 class="cf-section-title">Governed Tools</h3>
       <div id="cf-tools-wrap">
-        <p class="cf-loading">Loading...</p>
+        <atd-loading-indicator label="Loading configuration"></atd-loading-indicator>
       </div>
     </div>
     <div id="cf-edit-actions" style="display:none">
@@ -197,6 +198,7 @@ function _renderEditForm(wrap, tools, state) {
     const t = tools[i];
     const row = document.createElement('div');
     row.className = 'cf-edit-tool';
+    row.dataset.toolIndex = i;
     row.innerHTML = `
       <div class="cf-edit-tool-header">
         <strong>${_esc(t.name)}</strong>
@@ -218,6 +220,27 @@ function _renderEditForm(wrap, tools, state) {
         <label>Max Bytes: <input type="number" class="cf-input cf-max-bytes" value="${t.max_bytes !== '--' ? t.max_bytes : ''}" style="width:100px"></label>
       </div>
     `;
+
+    // Wire "Add Directory" button
+    row.querySelector('.cf-add-dir').addEventListener('click', () => {
+      const dirsContainer = row.querySelector('.cf-edit-dirs');
+      const addBtn = dirsContainer.querySelector('.cf-add-dir');
+      const newRow = document.createElement('div');
+      newRow.className = 'cf-edit-dir-row';
+      newRow.innerHTML = `
+        <input type="text" class="cf-input cf-dir-input" value="" placeholder="/path/to/directory">
+        <button class="cf-remove-dir">Remove</button>
+      `;
+      newRow.querySelector('.cf-remove-dir').addEventListener('click', () => newRow.remove());
+      dirsContainer.insertBefore(newRow, addBtn);
+      newRow.querySelector('.cf-dir-input').focus();
+    });
+
+    // Wire existing "Remove" buttons
+    row.querySelectorAll('.cf-remove-dir').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('.cf-edit-dir-row').remove());
+    });
+
     form.appendChild(row);
   }
 
@@ -252,17 +275,87 @@ async function _handleUnlock(state) {
 async function _handleSave(state) {
   const resultEl = state.el.querySelector('#cf-save-result');
   resultEl.textContent = 'Saving...';
+  resultEl.className = '';
 
-  const res = await api.postConfigUpdate({ registry: state.config.registry });
+  // Collect mutated state from the edit form DOM
+  const updatedRegistry = _collectEditState(state);
+
+  const res = await api.postConfigUpdate({ registry: updatedRegistry });
   if (res.ok) {
     resultEl.className = 'cf-result-success';
     resultEl.textContent = 'Configuration saved';
-    _exitEditMode(state);
+    state.originalRegistry = null; // Don't revert — save succeeded
+    state.editMode = false;
+    state.el.querySelector('#cf-edit-badge').style.display = 'none';
+    state.el.querySelector('#cf-unlock-card').style.display = 'block';
+    state.el.querySelector('#cf-edit-actions').style.display = 'none';
     _loadData(state);
   } else {
     resultEl.className = 'cf-result-error';
     resultEl.textContent = `Save failed: ${res.error}`;
   }
+}
+
+/**
+ * Collect the current edit form state from the DOM and build an updated
+ * registry object that mirrors the original structure.
+ */
+function _collectEditState(state) {
+  const registry = JSON.parse(JSON.stringify(state.config?.registry || {}));
+  const actions = registry.actions || registry.tools || {};
+  const toolEntries = Array.isArray(actions) ? actions : Object.values(actions);
+  const toolKeys = Array.isArray(actions) ? null : Object.keys(actions);
+
+  const toolRows = state.el.querySelectorAll('.cf-edit-tool');
+  toolRows.forEach((row, i) => {
+    const entry = toolEntries[i];
+    if (!entry) return;
+
+    // Collect directories from all input rows
+    const dirs = [];
+    row.querySelectorAll('.cf-dir-input').forEach(input => {
+      const val = input.value.trim();
+      if (val) dirs.push(val);
+    });
+
+    // Update directory arrays (try both field names)
+    if (entry.base_dirs !== undefined) entry.base_dirs = dirs;
+    else if (entry.allowed_directories !== undefined) entry.allowed_directories = dirs;
+    else entry.base_dirs = dirs;
+
+    // Collect constraints
+    const caps = entry.caps || entry.constraints || {};
+    const denyHidden = row.querySelector('[data-cap="deny_hidden"]');
+    const denyOverwrite = row.querySelector('[data-cap="deny_overwrite"]');
+    const denyExec = row.querySelector('[data-cap="deny_exec"]');
+    const maxBytes = row.querySelector('.cf-max-bytes');
+
+    if (denyHidden) caps.deny_hidden = denyHidden.checked;
+    if (denyOverwrite) {
+      if (caps.overwrite_allowed !== undefined) caps.overwrite_allowed = !denyOverwrite.checked;
+      else caps.deny_overwrite = denyOverwrite.checked;
+    }
+    if (denyExec) caps.deny_exec = denyExec.checked;
+    if (maxBytes && maxBytes.value) caps.max_bytes = parseInt(maxBytes.value, 10);
+
+    if (entry.caps !== undefined) entry.caps = caps;
+    else if (entry.constraints !== undefined) entry.constraints = caps;
+    else entry.caps = caps;
+
+    // Write back
+    if (toolKeys) {
+      actions[toolKeys[i]] = entry;
+    } else {
+      toolEntries[i] = entry;
+    }
+  });
+
+  if (Array.isArray(actions)) {
+    if (registry.actions) registry.actions = toolEntries;
+    else registry.tools = toolEntries;
+  }
+
+  return registry;
 }
 
 function _exitEditMode(state) {

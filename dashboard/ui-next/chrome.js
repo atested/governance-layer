@@ -294,5 +294,26 @@ chromeStyles.textContent = `
   .chrome-banner-dismiss:hover {
     opacity: 1;
   }
+
+  /* Responsive: narrow viewports */
+  @media (max-width: 600px) {
+    .chrome-brand {
+      position: static;
+      transform: none;
+      font-size: 0.88rem;
+      margin: 0 8px;
+    }
+    .chrome-license-tier {
+      display: none;
+    }
+    .chrome-id-timer {
+      display: none;
+    }
+  }
+  @media (max-width: 980px) {
+    .chrome-brand {
+      font-size: 0.92rem;
+    }
+  }
 `;
 document.head.appendChild(chromeStyles);

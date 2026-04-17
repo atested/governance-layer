@@ -16,6 +16,7 @@ import '../components/code-block.js';
 import '../components/decision-tag.js';
 import '../components/tier-badge.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /**
  * Open Record Detail as a grandchild window.
@@ -220,9 +221,9 @@ function _isVerificationChange(type) {
 // ---------- Utility ----------
 
 function _loadingEl() {
-  const el = document.createElement('div');
+  const el = document.createElement('atd-loading-indicator');
   el.className = 'rd-loading';
-  el.textContent = 'Loading record...';
+  el.setAttribute('label', 'Loading record');
   return el;
 }
 
@@ -271,7 +272,7 @@ rdStyles.textContent = `
     font-family: "Inter", system-ui, sans-serif;
   }
   .rd-header {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
   .rd-header-label {
     display: block;

@@ -26,19 +26,23 @@ function init() {
   const chrome = renderChrome();
   document.body.appendChild(chrome);
 
-  // Wire chrome zone clicks to window launches
-  chrome.querySelector('.chrome-identity').addEventListener('click', (e) => {
-    _openIdentityWindow(e.currentTarget);
+  // Wire chrome zone clicks and keyboard activation to window launches
+  const identityZone = chrome.querySelector('.chrome-identity');
+  identityZone.addEventListener('click', (e) => _openIdentityWindow(e.currentTarget));
+  identityZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _openIdentityWindow(e.currentTarget); }
   });
-  chrome.querySelector('.chrome-license').addEventListener('click', (e) => {
-    _chromeOpen('Licensing', e.currentTarget);
+
+  const licenseZone = chrome.querySelector('.chrome-license');
+  licenseZone.addEventListener('click', (e) => _chromeOpen('Licensing', e.currentTarget));
+  licenseZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _chromeOpen('Licensing', e.currentTarget); }
   });
-  chrome.querySelector('.chrome-notif-indicator').addEventListener('click', (e) => {
-    if (modalManager.depth > 0) {
-      openNotificationsWindow(e.currentTarget);
-    } else {
-      openNotificationsWindow(e.currentTarget);
-    }
+
+  const notifZone = chrome.querySelector('.chrome-notif-indicator');
+  notifZone.addEventListener('click', (e) => openNotificationsWindow(e.currentTarget));
+  notifZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotificationsWindow(e.currentTarget); }
   });
 
   // Render main page structure, then load live data

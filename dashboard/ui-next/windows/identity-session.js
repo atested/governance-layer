@@ -12,6 +12,7 @@ import { updateIdentityZone } from '../chrome.js';
 import '../components/status-card.js';
 import '../components/status-grid.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /** Timer interval reference for countdown */
 let _timerInterval = null;
@@ -39,7 +40,7 @@ function _buildContent() {
       <span class="ids-status" id="ids-status-badge"></span>
     </div>
     <div id="ids-sections">
-      <p class="ids-loading">Loading...</p>
+      <atd-loading-indicator label="Loading session"></atd-loading-indicator>
     </div>
   `;
   return el;

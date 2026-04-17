@@ -12,6 +12,7 @@ import { openRecordDetail } from './record-detail.js';
 import '../components/data-table.js';
 import '../components/decision-tag.js';
 import '../components/tier-badge.js';
+import '../components/loading-indicator.js';
 
 const PAGE_SIZE = 50;
 
@@ -75,7 +76,7 @@ function _buildContent() {
       <atd-pill variant="outline" id="aw-clear">Clear</atd-pill>
     </div>
     <div id="aw-table-wrap">
-      <p class="aw-loading">Loading...</p>
+      <atd-loading-indicator label="Loading events"></atd-loading-indicator>
     </div>
   `;
   return el;
@@ -103,7 +104,7 @@ function _wireControls(state) {
 
 async function _loadData(state) {
   const wrap = state.el.querySelector('#aw-table-wrap');
-  wrap.innerHTML = '<p class="aw-loading">Loading...</p>';
+  wrap.innerHTML = '<atd-loading-indicator label="Loading events"></atd-loading-indicator>';
 
   const params = {
     limit: PAGE_SIZE,
@@ -294,6 +295,10 @@ awStyles.textContent = `
     padding: 12px 16px;
     border-radius: 8px;
     font-size: 0.82rem;
+  }
+  @media (max-width: 600px) {
+    .aw-filters { flex-direction: column; align-items: stretch; }
+    .aw-filter-label { width: 100%; }
   }
 `;
 document.head.appendChild(awStyles);

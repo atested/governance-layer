@@ -10,6 +10,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import '../components/pill.js';
+import '../components/loading-indicator.js';
 
 /** Severity display order (highest first) */
 const SEVERITY_ORDER = { security: 0, critical: 1, routine: 2, informational: 3 };
@@ -44,7 +45,7 @@ function _buildContent() {
       <span class="nf-heading">Notifications</span>
     </div>
     <div id="nf-list">
-      <p class="nf-loading">Loading...</p>
+      <atd-loading-indicator label="Loading notifications"></atd-loading-indicator>
     </div>
   `;
   return el;

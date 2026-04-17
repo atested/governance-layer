@@ -11,6 +11,7 @@ import { modalManager } from '../modal-manager.js';
 import '../components/data-table.js';
 import '../components/pill.js';
 import '../components/confirmation-dialog.js';
+import '../components/loading-indicator.js';
 
 const COLUMNS = [
   { key: 'artifact_identity', label: 'Operation', sortable: false },
@@ -72,7 +73,7 @@ function _buildContent() {
     <div class="ap-list-section">
       <h3 class="ap-section-title">Active Approvals</h3>
       <div id="ap-table-wrap">
-        <p class="ap-loading">Loading...</p>
+        <atd-loading-indicator label="Loading approvals"></atd-loading-indicator>
       </div>
     </div>
   `;
@@ -111,7 +112,7 @@ function _showFormResult(el, msg, type) {
 
 async function _loadData(state) {
   const wrap = state.el.querySelector('#ap-table-wrap');
-  wrap.innerHTML = '<p class="ap-loading">Loading...</p>';
+  wrap.innerHTML = '<atd-loading-indicator label="Loading approvals"></atd-loading-indicator>';
 
   const res = await api.getApprovals();
   if (!res.ok) {
@@ -259,6 +260,9 @@ apStyles.textContent = `
   .ap-error {
     color: #f59e42; background: rgba(245,158,66,0.10);
     padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+  }
+  @media (max-width: 600px) {
+    .ap-form { grid-template-columns: 1fr; }
   }
 `;
 document.head.appendChild(apStyles);
