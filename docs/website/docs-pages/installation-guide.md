@@ -5,16 +5,16 @@ Atested is an HTTP proxy that sits between your AI agent and the model provider.
 ## Requirements
 
 - Python 3.9 or later
-- An API key for your model provider (Anthropic, OpenAI, or another supported provider)
-- An AI agent that lets you configure its API endpoint (Claude Code, Cursor, Aider, or similar)
+- An API key for Anthropic, OpenAI, or any provider whose API follows the standard chat completions format with tool calls
+- An AI agent that allows configuring its API endpoint. Claude Code, Cursor, and Aider are tested. Other agents that expose an API endpoint setting work the same way.
 
 ## Install
 
 Clone the repository and install the Python dependencies.
 
 ```bash
-git clone https://github.com/atested/governance-layer.git
-cd governance-layer
+git clone https://github.com/atested/governance-layer.git atested
+cd atested
 python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
 ```
@@ -36,15 +36,53 @@ export GOV_SIGNING_KEY_PATH=./signing.key
 
 The proxy logs the key fingerprint when it starts. Every chain record from this point forward is signed. If you skip this step, records are written unsigned and cannot be independently verified.
 
-## Start the proxy
+## Provider setup
 
-The proxy needs your provider's API key as an environment variable. The example below uses Anthropic. For other providers, see Provider setup.
+Atested governs tool calls at the API transport layer. Each provider has its own API structure, authentication, and tool call format. The proxy handles these differences internally. Configure the provider you use before starting the proxy.
+
+### Anthropic
+
+Set your API key. Anthropic is the default upstream, so no additional flags are needed.
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... python3 -m proxy.server
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-It starts on `http://127.0.0.1:8080` by default. You'll see a startup line confirming the port and the upstream provider URL.
+The proxy route is `/anthropic`. You will point your agent's base URL to `http://localhost:8080/anthropic`.
+
+### OpenAI
+
+Set your API key and specify the upstream URL.
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+Start the proxy with the `--upstream` flag:
+
+```bash
+python3 -m proxy.server --upstream https://api.openai.com/v1
+```
+
+The proxy route is `/openai`. You will point your agent's base URL to `http://localhost:8080/openai`.
+
+OpenAI's tool call format differs from Anthropic's. The classifier handles the structural differences, but classification confidence may vary between providers because the evidence available in tool call parameters is provider-dependent.
+
+### Other providers
+
+Any provider whose API follows the standard chat completions format with tool calls can work with the `--upstream` flag. Classification accuracy depends on how much structural evidence the provider includes in its tool call payloads.
+
+## Start the proxy
+
+Run the proxy using the environment variables you configured in Provider setup. For Anthropic (the default):
+
+```bash
+python3 -m proxy.server
+```
+
+For OpenAI and other providers, include the `--upstream` flag as shown in your provider's section above.
+
+The proxy starts on `http://127.0.0.1:8080` by default. You'll see a startup line confirming the port and the upstream provider URL.
 
 Options:
 
@@ -62,9 +100,15 @@ For Anthropic (Claude Code, agents using the Anthropic SDK):
 export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
 ```
 
-Add this to your shell profile (`.bashrc`, `.zshrc`, or `.bash_profile`) so it persists across sessions.
+For OpenAI:
 
-For other agents, find the setting that controls the API endpoint and set it to the matching Atested route for your provider. The setting name varies by agent.
+```bash
+export OPENAI_BASE_URL=http://localhost:8080/openai
+```
+
+Add the export to your shell profile (`.bashrc`, `.zshrc`, or `.bash_profile`) so it persists across sessions.
+
+For other agents, find the setting that controls the API endpoint and set it to the matching Atested route for your provider.
 
 ## Verify Atested is running
 
@@ -81,28 +125,6 @@ Open `http://localhost:9700` in a browser. On the Overview page, look for:
 - **Recent activity feed** listing your agent's tool calls with their policy decisions.
 
 If the dashboard shows activity, governance is working. Every tool call your agent's model proposes is being classified, evaluated against policy, and recorded in the chain before the agent can act on it.
-
-## Provider setup
-
-Atested governs tool calls at the API transport layer. Each provider has its own API structure, authentication, and tool call format. The proxy handles these differences internally.
-
-### Anthropic
-
-Anthropic is the default upstream. Set `ANTHROPIC_API_KEY` and start the proxy with no additional flags. The proxy route is `/anthropic`.
-
-### OpenAI
-
-```bash
-OPENAI_API_KEY=sk-... python3 -m proxy.server --upstream https://api.openai.com/v1
-```
-
-The proxy route for OpenAI is `/openai`. Point your agent's base URL to `http://localhost:8080/openai`.
-
-OpenAI's tool call format differs from Anthropic's. The classifier handles the structural differences, but classification confidence may vary between providers because the evidence available in tool call parameters is provider-dependent.
-
-### Other providers
-
-Any provider whose API follows the standard chat completions format with tool calls can work with the `--upstream` flag. Classification accuracy depends on how much structural evidence the provider includes in its tool call payloads.
 
 ## What "done" looks like
 
