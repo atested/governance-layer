@@ -654,6 +654,11 @@ function _renderThreshold(el, qState, appState) {
         Continuing adds detail to your case document but won't change
         this recommendation. You can stop at any time.
       </p>
+
+      <div class="lq-restart-section">
+        <button class="lic-action-btn lq-restart-btn">Restart Questionnaire</button>
+        <span class="lq-restart-hint">Clears all answers and starts from the beginning.</span>
+      </div>
     </div>
   `;
 
@@ -666,6 +671,10 @@ function _renderThreshold(el, qState, appState) {
     const p2State = { ...qState, state: STATES.PHASE_TWO };
     p2State.nextQuestion = getNextPhaseTwoQuestion(qState.recommendation, qState.answers);
     _renderQuestionnaireState(el, p2State, appState);
+  });
+
+  el.querySelector('.lq-restart-btn').addEventListener('click', () => {
+    _restartQuestionnaire(appState);
   });
 }
 
@@ -1581,55 +1590,10 @@ function _renderCaseDocument(el, doc, appState) {
           <p class="lcd-rec-summary">${_esc(doc.recommendation_section?.summary || '')}</p>
         </div>
 
-        <!-- Section 2: Why not lower -->
-        ${doc.why_not_lower ? `
-          <div class="lcd-section">
-            <h4 class="lcd-section-heading">Why not a lower tier?</h4>
-            <p class="lcd-section-text">${_esc(doc.why_not_lower)}</p>
-          </div>
-        ` : ''}
-
-        <!-- Section 3: Why not higher -->
-        ${doc.why_not_higher ? `
-          <div class="lcd-section">
-            <h4 class="lcd-section-heading">Why not a higher tier?</h4>
-            <p class="lcd-section-text">${_esc(doc.why_not_higher)}</p>
-          </div>
-        ` : ''}
-
-        <!-- Section 4: Features -->
-        <div class="lcd-section">
-          <h4 class="lcd-section-heading">Features at ${_esc(tierLabel)}</h4>
-          <div class="lcd-features">
-            ${(doc.feature_ids || []).map(fid => {
-              const t = getTemplate(fid);
-              return `
-                <div class="lcd-feature">
-                  <span class="lcd-feature-name">${_esc(t.name)}</span>
-                  <span class="lcd-feature-desc">${_esc(t.description)}</span>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        <!-- Section 5: Commercial terms -->
-        ${doc.commercial_terms ? `
-          <div class="lcd-section">
-            <h4 class="lcd-section-heading">Commercial Terms</h4>
-            <div class="lcd-terms-grid">
-              <div class="lcd-term"><span class="lcd-term-label">Price</span><span class="lcd-term-value">${_esc(doc.commercial_terms.price || '')}</span></div>
-              <div class="lcd-term"><span class="lcd-term-label">Billing</span><span class="lcd-term-value">${_esc(doc.commercial_terms.billing || '')}</span></div>
-              <div class="lcd-term"><span class="lcd-term-label">Support</span><span class="lcd-term-value">${_esc(doc.commercial_terms.support || '')}</span></div>
-              <div class="lcd-term"><span class="lcd-term-label">License Dating</span><span class="lcd-term-value">${_esc(doc.commercial_terms.dating || '')}</span></div>
-            </div>
-            <p class="lcd-terms-summary">${_esc(doc.commercial_terms.summary || '')}</p>
-          </div>
-        ` : ''}
-
-        <!-- Section 6: Governance evidence -->
-        <div class="lcd-section">
-          <h4 class="lcd-section-heading">Governance Evidence</h4>
+        <!-- Section 2: Governance evidence (live installation data) -->
+        <div class="lcd-section lcd-evidence-section">
+          <h4 class="lcd-section-heading">Evidence from Your Installation</h4>
+          ${ev.as_of ? `<p class="lcd-evidence-as-of">As of ${_esc(ev.as_of.replace('T', ' ').replace('Z', ' UTC'))}</p>` : ''}
           <div class="lcd-evidence-grid">
             <div class="lcd-evidence-stat">
               <span class="lcd-ev-number">${ev.total_decisions || 0}</span>
@@ -1652,6 +1616,52 @@ function _renderCaseDocument(el, doc, appState) {
             <p class="lcd-evidence-timeline">Activity: ${_esc(ev.first_decision.slice(0, 10))} to ${_esc(ev.last_decision.slice(0, 10))}</p>
           ` : ''}
         </div>
+
+        <!-- Section 3: Why not lower -->
+        ${doc.why_not_lower ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Why not a lower tier?</h4>
+            <p class="lcd-section-text">${_esc(doc.why_not_lower)}</p>
+          </div>
+        ` : ''}
+
+        <!-- Section 4: Why not higher -->
+        ${doc.why_not_higher ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Why not a higher tier?</h4>
+            <p class="lcd-section-text">${_esc(doc.why_not_higher)}</p>
+          </div>
+        ` : ''}
+
+        <!-- Section 5: Features -->
+        <div class="lcd-section">
+          <h4 class="lcd-section-heading">Features at ${_esc(tierLabel)}</h4>
+          <div class="lcd-features">
+            ${(doc.feature_ids || []).map(fid => {
+              const t = getTemplate(fid);
+              return `
+                <div class="lcd-feature">
+                  <span class="lcd-feature-name">${_esc(t.name)}</span>
+                  <span class="lcd-feature-desc">${_esc(t.description)}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Section 6: Commercial terms -->
+        ${doc.commercial_terms ? `
+          <div class="lcd-section">
+            <h4 class="lcd-section-heading">Commercial Terms</h4>
+            <div class="lcd-terms-grid">
+              <div class="lcd-term"><span class="lcd-term-label">Price</span><span class="lcd-term-value">${_esc(doc.commercial_terms.price || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">Billing</span><span class="lcd-term-value">${_esc(doc.commercial_terms.billing || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">Support</span><span class="lcd-term-value">${_esc(doc.commercial_terms.support || '')}</span></div>
+              <div class="lcd-term"><span class="lcd-term-label">License Dating</span><span class="lcd-term-value">${_esc(doc.commercial_terms.dating || '')}</span></div>
+            </div>
+            <p class="lcd-terms-summary">${_esc(doc.commercial_terms.summary || '')}</p>
+          </div>
+        ` : ''}
 
         <!-- Section 7: Actions -->
         <div class="lcd-actions">
@@ -1702,6 +1712,17 @@ function _downloadCaseDocument(doc) {
   md += `Status: ${isTentative ? 'Tentative' : 'Verified'}\n\n`;
   md += `${doc.recommendation_section?.summary || ''}\n\n`;
 
+  md += `### Evidence from Your Installation\n\n`;
+  if (ev.as_of) md += `As of ${ev.as_of.replace('T', ' ').replace('Z', ' UTC')}\n\n`;
+  md += `- Total decisions: ${ev.total_decisions || 0}\n`;
+  md += `- ALLOW: ${ev.allow_count || 0}\n`;
+  md += `- DENY: ${ev.deny_count || 0}\n`;
+  md += `- Tool categories: ${(ev.tool_categories || []).join(', ') || 'None'}\n`;
+  if (ev.first_decision && ev.last_decision) {
+    md += `- Activity period: ${ev.first_decision.slice(0, 10)} to ${ev.last_decision.slice(0, 10)}\n`;
+  }
+  md += `\n`;
+
   if (doc.why_not_lower) {
     md += `### Why not a lower tier?\n\n${doc.why_not_lower}\n\n`;
   }
@@ -1723,15 +1744,6 @@ function _downloadCaseDocument(doc) {
   md += `| Support | ${terms.support || 'N/A'} |\n`;
   md += `| License Dating | ${terms.dating || 'N/A'} |\n\n`;
   if (terms.summary) md += `${terms.summary}\n\n`;
-
-  md += `### Governance Evidence\n\n`;
-  md += `- Total decisions: ${ev.total_decisions || 0}\n`;
-  md += `- ALLOW: ${ev.allow_count || 0}\n`;
-  md += `- DENY: ${ev.deny_count || 0}\n`;
-  md += `- Tool categories: ${(ev.tool_categories || []).join(', ') || 'None'}\n`;
-  if (ev.first_decision && ev.last_decision) {
-    md += `- Activity period: ${ev.first_decision.slice(0, 10)} to ${ev.last_decision.slice(0, 10)}\n`;
-  }
   md += `\n---\n\n*Generated by Atested. This document contains rendered text only — no raw chain data.*\n`;
 
   // Trigger download
@@ -2564,6 +2576,17 @@ licStyles.textContent = `
     color: #8b919a;
     margin: 0;
     line-height: 1.5;
+  }
+  .lcd-evidence-section {
+    background: rgba(34, 197, 94, 0.04);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .lcd-evidence-as-of {
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin: 2px 0 10px 0;
   }
   .lcd-evidence-grid {
     display: grid;

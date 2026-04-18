@@ -2004,7 +2004,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 allow_count += 1
                             elif decision == "DENY":
                                 deny_count += 1
-                            cat = rec.get("tool_category", rec.get("governed_family", ""))
+                            cat = rec.get("original_tool", rec.get("tool_category", rec.get("governed_family", "")))
                             if cat:
                                 tool_categories.add(cat)
                             ts = rec.get("timestamp_utc", "")
@@ -2140,6 +2140,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "tool_categories": sorted(tool_categories),
                     "first_decision": first_decision_time,
                     "last_decision": last_decision_time,
+                    "as_of": now_str,
                 },
 
                 # Metadata
@@ -2178,22 +2179,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         Feature sets mirror tier-definitions.js.
         """
         FEATURES = {
-            "personal": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_single", "sup_community"],
-            "personal_plus": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_multi_machine", "ops_single", "sup_email"],
-            "crew": ["gov_chain", "gov_policy", "gov_shared", "vis_dashboard", "vis_audit", "vis_team", "ops_multi_machine", "ops_multi_user", "sup_email"],
-            "team": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "ops_multi_machine", "ops_multi_user", "ops_rbac", "sup_priority"],
-            "institution": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "gov_compliance", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "vis_enterprise", "ops_multi_machine", "ops_multi_user", "ops_rbac", "ops_custom_int", "sup_dedicated"],
+            "personal": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_single", "sup_docs_feedback"],
+            "personal_plus": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_multi_machine", "ops_single", "sup_feedback"],
+            "crew": ["gov_chain", "gov_policy", "gov_shared", "vis_dashboard", "vis_audit", "vis_team", "ops_multi_machine", "ops_multi_user", "sup_feedback"],
+            "team": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "ops_multi_machine", "ops_multi_user", "ops_rbac", "sup_priority_feedback"],
+            "institution": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "gov_compliance", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "vis_enterprise", "ops_multi_machine", "ops_multi_user", "ops_rbac", "ops_custom_int", "sup_dedicated_feedback"],
         }
         return FEATURES.get(tier, [])
 
     @staticmethod
     def _case_doc_commercial_terms(tier):
         TERMS = {
-            "personal":      {"price": "Free",       "billing": "N/A",    "support": "Community",  "dating": "From registration",     "summary": "Single operator, full governance."},
-            "personal_plus": {"price": "$99/yr",     "billing": "Annual", "support": "Email",      "dating": "From purchase",         "summary": "Single operator, multi-machine."},
-            "crew":          {"price": "$299/yr",    "billing": "Annual", "support": "Email",      "dating": "From trial completion",  "summary": "2\u201312 operators, shared governance."},
-            "team":          {"price": "$799/yr",    "billing": "Annual", "support": "Priority",   "dating": "From trial completion",  "summary": "13\u201350 operators, role-based governance."},
-            "institution":   {"price": "Negotiated", "billing": "Annual", "support": "Dedicated",  "dating": "From trial completion",  "summary": "51+ operators, enterprise governance."},
+            "personal":      {"price": "Free",        "billing": "N/A",    "support": "Documentation & Feedback",  "dating": "From registration",     "summary": "Single operator, full governance."},
+            "personal_plus": {"price": "$99/yr",      "billing": "Annual", "support": "Feedback System",           "dating": "From purchase",         "summary": "Single operator, multi-machine."},
+            "crew":          {"price": "$2,995/yr",   "billing": "Annual", "support": "Feedback System",           "dating": "From trial completion", "summary": "2\u201312 operators, shared governance."},
+            "team":          {"price": "$19,995/yr",  "billing": "Annual", "support": "Priority Feedback",         "dating": "From trial completion", "summary": "13\u201350 operators, role-based governance."},
+            "institution":   {"price": "Negotiated",  "billing": "Annual", "support": "Dedicated Feedback",        "dating": "From trial completion", "summary": "51+ operators, enterprise governance."},
         }
         return TERMS.get(tier, {})
 
