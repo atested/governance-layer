@@ -87,7 +87,7 @@ function _buildContent() {
       <div class="ll-sp-intro">Your current license status:</div>
       <div class="ll-sp-grid">
         <div class="ll-sp-row" data-pane="tiers">
-          <span class="ll-sp-name">Tiers</span>
+          <span class="ll-sp-name">Pricing</span>
           <span class="ll-sp-desc">Loading\u2026</span>
           <span class="ll-sp-state"></span>
         </div>
@@ -112,7 +112,7 @@ function _buildContent() {
           <span class="ll-sp-state"></span>
         </div>
       </div>
-      <div class="ll-sp-closing">Review the panes below for your next step.</div>
+      <div class="ll-sp-closing">Yellow below indicates action needed</div>
     </div>
 
     <button class="ll-terms-sliver" data-box="terms">
@@ -124,7 +124,7 @@ function _buildContent() {
     <div class="ll-grid">
       <button class="ll-box" data-box="tiers">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">Atested Tiers</span>
+        <span class="ll-title">Atested Pricing</span>
         <span class="ll-subtitle">Available plans</span>
         <p class="ll-desc">See what each plan includes and how they compare. Five levels from a solo user to thousands at the largest institutions, with capabilities that scale to your needs.</p>
         <span class="ll-status-line ll-s1"></span>
@@ -417,7 +417,7 @@ function _renderLauncher(state) {
     const titleEl = pane.querySelector('.ll-sp-tier');
     if (titleEl) titleEl.textContent = statusTitle;
     const closingEl = pane.querySelector('.ll-sp-closing');
-    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Review the panes below for your next step.';
+    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Yellow below indicates action needed';
 
     // Grid rows
     const paneKeys = ['tiers', 'survey', 'case', 'license', 'terms'];
@@ -430,7 +430,7 @@ function _renderLauncher(state) {
       const nameEl = row.querySelector('.ll-sp-name');
       const descEl = row.querySelector('.ll-sp-desc');
       const stateEl = row.querySelector('.ll-sp-state');
-      if (nameEl) nameEl.textContent = { tiers: 'Tiers', survey: 'Survey', case: 'Case document', license: 'License', terms: 'Terms' }[key];
+      if (nameEl) nameEl.textContent = { tiers: 'Pricing', survey: 'Survey', case: 'Case document', license: 'License', terms: 'Terms' }[key];
       const r = gridRows[key] || {};
       if (descEl) {
         descEl.textContent = r.desc || '';
@@ -528,7 +528,7 @@ async function _refreshLauncher(state) {
     const titleEl = pane.querySelector('.ll-sp-tier');
     if (titleEl) titleEl.textContent = statusTitle;
     const closingEl = pane.querySelector('.ll-sp-closing');
-    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Review the panes below for your next step.';
+    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Yellow below indicates action needed';
     const paneKeys = ['tiers', 'survey', 'case', 'license', 'terms'];
     paneKeys.forEach(key => {
       const row = pane.querySelector(`[data-pane="${key}"]`);
@@ -593,7 +593,7 @@ async function _refreshLauncher(state) {
 
 function _openBoxGrandchild(boxId, trigger, state) {
   if (modalManager.depth >= 2) return;
-  const titles = { tiers: 'Tiers', survey: 'Survey', case: 'Case Document', purchase: 'License', terms: 'Terms' };
+  const titles = { tiers: 'Pricing', survey: 'Survey', case: 'Case Document', purchase: 'License', terms: 'Terms' };
   const content = _buildGrandchildContent(boxId, state);
   const result = modalManager.open({ title: titles[boxId] || boxId, trigger, content });
   if (!result) return;
@@ -2182,7 +2182,7 @@ licStyles.textContent = `
     font-family: "Inter", system-ui, sans-serif;
     color: #e4e6eb;
     align-items: center;
-    padding: 24px 24px 16px;
+    padding: 12px 16px 10px;
   }
   .lic-error {
     color: #f5a623;
@@ -2266,8 +2266,8 @@ licStyles.textContent = `
     color: #e4e6eb;
   }
   .ll-sp-tier {
-    font-weight: 400;
-    color: #b0b6c0;
+    font-weight: 600;
+    color: #60a5fa;
   }
   .ll-sp-intro {
     font-size: 0.82rem;
@@ -2315,9 +2315,11 @@ licStyles.textContent = `
   }
   .ll-sp-closing {
     font-size: 0.82rem;
-    color: #6b7280;
+    color: #60a5fa;
+    font-weight: 500;
+    text-align: center;
     margin-top: 10px;
-    padding-left: 20px;
+    padding-left: 0;
   }
   /* Dynamic row colors */
   .ll-sp-row-green .ll-sp-name { color: #22c55e; }
@@ -3673,7 +3675,7 @@ licStyles.textContent = `
       gap: 3px 8px;
       padding-left: 12px;
     }
-    .ll-sp-intro, .ll-sp-closing {
+    .ll-sp-intro {
       padding-left: 12px;
     }
     .ll-terms-sliver {
