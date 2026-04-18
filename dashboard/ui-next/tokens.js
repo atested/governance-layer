@@ -29,11 +29,11 @@ const tokenCSS = `
 
   --font-body: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --text-xs: 0.72rem;
-  --text-sm: 0.82rem;
-  --text-base: 0.88rem;
-  --text-lg: 1.25rem;
-  --text-stat: 1.5rem;
+  --text-xs: 0.82rem;
+  --text-sm: 0.9rem;
+  --text-base: 1rem;
+  --text-lg: 1.35rem;
+  --text-stat: 1.7rem;
 
   --space-xs: 4px;
   --space-sm: 8px;

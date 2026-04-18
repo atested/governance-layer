@@ -99,7 +99,7 @@ class ModalManager {
     document.body.appendChild(frame);
 
     // Push to stack
-    this._stack.push({ depth, frame, backdrop, trigger, content: null });
+    this._stack.push({ depth, frame, backdrop, trigger, content: null, onClose: null });
 
     // Move focus into the window
     this._trapFocus(frame);
@@ -141,7 +141,21 @@ class ModalManager {
       this._trapFocus(this._stack[this._stack.length - 1].frame);
     }
 
+    // Fire onClose callback if set
+    if (entry.onClose) entry.onClose();
+
     return true;
+  }
+
+  /**
+   * Set an onClose callback for the topmost window.
+   * Called after the window is removed and focus is restored.
+   * @param {Function} fn
+   */
+  setOnClose(fn) {
+    if (this._stack.length > 0) {
+      this._stack[this._stack.length - 1].onClose = fn;
+    }
   }
 
   /**

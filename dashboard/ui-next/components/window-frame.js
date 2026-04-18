@@ -59,6 +59,9 @@ const styles = `
   height: calc(85vh * 0.8);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
+:host([depth="2"]) .title-bar {
+  border-bottom: 3px solid var(--grandchild-accent, var(--line));
+}
 
 .title-bar {
   display: flex;
