@@ -769,6 +769,13 @@ function _renderComplete(el, qState, appState) {
           View Tier Details
         </button>
       </div>
+
+      <div class="lq-restart-section">
+        <button class="lic-action-btn lq-restart-btn">
+          Restart Questionnaire
+        </button>
+        <span class="lq-restart-hint">Clears all answers and starts from the beginning.</span>
+      </div>
     </div>
   `;
 
@@ -779,9 +786,20 @@ function _renderComplete(el, qState, appState) {
   el.querySelector('.lq-view-tiers').addEventListener('click', () => {
     _switchPanel(appState, 'tiers');
   });
+
+  el.querySelector('.lq-restart-btn').addEventListener('click', () => {
+    _restartQuestionnaire(appState);
+  });
 }
 
 // ---------- Previous answers (collapsible) ----------
+
+async function _restartQuestionnaire(appState) {
+  const res = await api.postQuestionnaireReset();
+  if (res.ok) {
+    _switchPanel(appState, 'questionnaire');
+  }
+}
 
 function _renderPreviousAnswers(qState) {
   const entries = Object.entries(qState.answers);
@@ -1054,8 +1072,8 @@ function _buildPurchasePanel(state) {
   // Tier options — all enabled except Institution (contact handoff)
   const TIERS_FOR_PURCHASE = [
     { id: 'personal_plus', label: 'Personal Plus', price: '$99/yr', dating: 'From purchase date', selfServe: true },
-    { id: 'crew', label: 'Crew', price: '$299/yr', dating: 'From trial completion', selfServe: true },
-    { id: 'team', label: 'Team', price: '$799/yr', dating: 'From trial completion', selfServe: true },
+    { id: 'crew', label: 'Crew', price: '$2,995/yr', dating: 'From trial completion', selfServe: true },
+    { id: 'team', label: 'Team', price: '$19,995/yr', dating: 'From trial completion', selfServe: true },
     { id: 'institution', label: 'Institution', price: 'Contact us', dating: 'From trial completion', selfServe: false },
   ];
 
@@ -1217,7 +1235,7 @@ function _buildPurchasePanel(state) {
 }
 
 function _purchaseBtnLabel(tier, isUpgrade) {
-  const PRICES = { personal_plus: '$99/yr', crew: '$299/yr', team: '$799/yr' };
+  const PRICES = { personal_plus: '$99/yr', crew: '$2,995/yr', team: '$19,995/yr' };
   const label = _tierLabel(tier);
   const price = PRICES[tier] || '';
   const verb = isUpgrade ? 'Upgrade to' : 'Purchase';
@@ -1639,6 +1657,7 @@ function _renderCaseDocument(el, doc, appState) {
         <div class="lcd-actions">
           <button class="lic-action-btn lic-action-primary lcd-download-btn">Download Case Document</button>
           <button class="lic-action-btn" data-nav="tiers">View Tier Details</button>
+          <button class="lic-action-btn lq-restart-btn lcd-restart-btn">Restart Questionnaire</button>
         </div>
       `}
     </div>
@@ -1657,6 +1676,12 @@ function _renderCaseDocument(el, doc, appState) {
   const dlBtn = el.querySelector('.lcd-download-btn');
   if (dlBtn) {
     dlBtn.addEventListener('click', () => _downloadCaseDocument(doc));
+  }
+
+  // Wire restart questionnaire button
+  const rstBtn = el.querySelector('.lcd-restart-btn');
+  if (rstBtn) {
+    rstBtn.addEventListener('click', () => _restartQuestionnaire(appState));
   }
 }
 
@@ -2578,6 +2603,18 @@ licStyles.textContent = `
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  /* ---- Restart questionnaire ---- */
+  .lq-restart-section {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .lq-restart-hint {
+    font-size: 0.82rem;
+    color: #8b919a;
   }
 
   /* ---- Tier Display panel ---- */

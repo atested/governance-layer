@@ -342,6 +342,14 @@ export function postQuestionnaireAnswer({ question_id, answer_value, phase, tier
 }
 
 /**
+ * Reset the questionnaire (clears all answers and capacity in the chain).
+ * POST /api/licensing/questionnaire/reset
+ */
+export function postQuestionnaireReset() {
+  return _request('POST', '/licensing/questionnaire/reset', { body: {} });
+}
+
+/**
  * Persist capacity gate inputs to the chain.
  * POST /api/licensing/capacity
  * @param {Object} opts - { user_count, machine_count, base_tier }

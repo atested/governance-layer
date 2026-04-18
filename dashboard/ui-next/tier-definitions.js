@@ -29,37 +29,37 @@ export const COMMERCIAL_TERMS = {
   personal: {
     price: 'Free',
     billing: 'N/A',
-    support: 'Community',
+    support: 'Documentation & Feedback',
     dating: 'From registration',
-    summary: 'Single operator, full governance chain, community support.',
+    summary: 'Single operator, full governance chain, documentation and feedback system support.',
   },
   personal_plus: {
     price: '$99/yr',
     billing: 'Annual',
-    support: 'Email',
+    support: 'Feedback System',
     dating: 'From purchase',
-    summary: 'Single operator, multi-machine, priority email support.',
+    summary: 'Single operator, multi-machine, support through the Atested feedback system.',
   },
   crew: {
-    price: '$299/yr',
+    price: '$2,995/yr',
     billing: 'Annual',
-    support: 'Email',
+    support: 'Feedback System',
     dating: 'From trial completion',
     summary: '2\u201312 operators, shared governance chain, team visibility.',
   },
   team: {
-    price: '$799/yr',
+    price: '$19,995/yr',
     billing: 'Annual',
-    support: 'Priority',
+    support: 'Priority Feedback',
     dating: 'From trial completion',
     summary: '13\u201350 operators, role-based governance, priority support.',
   },
   institution: {
     price: 'Negotiated',
     billing: 'Annual',
-    support: 'Dedicated',
+    support: 'Dedicated Feedback',
     dating: 'From trial completion',
-    summary: '51+ operators, enterprise governance, dedicated support.',
+    summary: '51+ operators, enterprise governance, dedicated support through the Atested feedback system.',
   },
 };
 
@@ -91,7 +91,7 @@ export const TIER_CAPABILITIES = {
     { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: true },
     { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: true },
     { id: 'ops_single',      name: 'Single-Operator Mode',     category: 'Operations', isNew: true },
-    { id: 'sup_community',   name: 'Community Support',        category: 'Support',    isNew: true },
+    { id: 'sup_docs_feedback', name: 'Documentation & Feedback Support', category: 'Support', isNew: true },
   ],
 
   personal_plus: [
@@ -101,7 +101,7 @@ export const TIER_CAPABILITIES = {
     { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: false },
     { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: true },
     { id: 'ops_single',      name: 'Single-Operator Mode',     category: 'Operations', isNew: false },
-    { id: 'sup_email',       name: 'Email Support',            category: 'Support',    isNew: true },
+    { id: 'sup_feedback',    name: 'Feedback System Support',  category: 'Support',    isNew: true },
   ],
 
   crew: [
@@ -113,7 +113,7 @@ export const TIER_CAPABILITIES = {
     { id: 'vis_team',        name: 'Team Activity View',       category: 'Visibility', isNew: true },
     { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: false },
     { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: true },
-    { id: 'sup_email',       name: 'Email Support',            category: 'Support',    isNew: false },
+    { id: 'sup_feedback',    name: 'Feedback System Support',  category: 'Support',    isNew: false },
   ],
 
   team: [
@@ -128,7 +128,7 @@ export const TIER_CAPABILITIES = {
     { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: false },
     { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: false },
     { id: 'ops_rbac',        name: 'Access Control',           category: 'Operations', isNew: true },
-    { id: 'sup_priority',    name: 'Priority Support',         category: 'Support',    isNew: true },
+    { id: 'sup_priority_feedback', name: 'Priority Feedback Support', category: 'Support', isNew: true },
   ],
 
   institution: [
@@ -146,7 +146,7 @@ export const TIER_CAPABILITIES = {
     { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: false },
     { id: 'ops_rbac',        name: 'Access Control',           category: 'Operations', isNew: false },
     { id: 'ops_custom_int',  name: 'Custom Integrations',      category: 'Operations', isNew: true },
-    { id: 'sup_dedicated',   name: 'Dedicated Support',        category: 'Support',    isNew: true },
+    { id: 'sup_dedicated_feedback', name: 'Dedicated Feedback Support', category: 'Support', isNew: true },
   ],
 };
 
@@ -165,17 +165,17 @@ export const TIER_CAPABILITIES = {
 export const TRANSLATION_TEMPLATES = {
   gov_chain: {
     name: 'Governance Chain',
-    description: 'Every AI agent action is recorded in a tamper-evident chain, creating a complete audit trail of all governed operations.',
-    justification: 'Provides verifiable proof that AI agents operated within policy, essential for compliance and incident investigation.',
+    description: 'Every AI application action is recorded in a tamper-evident chain, creating a complete audit trail of all governed operations.',
+    justification: 'Provides verifiable proof that AI applications operated within policy, essential for compliance and incident investigation.',
   },
   gov_policy: {
     name: 'Policy Evaluation',
     description: 'Declarative policy rules evaluated against every tool call before execution, with ALLOW/DENY decisions recorded.',
-    justification: 'Ensures AI agents cannot exceed their authorized scope, reducing risk of unauthorized data access or destructive operations.',
+    justification: 'Ensures AI applications cannot exceed their authorized scope, reducing risk of unauthorized data access or destructive operations.',
   },
   gov_shared: {
     name: 'Shared Governance Chain',
-    description: 'A unified governance chain across all team members, providing organization-wide visibility into AI agent operations.',
+    description: 'A unified governance chain across all team members, providing organization-wide visibility into AI application operations.',
     justification: 'Gives managers and compliance officers a single view of all governed AI activity across the team.',
   },
   gov_roles: {
@@ -201,7 +201,7 @@ export const TRANSLATION_TEMPLATES = {
   vis_team: {
     name: 'Team Activity View',
     description: 'Aggregated activity view showing governance decisions across all team members with per-user breakdown.',
-    justification: 'Helps team leads identify patterns, ensure consistent governance, and spot unusual agent behavior.',
+    justification: 'Helps team leads identify patterns, ensure consistent governance, and spot unusual AI application behavior.',
   },
   vis_reports: {
     name: 'Advanced Reporting',
@@ -220,7 +220,7 @@ export const TRANSLATION_TEMPLATES = {
   },
   ops_multi_machine: {
     name: 'Multi-Machine Support',
-    description: 'Run governed AI agents on multiple machines under a single license, with chain data from all machines.',
+    description: 'Run governed AI applications on multiple machines under a single license, with chain data from all machines.',
     justification: 'Supports developers who work across multiple environments (laptop, CI server, staging) without separate licenses.',
   },
   ops_multi_user: {
@@ -238,25 +238,25 @@ export const TRANSLATION_TEMPLATES = {
     description: 'API access for integrating Atested governance data with existing enterprise systems (SIEM, GRC, CI/CD).',
     justification: 'Enables AI governance to be part of existing security and compliance workflows rather than a standalone tool.',
   },
-  sup_community: {
-    name: 'Community Support',
-    description: 'Access to community forums, documentation, and knowledge base for governance questions and configuration help.',
-    justification: 'Self-service support resources for operators comfortable with independent problem-solving.',
+  sup_docs_feedback: {
+    name: 'Documentation & Feedback Support',
+    description: 'Support through documentation and the Atested feedback system for governance questions and configuration help.',
+    justification: 'Self-service support through documentation plus the ability to submit feedback artifacts for assistance.',
   },
-  sup_email: {
-    name: 'Email Support',
-    description: 'Direct email support for governance questions, configuration assistance, and issue resolution.',
-    justification: 'Human support for when documentation isn\'t enough, with responses within one business day.',
+  sup_feedback: {
+    name: 'Feedback System Support',
+    description: 'Support through the Atested feedback system for governance questions, configuration assistance, and issue resolution.',
+    justification: 'Direct support through the in-app feedback artifact system with responses tracked in the governance chain.',
   },
-  sup_priority: {
-    name: 'Priority Support',
-    description: 'Priority email support with faster response times and escalation paths for urgent governance issues.',
-    justification: 'Ensures governance issues that affect team productivity are resolved quickly.',
+  sup_priority_feedback: {
+    name: 'Priority Feedback Support',
+    description: 'Priority support through the Atested feedback system with faster response times for urgent governance issues.',
+    justification: 'Ensures governance issues that affect team productivity are resolved quickly through prioritized feedback handling.',
   },
-  sup_dedicated: {
-    name: 'Dedicated Support',
-    description: 'Dedicated account representative with proactive support, custom onboarding, and regular governance reviews.',
-    justification: 'White-glove support for organizations where AI governance is mission-critical.',
+  sup_dedicated_feedback: {
+    name: 'Dedicated Feedback Support',
+    description: 'Dedicated support through the Atested feedback system with a named contact, custom onboarding, and regular governance reviews.',
+    justification: 'White-glove support for organizations where AI governance is mission-critical, with a named support contact.',
   },
 };
 

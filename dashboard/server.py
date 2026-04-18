@@ -407,6 +407,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_identity_lock()
             elif parsed.path == "/api/licensing/questionnaire/answer":
                 self._handle_questionnaire_answer()
+            elif parsed.path == "/api/licensing/questionnaire/reset":
+                self._handle_questionnaire_reset()
             elif parsed.path == "/api/licensing/capacity":
                 self._handle_capacity_inputs()
             elif parsed.path == "/api/licensing/register":
@@ -1276,7 +1278,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         except json.JSONDecodeError:
                             continue
                         et = rec.get("event_type")
-                        if et == "questionnaire_response":
+                        if et == "questionnaire_reset":
+                            # Reset clears all prior answers and capacity
+                            answers = []
+                            capacity = None
+                        elif et == "questionnaire_response":
                             answers.append({
                                 "question_id": rec.get("question_id", ""),
                                 "answer_value": rec.get("answer_value", ""),
@@ -1341,6 +1347,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "recorded": True,
                 "event_id": event.get("event_id"),
                 "question_id": question_id,
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_questionnaire_reset(self):
+        """POST /api/licensing/questionnaire/reset — record a questionnaire reset event."""
+        try:
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "questionnaire_reset",
+                {"reason": "operator_restart"},
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+            _json_response(self, {
+                "recorded": True,
+                "event_id": event.get("event_id"),
             })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
@@ -1956,8 +1979,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         except json.JSONDecodeError:
                             continue
                         et = rec.get("event_type")
+                        rt = rec.get("record_type", "")
 
-                        if et == "questionnaire_response":
+                        if et == "questionnaire_reset":
+                            answers_raw = []
+                            capacity = None
+                        elif et == "questionnaire_response":
                             answers_raw.append({
                                 "question_id": rec.get("question_id", ""),
                                 "answer_value": rec.get("answer_value", ""),
@@ -1970,7 +1997,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                 "machine_count": rec.get("machine_count"),
                                 "base_tier": rec.get("base_tier", ""),
                             }
-                        elif et == "action_decision":
+                        elif et == "action_decision" or rt == "mediated_decision":
                             total_decisions += 1
                             decision = rec.get("policy_decision", "")
                             if decision == "ALLOW":

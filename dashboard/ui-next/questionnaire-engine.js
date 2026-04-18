@@ -50,6 +50,8 @@ export function computeBaseTier(userCount, machineCount) {
   if (userCount >= 13) return 'team';
   if (userCount >= 2) return 'crew';
   // Single user — check machine count
+  // Personal Plus supports up to 3 machines; more than 3 routes to Crew.
+  if (machineCount > 3) return 'crew';
   if (machineCount >= 2) return 'personal_plus';
   return 'personal';
 }

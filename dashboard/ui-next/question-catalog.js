@@ -71,8 +71,8 @@ export const CLIMBING_QUESTIONS = {
     },
     {
       id: 'climb_pp_priority',
-      text: 'Would priority email support for governance questions be valuable to you?',
-      context: 'Personal Plus includes priority email support beyond community forums.',
+      text: 'Would dedicated support through the Atested feedback system be valuable to you?',
+      context: 'Personal Plus includes support through the Atested feedback system.',
       boundary: 'personal_to_personal_plus',
       options: [
         { value: 'yes', label: 'Yes' },
@@ -84,7 +84,7 @@ export const CLIMBING_QUESTIONS = {
   personal_plus_to_crew: [
     {
       id: 'climb_crew_multi_user',
-      text: 'Do multiple people at your organization need to use governed AI agents?',
+      text: 'Do multiple people at your organization need to use governed AI applications?',
       context: 'Crew supports 2-12 operators with shared governance.',
       boundary: 'personal_plus_to_crew',
       options: [
@@ -107,7 +107,7 @@ export const CLIMBING_QUESTIONS = {
   crew_to_team: [
     {
       id: 'climb_team_scale',
-      text: 'Does your team have more than 12 people using AI agents?',
+      text: 'Does your team have more than 12 people using AI applications?',
       context: 'Team supports 13-50 operators with advanced governance.',
       boundary: 'crew_to_team',
       options: [
@@ -130,7 +130,7 @@ export const CLIMBING_QUESTIONS = {
   team_to_institution: [
     {
       id: 'climb_inst_scale',
-      text: 'Does your organization have more than 50 people using AI agents?',
+      text: 'Does your organization have more than 50 people using AI applications?',
       context: 'Institution supports 51+ operators with enterprise governance.',
       boundary: 'team_to_institution',
       options: [
@@ -150,8 +150,8 @@ export const CLIMBING_QUESTIONS = {
     },
     {
       id: 'climb_inst_dedicated',
-      text: 'Would dedicated support with an assigned account representative be valuable?',
-      context: 'Institution includes dedicated support beyond priority email.',
+      text: 'Would dedicated support with a named contact be valuable?',
+      context: 'Institution includes dedicated support through the Atested feedback system with a named contact.',
       boundary: 'team_to_institution',
       options: [
         { value: 'yes', label: 'Yes' },
@@ -217,7 +217,7 @@ export const PHASE_TWO_QUESTIONS = {
   crew: [
     {
       id: 'p2_crew_structure',
-      text: 'How is your team structured for AI agent usage?',
+      text: 'How is your team structured for AI application usage?',
       context: 'This documents your team governance model.',
       options: [
         { value: 'centralized', label: 'Centralized — one person manages governance' },
@@ -227,12 +227,12 @@ export const PHASE_TWO_QUESTIONS = {
     },
     {
       id: 'p2_crew_agents',
-      text: 'How many AI agents does your team typically run concurrently?',
+      text: 'How many AI applications does your team typically run concurrently?',
       context: 'This adds scale context to the case document.',
       options: [
-        { value: 'few', label: '1-5 agents' },
-        { value: 'moderate', label: '6-20 agents' },
-        { value: 'many', label: '20+ agents' },
+        { value: 'few', label: '1-5 applications' },
+        { value: 'moderate', label: '6-20 applications' },
+        { value: 'many', label: '20+ applications' },
       ],
     },
   ],
@@ -240,7 +240,7 @@ export const PHASE_TWO_QUESTIONS = {
   team: [
     {
       id: 'p2_team_departments',
-      text: 'Do multiple departments or teams use AI agents?',
+      text: 'Do multiple departments or teams use AI applications?',
       context: 'This documents cross-team governance needs.',
       options: [
         { value: 'single', label: 'Single team' },
@@ -250,7 +250,7 @@ export const PHASE_TWO_QUESTIONS = {
     },
     {
       id: 'p2_team_compliance',
-      text: 'What compliance frameworks apply to your AI agent usage?',
+      text: 'What compliance frameworks apply to your AI application usage?',
       context: 'This adds compliance context to the case document.',
       options: [
         { value: 'internal', label: 'Internal policies only' },
@@ -264,7 +264,7 @@ export const PHASE_TWO_QUESTIONS = {
   institution: [
     {
       id: 'p2_inst_geography',
-      text: 'Does your AI agent deployment span multiple geographic regions?',
+      text: 'Does your AI application deployment span multiple geographic regions?',
       context: 'This documents data residency and compliance needs.',
       options: [
         { value: 'single', label: 'Single region' },
@@ -285,7 +285,7 @@ export const PHASE_TWO_QUESTIONS = {
     },
     {
       id: 'p2_inst_timeline',
-      text: 'What is your timeline for deploying governed AI agents at scale?',
+      text: 'What is your timeline for deploying governed AI applications at scale?',
       context: 'This adds deployment planning context.',
       options: [
         { value: 'now', label: 'Already deploying' },
