@@ -14,10 +14,10 @@ const tokenCSS = `
   --line: rgba(255, 255, 255, 0.08);
   --accent: #5b8af5;
   --accent-soft: rgba(91, 138, 245, 0.12);
-  --ok: #4ade80;
-  --ok-soft: rgba(74, 222, 128, 0.10);
-  --warn: #f59e42;
-  --warn-soft: rgba(245, 158, 66, 0.10);
+  --ok: #22c55e;
+  --ok-soft: rgba(34, 197, 94, 0.10);
+  --warn: #f5a623;
+  --warn-soft: rgba(245, 166, 35, 0.10);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.10);
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.25);

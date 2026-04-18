@@ -82,7 +82,7 @@ function _buildContent() {
     <div class="ll-status-pane">
       <div class="ll-sp-header">
         <span class="ll-sp-dot"></span>
-        <span class="ll-sp-title">License status: <span class="ll-sp-tier">Loading\u2026</span></span>
+        <span class="ll-sp-title">Atested License Status: <span class="ll-sp-tier">Loading\u2026</span></span>
       </div>
       <div class="ll-sp-intro">Your current license status:</div>
       <div class="ll-sp-grid">
@@ -124,7 +124,7 @@ function _buildContent() {
     <div class="ll-grid">
       <button class="ll-box" data-box="tiers">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">Tiers</span>
+        <span class="ll-title">Atested Tiers</span>
         <span class="ll-subtitle">Available plans</span>
         <p class="ll-desc">See what each plan includes and how they compare. Five levels from a solo user to thousands at the largest institutions, with capabilities that scale to your needs.</p>
         <span class="ll-status-line ll-s1"></span>
@@ -134,7 +134,7 @@ function _buildContent() {
       </button>
       <button class="ll-box" data-box="survey">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">Survey</span>
+        <span class="ll-title">Atested Survey</span>
         <span class="ll-subtitle">Your intended installation</span>
         <p class="ll-desc">Tell us about your planned deployment. We use your responses to help you decide the right plan and to create your case document. The more responses you provide the more accurate our assessment will be.</p>
         <span class="ll-status-line ll-s1"></span>
@@ -143,7 +143,7 @@ function _buildContent() {
       </button>
       <button class="ll-box" data-box="case">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">Case document</span>
+        <span class="ll-title">Atested Case Document</span>
         <span class="ll-subtitle">Your purchase argument</span>
         <p class="ll-desc">We take your responses to the survey and combine them with the evidence you have generated during your trial to create a document you can use internally to move forward with the project if you choose.</p>
         <span class="ll-status-line ll-s1"></span>
@@ -152,7 +152,7 @@ function _buildContent() {
       </button>
       <button class="ll-box" data-box="purchase">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">License</span>
+        <span class="ll-title">Atested License</span>
         <span class="ll-subtitle">Your Atested license</span>
         <p class="ll-desc">Select and purchase your plan. View your current license status, manage renewals, or change your plan as your needs evolve.</p>
         <span class="ll-status-line ll-s1"></span>
@@ -264,60 +264,61 @@ function _computeGridRows(state, paneStates) {
   const licensedTier = md.license_tier || '';
   const termsAck = md.terms_acknowledged || false;
   const p2Extra = q ? (q.phaseTwoTotal - q.phaseTwoAnswered) : 0;
+  const capStr = q?.capacity ? `${q.capacity.user_count} user${q.capacity.user_count !== 1 ? 's' : ''}, ${q.capacity.machine_count || 1} machine${(q.capacity.machine_count || 1) !== 1 ? 's' : ''}` : '';
+  const decStr = decisions > 0 ? `${decisions.toLocaleString()} Atested decisions as evidence` : '';
+  const renewalDate = md.license_expiry || '';
 
   const rows = {};
 
-  // Tiers
+  // Tiers — line 1: state, line 2: capacity detail
   if (isLicensed) {
-    rows.tiers = { desc: `Licensed at ${_tierLabel(licensedTier)}`, label: 'Current' };
+    rows.tiers = { desc: `Licensed at ${_tierLabel(licensedTier)}`, detail: '5 plans available', label: 'Current' };
   } else if (rec) {
-    const cap = q.capacity ? `${q.capacity.user_count} user${q.capacity.user_count !== 1 ? 's' : ''}, ${q.capacity.machine_count || 1} machine${(q.capacity.machine_count || 1) !== 1 ? 's' : ''}` : '';
-    rows.tiers = { desc: `${rec} recommended at ${price}${cap ? ' \u2014 ' + cap : ''}`, label: 'Recommended' };
+    rows.tiers = { desc: `${rec} recommended at ${price}`, detail: capStr || '', label: 'Recommended' };
   } else {
-    rows.tiers = { desc: 'Five plans from Personal to Institution', label: 'Available' };
+    rows.tiers = { desc: 'Five plans from Personal to Institution', detail: '', label: 'Available' };
   }
 
-  // Survey
+  // Survey — line 1: state, line 2: next action
   if (isLicensed) {
-    rows.survey = { desc: `Complete \u2014 ${rec || _tierLabel(licensedTier)}`, label: 'Complete' };
+    rows.survey = { desc: 'Complete', detail: 'Retake if your situation changes', label: 'Complete' };
   } else if (!q || q.state === STATES.EMPTY) {
-    rows.survey = { desc: 'Not started', label: 'Pending' };
+    rows.survey = { desc: 'Not started', detail: '', label: 'Pending' };
   } else if (q.state === STATES.CAPACITY || q.state === STATES.CLIMBING) {
-    rows.survey = { desc: 'In progress', label: 'Pending' };
+    rows.survey = { desc: 'In progress', detail: '', label: 'Pending' };
   } else if (q.state === STATES.COMPLETE) {
-    rows.survey = { desc: `${rec} recommended. All questions answered.`, label: 'Complete' };
+    rows.survey = { desc: `${rec} recommended`, detail: 'All questions answered', label: 'Complete' };
   } else if (rec) {
-    rows.survey = { desc: `${rec} recommended.${p2Extra > 0 ? ' There is more you can add.' : ''}`, label: p2Extra > 0 ? 'Optional' : 'Complete' };
+    rows.survey = { desc: `${rec} recommended`, detail: p2Extra > 0 ? 'There is more you can add' : '', label: p2Extra > 0 ? 'Optional' : 'Complete' };
   } else {
-    rows.survey = { desc: 'Not started', label: 'Pending' };
+    rows.survey = { desc: 'Not started', detail: '', label: 'Pending' };
   }
 
-  // Case document
+  // Case document — line 1: state, line 2: evidence count
   if (doc?.generated_at) {
-    const decStr = decisions > 0 ? `${decisions.toLocaleString()} Atested decisions as evidence` : 'Evidence available';
-    rows.case = { desc: `Ready with ${decStr}`, label: 'Ready' };
+    rows.case = { desc: 'Ready', detail: decStr || 'Evidence available', label: 'Ready' };
   } else if (rec) {
-    rows.case = { desc: 'Ready to generate', label: 'Available' };
+    rows.case = { desc: 'Ready to generate', detail: decStr || '', label: 'Available' };
   } else {
-    rows.case = { desc: 'Complete the survey first', label: 'Pending' };
+    rows.case = { desc: 'Complete the survey first', detail: '', label: 'Pending' };
   }
 
-  // License
+  // License — line 1: state, line 2: recommendation or renewal
   if (isLicensed) {
-    rows.license = { desc: `Licensed at ${_tierLabel(licensedTier)}`, label: 'Active' };
+    rows.license = { desc: `Licensed: ${_tierLabel(licensedTier)}`, detail: renewalDate ? `Renewal: ${renewalDate}` : '', label: 'Active' };
   } else if (md.registered) {
-    rows.license = { desc: 'Registered \u2014 Personal (free)', label: 'Registered' };
+    rows.license = { desc: 'Registered \u2014 Personal (free)', detail: '', label: 'Registered' };
   } else if (rec) {
-    rows.license = { desc: `Not yet licensed. Recommended: ${rec} at ${price}`, label: 'Pending' };
+    rows.license = { desc: 'Not yet licensed', detail: `${rec} at ${price}`, label: 'Pending' };
   } else {
-    rows.license = { desc: 'Not yet licensed', label: 'Pending' };
+    rows.license = { desc: 'Not yet licensed', detail: '', label: 'Pending' };
   }
 
-  // Terms
+  // Terms — line 1: state, no blue line
   if (termsAck) {
-    rows.terms = { desc: 'Reviewed', label: 'Reviewed' };
+    rows.terms = { desc: 'Reviewed', detail: '', label: 'Reviewed' };
   } else {
-    rows.terms = { desc: 'Not reviewed', label: 'Pending' };
+    rows.terms = { desc: 'Not reviewed', detail: '', label: 'Pending' };
   }
 
   return rows;
@@ -431,7 +432,18 @@ function _renderLauncher(state) {
       const stateEl = row.querySelector('.ll-sp-state');
       if (nameEl) nameEl.textContent = { tiers: 'Tiers', survey: 'Survey', case: 'Case document', license: 'License', terms: 'Terms' }[key];
       const r = gridRows[key] || {};
-      if (descEl) descEl.textContent = r.desc || '';
+      if (descEl) {
+        descEl.textContent = r.desc || '';
+        // Add blue detail line if present
+        const existingDetail = descEl.querySelector('.ll-sp-detail');
+        if (existingDetail) existingDetail.remove();
+        if (r.detail) {
+          const detailSpan = document.createElement('span');
+          detailSpan.className = 'll-sp-detail';
+          detailSpan.textContent = r.detail;
+          descEl.appendChild(detailSpan);
+        }
+      }
       if (stateEl) stateEl.textContent = r.label || '';
     });
   }
@@ -460,9 +472,12 @@ function _renderLauncher(state) {
     const s2 = box.querySelector('.ll-s2');
     const s3 = box.querySelector('.ll-s3');
     const click = box.querySelector('.ll-click');
-    if (s1) s1.textContent = bc.s1 || '';
-    if (s2) s2.textContent = bc.s2 || '';
-    if (s3) s3.textContent = bc.s3 || '';
+    if (s1) { s1.textContent = bc.s1 || ''; s1.classList.remove('ll-data'); }
+    if (s2) { s2.textContent = bc.s2 || ''; s2.classList.remove('ll-data'); }
+    if (s3) { s3.textContent = bc.s3 || ''; s3.classList.remove('ll-data'); }
+    // Mark last non-empty status line blue
+    const lastData = (bc.s3 ? s3 : bc.s2 ? s2 : null);
+    if (lastData) lastData.classList.add('ll-data');
     if (click) click.textContent = bc.click || '';
   });
 
@@ -524,7 +539,17 @@ async function _refreshLauncher(state) {
       const r = gridRows[key] || {};
       const descEl = row.querySelector('.ll-sp-desc');
       const stateEl = row.querySelector('.ll-sp-state');
-      if (descEl) descEl.textContent = r.desc || '';
+      if (descEl) {
+        descEl.textContent = r.desc || '';
+        const existingDetail = descEl.querySelector('.ll-sp-detail');
+        if (existingDetail) existingDetail.remove();
+        if (r.detail) {
+          const detailSpan = document.createElement('span');
+          detailSpan.className = 'll-sp-detail';
+          detailSpan.textContent = r.detail;
+          descEl.appendChild(detailSpan);
+        }
+      }
       if (stateEl) stateEl.textContent = r.label || '';
     });
   }
@@ -553,9 +578,11 @@ async function _refreshLauncher(state) {
     const s2 = box.querySelector('.ll-s2');
     const s3 = box.querySelector('.ll-s3');
     const click = box.querySelector('.ll-click');
-    if (s1) s1.textContent = bc.s1 || '';
-    if (s2) s2.textContent = bc.s2 || '';
-    if (s3) s3.textContent = bc.s3 || '';
+    if (s1) { s1.textContent = bc.s1 || ''; s1.classList.remove('ll-data'); }
+    if (s2) { s2.textContent = bc.s2 || ''; s2.classList.remove('ll-data'); }
+    if (s3) { s3.textContent = bc.s3 || ''; s3.classList.remove('ll-data'); }
+    const lastData = (bc.s3 ? s3 : bc.s2 ? s2 : null);
+    if (lastData) lastData.classList.add('ll-data');
     if (click) click.textContent = bc.click || '';
   });
 
@@ -575,7 +602,7 @@ function _openBoxGrandchild(boxId, trigger, state) {
   const paneStates = _computePaneStates(state);
   const paneMap = { tiers: 'tiers', survey: 'survey', case: 'case', purchase: 'license', terms: 'terms' };
   const ps = paneStates[paneMap[boxId]] || 'amber';
-  const accent = ps === 'green' ? '#4ade80' : '#f59e42';
+  const accent = ps === 'green' ? '#22c55e' : '#f5a623';
   if (result.frame) result.frame.style.setProperty('--grandchild-accent', accent);
 
   modalManager.setOnClose(() => _refreshLauncher(state));
@@ -1306,7 +1333,7 @@ function _renderUnifiedPurchase(el, state) {
 
         <div class="lup-renewal-section">
           <div class="lup-renewal-status">
-            <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f59e42'}"></span>
+            <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f5a623'}"></span>
             <span>Auto-renewal ${autoRenewal ? 'enabled' : 'disabled'}</span>
           </div>
           <button class="lic-action-btn lup-renewal-toggle">${autoRenewal ? 'Turn Off' : 'Turn On'}</button>
@@ -2158,8 +2185,8 @@ licStyles.textContent = `
     padding: 24px 24px 16px;
   }
   .lic-error {
-    color: #f59e42;
-    background: rgba(245, 158, 66, 0.10);
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 12px 16px;
     border-radius: 8px;
@@ -2226,12 +2253,12 @@ licStyles.textContent = `
     transition: background 0.2s, box-shadow 0.2s;
   }
   .ll-dot-green {
-    background: #4ade80;
-    box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
   }
   .ll-dot-amber {
-    background: #f59e42;
-    box-shadow: 0 0 8px rgba(245, 158, 66, 0.3);
+    background: #f5a623;
+    box-shadow: 0 0 8px rgba(245, 166, 35, 0.3);
   }
   .ll-sp-title {
     font-size: 1rem;
@@ -2266,16 +2293,23 @@ licStyles.textContent = `
   }
   .ll-sp-desc {
     font-size: 0.82rem;
-    color: #b0b6c0;
+    color: #e4e6eb;
     padding: 3px 0;
     line-height: 1.35;
   }
+  .ll-sp-detail {
+    display: block;
+    font-size: 13px;
+    color: #60a5fa;
+    line-height: 1.35;
+    margin-top: 1px;
+  }
   .ll-sp-state {
-    font-size: 0.75rem;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 8px;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
     border-radius: 4px;
     white-space: nowrap;
   }
@@ -2286,15 +2320,15 @@ licStyles.textContent = `
     padding-left: 20px;
   }
   /* Dynamic row colors */
-  .ll-sp-row-green .ll-sp-name { color: #4ade80; }
+  .ll-sp-row-green .ll-sp-name { color: #22c55e; }
   .ll-sp-row-green .ll-sp-state {
-    color: #166534;
-    background: rgba(74, 222, 128, 0.15);
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.15);
   }
-  .ll-sp-row-amber .ll-sp-name { color: #f59e42; }
+  .ll-sp-row-amber .ll-sp-name { color: #f5a623; }
   .ll-sp-row-amber .ll-sp-state {
-    color: #92400e;
-    background: rgba(245, 158, 66, 0.15);
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.15);
   }
   /* Aggregate header dot colors applied via .ll-dot-green / .ll-dot-amber */
   .ll-sp-green .ll-sp-title { color: #e4e6eb; }
@@ -2327,14 +2361,14 @@ licStyles.textContent = `
     outline-offset: 2px;
   }
   .ll-ts-accent {
-    width: 4px;
+    width: 6px;
     align-self: stretch;
     flex-shrink: 0;
     background: #8b919a;
     transition: background 0.2s;
   }
-  .ll-ts-green .ll-ts-accent { background: #4ade80; }
-  .ll-ts-amber .ll-ts-accent { background: #f59e42; }
+  .ll-ts-green .ll-ts-accent { background: #22c55e; }
+  .ll-ts-amber .ll-ts-accent { background: #f5a623; }
   .ll-ts-left {
     flex: 1;
     padding: 10px 16px;
@@ -2355,8 +2389,8 @@ licStyles.textContent = `
     white-space: nowrap;
     transition: color 0.15s;
   }
-  .ll-ts-green .ll-ts-action { color: #4ade80; }
-  .ll-ts-amber .ll-ts-action { color: #f59e42; }
+  .ll-ts-green .ll-ts-action { color: #22c55e; }
+  .ll-ts-amber .ll-ts-action { color: #f5a623; }
 
   /* ---- Launcher grid ---- */
   .ll-grid {
@@ -2390,22 +2424,22 @@ licStyles.textContent = `
     top: 0;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 6px;
     border-radius: 12px 12px 0 0;
     background: rgba(255, 255, 255, 0.1);
     transition: background 0.2s;
   }
   /* Dynamic box accent colors */
-  .ll-box-green .ll-accent-bar { background: #4ade80; }
-  .ll-box-amber .ll-accent-bar { background: #f59e42; }
+  .ll-box-green .ll-accent-bar { background: #22c55e; }
+  .ll-box-amber .ll-accent-bar { background: #f5a623; }
   .ll-box:hover {
     background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.14);
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   }
-  .ll-box-green:hover { border-color: rgba(74, 222, 128, 0.3); }
-  .ll-box-amber:hover { border-color: rgba(245, 158, 66, 0.3); }
+  .ll-box-green:hover { border-color: rgba(34, 197, 94, 0.3); }
+  .ll-box-amber:hover { border-color: rgba(245, 166, 35, 0.3); }
   .ll-box:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: 2px;
@@ -2432,19 +2466,22 @@ licStyles.textContent = `
   }
   .ll-status-line {
     font-size: 0.82rem;
-    color: #8b919a;
+    color: #e4e6eb;
     line-height: 1.4;
+  }
+  .ll-status-line.ll-data {
+    color: #60a5fa;
   }
   .ll-click {
     font-size: 0.82rem;
     font-weight: 500;
     margin-top: auto;
     padding-top: 4px;
-    color: #8b919a;
+    color: #fbbf24;
+    text-align: center;
+    width: 100%;
     transition: color 0.15s;
   }
-  .ll-box-green .ll-click { color: #4ade80; }
-  .ll-box-amber .ll-click { color: #f59e42; }
 
   /* ---- Terms panel (grandchild) ---- */
   .lic-terms-panel {
@@ -2475,7 +2512,7 @@ licStyles.textContent = `
   }
   .lt-ack-done {
     font-size: 0.9rem;
-    color: #4ade80;
+    color: #22c55e;
     font-weight: 500;
   }
   .lt-ack-check {
@@ -2537,8 +2574,8 @@ licStyles.textContent = `
     flex-wrap: wrap;
   }
   .lq-error {
-    color: #f59e42;
-    background: rgba(245, 158, 66, 0.10);
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
     border-radius: 8px;
@@ -2830,12 +2867,12 @@ licStyles.textContent = `
     color: #6b7280;
   }
   .lcd-tentative-banner {
-    background: rgba(245, 158, 66, 0.10);
-    border: 1px solid rgba(245, 158, 66, 0.3);
+    background: rgba(245, 166, 35, 0.10);
+    border: 1px solid rgba(245, 166, 35, 0.3);
     border-radius: 8px;
     padding: 10px 14px;
     font-size: 0.82rem;
-    color: #f59e42;
+    color: #f5a623;
   }
   .lcd-no-rec {
     font-size: 1rem;
@@ -2974,7 +3011,7 @@ licStyles.textContent = `
     color: #22c55e;
   }
   .lcd-ev-deny {
-    color: #f59e42;
+    color: #f5a623;
   }
   .lcd-ev-label {
     font-size: 0.82rem;
@@ -3090,8 +3127,8 @@ licStyles.textContent = `
     color: #5b8af5;
   }
   .ltd-badge-tentative {
-    background: rgba(245, 158, 66, 0.15);
-    color: #f59e42;
+    background: rgba(245, 166, 35, 0.15);
+    color: #f5a623;
   }
   .ltd-tier-range {
     font-size: 0.82rem;
@@ -3393,8 +3430,8 @@ licStyles.textContent = `
     flex-wrap: wrap;
   }
   .lup-action-error {
-    color: #f59e42;
-    background: rgba(245, 158, 66, 0.10);
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
     border-radius: 8px;
@@ -3449,12 +3486,12 @@ licStyles.textContent = `
     flex-shrink: 0;
   }
   .lup-pending-downgrade {
-    background: rgba(245, 158, 66, 0.06);
-    border: 1px solid rgba(245, 158, 66, 0.2);
+    background: rgba(245, 166, 35, 0.06);
+    border: 1px solid rgba(245, 166, 35, 0.2);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 0.9rem;
-    color: #f59e42;
+    color: #f5a623;
     line-height: 1.5;
     margin-bottom: 16px;
     display: flex;
@@ -3500,8 +3537,8 @@ licStyles.textContent = `
 
   /* Confirm dialog */
   .lup-confirm-card {
-    background: rgba(245, 158, 66, 0.06);
-    border: 1px solid rgba(245, 158, 66, 0.2);
+    background: rgba(245, 166, 35, 0.06);
+    border: 1px solid rgba(245, 166, 35, 0.2);
     border-radius: 10px;
     padding: 16px 20px;
     margin-top: 12px;
@@ -3517,8 +3554,8 @@ licStyles.textContent = `
     gap: 8px;
   }
   .lup-error {
-    color: #f59e42;
-    background: rgba(245, 158, 66, 0.10);
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
     border-radius: 8px;
