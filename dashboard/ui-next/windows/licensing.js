@@ -10,7 +10,12 @@
 
 import * as api from '../api.js';
 import * as licensingApi from '../licensing-api.js';
-import { refreshLicenseState } from '../app.js';
+// refreshLicenseState is loaded lazily to break the circular import:
+// app.js → main-page.js → licensing.js → app.js
+async function _refreshLicenseState() {
+  const { refreshLicenseState } = await import('../app.js');
+  refreshLicenseState();
+}
 import { modalManager } from '../modal-manager.js';
 import '../components/loading-indicator.js';
 import {
@@ -117,7 +122,7 @@ async function _loadMode(state) {
     // Trial complete — views revert immediately to personal unlicensed
     state.mode = 'personal';
     // Propagate mode transition to chrome + main page
-    refreshLicenseState();
+    _refreshLicenseState();
   } else {
     state.mode = _normalizeMode(res.data);
   }
@@ -987,7 +992,7 @@ function _renderRegisterStep(el, step, regData, state) {
       _renderRegisterSuccess(el, res.data, state);
 
       // Propagate mode transitions to chrome + main page
-      refreshLicenseState();
+      _refreshLicenseState();
     });
   }
 }
@@ -1205,7 +1210,7 @@ function _buildPurchasePanel(state) {
 
     // Success — show confirmation and propagate mode change
     _renderPurchaseSuccess(el, res.data, state);
-    refreshLicenseState();
+    _refreshLicenseState();
   });
 
   return el;

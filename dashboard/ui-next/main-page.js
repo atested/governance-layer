@@ -24,6 +24,7 @@ import { openReportsWindow } from './windows/reports.js';
 import { openConfigWindow } from './windows/configuration.js';
 import { openFeedbackWindow } from './windows/feedback.js';
 import { openNotificationsWindow } from './windows/notifications.js';
+import { openLicensingWindow } from './windows/licensing.js';
 
 /** Map launcher IDs to window open functions */
 const WINDOW_OPENERS = {
@@ -35,6 +36,7 @@ const WINDOW_OPENERS = {
   configuration: openConfigWindow,
   feedback: openFeedbackWindow,
   notifications: openNotificationsWindow,
+  licensing: openLicensingWindow,
 };
 
 /** Launcher definitions for all workflow windows */
@@ -47,7 +49,7 @@ const LAUNCHERS = [
   { id: 'configuration', label: 'Configuration' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'notifications', label: 'Notifications' },
-  { id: 'licensing', label: 'Licensing', comingSoon: true },
+  { id: 'licensing', label: 'Licensing' },
 ];
 
 /** DOM references populated during render */
@@ -230,6 +232,41 @@ export async function loadMainPageData() {
 
   // Recent Activity feed
   _renderRecentActivity(activityRes);
+}
+
+/**
+ * Set the licensing mode and conditionally render the post-trial
+ * unlicensed card on the main page.
+ * Called by app.js after loading license state.
+ * @param {{ license_status: string, license_tier: string }} modeData
+ */
+export function setLicenseMode(modeData) {
+  if (!_page) return;
+  const existing = _page.querySelector('#mp-license-card');
+  if (existing) existing.remove();
+
+  const status = modeData?.license_status;
+  if (status === 'personal' || status === 'unlicensed') {
+    const card = document.createElement('div');
+    card.id = 'mp-license-card';
+    card.className = 'mp-license-card';
+    card.innerHTML = `
+      <div class="mp-license-card-inner">
+        <span class="mp-license-dot" style="background: var(--warning, #f59e42)"></span>
+        <div class="mp-license-card-text">
+          <strong>Personal (unlicensed)</strong>
+          <span>Governance is active. Register or choose a tier to unlock full features.</span>
+        </div>
+        <button class="mp-license-card-btn">Open Licensing</button>
+      </div>
+    `;
+    card.querySelector('.mp-license-card-btn').addEventListener('click', () => {
+      openLicensingWindow(card);
+    });
+    // Insert before the launchers section
+    const launchers = _page.querySelector('#mp-launchers');
+    _page.insertBefore(card, launchers);
+  }
 }
 
 // ---------- Internal helpers ----------
@@ -464,6 +501,54 @@ mpStyles.textContent = `
   .mp-launcher-disabled:hover {
     background: none;
     border-color: rgba(255, 255, 255, 0.08);
+  }
+  .mp-license-card {
+    margin-bottom: 24px;
+  }
+  .mp-license-card-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: rgba(245, 158, 66, 0.06);
+    border: 1px solid rgba(245, 158, 66, 0.3);
+    border-radius: 10px;
+  }
+  .mp-license-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .mp-license-card-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.82rem;
+  }
+  .mp-license-card-text strong {
+    color: #f59e42;
+    font-weight: 600;
+  }
+  .mp-license-card-text span {
+    color: #8b919a;
+  }
+  .mp-license-card-btn {
+    background: none;
+    border: 1px solid rgba(245, 158, 66, 0.4);
+    border-radius: 8px;
+    color: #f59e42;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .mp-license-card-btn:hover {
+    background: rgba(245, 158, 66, 0.12);
   }
 
   /* Responsive: narrow viewports */

@@ -131,6 +131,23 @@ export function updateIdentityZone(session) {
   }
 }
 
+/**
+ * Update the chrome license zone to reflect current licensing state.
+ * @param {string} tierName - display name for the tier (e.g. "Trial", "Personal", "Team")
+ * @param {string} dotColor - CSS color or var() for the status dot
+ */
+export function updateLicenseZone(tierName, dotColor) {
+  const zone = document.querySelector('.chrome-license');
+  if (!zone) return;
+  const tierEl = zone.querySelector('.chrome-license-tier');
+  const dotEl = zone.querySelector('.chrome-license-dot');
+  if (tierEl) tierEl.textContent = tierName || 'Unknown';
+  if (dotEl) dotEl.style.background = dotColor || 'var(--muted, #8b919a)';
+
+  // Add/remove amber state class for post-trial unlicensed
+  zone.classList.toggle('chrome-license-amber', tierName === 'Personal' && dotColor && dotColor.includes('f59e42'));
+}
+
 function _formatRemaining(seconds) {
   if (seconds == null || seconds <= 0) return '';
   const m = Math.floor(seconds / 60);
@@ -210,6 +227,9 @@ chromeStyles.textContent = `
   }
   .chrome-license-tier {
     color: #8b919a;
+  }
+  .chrome-license-amber .chrome-license-tier {
+    color: #f59e42;
   }
   .chrome-license-dot {
     width: 8px;
