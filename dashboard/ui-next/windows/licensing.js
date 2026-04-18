@@ -1939,196 +1939,252 @@ function _downloadCaseDocument(doc) {
 }
 
 // ==========================================================================
-// Tier display panel
+// Pricing grandchild — tier selector + incremental feature detail
 // ==========================================================================
+
+// ---------- Pricing feature content (incremental per plan) ----------
+
+const _TELEMETRY_INTRO = 'Atested maintains a bidirectional channel between your installation and Atested. This channel carries data in both directions and is the transport layer we both use to communicate. Uses include escalation requests from you, security notifications, new version notifications, and operational intelligence. All traffic on this channel is recorded in your governance chain, so you can independently verify what was sent and received. The transport layer itself is encrypted end to end.';
+
+const _TELEMETRY_OUTBOUND = 'Your installation sends anonymized, summarized operational data to Atested. Aggregate decision counts, classifier confidence distributions, and policy rule hit patterns. No tool names, file paths, commands, or content is transmitted or ever retained in any way. This data helps Atested improve classification accuracy and prioritize development.';
+
+const _TELEMETRY_OPT_OUT = 'You can opt out of telemetry during licensing. Opting out is supported but reduces our ability to deliver version updates and operational intelligence to your installation. Emergency communications are never affected by telemetry status or plan level. Atested will always act to protect every installation regardless.';
+
+const _PRIORITY_INTRO = [
+  'Priority requests use the telemetry channel to connect you directly with Atested. You decide when to use a slot and what priority it warrants. We do not require you to exhaust documentation or verify your issue before reaching out. Your judgment is enough.',
+  'When you submit a priority request, one of your slots is immediately occupied with your submission. A companion pane comes alive with a receipt of delivery, your position in the queue, and an expected investigation start time. As we work on your request, our response is reported in real time alongside your original submission. This is not a ticket number you check periodically. It is a live view of the exchange between you and Atested.',
+  'Slots remain occupied until the request is resolved. You choose which issues warrant a slot, knowing the count is limited.',
+];
+
+const PRICING_FEATURES = {
+  personal: {
+    title: 'All Atested plans include the following',
+    categories: [
+      { name: 'Governance', features: [
+        { name: 'The Chain', desc: 'Cryptographically signed, hash-chained, immutable record of every AI application action. Every decision is recorded with Ed25519 signatures and can be independently verified by anyone with the public key.' },
+        { name: 'Policy Evaluation', desc: 'Declarative rules evaluated against every tool call before execution. ALLOW or DENY, decided and recorded before the action can happen.' },
+      ]},
+      { name: 'Oversight', features: [
+        { name: 'Dashboard', desc: 'Real-time operational view of what your AI applications are doing. Decisions, activity, health, and configuration in one surface.' },
+        { name: 'Audit', desc: 'Searchable, filterable record of every governed operation. Query by time, user, tool, decision type, or event category. Independently verifiable against the chain.' },
+      ]},
+      { name: 'Operations', features: [
+        { name: 'Single Operator', desc: 'Full Atested capabilities for one person. Your chain, your machine. Everything you need to trust your AI applications.' },
+      ]},
+      { name: 'Communication', features: [
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Atested sends security notifications, version updates, and operational intelligence back through the same channel. Critical security alerts reach your installation as they are identified. New version availability is communicated with release details so you can evaluate before updating.' },
+        { name: 'Priority Requests', priority: true, detail: 'All requests are accepted at standard priority. Standard requests are not tracked individually.', slots: null },
+      ]},
+    ],
+  },
+  personal_plus: {
+    title: 'Personal Plus adds the following',
+    categories: [
+      { name: 'Operations', features: [
+        { name: 'Multi-Machine', desc: 'Run Atested on up to 3 machines under a single license. All machines share one chain and one policy configuration. Your governance picture is complete regardless of which machine you work from.' },
+      ]},
+      { name: 'Communication', features: [
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Cross-machine pattern detection. Atested can identify inconsistencies between your machines and surface operational insights specific to your multi-machine setup.' },
+        { name: 'Priority Requests', priority: true, detail: '2 Medium priority slots. Medium requests move ahead of standard requests in the queue.', slots: { medium: 2, high: 0 } },
+      ]},
+    ],
+  },
+  crew: {
+    title: 'Crew adds the following',
+    categories: [
+      { name: 'Operations', features: [
+        { name: 'Unlimited Machines', desc: 'No machine limit. Run Atested across your entire infrastructure under one license.' },
+        { name: 'Team Oversight', desc: 'When multiple people use Atested under one license, their activity is governed together. Shared policies, combined views, and organizational-level reporting. One team, one set of rules, one complete picture of what is happening. Everyone on the license shares governance with no way to segment data within a license.' },
+      ]},
+      { name: 'Communication', features: [
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Aggregate team patterns visible in your dashboard. Cross-install intelligence feeds back into your operational views. You see how your team compares to similar deployments.' },
+        { name: 'Priority Requests', priority: true, detail: '4 Medium priority slots and 2 High priority slots. High priority requests move to the front of the queue ahead of Medium. Response time targets begin at this tier.', slots: { medium: 4, high: 2 } },
+      ]},
+    ],
+  },
+  team: {
+    title: 'Team adds the following',
+    categories: [
+      { name: 'Operations', features: [
+        { name: 'Role-Based Governance', desc: 'Configurable roles with different permission levels for operators, reviewers, and administrators. Control who can approve, who can configure, and who can view.' },
+        { name: 'Organizational Structure', desc: '10\u201350 users with delegated administration. Manage your governance organization, not just individual operators.' },
+      ]},
+      { name: 'Oversight', features: [
+        { name: 'Team Activity View', desc: 'Aggregated activity across all team members with per-user breakdown. See who is doing what and how governance decisions distribute across the organization.' },
+        { name: 'Advanced Reporting', desc: 'Scheduled and ad-hoc reports covering metrics, trends, and compliance status over configurable time periods.' },
+      ]},
+      { name: 'Communication', features: [
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Organizational telemetry with role-level breakdowns. Compliance-relevant aggregate metrics derived from your telemetry data and surfaced in your reporting. Industry-level benchmarking at this scale.' },
+        { name: 'Priority Requests', priority: true, detail: '8 Medium priority slots and 4 High priority slots. 2-business-day response commitment for all elevated requests. Your team can see all open requests, who submitted them, and their current status.', slots: { medium: 8, high: 4 } },
+      ]},
+    ],
+  },
+  institution: {
+    title: 'Institution adds the following',
+    categories: [
+      { name: 'Operations', features: [
+        { name: 'Custom Deployment', desc: 'On-premises or hybrid deployment configured to your infrastructure requirements. Your data stays where you need it.' },
+        { name: 'Unlimited Scale', desc: '50+ users with enterprise-scale administration and policy management. No user ceiling.' },
+      ]},
+      { name: 'Compliance', features: [
+        { name: 'Third-Party Attestation', desc: 'Independent verification of your governance chain by authorized auditors. Proof that your AI governance is what you say it is.' },
+        { name: 'Compliance Reporting', desc: 'Regulatory-aligned reporting for healthcare, finance, legal, and defense requirements. Built from your chain data, not from surveys or self-assessments.' },
+      ]},
+      { name: 'Communication', features: [
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Custom telemetry configuration. You control what is shared, what is retained, and what is reported. Telemetry terms are part of your negotiated agreement.' },
+        { name: 'Priority Requests', priority: true, detail: 'Custom priority slot allocation and SLA negotiated for your organization. Named contact with direct access to the people who build and maintain Atested.', slots: { medium: -1, high: -1 } },
+      ]},
+    ],
+  },
+};
+
+const _TIER_SELECTOR = [
+  { id: 'personal',      name: 'Personal',      spec: '1 user, 1 machine',                       price: 'Free' },
+  { id: 'personal_plus', name: 'Personal Plus',  spec: '1 user, up to 3 machines',                price: '$99/yr' },
+  { id: 'crew',          name: 'Crew',           spec: '2\u201312 users, unlimited machines',      price: '$2,995/yr' },
+  { id: 'team',          name: 'Team',           spec: '10\u201350 users, organizational governance', price: '$19,995/yr' },
+  { id: 'institution',   name: 'Institution',    spec: '50+ users, custom deployment',             price: 'Negotiated' },
+];
+
+// ---------- Pricing grandchild builder ----------
 
 function _buildTierDisplayPanel(state) {
   const el = document.createElement('div');
-  el.className = 'ltd-panel';
-  el.innerHTML = `<atd-loading-indicator label="Loading tier information"></atd-loading-indicator>`;
-  _loadTierDisplay(el, state);
-  return el;
-}
+  el.className = 'lp-panel';
 
-async function _loadTierDisplay(el, appState) {
-  // Fetch questionnaire state for recommendation highlight + fit reasoning
-  const qRes = await api.getQuestionnaireState();
-  let qState = null;
-  if (qRes.ok) {
-    qState = reconstructState(qRes.data);
-  }
-
-  _renderTierDisplay(el, qState, appState);
-}
-
-function _renderTierDisplay(el, qState, appState) {
-  const recommendation = qState?.verified ? qState.recommendation : null;
-  const tentativeRec = !qState?.verified ? qState?.recommendation : null;
-  const licensedTier = _getLicensedTier(appState.mode);
-
-  // Build tier index + sections
-  let indexHtml = '';
-  let sectionsHtml = '';
-
-  for (const tierId of TIERS) {
-    const label = TIER_LABELS[tierId];
-    const isLicensed = licensedTier === tierId;
-    const isRecommended = recommendation === tierId;
-    const isTentative = tentativeRec === tierId;
-    const range = CAPACITY_RANGES[tierId];
-    const terms = COMMERCIAL_TERMS[tierId];
-    const groups = getGroupedCapabilities(tierId);
-
-    // Index entry
-    indexHtml += `<button class="ltd-index-item" data-tier="${tierId}">${_esc(label)}</button>`;
-
-    // Badges
-    let badges = '';
-    if (isLicensed) badges += `<span class="ltd-badge ltd-badge-licensed">Licensed</span>`;
-    if (isRecommended) badges += `<span class="ltd-badge ltd-badge-recommended">Recommended</span>`;
-    if (isTentative) badges += `<span class="ltd-badge ltd-badge-tentative">Tentative</span>`;
-
-    // Capabilities grouped by category
-    let capsHtml = '';
-    for (const group of groups) {
-      capsHtml += `<div class="ltd-cap-group">`;
-      capsHtml += `<div class="ltd-cap-category">${_esc(group.category)}</div>`;
-      for (const cap of group.capabilities) {
-        capsHtml += `
-          <div class="ltd-cap-row">
-            <span class="ltd-cap-name">${_esc(cap.name)}</span>
-            ${cap.isNew ? `<span class="ltd-cap-new">New at ${_esc(label)}</span>` : ''}
-            <span class="ltd-cap-desc">${_esc(cap.description)}</span>
-          </div>
-        `;
-      }
-      capsHtml += `</div>`;
-    }
-
-    // Fit reasoning (conditional)
-    let fitHtml = '';
-    if (qState && qState.verified && qState.recommendation) {
-      const reasoning = thresholdReasoning(qState);
-      if (tierId === qState.recommendation) {
-        fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">This tier is the verified recommendation for your organization.</p></div>`;
-      } else {
-        const recIdx = TIERS.indexOf(qState.recommendation);
-        const tierIdx = TIERS.indexOf(tierId);
-        if (tierIdx < recIdx && reasoning.whyNotLower) {
-          fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">${_esc(reasoning.whyNotLower)}</p></div>`;
-        } else if (tierIdx > recIdx && reasoning.whyNotHigher) {
-          fitHtml = `<div class="ltd-fit"><div class="ltd-fit-eyebrow">Fit Assessment</div><p class="ltd-fit-text">${_esc(reasoning.whyNotHigher)}</p></div>`;
-        }
-      }
-    }
-
-    // Action button
-    let actionHtml = _tierActionButton(tierId, appState.mode, isLicensed, isRecommended);
-
-    sectionsHtml += `
-      <div class="ltd-tier-section" id="ltd-tier-${tierId}">
-        <div class="ltd-tier-header">
-          <h3 class="ltd-tier-name">${_esc(label)}</h3>
-          ${badges}
-        </div>
-        <div class="ltd-tier-range">${_esc(range)}</div>
-        <div class="ltd-tier-caps">${capsHtml}</div>
-        <div class="ltd-tier-terms">
-          <div class="ltd-term-row"><span class="ltd-term-label">Price</span><span class="ltd-term-value">${_esc(terms.price)}</span></div>
-          <div class="ltd-term-row"><span class="ltd-term-label">Billing</span><span class="ltd-term-value">${_esc(terms.billing)}</span></div>
-          <div class="ltd-term-row"><span class="ltd-term-label">Support</span><span class="ltd-term-value">${_esc(terms.support)}</span></div>
-          <div class="ltd-term-row"><span class="ltd-term-label">License Dating</span><span class="ltd-term-value">${_esc(terms.dating)}</span></div>
-        </div>
-        ${fitHtml}
-        ${actionHtml}
-      </div>
-    `;
+  // Tier selector panes
+  let selectorHtml = '';
+  for (const t of _TIER_SELECTOR) {
+    selectorHtml += `<button class="lp-tier-row" data-tier="${t.id}">
+      <span class="lp-tier-name">${_esc(t.name)}</span>
+      <span class="lp-tier-spec">${_esc(t.spec)}</span>
+      <span class="lp-tier-price">${_esc(t.price)}</span>
+    </button>`;
   }
 
   el.innerHTML = `
-    <div class="ltd-layout">
-      <nav class="ltd-index">${indexHtml}</nav>
-      <div class="ltd-sections">${sectionsHtml}</div>
-    </div>
+    <div class="lp-selector">${selectorHtml}</div>
+    <div class="lp-detail"></div>
   `;
 
-  // Wire index buttons
-  el.querySelectorAll('.ltd-index-item').forEach(btn => {
+  // Select first tier (or recommended/licensed)
+  const rec = state.qState?.recommendation;
+  const licensed = _getLicensedTier(state.mode);
+  const initial = licensed || rec || 'personal';
+
+  // Wire selector clicks
+  el.querySelectorAll('.lp-tier-row').forEach(btn => {
     btn.addEventListener('click', () => {
-      const tierId = btn.dataset.tier;
-      const section = el.querySelector(`#ltd-tier-${tierId}`);
-      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.querySelectorAll('.lp-tier-row').forEach(b => b.classList.remove('lp-tier-active'));
+      btn.classList.add('lp-tier-active');
+      _renderPricingDetail(el.querySelector('.lp-detail'), btn.dataset.tier, state);
     });
   });
 
-  // Highlight active tier on scroll
-  const sections = el.querySelector('.ltd-sections');
-  if (sections) {
-    sections.addEventListener('scroll', () => {
-      const tierSections = el.querySelectorAll('.ltd-tier-section');
-      let activeId = '';
-      for (const sec of tierSections) {
-        const rect = sec.getBoundingClientRect();
-        const parentRect = sections.getBoundingClientRect();
-        if (rect.top <= parentRect.top + 60) activeId = sec.id.replace('ltd-tier-', '');
-      }
-      el.querySelectorAll('.ltd-index-item').forEach(btn => {
-        btn.classList.toggle('ltd-index-active', btn.dataset.tier === activeId);
-      });
-    });
+  // Activate initial tier
+  const initialBtn = el.querySelector(`[data-tier="${initial}"]`);
+  if (initialBtn) {
+    initialBtn.classList.add('lp-tier-active');
+    _renderPricingDetail(el.querySelector('.lp-detail'), initial, state);
   }
 
-  // Wire action buttons
-  el.querySelectorAll('[data-nav]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _switchPanel(appState, btn.dataset.nav);
-    });
-  });
+  return el;
+}
+
+function _renderPricingDetail(container, tierId, state) {
+  const plan = PRICING_FEATURES[tierId];
+  if (!plan) { container.innerHTML = ''; return; }
+
+  const paneStates = _computePaneStates(state);
+  const accentColor = (paneStates.tiers === 'green') ? '#22c55e' : '#f5a623';
+
+  let html = `<div class="lp-accent-bar" style="background:${accentColor}"></div>`;
+  html += `<h3 class="lp-detail-title">${_esc(plan.title)}</h3>`;
+
+  for (const cat of plan.categories) {
+    html += `<div class="lp-category-header">${_esc(cat.name)}</div>`;
+    for (const feat of cat.features) {
+      if (feat.telemetry) {
+        html += _renderTelemetryItem(feat, tierId);
+      } else if (feat.priority) {
+        html += _renderPriorityItem(feat);
+      } else {
+        html += `<div class="lp-feature">
+          <div class="lp-feature-name">${_esc(feat.name)}</div>
+          <div class="lp-feature-desc">${_esc(feat.desc)}</div>
+        </div>`;
+      }
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function _renderTelemetryItem(feat, tierId) {
+  const isPersonal = (tierId === 'personal');
+  let html = `<div class="lp-feature lp-feature-telemetry">
+    <div class="lp-feature-name">${_esc(feat.name)}</div>`;
+
+  if (isPersonal) {
+    html += `<div class="lp-feature-desc">${_esc(_TELEMETRY_INTRO)}</div>`;
+  }
+
+  html += `<div class="lp-telem-sections">`;
+  if (isPersonal) {
+    html += `<div class="lp-telem-sub"><span class="lp-telem-label">Outbound</span><div class="lp-telem-text">${_esc(_TELEMETRY_OUTBOUND)}</div></div>`;
+  }
+  html += `<div class="lp-telem-sub"><span class="lp-telem-label">Inbound${isPersonal ? '' : ' (additional)'}</span><div class="lp-telem-text">${_esc(feat.inbound)}</div></div>`;
+  if (isPersonal) {
+    html += `<div class="lp-telem-sub"><span class="lp-telem-label">Opting Out</span><div class="lp-telem-text">${_esc(_TELEMETRY_OPT_OUT)}</div></div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+function _renderPriorityItem(feat) {
+  let html = `<div class="lp-feature lp-feature-priority">
+    <div class="lp-feature-name">${_esc(feat.name)}</div>`;
+
+  // Shared intro only at Personal (full base set)
+  if (!feat.slots) {
+    // Personal — show full intro
+    html += _PRIORITY_INTRO.map(p => `<div class="lp-feature-desc">${_esc(p)}</div>`).join('');
+  }
+
+  html += `<div class="lp-feature-desc">${_esc(feat.detail)}</div>`;
+
+  // Slot indicators
+  if (feat.slots) {
+    html += `<div class="lp-slots">`;
+    if (feat.slots.medium === -1) {
+      // Institution: custom
+      html += `<span class="lp-slot lp-slot-custom lp-slot-m">Custom</span>`;
+      html += `<span class="lp-slot lp-slot-custom lp-slot-h">Custom</span>`;
+    } else {
+      for (let i = 0; i < feat.slots.medium; i++) html += `<span class="lp-slot lp-slot-m">M</span>`;
+      for (let i = 0; i < feat.slots.high; i++) html += `<span class="lp-slot lp-slot-h">H</span>`;
+    }
+    const countParts = [];
+    if (feat.slots.medium === -1) {
+      countParts.push('Custom allocation');
+    } else {
+      if (feat.slots.medium > 0) countParts.push(`${feat.slots.medium} Medium`);
+      if (feat.slots.high > 0) countParts.push(`${feat.slots.high} High`);
+    }
+    if (countParts.length > 0) {
+      html += `<div class="lp-slot-summary">${countParts.join(', ')} priority slot${countParts.length === 1 && feat.slots.medium <= 1 && feat.slots.high === 0 ? '' : 's'}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 function _getLicensedTier(mode) {
   if (mode === 'personal_registered') return 'personal';
   if (['personal_plus', 'crew', 'team', 'institution'].includes(mode)) return mode;
   return null;
-}
-
-function _tierActionButton(tierId, mode, isLicensed, isRecommended) {
-  if (isLicensed) {
-    return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="management">Manage License</button></div>`;
-  }
-
-  if (mode === 'trial') {
-    if (isRecommended) {
-      return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="questionnaire">Continue Survey</button></div>`;
-    }
-    return '';
-  }
-
-  if (mode === 'personal' || mode === 'unlicensed') {
-    return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="register">Register First</button></div>`;
-  }
-
-  if (mode === 'personal_registered' && tierId !== 'personal') {
-    if (tierId === 'institution') {
-      return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="purchase">Get Institution Pricing</button></div>`;
-    }
-    return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="purchase">Purchase ${_esc(TIER_LABELS[tierId])}</button></div>`;
-  }
-
-  // Licensed users can upgrade from tier display
-  if (['personal_plus', 'crew', 'team'].includes(mode) && tierId !== 'personal') {
-    const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
-    const modeIdx = TIER_ORDER.indexOf(mode);
-    const tierIdx = TIER_ORDER.indexOf(tierId);
-    if (tierIdx > modeIdx) {
-      if (tierId === 'institution') {
-        return `<div class="ltd-tier-action"><button class="lic-action-btn" data-nav="purchase">Get Institution Pricing</button></div>`;
-      }
-      return `<div class="ltd-tier-action"><button class="lic-action-btn lic-action-primary" data-nav="purchase">Upgrade to ${_esc(TIER_LABELS[tierId])}</button></div>`;
-    }
-  }
-
-  return '';
 }
 
 // ---------- Identity unlock check ----------
@@ -3044,190 +3100,169 @@ licStyles.textContent = `
     color: #8b919a;
   }
 
-  /* ---- Tier Display panel ---- */
-  .ltd-panel {
+  /* ---- Pricing grandchild ---- */
+  .lp-panel {
     max-width: 900px;
   }
-  .ltd-layout {
-    display: flex;
-    gap: 20px;
-  }
-  .ltd-index {
+  .lp-selector {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    flex-shrink: 0;
-    width: 140px;
-    position: sticky;
-    top: 0;
-    align-self: flex-start;
+    margin-bottom: 20px;
   }
-  .ltd-index-item {
-    background: none;
+  .lp-tier-row {
+    display: grid;
+    grid-template-columns: 180px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.03);
     border: none;
-    border-left: 2px solid transparent;
-    color: #8b919a;
+    border-left: 4px solid transparent;
+    border-radius: 6px;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 0.82rem;
-    font-weight: 500;
-    padding: 8px 12px;
-    text-align: left;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .ltd-index-item:hover {
     color: #e4e6eb;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
   }
-  .ltd-index-item:focus-visible {
+  .lp-tier-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .lp-tier-row:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: -2px;
   }
-  .ltd-index-active {
-    color: #5b8af5;
-    border-left-color: #5b8af5;
+  .lp-tier-active {
+    border-left-color: #22c55e;
+    background: rgba(255, 255, 255, 0.06);
   }
-  .ltd-sections {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    min-width: 0;
+  .lp-tier-name {
+    font-size: 0.9rem;
+    font-weight: 600;
   }
-  .ltd-tier-section {
+  .lp-tier-spec {
+    font-size: 0.82rem;
+    color: #60a5fa;
+  }
+  .lp-tier-price {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #b0b6c0;
+    text-align: right;
+  }
+
+  /* Detail pane */
+  .lp-detail {
+    position: relative;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    padding: 20px 24px;
+    padding: 24px 28px;
+    overflow: hidden;
   }
-  .ltd-tier-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 8px;
+  .lp-accent-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    border-radius: 12px 12px 0 0;
   }
-  .ltd-tier-name {
+  .lp-detail-title {
     font-size: 1.05rem;
     font-weight: 600;
-    margin: 0;
     color: #e4e6eb;
+    margin: 6px 0 18px 0;
   }
-  .ltd-badge {
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .ltd-badge-licensed {
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
-  }
-  .ltd-badge-recommended {
-    background: rgba(91, 138, 245, 0.15);
-    color: #5b8af5;
-  }
-  .ltd-badge-tentative {
-    background: rgba(245, 166, 35, 0.15);
-    color: #f5a623;
-  }
-  .ltd-tier-range {
-    font-size: 0.82rem;
-    color: #6b7280;
-    margin-bottom: 14px;
-  }
-  .ltd-tier-caps {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 14px;
-  }
-  .ltd-cap-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .ltd-cap-category {
+  .lp-category-header {
     font-size: 0.82rem;
     font-weight: 600;
-    color: #6b7280;
+    color: #60a5fa;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.5px;
+    margin: 20px 0 10px 0;
   }
-  .ltd-cap-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 6px;
-    padding: 2px 0;
+  .lp-category-header:first-of-type {
+    margin-top: 0;
   }
-  .ltd-cap-name {
+  .lp-feature {
+    margin-bottom: 16px;
+  }
+  .lp-feature-name {
     font-size: 0.9rem;
     font-weight: 600;
     color: #e4e6eb;
-  }
-  .ltd-cap-new {
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: #5b8af5;
-    background: rgba(91, 138, 245, 0.12);
-    padding: 1px 6px;
-    border-radius: 6px;
-  }
-  .ltd-cap-desc {
-    font-size: 0.82rem;
-    color: #8b919a;
-    flex-basis: 100%;
-    line-height: 1.5;
-  }
-  .ltd-tier-terms {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .ltd-term-row {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .ltd-term-label {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .ltd-term-value {
-    font-size: 0.9rem;
-    color: #e4e6eb;
-  }
-  .ltd-fit {
-    background: rgba(91, 138, 245, 0.06);
-    border: 1px solid rgba(91, 138, 245, 0.15);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 12px;
-  }
-  .ltd-fit-eyebrow {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #5b8af5;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     margin-bottom: 4px;
   }
-  .ltd-fit-text {
-    font-size: 0.9rem;
-    color: #e4e6eb;
-    margin: 0;
-    line-height: 1.5;
+  .lp-feature-desc {
+    font-size: 0.82rem;
+    color: #b0b6c0;
+    line-height: 1.6;
+    margin-bottom: 6px;
   }
-  .ltd-tier-action {
+
+  /* Telemetry subsections */
+  .lp-telem-sections {
     margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid rgba(255, 255, 255, 0.06);
+  }
+  .lp-telem-sub {
+    margin-bottom: 10px;
+  }
+  .lp-telem-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    display: block;
+    margin-bottom: 3px;
+  }
+  .lp-telem-text {
+    font-size: 0.82rem;
+    color: #b0b6c0;
+    line-height: 1.6;
+  }
+
+  /* Priority request slots */
+  .lp-slots {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .lp-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .lp-slot-m {
+    color: #f5a623;
+    border: 1.5px solid #f5a623;
+    background: rgba(245, 166, 35, 0.08);
+  }
+  .lp-slot-h {
+    color: #ef4444;
+    border: 1.5px solid #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+  }
+  .lp-slot-custom {
+    font-size: 0.68rem;
+    min-width: 48px;
+    letter-spacing: 0.02em;
+  }
+  .lp-slot-summary {
+    font-size: 0.75rem;
+    color: #8b919a;
+    margin-left: 4px;
   }
 
   /* ---- Unified Purchase panel ---- */
@@ -3693,28 +3728,13 @@ licStyles.textContent = `
     .lcd-terms-grid {
       grid-template-columns: 1fr;
     }
-    .ltd-layout {
-      flex-direction: column;
+    .lp-tier-row {
+      grid-template-columns: 120px 1fr auto;
+      padding: 10px 12px;
+      gap: 8px;
     }
-    .ltd-index {
-      flex-direction: row;
-      width: auto;
-      overflow-x: auto;
-      position: static;
-    }
-    .ltd-index-item {
-      border-left: none;
-      border-bottom: 2px solid transparent;
-      white-space: nowrap;
-      padding: 6px 10px;
-      font-size: 0.82rem;
-    }
-    .ltd-index-active {
-      border-bottom-color: #5b8af5;
-      border-left-color: transparent;
-    }
-    .ltd-tier-terms {
-      grid-template-columns: 1fr;
+    .lp-detail {
+      padding: 18px 16px;
     }
     .lup-input {
       width: 100%;
