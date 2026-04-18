@@ -145,7 +145,7 @@ function _buildContent() {
         <span class="ll-accent-bar"></span>
         <span class="ll-title">Atested Case Document</span>
         <span class="ll-subtitle">Your purchase argument</span>
-        <p class="ll-desc">We take your responses to the survey and combine them with the evidence you have generated during your trial to create a document you can use internally to move forward with the project if you choose.</p>
+        <p class="ll-desc">Combining your responses with the evidence you generated in the trial, Atested creates a document you can use to communicate internally to formally move Atested into production in your environment. This is intended to make this part of your job easier.</p>
         <span class="ll-status-line ll-s1"></span>
         <span class="ll-status-line ll-s2"></span>
         <span class="ll-click">Click to review and share your case</span>
@@ -1973,24 +1973,26 @@ const PRICING_FEATURES = {
       ]},
       { name: 'Communication', features: [
         { name: 'Telemetry Communication', telemetry: true, inbound: 'Atested sends security notifications, version updates, and operational intelligence back through the same channel. Critical security alerts reach your installation as they are identified. New version availability is communicated with release details so you can evaluate before updating.' },
-        { name: 'Priority Requests', priority: true, detail: 'All requests are accepted at standard priority. Standard requests are not tracked individually.', slots: null },
+        { name: 'Priority Requests', priority: true, detail: 'All requests are accepted at standard priority. Standard requests are not tracked individually.' },
+        { name: 'Safety Alerts', monitoring: true, desc: 'Atested monitors for security vulnerabilities that affect your version. If we detect one, we notify you through the telemetry channel. At Personal, we watch for safety. We only reach out when your installation\u2019s security is at risk.' },
       ]},
     ],
   },
   personal_plus: {
-    title: 'Personal Plus adds the following',
+    title: 'In addition to everything included with Personal, Personal Plus adds the following.',
     categories: [
       { name: 'Operations', features: [
         { name: 'Multi-Machine', desc: 'Run Atested on up to 3 machines under a single license. All machines share one chain and one policy configuration. Your governance picture is complete regardless of which machine you work from.' },
       ]},
       { name: 'Communication', features: [
         { name: 'Telemetry Communication', telemetry: true, inbound: 'Cross-machine pattern detection. Atested can identify inconsistencies between your machines and surface operational insights specific to your multi-machine setup.' },
-        { name: 'Priority Requests', priority: true, detail: '2 Medium priority slots. Medium requests move ahead of standard requests in the queue.', slots: { medium: 2, high: 0 } },
+        { name: 'Priority Requests', priority: true, detail: '2 Medium priority slots. Medium requests move ahead of standard requests in the queue.' },
+        { name: 'Operational Monitoring', monitoring: true, desc: 'Atested monitors your installation\u2019s operational health in addition to safety. If your DENY rate spikes abnormally or your chain integrity degrades, we send a notice describing what we observed and what it may indicate. We are watching for operational health, not just safety.' },
       ]},
     ],
   },
   crew: {
-    title: 'Crew adds the following',
+    title: 'In addition to everything included with Personal Plus, the Crew plan adds the following.',
     categories: [
       { name: 'Operations', features: [
         { name: 'Unlimited Machines', desc: 'No machine limit. Run Atested across your entire infrastructure under one license.' },
@@ -1998,12 +2000,13 @@ const PRICING_FEATURES = {
       ]},
       { name: 'Communication', features: [
         { name: 'Telemetry Communication', telemetry: true, inbound: 'Aggregate team patterns visible in your dashboard. Cross-install intelligence feeds back into your operational views. You see how your team compares to similar deployments.' },
-        { name: 'Priority Requests', priority: true, detail: '4 Medium priority slots and 2 High priority slots. High priority requests move to the front of the queue ahead of Medium. Response time targets begin at this tier.', slots: { medium: 4, high: 2 } },
+        { name: 'Priority Requests', priority: true, detail: '4 Medium priority slots and 2 High priority slots. High priority requests move to the front of the queue ahead of Medium. Response time targets: 3 business days for Medium, 2 business days for High. These are targets, not contractual commitments. Contractual SLA begins at Team.' },
+        { name: 'Team Pattern Detection', monitoring: true, desc: 'Atested monitors cross-user patterns within your license. If one user generates significantly more DENYs than others, or if your team\u2019s classifier confidence trends toward opaque operations, we flag it with specifics. We are watching team dynamics, not just the installation.' },
       ]},
     ],
   },
   team: {
-    title: 'Team adds the following',
+    title: 'In addition to everything included with Crew, the Team plan adds the following.',
     categories: [
       { name: 'Operations', features: [
         { name: 'Role-Based Governance', desc: 'Configurable roles with different permission levels for operators, reviewers, and administrators. Control who can approve, who can configure, and who can view.' },
@@ -2015,12 +2018,13 @@ const PRICING_FEATURES = {
       ]},
       { name: 'Communication', features: [
         { name: 'Telemetry Communication', telemetry: true, inbound: 'Organizational telemetry with role-level breakdowns. Compliance-relevant aggregate metrics derived from your telemetry data and surfaced in your reporting. Industry-level benchmarking at this scale.' },
-        { name: 'Priority Requests', priority: true, detail: '8 Medium priority slots and 4 High priority slots. 2-business-day response commitment for all elevated requests. Your team can see all open requests, who submitted them, and their current status.', slots: { medium: 8, high: 4 } },
+        { name: 'Priority Requests', priority: true, detail: '8 Medium priority slots with 3-business-day response and 4 High priority slots with 2-business-day response. Your team can see all open requests, who submitted them, and their current status. 3-business-day response commitment for Medium. 2-business-day response commitment for High.' },
+        { name: 'Governance Health Monitoring', monitoring: true, desc: 'Atested monitors your governance posture for compliance-relevant drift. Policy rules that never fire, rules that fire constantly, approval backlogs building. We surface these before they become audit findings. If we send an alert and it is not acknowledged within a reasonable window, we follow up. We are actively managing your governance health, not just monitoring it.' },
       ]},
     ],
   },
   institution: {
-    title: 'Institution adds the following',
+    title: 'In addition to everything included with Team, the Institution plan adds the following.',
     categories: [
       { name: 'Operations', features: [
         { name: 'Custom Deployment', desc: 'On-premises or hybrid deployment configured to your infrastructure requirements. Your data stays where you need it.' },
@@ -2032,7 +2036,8 @@ const PRICING_FEATURES = {
       ]},
       { name: 'Communication', features: [
         { name: 'Telemetry Communication', telemetry: true, inbound: 'Custom telemetry configuration. You control what is shared, what is retained, and what is reported. Telemetry terms are part of your negotiated agreement.' },
-        { name: 'Priority Requests', priority: true, detail: 'Custom priority slot allocation and SLA negotiated for your organization. Named contact with direct access to the people who build and maintain Atested.', slots: { medium: -1, high: -1 } },
+        { name: 'Priority Requests', priority: true, detail: 'Custom priority slot allocation and SLA negotiated for your organization. Named contact with direct access to the people who build and maintain Atested.' },
+        { name: 'Continuous Oversight', monitoring: true, desc: 'Custom alert thresholds configured for your environment. Your named contact proactively reaches out on a scheduled cadence, not only when something triggers. The relationship is continuous, not reactive.' },
       ]},
     ],
   },
@@ -2107,7 +2112,12 @@ function _renderPricingDetail(container, tierId, state) {
       if (feat.telemetry) {
         html += _renderTelemetryItem(feat, tierId);
       } else if (feat.priority) {
-        html += _renderPriorityItem(feat);
+        html += _renderPriorityItem(feat, tierId === 'personal');
+      } else if (feat.monitoring) {
+        html += `<div class="lp-feature">
+          <div class="lp-feature-name">${_esc(feat.name)}</div>
+          <div class="lp-feature-desc">${_esc(feat.desc)}</div>
+        </div>`;
       } else {
         html += `<div class="lp-feature">
           <div class="lp-feature-name">${_esc(feat.name)}</div>
@@ -2133,7 +2143,7 @@ function _renderTelemetryItem(feat, tierId) {
   if (isPersonal) {
     html += `<div class="lp-telem-sub"><span class="lp-telem-label">Outbound</span><div class="lp-telem-text">${_esc(_TELEMETRY_OUTBOUND)}</div></div>`;
   }
-  html += `<div class="lp-telem-sub"><span class="lp-telem-label">Inbound${isPersonal ? '' : ' (additional)'}</span><div class="lp-telem-text">${_esc(feat.inbound)}</div></div>`;
+  html += `<div class="lp-telem-sub"><span class="lp-telem-label">Inbound</span><div class="lp-telem-text">${_esc(feat.inbound)}</div></div>`;
   if (isPersonal) {
     html += `<div class="lp-telem-sub"><span class="lp-telem-label">Opting Out</span><div class="lp-telem-text">${_esc(_TELEMETRY_OPT_OUT)}</div></div>`;
   }
@@ -2141,42 +2151,16 @@ function _renderTelemetryItem(feat, tierId) {
   return html;
 }
 
-function _renderPriorityItem(feat) {
+function _renderPriorityItem(feat, isBase) {
   let html = `<div class="lp-feature lp-feature-priority">
     <div class="lp-feature-name">${_esc(feat.name)}</div>`;
 
   // Shared intro only at Personal (full base set)
-  if (!feat.slots) {
-    // Personal — show full intro
+  if (isBase) {
     html += _PRIORITY_INTRO.map(p => `<div class="lp-feature-desc">${_esc(p)}</div>`).join('');
   }
 
   html += `<div class="lp-feature-desc">${_esc(feat.detail)}</div>`;
-
-  // Slot indicators
-  if (feat.slots) {
-    html += `<div class="lp-slots">`;
-    if (feat.slots.medium === -1) {
-      // Institution: custom
-      html += `<span class="lp-slot lp-slot-custom lp-slot-m">Custom</span>`;
-      html += `<span class="lp-slot lp-slot-custom lp-slot-h">Custom</span>`;
-    } else {
-      for (let i = 0; i < feat.slots.medium; i++) html += `<span class="lp-slot lp-slot-m">M</span>`;
-      for (let i = 0; i < feat.slots.high; i++) html += `<span class="lp-slot lp-slot-h">H</span>`;
-    }
-    const countParts = [];
-    if (feat.slots.medium === -1) {
-      countParts.push('Custom allocation');
-    } else {
-      if (feat.slots.medium > 0) countParts.push(`${feat.slots.medium} Medium`);
-      if (feat.slots.high > 0) countParts.push(`${feat.slots.high} High`);
-    }
-    if (countParts.length > 0) {
-      html += `<div class="lp-slot-summary">${countParts.join(', ')} priority slot${countParts.length === 1 && feat.slots.medium <= 1 && feat.slots.high === 0 ? '' : 's'}</div>`;
-    }
-    html += `</div>`;
-  }
-
   html += `</div>`;
   return html;
 }
@@ -3222,47 +3206,6 @@ licStyles.textContent = `
     font-size: 0.82rem;
     color: #b0b6c0;
     line-height: 1.6;
-  }
-
-  /* Priority request slots */
-  .lp-slots {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin-top: 10px;
-  }
-  .lp-slot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 28px;
-    height: 24px;
-    padding: 0 6px;
-    border-radius: 4px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-  .lp-slot-m {
-    color: #f5a623;
-    border: 1.5px solid #f5a623;
-    background: rgba(245, 166, 35, 0.08);
-  }
-  .lp-slot-h {
-    color: #ef4444;
-    border: 1.5px solid #ef4444;
-    background: rgba(239, 68, 68, 0.08);
-  }
-  .lp-slot-custom {
-    font-size: 0.68rem;
-    min-width: 48px;
-    letter-spacing: 0.02em;
-  }
-  .lp-slot-summary {
-    font-size: 0.75rem;
-    color: #8b919a;
-    margin-left: 4px;
   }
 
   /* ---- Unified Purchase panel ---- */
