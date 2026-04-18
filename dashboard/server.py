@@ -419,6 +419,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_auto_renewal()
             elif parsed.path == "/api/licensing/downgrade":
                 self._handle_licensing_downgrade()
+            elif parsed.path == "/api/licensing/terms-acknowledge":
+                self._handle_terms_acknowledge()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1820,6 +1822,44 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
+    def _handle_terms_acknowledge(self):
+        """POST /api/licensing/terms-acknowledge — mark terms as reviewed."""
+        try:
+            from event_model import build_non_action_event, now_utc_z
+
+            license_file = RUNTIME / "license.json"
+            lic_data = {}
+            if license_file.exists():
+                try:
+                    lic_data = json.loads(
+                        license_file.read_text(encoding="utf-8")
+                    )
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            ts = now_utc_z()
+            lic_data["terms_acknowledged"] = True
+            lic_data["terms_acknowledged_at"] = ts
+            license_file.write_text(
+                json.dumps(lic_data, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+            event = build_non_action_event(
+                "terms_acknowledged",
+                {"acknowledged_at": ts},
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "acknowledged": True,
+                "acknowledged_at": ts,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
     # ------------------------------------------------------------------
     # Trial completion detection (Phase 4)
     # ------------------------------------------------------------------
@@ -2417,6 +2457,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result["purchase_date"] = lic_data.get("purchase_date", "")
                 result["operator_name"] = lic_data.get("operator_name", "")
                 result["pending_downgrade"] = lic_data.get("pending_downgrade", None)
+                result["terms_acknowledged"] = lic_data.get("terms_acknowledged", False)
+                result["terms_acknowledged_at"] = lic_data.get("terms_acknowledged_at", "")
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met

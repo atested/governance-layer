@@ -413,6 +413,16 @@ export function postDowngrade({ to_tier } = {}) {
   });
 }
 
+/**
+ * Acknowledge licensing terms.
+ * POST /api/licensing/terms-acknowledge
+ */
+export function postTermsAcknowledge() {
+  return _request('POST', '/licensing/terms-acknowledge', {
+    body: {},
+  });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

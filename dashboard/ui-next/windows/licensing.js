@@ -80,38 +80,84 @@ function _buildContent() {
   el.className = 'lic-content';
   el.innerHTML = `
     <div class="ll-status-pane">
-      <div class="ll-status-indicator"></div>
-      <div class="ll-status-text">Loading\u2026</div>
+      <div class="ll-sp-header">
+        <span class="ll-sp-dot"></span>
+        <span class="ll-sp-title">License status: <span class="ll-sp-tier">Loading\u2026</span></span>
+      </div>
+      <div class="ll-sp-intro">Your current license status:</div>
+      <div class="ll-sp-grid">
+        <div class="ll-sp-row" data-pane="tiers">
+          <span class="ll-sp-name">Tiers</span>
+          <span class="ll-sp-desc">Loading\u2026</span>
+          <span class="ll-sp-state"></span>
+        </div>
+        <div class="ll-sp-row" data-pane="survey">
+          <span class="ll-sp-name">Survey</span>
+          <span class="ll-sp-desc">Loading\u2026</span>
+          <span class="ll-sp-state"></span>
+        </div>
+        <div class="ll-sp-row" data-pane="case">
+          <span class="ll-sp-name">Case document</span>
+          <span class="ll-sp-desc">Loading\u2026</span>
+          <span class="ll-sp-state"></span>
+        </div>
+        <div class="ll-sp-row" data-pane="license">
+          <span class="ll-sp-name">License</span>
+          <span class="ll-sp-desc">Loading\u2026</span>
+          <span class="ll-sp-state"></span>
+        </div>
+        <div class="ll-sp-row" data-pane="terms">
+          <span class="ll-sp-name">Terms</span>
+          <span class="ll-sp-desc">Loading\u2026</span>
+          <span class="ll-sp-state"></span>
+        </div>
+      </div>
+      <div class="ll-sp-closing">Review the panes below for your next step.</div>
     </div>
-    <div class="ll-flow-hint"></div>
+
+    <button class="ll-terms-sliver" data-box="terms">
+      <span class="ll-ts-accent"></span>
+      <span class="ll-ts-left"><strong>Terms</strong> <span class="ll-ts-desc">Understand the Atested licensing lifecycle</span></span>
+      <span class="ll-ts-action">Click to review</span>
+    </button>
+
     <div class="ll-grid">
-      <button class="ll-box ll-box-tiers" data-box="tiers">
+      <button class="ll-box" data-box="tiers">
         <span class="ll-accent-bar"></span>
         <span class="ll-title">Tiers</span>
-        <span class="ll-detail">Loading\u2026</span>
-        <span class="ll-action"></span>
-        <span class="ll-status"></span>
+        <span class="ll-subtitle">Available plans</span>
+        <p class="ll-desc">See what each plan includes and how they compare. Five levels from a solo user to thousands at the largest institutions, with capabilities that scale to your needs.</p>
+        <span class="ll-status-line ll-s1"></span>
+        <span class="ll-status-line ll-s2"></span>
+        <span class="ll-status-line ll-s3"></span>
+        <span class="ll-click">Click to compare plans and features</span>
       </button>
-      <button class="ll-box ll-box-survey" data-box="survey">
+      <button class="ll-box" data-box="survey">
         <span class="ll-accent-bar"></span>
         <span class="ll-title">Survey</span>
-        <span class="ll-detail">Loading\u2026</span>
-        <span class="ll-action"></span>
-        <span class="ll-status"></span>
+        <span class="ll-subtitle">Your intended installation</span>
+        <p class="ll-desc">Tell us about your planned deployment. We use your responses to help you decide the right plan and to create your case document. The more responses you provide the more accurate our assessment will be.</p>
+        <span class="ll-status-line ll-s1"></span>
+        <span class="ll-status-line ll-s2"></span>
+        <span class="ll-click">Click to find your plan</span>
       </button>
-      <button class="ll-box ll-box-case" data-box="case">
+      <button class="ll-box" data-box="case">
         <span class="ll-accent-bar"></span>
-        <span class="ll-title">Case Document</span>
-        <span class="ll-detail">Loading\u2026</span>
-        <span class="ll-action"></span>
-        <span class="ll-status"></span>
+        <span class="ll-title">Case document</span>
+        <span class="ll-subtitle">Your purchase argument</span>
+        <p class="ll-desc">We take your responses to the survey and combine them with the evidence you have generated during your trial to create a document you can use internally to move forward with the project if you choose.</p>
+        <span class="ll-status-line ll-s1"></span>
+        <span class="ll-status-line ll-s2"></span>
+        <span class="ll-click">Click to review and share your case</span>
       </button>
-      <button class="ll-box ll-box-purchase" data-box="purchase">
+      <button class="ll-box" data-box="purchase">
         <span class="ll-accent-bar"></span>
         <span class="ll-title">License</span>
-        <span class="ll-detail">Loading\u2026</span>
-        <span class="ll-action"></span>
-        <span class="ll-status"></span>
+        <span class="ll-subtitle">Your Atested license</span>
+        <p class="ll-desc">Select and purchase your plan. View your current license status, manage renewals, or change your plan as your needs evolve.</p>
+        <span class="ll-status-line ll-s1"></span>
+        <span class="ll-status-line ll-s2"></span>
+        <span class="ll-click">Click to purchase your plan</span>
       </button>
     </div>
   `;
@@ -121,7 +167,6 @@ function _buildContent() {
 // ---------- Launcher data loading ----------
 
 async function _loadLauncherData(state) {
-  // Parallel-fetch all three data sources
   const [modeRes, qRes, caseRes] = await Promise.all([
     api.getLicensingMode(),
     api.getQuestionnaireState(),
@@ -133,7 +178,6 @@ async function _loadLauncherData(state) {
     return;
   }
 
-  // Store mode data
   state.modeData = modeRes.data;
   if (modeRes.data.trial_complete && !modeRes.data.trial_extended) {
     state.mode = 'personal';
@@ -141,257 +185,299 @@ async function _loadLauncherData(state) {
   } else {
     state.mode = _normalizeMode(modeRes.data);
   }
+  if (qRes.ok) state.qState = reconstructState(qRes.data);
+  if (caseRes.ok) state.caseData = caseRes.data;
 
-  // Store questionnaire state
-  if (qRes.ok) {
-    state.qState = reconstructState(qRes.data);
-  }
-
-  // Store case data
-  if (caseRes.ok) {
-    state.caseData = caseRes.data;
-  }
-
-  _renderBoxStatuses(state);
+  _renderLauncher(state);
 }
 
-/**
- * Normalize the server response into a mode string.
- */
 function _normalizeMode(data) {
   const status = data.license_status || 'trial';
   const tier = data.license_tier || 'personal';
-
   if (status === 'clock_anomaly') return 'clock_anomaly';
   if (status === 'trial') return 'trial';
   if (status === 'licensed') return tier;
-  if (status === 'personal') {
-    if (data.registered) return 'personal_registered';
-    return 'personal';
-  }
+  if (status === 'personal') return data.registered ? 'personal_registered' : 'personal';
   if (status === 'unlicensed') return 'unlicensed';
   return 'trial';
 }
 
-// ---------- Box status rendering ----------
+// ---------- Dynamic action-state color engine ----------
 
-function _renderBoxStatuses(state) {
-  const modeData = state.modeData || {};
-  const qState = state.qState;
-  const caseData = state.caseData;
-  const isLicensed = modeData.license_status === 'licensed';
-  const licensedTier = modeData.license_tier || '';
+// 'green' = complete/no action. 'amber' = action available or needed.
+function _computePaneStates(state) {
+  const md = state.modeData || {};
+  const q = state.qState;
+  const c = state.caseData;
+  const isLicensed = md.license_status === 'licensed';
+  const hasRec = q && q.recommendation;
+  const doc = c?.document;
+  const decisions = doc?.governance_evidence?.total_decisions || 0;
+  const termsAck = md.terms_acknowledged || false;
 
-  // Status pane
-  const paneContent = _computeStatusPaneContent(isLicensed, licensedTier, modeData, qState, caseData);
-  const paneEl = state.el.querySelector('.ll-status-pane');
-  if (paneEl) {
-    const indicator = paneEl.querySelector('.ll-status-indicator');
-    const textEl = paneEl.querySelector('.ll-status-text');
-    if (indicator) {
-      indicator.className = 'll-status-indicator';
-      indicator.classList.add(`ll-indicator-${paneContent.indicator}`);
-    }
-    if (textEl) textEl.textContent = paneContent.text;
+  // --- Tiers ---
+  const tiersState = hasRec || isLicensed ? 'green' : 'amber';
+
+  // --- Survey ---
+  let surveyState = 'amber';
+  if (isLicensed) {
+    surveyState = 'green';
+  } else if (q) {
+    if (q.state === STATES.COMPLETE) surveyState = 'green';
+    else if (q.state === STATES.THRESHOLD || q.state === STATES.PHASE_TWO) surveyState = 'amber'; // optional refinement
   }
 
-  // Flow hint
-  const flowEl = state.el.querySelector('.ll-flow-hint');
-  if (flowEl) flowEl.textContent = _computeFlowHint(isLicensed);
+  // --- Case document --- (depends on survey)
+  let caseState = 'amber';
+  if (isLicensed && doc?.generated_at) {
+    caseState = surveyState === 'amber' ? 'amber' : 'green'; // cascading dependency
+  } else if (doc?.generated_at && hasRec) {
+    caseState = surveyState === 'amber' ? 'amber' : 'green';
+    // If survey is amber, case cascades to amber
+    if (surveyState === 'green') caseState = 'green';
+  }
 
-  // Box info
-  _setBoxInfo(state.el, 'tiers', _computeTiersInfo(isLicensed, licensedTier, qState));
-  _setBoxInfo(state.el, 'survey', _computeSurveyInfo(qState, isLicensed));
-  _setBoxInfo(state.el, 'case', _computeCaseInfo(caseData, qState, isLicensed));
-  _setBoxInfo(state.el, 'purchase', _computePurchaseInfo(isLicensed, licensedTier, modeData, qState));
+  // --- License ---
+  let licenseState = isLicensed ? 'green' : 'amber';
 
-  // Highlight next step
-  const nextStep = _computeNextStep(qState, caseData, isLicensed, modeData);
-  state.el.querySelectorAll('.ll-box').forEach(btn => {
-    btn.classList.toggle('ll-box-next', btn.dataset.box === nextStep);
+  // --- Terms ---
+  let termsState = termsAck ? 'green' : 'amber';
+
+  return { tiers: tiersState, survey: surveyState, case: caseState, license: licenseState, terms: termsState };
+}
+
+function _aggregateState(paneStates) {
+  return Object.values(paneStates).every(s => s === 'green') ? 'green' : 'amber';
+}
+
+// ---------- Status pane grid content ----------
+
+function _computeGridRows(state, paneStates) {
+  const md = state.modeData || {};
+  const q = state.qState;
+  const c = state.caseData;
+  const isLicensed = md.license_status === 'licensed';
+  const rec = q?.recommendation ? (TIER_LABELS[q.recommendation] || q.recommendation) : null;
+  const price = q?.recommendation ? (COMMERCIAL_TERMS[q.recommendation]?.price || '') : '';
+  const doc = c?.document;
+  const decisions = doc?.governance_evidence?.total_decisions || 0;
+  const licensedTier = md.license_tier || '';
+  const termsAck = md.terms_acknowledged || false;
+  const p2Extra = q ? (q.phaseTwoTotal - q.phaseTwoAnswered) : 0;
+
+  const rows = {};
+
+  // Tiers
+  if (isLicensed) {
+    rows.tiers = { desc: `Licensed at ${_tierLabel(licensedTier)}`, label: 'Current' };
+  } else if (rec) {
+    const cap = q.capacity ? `${q.capacity.user_count} user${q.capacity.user_count !== 1 ? 's' : ''}, ${q.capacity.machine_count || 1} machine${(q.capacity.machine_count || 1) !== 1 ? 's' : ''}` : '';
+    rows.tiers = { desc: `${rec} recommended at ${price}${cap ? ' \u2014 ' + cap : ''}`, label: 'Recommended' };
+  } else {
+    rows.tiers = { desc: 'Five plans from Personal to Institution', label: 'Available' };
+  }
+
+  // Survey
+  if (isLicensed) {
+    rows.survey = { desc: `Complete \u2014 ${rec || _tierLabel(licensedTier)}`, label: 'Complete' };
+  } else if (!q || q.state === STATES.EMPTY) {
+    rows.survey = { desc: 'Not started', label: 'Pending' };
+  } else if (q.state === STATES.CAPACITY || q.state === STATES.CLIMBING) {
+    rows.survey = { desc: 'In progress', label: 'Pending' };
+  } else if (q.state === STATES.COMPLETE) {
+    rows.survey = { desc: `${rec} recommended. All questions answered.`, label: 'Complete' };
+  } else if (rec) {
+    rows.survey = { desc: `${rec} recommended.${p2Extra > 0 ? ' There is more you can add.' : ''}`, label: p2Extra > 0 ? 'Optional' : 'Complete' };
+  } else {
+    rows.survey = { desc: 'Not started', label: 'Pending' };
+  }
+
+  // Case document
+  if (doc?.generated_at) {
+    const decStr = decisions > 0 ? `${decisions.toLocaleString()} Atested decisions as evidence` : 'Evidence available';
+    rows.case = { desc: `Ready with ${decStr}`, label: 'Ready' };
+  } else if (rec) {
+    rows.case = { desc: 'Ready to generate', label: 'Available' };
+  } else {
+    rows.case = { desc: 'Complete the survey first', label: 'Pending' };
+  }
+
+  // License
+  if (isLicensed) {
+    rows.license = { desc: `Licensed at ${_tierLabel(licensedTier)}`, label: 'Active' };
+  } else if (md.registered) {
+    rows.license = { desc: 'Registered \u2014 Personal (free)', label: 'Registered' };
+  } else if (rec) {
+    rows.license = { desc: `Not yet licensed. Recommended: ${rec} at ${price}`, label: 'Pending' };
+  } else {
+    rows.license = { desc: 'Not yet licensed', label: 'Pending' };
+  }
+
+  // Terms
+  if (termsAck) {
+    rows.terms = { desc: 'Reviewed', label: 'Reviewed' };
+  } else {
+    rows.terms = { desc: 'Not reviewed', label: 'Pending' };
+  }
+
+  return rows;
+}
+
+function _computeStatusTitle(state) {
+  const md = state.modeData || {};
+  const isLicensed = md.license_status === 'licensed';
+  if (isLicensed) return _tierLabel(md.license_tier || '');
+  return 'Trial';
+}
+
+// ---------- Box content computation ----------
+
+function _computeBoxContent(state, paneStates) {
+  const md = state.modeData || {};
+  const q = state.qState;
+  const c = state.caseData;
+  const isLicensed = md.license_status === 'licensed';
+  const rec = q?.recommendation ? (TIER_LABELS[q.recommendation] || q.recommendation) : null;
+  const price = q?.recommendation ? (COMMERCIAL_TERMS[q.recommendation]?.price || '') : '';
+  const doc = c?.document;
+  const decisions = doc?.governance_evidence?.total_decisions || 0;
+  const licensedTier = md.license_tier || '';
+  const p2Extra = q ? (q.phaseTwoTotal - q.phaseTwoAnswered) : 0;
+
+  const boxes = {};
+
+  // Tiers
+  if (isLicensed) {
+    const lp = COMMERCIAL_TERMS[licensedTier]?.price || '';
+    boxes.tiers = { s1: `Current: ${_tierLabel(licensedTier)}`, s2: lp ? `Price: ${lp}` : '', s3: '', click: 'Click to see what other plans offer' };
+  } else if (rec) {
+    const cap = q.capacity ? `${q.capacity.user_count} user${q.capacity.user_count !== 1 ? 's' : ''}, ${q.capacity.machine_count || 1} machine${(q.capacity.machine_count || 1) !== 1 ? 's' : ''}` : '';
+    boxes.tiers = { s1: `Recommended: ${rec}`, s2: price ? `Price: ${price}` : '', s3: cap, click: 'Click to compare plans and features' };
+  } else {
+    boxes.tiers = { s1: '', s2: '', s3: '', click: 'Click to compare plans and features' };
+  }
+
+  // Survey
+  if (isLicensed) {
+    boxes.survey = { s1: `Complete \u2014 ${rec || _tierLabel(licensedTier)}`, s2: '', click: 'Click to retake if your situation has changed' };
+  } else if (!q || q.state === STATES.EMPTY) {
+    boxes.survey = { s1: 'Not started', s2: '', click: 'Click to find your plan' };
+  } else if (q.state === STATES.CAPACITY || q.state === STATES.CLIMBING) {
+    boxes.survey = { s1: 'In progress', s2: '', click: 'Click to continue your survey' };
+  } else if (q.state === STATES.COMPLETE) {
+    boxes.survey = { s1: `Complete: ${rec} recommended`, s2: 'All questions answered', click: 'Click to review your answers' };
+  } else if (rec) {
+    boxes.survey = { s1: `Complete: ${rec} recommended`, s2: p2Extra > 0 ? 'There is more you can add' : '', click: p2Extra > 0 ? 'Click to strengthen your case' : 'Click to review your answers' };
+  } else {
+    boxes.survey = { s1: 'Not started', s2: '', click: 'Click to find your plan' };
+  }
+
+  // Case document
+  if (isLicensed && doc?.generated_at) {
+    boxes.case = { s1: `${_tierLabel(licensedTier)} \u2014 ${doc.generated_at.slice(0, 10)}`, s2: decisions > 0 ? `${decisions.toLocaleString()} Atested decisions as evidence` : '', click: 'Click to view your current case with live evidence' };
+  } else if (doc?.generated_at) {
+    boxes.case = { s1: `Generated for ${rec} on ${doc.generated_at.slice(0, 10)}`, s2: decisions > 0 ? `${decisions.toLocaleString()} Atested decisions as evidence` : '', click: 'Click to review and share your case' };
+  } else if (rec) {
+    boxes.case = { s1: 'Ready to generate', s2: '', click: 'Click to review and share your case' };
+  } else {
+    boxes.case = { s1: 'Complete the survey first', s2: '', click: 'Click to review and share your case' };
+  }
+
+  // License
+  if (isLicensed) {
+    const lp = COMMERCIAL_TERMS[licensedTier]?.price || '';
+    const pd = md.purchase_date ? md.purchase_date.slice(0, 10) : '';
+    boxes.purchase = { s1: `Licensed: ${_tierLabel(licensedTier)}${lp ? ' at ' + lp : ''}`, s2: pd ? `Purchased ${pd}` : '', click: 'Click to view license details and renewal' };
+  } else if (rec) {
+    boxes.purchase = { s1: 'Not yet licensed', s2: `Recommended: ${rec} at ${price}`, click: q.recommendation === 'personal' ? 'Click to register \u2014 free' : `Click to purchase your plan` };
+  } else {
+    boxes.purchase = { s1: 'Not yet licensed', s2: '', click: 'Click to purchase your plan' };
+  }
+
+  return boxes;
+}
+
+// ---------- Render launcher surface ----------
+
+function _renderLauncher(state) {
+  const paneStates = _computePaneStates(state);
+  const agg = _aggregateState(paneStates);
+  const gridRows = _computeGridRows(state, paneStates);
+  const boxContent = _computeBoxContent(state, paneStates);
+  const statusTitle = _computeStatusTitle(state);
+
+  // Status pane
+  const pane = state.el.querySelector('.ll-status-pane');
+  if (pane) {
+    pane.classList.toggle('ll-sp-green', agg === 'green');
+    pane.classList.toggle('ll-sp-amber', agg === 'amber');
+    const dot = pane.querySelector('.ll-sp-dot');
+    if (dot) { dot.className = 'll-sp-dot'; dot.classList.add(agg === 'green' ? 'll-dot-green' : 'll-dot-amber'); }
+    const titleEl = pane.querySelector('.ll-sp-tier');
+    if (titleEl) titleEl.textContent = statusTitle;
+    const closingEl = pane.querySelector('.ll-sp-closing');
+    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Review the panes below for your next step.';
+
+    // Grid rows
+    const paneKeys = ['tiers', 'survey', 'case', 'license', 'terms'];
+    paneKeys.forEach(key => {
+      const row = pane.querySelector(`[data-pane="${key}"]`);
+      if (!row) return;
+      const ps = paneStates[key] || 'amber';
+      row.classList.toggle('ll-sp-row-green', ps === 'green');
+      row.classList.toggle('ll-sp-row-amber', ps === 'amber');
+      const nameEl = row.querySelector('.ll-sp-name');
+      const descEl = row.querySelector('.ll-sp-desc');
+      const stateEl = row.querySelector('.ll-sp-state');
+      if (nameEl) nameEl.textContent = { tiers: 'Tiers', survey: 'Survey', case: 'Case document', license: 'License', terms: 'Terms' }[key];
+      const r = gridRows[key] || {};
+      if (descEl) descEl.textContent = r.desc || '';
+      if (stateEl) stateEl.textContent = r.label || '';
+    });
+  }
+
+  // Terms sliver
+  const sliver = state.el.querySelector('.ll-terms-sliver');
+  if (sliver) {
+    const ts = paneStates.terms;
+    sliver.classList.toggle('ll-ts-green', ts === 'green');
+    sliver.classList.toggle('ll-ts-amber', ts === 'amber');
+    const actionEl = sliver.querySelector('.ll-ts-action');
+    if (actionEl) actionEl.textContent = ts === 'green' ? 'Reviewed' : 'Click to review';
+  }
+
+  // Boxes
+  const boxKeys = ['tiers', 'survey', 'case', 'purchase'];
+  const boxPaneMap = { tiers: 'tiers', survey: 'survey', case: 'case', purchase: 'license' };
+  boxKeys.forEach(key => {
+    const box = state.el.querySelector(`.ll-box[data-box="${key}"]`);
+    if (!box) return;
+    const ps = paneStates[boxPaneMap[key]] || 'amber';
+    box.classList.toggle('ll-box-green', ps === 'green');
+    box.classList.toggle('ll-box-amber', ps === 'amber');
+    const bc = boxContent[key] || {};
+    const s1 = box.querySelector('.ll-s1');
+    const s2 = box.querySelector('.ll-s2');
+    const s3 = box.querySelector('.ll-s3');
+    const click = box.querySelector('.ll-click');
+    if (s1) s1.textContent = bc.s1 || '';
+    if (s2) s2.textContent = bc.s2 || '';
+    if (s3) s3.textContent = bc.s3 || '';
+    if (click) click.textContent = bc.click || '';
   });
 
   // Wire click handlers
   state.el.querySelectorAll('.ll-box').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const boxId = btn.dataset.box;
-      _openBoxGrandchild(boxId, btn, state);
-    });
+    btn.addEventListener('click', () => _openBoxGrandchild(btn.dataset.box, btn, state));
   });
-}
-
-function _setBoxInfo(el, boxId, info) {
-  const box = el.querySelector(`[data-box="${boxId}"]`);
-  if (!box) return;
-  const detailEl = box.querySelector('.ll-detail');
-  const actionEl = box.querySelector('.ll-action');
-  const statusEl = box.querySelector('.ll-status');
-  if (detailEl) detailEl.textContent = info.detail;
-  if (actionEl) actionEl.textContent = info.action || '';
-  if (statusEl) statusEl.textContent = info.status || '';
-}
-
-function _computeTiersInfo(isLicensed, licensedTier, qState) {
-  if (isLicensed) {
-    const price = COMMERCIAL_TERMS[licensedTier]?.price || '';
-    return { detail: `Licensed: ${_tierLabel(licensedTier)}${price ? ' \u2014 ' + price : ''}`, action: 'See what other tiers offer', status: '' };
-  }
-  if (qState && qState.recommendation) {
-    const rec = TIER_LABELS[qState.recommendation] || qState.recommendation;
-    const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
-    const reason = qState.capacity
-      ? `${qState.capacity.user_count} user${qState.capacity.user_count !== 1 ? 's' : ''}${qState.capacity.machine_count > 1 ? ', ' + qState.capacity.machine_count + ' machines' : ''}`
-      : '';
-    return { detail: `Recommended: ${rec}${price ? ' \u2014 ' + price : ''}`, action: 'Compare tiers and features', status: reason };
-  }
-  return { detail: '5 tiers from Personal to Institution', action: 'Compare tiers and features', status: '' };
-}
-
-function _computeSurveyInfo(qState, isLicensed) {
-  if (isLicensed) {
-    const rec = qState?.recommendation ? TIER_LABELS[qState.recommendation] : '';
-    return { detail: rec ? `Complete \u2014 ${rec}` : 'Complete', action: 'Retake if your situation has changed', status: '' };
-  }
-  if (!qState || qState.state === STATES.EMPTY) {
-    return { detail: 'Not started', action: 'Find the right tier for your situation', status: '' };
-  }
-  switch (qState.state) {
-    case STATES.CAPACITY:
-      return { detail: 'Organization size', action: 'Continue your survey', status: 'Enter your team size to begin' };
-    case STATES.CLIMBING: {
-      const progress = estimateClimbingTotal(qState.baseTier, qState.answers);
-      return { detail: `${progress.answered + 2} of ~${progress.total + 2} answered`, action: 'Continue your survey', status: 'Testing tier boundaries' };
-    }
-    case STATES.THRESHOLD:
-    case STATES.PHASE_TWO: {
-      const rec = TIER_LABELS[qState.recommendation] || qState.recommendation;
-      const extra = qState.phaseTwoTotal - qState.phaseTwoAnswered;
-      const action = extra > 0 ? `Answer ${extra} more question${extra !== 1 ? 's' : ''} to strengthen your case` : 'Survey complete';
-      return { detail: `Recommended: ${rec}`, action, status: '' };
-    }
-    case STATES.COMPLETE: {
-      const rec = TIER_LABELS[qState.recommendation] || qState.recommendation;
-      return { detail: `Complete \u2014 ${rec}`, action: 'Survey complete', status: 'All questions answered' };
-    }
-    default: return { detail: 'Not started', action: 'Find the right tier for your situation', status: '' };
+  if (sliver) {
+    sliver.addEventListener('click', () => _openBoxGrandchild('terms', sliver, state));
   }
 }
 
-function _computeCaseInfo(caseData, qState, isLicensed) {
-  if (isLicensed) {
-    const doc = caseData?.document;
-    const ev = doc?.governance_evidence || {};
-    const decisions = ev.total_decisions || 0;
-    const rec = TIER_LABELS[doc?.recommendation || ''] || '';
-    if (doc && doc.generated_at) {
-      return { detail: `${rec} \u2014 ${doc.generated_at.slice(0, 10)}`, action: 'View your current case with live evidence', status: decisions > 0 ? `${decisions.toLocaleString()} governance decisions` : '' };
-    }
-    return { detail: 'Available', action: 'View your current case with live evidence', status: '' };
-  }
-  if (!qState || !qState.recommendation) {
-    return { detail: 'No recommendation yet', action: 'Complete the survey to generate', status: '' };
-  }
-  const doc = caseData?.document;
-  const ev = doc?.governance_evidence || {};
-  const decisions = ev.total_decisions || 0;
-  const rec = TIER_LABELS[doc?.recommendation || qState.recommendation] || '';
-  if (doc && doc.generated_at) {
-    return { detail: `${rec} \u2014 generated ${doc.generated_at.slice(0, 10)}`, action: 'Review and share your case', status: decisions > 0 ? `${decisions.toLocaleString()} governance decisions recorded` : '' };
-  }
-  return { detail: `Recommended: ${rec}`, action: 'Review and share your case', status: 'Ready to generate' };
-}
+// ---------- Refresh (after grandchild close) ----------
 
-function _computePurchaseInfo(isLicensed, licensedTier, modeData, qState) {
-  if (isLicensed) {
-    const price = COMMERCIAL_TERMS[licensedTier]?.price || '';
-    const purchaseDate = modeData.purchase_date ? modeData.purchase_date.slice(0, 10) : '';
-    return { detail: `Licensed: ${_tierLabel(licensedTier)}${price ? ' \u2014 ' + price : ''}`, action: 'View license details and renewal', status: purchaseDate ? `Purchased ${purchaseDate}` : '' };
-  }
-  if (modeData.registered) {
-    if (qState && qState.recommendation && qState.recommendation !== 'personal') {
-      const rec = TIER_LABELS[qState.recommendation] || qState.recommendation;
-      const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
-      return { detail: 'Registered \u2014 Personal', action: `Purchase ${rec}${price ? ' \u2014 ' + price : ''}`, status: '' };
-    }
-    return { detail: 'Registered \u2014 Personal', action: 'View license details and renewal', status: 'Free tier active' };
-  }
-  if (qState && qState.recommendation) {
-    const rec = TIER_LABELS[qState.recommendation] || qState.recommendation;
-    const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
-    if (qState.recommendation === 'personal') {
-      return { detail: 'Not yet licensed', action: 'Register for Personal \u2014 free', status: '' };
-    }
-    return { detail: 'Not yet licensed', action: `Purchase ${rec}${price ? ' \u2014 ' + price : ''}`, status: '' };
-  }
-  const status = modeData.license_status || 'trial';
-  if (status === 'trial') return { detail: 'Trial', action: 'Register or purchase a tier', status: '' };
-  return { detail: 'Not purchased', action: 'Register or purchase a tier', status: '' };
-}
-
-function _computeNextStep(qState, caseData, isLicensed, modeData) {
-  if (isLicensed) return null;
-  if (!qState || qState.state === STATES.EMPTY || qState.state === STATES.CAPACITY || qState.state === STATES.CLIMBING) return 'survey';
-  if (qState.verified && !caseData?.document?.recommendation) return 'case';
-  if (qState.verified && !isLicensed && !modeData.registered) return 'purchase';
-  if (qState.verified) return 'purchase';
-  return 'survey';
-}
-
-function _computeStatusPaneContent(isLicensed, licensedTier, modeData, qState, caseData) {
-  const decisions = caseData?.document?.governance_evidence?.total_decisions || 0;
-  const decisionStr = decisions > 0 ? `${decisions.toLocaleString()} governance decisions` : '';
-
-  if (isLicensed) {
-    const label = _tierLabel(licensedTier);
-    const purchaseDate = modeData.purchase_date || '';
-    // Estimate renewal date as ~1 year from purchase
-    let renewalStr = '';
-    if (purchaseDate) {
-      try {
-        const d = new Date(purchaseDate);
-        d.setFullYear(d.getFullYear() + 1);
-        renewalStr = d.toISOString().slice(0, 10);
-      } catch (_) {}
-    }
-    let text = `Licensed at ${label}.`;
-    if (renewalStr) text += ` Renewal ${renewalStr}.`;
-    if (decisionStr) text += ` ${decisionStr} since licensing.`;
-    return { indicator: 'ok', text };
-  }
-
-  // Trial / pre-purchase states
-  const rec = qState?.recommendation ? (TIER_LABELS[qState.recommendation] || qState.recommendation) : null;
-
-  if (!qState || qState.state === STATES.EMPTY) {
-    return { indicator: 'trial', text: 'Trial. Survey not started. Answer a few questions to find the right tier for your situation.' };
-  }
-  if (qState.state === STATES.CAPACITY || qState.state === STATES.CLIMBING) {
-    return { indicator: 'trial', text: 'Trial. Survey in progress. Continue answering to get a tier recommendation.' };
-  }
-  if (rec) {
-    const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
-    let text = `Trial. ${rec} recommended`;
-    if (decisionStr) text += ` based on your survey and ${decisionStr}`;
-    text += '.';
-    if (caseData?.document?.generated_at) {
-      text += ' Review your case document or purchase to license.';
-    } else {
-      text += ' Complete your survey or purchase to license.';
-    }
-    return { indicator: 'trial', text };
-  }
-
-  return { indicator: 'trial', text: 'Trial. Take the survey to find the right tier.' };
-}
-
-function _computeFlowHint(isLicensed) {
-  if (isLicensed) return '';
-  return 'Take the survey to get a recommendation. Review your case to see the evidence. Purchase when you\u2019re ready.';
-}
-
-// ---------- Refresh box statuses (after grandchild close) ----------
-
-async function _refreshBoxStatuses(state) {
+async function _refreshLauncher(state) {
   const [modeRes, qRes, caseRes] = await Promise.all([
     api.getLicensingMode(),
     api.getQuestionnaireState(),
@@ -410,69 +496,98 @@ async function _refreshBoxStatuses(state) {
   if (qRes.ok) state.qState = reconstructState(qRes.data);
   if (caseRes.ok) state.caseData = caseRes.data;
 
-  const modeData = state.modeData || {};
-  const isLicensed = modeData.license_status === 'licensed';
-  const licensedTier = modeData.license_tier || '';
+  // Re-render all dynamic content
+  const paneStates = _computePaneStates(state);
+  const agg = _aggregateState(paneStates);
+  const gridRows = _computeGridRows(state, paneStates);
+  const boxContent = _computeBoxContent(state, paneStates);
+  const statusTitle = _computeStatusTitle(state);
 
   // Status pane
-  const paneContent = _computeStatusPaneContent(isLicensed, licensedTier, modeData, state.qState, state.caseData);
-  const paneEl = state.el.querySelector('.ll-status-pane');
-  if (paneEl) {
-    const indicator = paneEl.querySelector('.ll-status-indicator');
-    const textEl = paneEl.querySelector('.ll-status-text');
-    if (indicator) {
-      indicator.className = 'll-status-indicator';
-      indicator.classList.add(`ll-indicator-${paneContent.indicator}`);
-    }
-    if (textEl) textEl.textContent = paneContent.text;
+  const pane = state.el.querySelector('.ll-status-pane');
+  if (pane) {
+    pane.classList.toggle('ll-sp-green', agg === 'green');
+    pane.classList.toggle('ll-sp-amber', agg === 'amber');
+    const dot = pane.querySelector('.ll-sp-dot');
+    if (dot) { dot.className = 'll-sp-dot'; dot.classList.add(agg === 'green' ? 'll-dot-green' : 'll-dot-amber'); }
+    const titleEl = pane.querySelector('.ll-sp-tier');
+    if (titleEl) titleEl.textContent = statusTitle;
+    const closingEl = pane.querySelector('.ll-sp-closing');
+    if (closingEl) closingEl.textContent = agg === 'green' ? 'All panes current.' : 'Review the panes below for your next step.';
+    const paneKeys = ['tiers', 'survey', 'case', 'license', 'terms'];
+    paneKeys.forEach(key => {
+      const row = pane.querySelector(`[data-pane="${key}"]`);
+      if (!row) return;
+      const ps = paneStates[key] || 'amber';
+      row.classList.toggle('ll-sp-row-green', ps === 'green');
+      row.classList.toggle('ll-sp-row-amber', ps === 'amber');
+      const r = gridRows[key] || {};
+      const descEl = row.querySelector('.ll-sp-desc');
+      const stateEl = row.querySelector('.ll-sp-state');
+      if (descEl) descEl.textContent = r.desc || '';
+      if (stateEl) stateEl.textContent = r.label || '';
+    });
   }
 
-  // Flow hint
-  const flowEl = state.el.querySelector('.ll-flow-hint');
-  if (flowEl) flowEl.textContent = _computeFlowHint(isLicensed);
+  // Terms sliver
+  const sliver = state.el.querySelector('.ll-terms-sliver');
+  if (sliver) {
+    const ts = paneStates.terms;
+    sliver.classList.toggle('ll-ts-green', ts === 'green');
+    sliver.classList.toggle('ll-ts-amber', ts === 'amber');
+    const actionEl = sliver.querySelector('.ll-ts-action');
+    if (actionEl) actionEl.textContent = ts === 'green' ? 'Reviewed' : 'Click to review';
+  }
 
-  // Box info
-  _setBoxInfo(state.el, 'tiers', _computeTiersInfo(isLicensed, licensedTier, state.qState));
-  _setBoxInfo(state.el, 'survey', _computeSurveyInfo(state.qState, isLicensed));
-  _setBoxInfo(state.el, 'case', _computeCaseInfo(state.caseData, state.qState, isLicensed));
-  _setBoxInfo(state.el, 'purchase', _computePurchaseInfo(isLicensed, licensedTier, modeData, state.qState));
-
-  // Highlight next step
-  const nextStep = _computeNextStep(state.qState, state.caseData, isLicensed, modeData);
-  state.el.querySelectorAll('.ll-box').forEach(btn => {
-    btn.classList.toggle('ll-box-next', btn.dataset.box === nextStep);
+  // Boxes
+  const boxKeys = ['tiers', 'survey', 'case', 'purchase'];
+  const boxPaneMap = { tiers: 'tiers', survey: 'survey', case: 'case', purchase: 'license' };
+  boxKeys.forEach(key => {
+    const box = state.el.querySelector(`.ll-box[data-box="${key}"]`);
+    if (!box) return;
+    const ps = paneStates[boxPaneMap[key]] || 'amber';
+    box.classList.toggle('ll-box-green', ps === 'green');
+    box.classList.toggle('ll-box-amber', ps === 'amber');
+    const bc = boxContent[key] || {};
+    const s1 = box.querySelector('.ll-s1');
+    const s2 = box.querySelector('.ll-s2');
+    const s3 = box.querySelector('.ll-s3');
+    const click = box.querySelector('.ll-click');
+    if (s1) s1.textContent = bc.s1 || '';
+    if (s2) s2.textContent = bc.s2 || '';
+    if (s3) s3.textContent = bc.s3 || '';
+    if (click) click.textContent = bc.click || '';
   });
 
-  // Also refresh chrome/main page state
   _refreshLicenseState();
 }
 
 // ---------- Grandchild navigation ----------
 
-const BOX_ACCENTS = { tiers: '#5b8af5', survey: '#a78bfa', case: '#f59e42', purchase: '#4ade80' };
-
 function _openBoxGrandchild(boxId, trigger, state) {
-  if (modalManager.depth >= 2) return; // guard against double-open
-  const titles = { tiers: 'Tiers', survey: 'Survey', case: 'Case Document', purchase: 'License' };
+  if (modalManager.depth >= 2) return;
+  const titles = { tiers: 'Tiers', survey: 'Survey', case: 'Case Document', purchase: 'License', terms: 'Terms' };
   const content = _buildGrandchildContent(boxId, state);
   const result = modalManager.open({ title: titles[boxId] || boxId, trigger, content });
   if (!result) return;
 
-  // Accent color continuity: apply the box's accent to the grandchild frame
-  const accent = BOX_ACCENTS[boxId];
-  if (accent && result.frame) {
-    result.frame.style.setProperty('--grandchild-accent', accent);
-  }
+  // Accent color: use action-state color, not fixed pane color
+  const paneStates = _computePaneStates(state);
+  const paneMap = { tiers: 'tiers', survey: 'survey', case: 'case', purchase: 'license', terms: 'terms' };
+  const ps = paneStates[paneMap[boxId]] || 'amber';
+  const accent = ps === 'green' ? '#4ade80' : '#f59e42';
+  if (result.frame) result.frame.style.setProperty('--grandchild-accent', accent);
 
-  modalManager.setOnClose(() => _refreshBoxStatuses(state));
+  modalManager.setOnClose(() => _refreshLauncher(state));
 }
 
 function _buildGrandchildContent(boxId, state) {
   switch (boxId) {
     case 'tiers': return _buildTierDisplayPanel(state);
     case 'survey': return _buildQuestionnairePanel(state);
-    case 'case': return _buildCaseDocPanel(state);
+    case 'case': return _buildCaseDocumentPanel(state);
     case 'purchase': return _buildUnifiedPurchasePanel(state);
+    case 'terms': return _buildTermsPanel(state);
     default: {
       const el = document.createElement('div');
       el.className = 'lic-panel';
@@ -482,8 +597,69 @@ function _buildGrandchildContent(boxId, state) {
   }
 }
 
-function _buildCaseDocPanel(state) {
-  const el = _buildCaseDocumentPanel(state);
+// ---------- Terms grandchild ----------
+
+function _buildTermsPanel(state) {
+  const el = document.createElement('div');
+  el.className = 'lic-terms-panel';
+  const ack = state.modeData?.terms_acknowledged || false;
+
+  el.innerHTML = `
+    <div class="lt-section">
+      <h3 class="lt-heading">How Atested licensing works</h3>
+      <p class="lt-text">Atested demonstrates its capabilities on your real governance data during your trial. The trial is not time-limited \u2014 it ends when you have generated enough governance decisions to see the value. At that point you can license the tier that fits your organization, or continue on the free Personal tier.</p>
+    </div>
+
+    <div class="lt-section">
+      <h3 class="lt-heading">The recommendation process</h3>
+      <p class="lt-text">The survey asks about your deployment: how many users, how many machines, which governance capabilities you need. The climbing procedure tests each tier boundary until it finds the one that fits. The result is a verified recommendation \u2014 the lowest tier that covers everything you need.</p>
+    </div>
+
+    <div class="lt-section">
+      <h3 class="lt-heading">Purchasing and license dating</h3>
+      <p class="lt-text">Crew and higher are annual licenses dated from trial completion. Personal Plus is dated from purchase. Personal is free and does not require purchase. All paid licenses renew annually. If you choose not to renew, your views revert to Personal capabilities. Governance continues uninterrupted \u2014 chain records are marked as unlicensed but never lost.</p>
+    </div>
+
+    <div class="lt-section">
+      <h3 class="lt-heading">Telemetry reciprocity</h3>
+      <p class="lt-text">If you opt into telemetry, Atested receives anonymous aggregated usage counts: total decisions, deterministic vs judgment split, tool categories. No file paths, no user identities, no organization names. In return, Atested shares back anonymized benchmarks so you can compare your governance posture to similar deployments. Opting out is always available \u2014 you lose the benchmark comparison but nothing else changes.</p>
+    </div>
+
+    <div class="lt-section">
+      <h3 class="lt-heading">What the trial means</h3>
+      <p class="lt-text">During trial, all tier capabilities are available. This lets you evaluate the full product before deciding. The trial threshold is based on governance activity, not time. Once you reach it, Atested prompts you to license or register for Personal. There is no lockout \u2014 governance continues regardless of licensing status.</p>
+    </div>
+
+    <div class="lt-ack-area">
+      ${ack
+        ? `<div class="lt-ack-done"><span class="lt-ack-check">\u2713</span> Terms reviewed${state.modeData?.terms_acknowledged_at ? ' on ' + state.modeData.terms_acknowledged_at.slice(0, 10) : ''}</div>`
+        : `<button class="lic-action-btn lic-action-primary lt-ack-btn">I have reviewed these terms</button>`
+      }
+    </div>
+  `;
+
+  if (!ack) {
+    const btn = el.querySelector('.lt-ack-btn');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Recording\u2026';
+        const res = await api.postTermsAcknowledge();
+        if (res.ok) {
+          state.modeData.terms_acknowledged = true;
+          state.modeData.terms_acknowledged_at = res.data.acknowledged_at || '';
+          const area = el.querySelector('.lt-ack-area');
+          if (area) {
+            area.innerHTML = `<div class="lt-ack-done"><span class="lt-ack-check">\u2713</span> Terms reviewed${res.data.acknowledged_at ? ' on ' + res.data.acknowledged_at.slice(0, 10) : ''}</div>`;
+          }
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'I have reviewed these terms';
+        }
+      });
+    }
+  }
+
   return el;
 }
 
@@ -1360,6 +1536,13 @@ function _renderPurchaseDetail(el, tier, regData, state, isLicensed) {
       nameInput.focus();
       return;
     }
+    // Terms gate: require acknowledgment before purchase
+    if (!state.modeData?.terms_acknowledged) {
+      errorEl.textContent = 'Review the licensing terms first. Close this window and click the Terms pane.';
+      errorEl.style.display = '';
+      return;
+    }
+
     regData.operator_name = name;
     regData.context_note = contextInput.value.trim();
 
@@ -2015,49 +2198,165 @@ licStyles.textContent = `
     pointer-events: none;
   }
 
-  /* ---- License status pane ---- */
+  /* ---- License status pane (five-row grid) ---- */
   .ll-status-pane {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 18px 24px;
+    flex-direction: column;
+    gap: 0;
+    padding: 20px 24px 16px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     width: 100%;
     max-width: 780px;
   }
-  .ll-status-indicator {
+  .ll-sp-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .ll-sp-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
     background: #8b919a;
+    transition: background 0.2s, box-shadow 0.2s;
   }
-  .ll-indicator-ok {
+  .ll-dot-green {
     background: #4ade80;
     box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
   }
-  .ll-indicator-trial {
+  .ll-dot-amber {
     background: #f59e42;
     box-shadow: 0 0 8px rgba(245, 158, 66, 0.3);
   }
-  .ll-status-text {
+  .ll-sp-title {
     font-size: 1rem;
+    font-weight: 600;
     color: #e4e6eb;
-    line-height: 1.5;
   }
-
-  /* ---- Flow hint ---- */
-  .ll-flow-hint {
-    font-size: 0.9rem;
+  .ll-sp-tier {
+    font-weight: 400;
+    color: #b0b6c0;
+  }
+  .ll-sp-intro {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin-bottom: 10px;
+    padding-left: 20px;
+  }
+  .ll-sp-grid {
+    display: grid;
+    grid-template-columns: 90px 1fr auto;
+    gap: 4px 12px;
+    padding-left: 20px;
+    align-items: baseline;
+  }
+  .ll-sp-row {
+    display: contents;
+  }
+  .ll-sp-name {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #8b919a;
+    padding: 3px 0;
+  }
+  .ll-sp-desc {
+    font-size: 0.82rem;
+    color: #b0b6c0;
+    padding: 3px 0;
+    line-height: 1.35;
+  }
+  .ll-sp-state {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .ll-sp-closing {
+    font-size: 0.82rem;
     color: #6b7280;
-    text-align: center;
-    margin-bottom: 16px;
-    min-height: 1.2em;
+    margin-top: 10px;
+    padding-left: 20px;
+  }
+  /* Dynamic row colors */
+  .ll-sp-row-green .ll-sp-name { color: #4ade80; }
+  .ll-sp-row-green .ll-sp-state {
+    color: #166534;
+    background: rgba(74, 222, 128, 0.15);
+  }
+  .ll-sp-row-amber .ll-sp-name { color: #f59e42; }
+  .ll-sp-row-amber .ll-sp-state {
+    color: #92400e;
+    background: rgba(245, 158, 66, 0.15);
+  }
+  /* Aggregate header dot colors applied via .ll-dot-green / .ll-dot-amber */
+  .ll-sp-green .ll-sp-title { color: #e4e6eb; }
+  .ll-sp-amber .ll-sp-title { color: #e4e6eb; }
+
+  /* ---- Terms sliver ---- */
+  .ll-terms-sliver {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 780px;
+    padding: 0;
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    transition: background 0.15s, border-color 0.15s;
+    overflow: hidden;
+    text-align: left;
+  }
+  .ll-terms-sliver:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+  .ll-terms-sliver:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: 2px;
+  }
+  .ll-ts-accent {
+    width: 4px;
+    align-self: stretch;
+    flex-shrink: 0;
+    background: #8b919a;
+    transition: background 0.2s;
+  }
+  .ll-ts-green .ll-ts-accent { background: #4ade80; }
+  .ll-ts-amber .ll-ts-accent { background: #f59e42; }
+  .ll-ts-left {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    color: #e4e6eb;
     line-height: 1.4;
   }
+  .ll-ts-desc {
+    color: #8b919a;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  .ll-ts-action {
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #8b919a;
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .ll-ts-green .ll-ts-action { color: #4ade80; }
+  .ll-ts-amber .ll-ts-action { color: #f59e42; }
 
   /* ---- Launcher grid ---- */
   .ll-grid {
@@ -2067,15 +2366,15 @@ licStyles.textContent = `
     width: 100%;
     max-width: 780px;
     flex: 1;
-    align-content: stretch;
+    align-content: start;
   }
   .ll-box {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding: 28px 24px 24px;
+    gap: 4px;
+    padding: 28px 24px 20px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
@@ -2084,7 +2383,7 @@ licStyles.textContent = `
     transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
     text-align: left;
     overflow: hidden;
-    min-height: 160px;
+    min-height: 200px;
   }
   .ll-accent-bar {
     position: absolute;
@@ -2094,21 +2393,19 @@ licStyles.textContent = `
     height: 3px;
     border-radius: 12px 12px 0 0;
     background: rgba(255, 255, 255, 0.1);
+    transition: background 0.2s;
   }
-  .ll-box-tiers .ll-accent-bar { background: #5b8af5; }
-  .ll-box-survey .ll-accent-bar { background: #a78bfa; }
-  .ll-box-case .ll-accent-bar { background: #f59e42; }
-  .ll-box-purchase .ll-accent-bar { background: #4ade80; }
+  /* Dynamic box accent colors */
+  .ll-box-green .ll-accent-bar { background: #4ade80; }
+  .ll-box-amber .ll-accent-bar { background: #f59e42; }
   .ll-box:hover {
     background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.14);
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   }
-  .ll-box-tiers:hover { border-color: rgba(91, 138, 245, 0.3); }
-  .ll-box-survey:hover { border-color: rgba(167, 139, 250, 0.3); }
-  .ll-box-case:hover { border-color: rgba(245, 158, 66, 0.3); }
-  .ll-box-purchase:hover { border-color: rgba(74, 222, 128, 0.3); }
+  .ll-box-green:hover { border-color: rgba(74, 222, 128, 0.3); }
+  .ll-box-amber:hover { border-color: rgba(245, 158, 66, 0.3); }
   .ll-box:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: 2px;
@@ -2116,34 +2413,102 @@ licStyles.textContent = `
   .ll-box:active {
     transform: translateY(0);
   }
-  .ll-box-next {
-    border-color: rgba(91, 138, 245, 0.35);
-    background: rgba(91, 138, 245, 0.06);
-    box-shadow: 0 0 0 1px rgba(91, 138, 245, 0.15);
-  }
   .ll-title {
-    font-size: 1.1rem;
+    font-size: 1.25rem;
     font-weight: 600;
     color: #e4e6eb;
+    margin-bottom: 0;
   }
-  .ll-detail {
-    font-size: 1rem;
-    color: #e4e6eb;
-    line-height: 1.4;
+  .ll-subtitle {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin-bottom: 6px;
   }
-  .ll-action {
+  .ll-desc {
     font-size: 0.9rem;
-    line-height: 1.4;
-    margin-top: auto;
+    color: #b0b6c0;
+    line-height: 1.5;
+    margin-bottom: 8px;
   }
-  .ll-box-tiers .ll-action { color: #5b8af5; }
-  .ll-box-survey .ll-action { color: #a78bfa; }
-  .ll-box-case .ll-action { color: #f59e42; }
-  .ll-box-purchase .ll-action { color: #4ade80; }
-  .ll-status {
+  .ll-status-line {
     font-size: 0.82rem;
     color: #8b919a;
     line-height: 1.4;
+  }
+  .ll-click {
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin-top: auto;
+    padding-top: 4px;
+    color: #8b919a;
+    transition: color 0.15s;
+  }
+  .ll-box-green .ll-click { color: #4ade80; }
+  .ll-box-amber .ll-click { color: #f59e42; }
+
+  /* ---- Terms panel (grandchild) ---- */
+  .lic-terms-panel {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 8px 0;
+  }
+  .lt-section {
+    margin-bottom: 28px;
+  }
+  .lt-heading {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    margin: 0 0 10px 0;
+  }
+  .lt-text {
+    font-size: 0.9rem;
+    color: #b0b6c0;
+    line-height: 1.6;
+    margin: 0 0 8px 0;
+  }
+  .lt-ack-area {
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: center;
+  }
+  .lt-ack-done {
+    font-size: 0.9rem;
+    color: #4ade80;
+    font-weight: 500;
+  }
+  .lt-ack-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 0.9rem;
+    color: #b0b6c0;
+    cursor: pointer;
+  }
+  .lt-ack-check input {
+    accent-color: #5b8af5;
+    width: 16px;
+    height: 16px;
+  }
+  .lt-ack-btn {
+    display: inline-block;
+    padding: 10px 32px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #fff;
+    background: #5b8af5;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .lt-ack-btn:hover { background: #4a79e4; }
+  .lt-ack-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   /* ---- Survey panel ---- */
@@ -3266,11 +3631,22 @@ licStyles.textContent = `
     .ll-status-pane {
       padding: 14px 16px;
     }
+    .ll-sp-grid {
+      grid-template-columns: 70px 1fr auto;
+      gap: 3px 8px;
+      padding-left: 12px;
+    }
+    .ll-sp-intro, .ll-sp-closing {
+      padding-left: 12px;
+    }
+    .ll-terms-sliver {
+      border-radius: 8px;
+    }
     .ll-grid {
       grid-template-columns: 1fr;
     }
     .ll-box {
-      min-height: 120px;
+      min-height: 140px;
     }
     .lcd-evidence-grid {
       grid-template-columns: repeat(2, 1fr);
