@@ -51,6 +51,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "notifications_viewed",
     "disclosure_shown",
     "questionnaire_response",
+    "questionnaire_reset",
     "capacity_inputs",
     "case_document_generated",
     "trial_complete",

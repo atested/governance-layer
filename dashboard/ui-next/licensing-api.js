@@ -34,13 +34,16 @@ function _mockNotReady() {
  * Spec v1 section 2 (tier display).
  */
 export function getTierDefinitions() {
+  // Phase 1 mock — not currently used.  Canonical prices live in
+  // tier-definitions.js (COMMERCIAL_TERMS).  When the licensing server
+  // exists, this function will call it and the server will be the source.
   return _mockOk({
     tiers: [
       { id: 'personal', name: 'Personal', price: 'Free', description: 'Single operator, full governance.' },
-      { id: 'personal_plus', name: 'Personal Plus', price: '$9/mo', description: 'Single operator, priority features.' },
-      { id: 'crew', name: 'Crew', price: '$29/mo', description: '2-5 operators, shared governance.' },
-      { id: 'team', name: 'Team', price: '$79/mo', description: '6-20 operators, team governance.' },
-      { id: 'institution', name: 'Institution', price: 'Contact us', description: '20+ operators, enterprise governance.' },
+      { id: 'personal_plus', name: 'Personal Plus', price: '$99/yr', description: 'Single operator, multi-machine.' },
+      { id: 'crew', name: 'Crew', price: '$2,995/yr', description: '2\u201312 operators, shared governance.' },
+      { id: 'team', name: 'Team', price: '$19,995/yr', description: '13\u201350 operators, role-based governance.' },
+      { id: 'institution', name: 'Institution', price: 'Negotiated', description: '51+ operators, enterprise governance.' },
     ],
   });
 }

@@ -807,6 +807,16 @@ async function _restartQuestionnaire(appState) {
   const res = await api.postQuestionnaireReset();
   if (res.ok) {
     _switchPanel(appState, 'questionnaire');
+  } else {
+    console.error('Questionnaire reset failed:', res.error);
+    // Show error inline — find nearest error element or alert
+    const area = appState.el.querySelector('#lic-panel-area');
+    if (area) {
+      const err = document.createElement('div');
+      err.className = 'lic-error';
+      err.textContent = `Reset failed: ${res.error || 'Unknown error'}`;
+      area.prepend(err);
+    }
   }
 }
 
@@ -1079,12 +1089,14 @@ function _buildPurchasePanel(state) {
   const isLicensed = currentStatus === 'licensed';
 
   // Tier options — all enabled except Institution (contact handoff)
-  const TIERS_FOR_PURCHASE = [
-    { id: 'personal_plus', label: 'Personal Plus', price: '$99/yr', dating: 'From purchase date', selfServe: true },
-    { id: 'crew', label: 'Crew', price: '$2,995/yr', dating: 'From trial completion', selfServe: true },
-    { id: 'team', label: 'Team', price: '$19,995/yr', dating: 'From trial completion', selfServe: true },
-    { id: 'institution', label: 'Institution', price: 'Contact us', dating: 'From trial completion', selfServe: false },
-  ];
+  // Prices and dating come from COMMERCIAL_TERMS (tier-definitions.js) — single source of truth.
+  const TIERS_FOR_PURCHASE = ['personal_plus', 'crew', 'team', 'institution'].map(id => ({
+    id,
+    label: TIER_LABELS[id] || id,
+    price: COMMERCIAL_TERMS[id]?.price || '',
+    dating: COMMERCIAL_TERMS[id]?.dating || '',
+    selfServe: id !== 'institution',
+  }));
 
   // Filter out tiers at or below current if upgrading
   const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
@@ -1244,11 +1256,11 @@ function _buildPurchasePanel(state) {
 }
 
 function _purchaseBtnLabel(tier, isUpgrade) {
-  const PRICES = { personal_plus: '$99/yr', crew: '$2,995/yr', team: '$19,995/yr' };
   const label = _tierLabel(tier);
-  const price = PRICES[tier] || '';
+  const price = COMMERCIAL_TERMS[tier]?.price || '';
   const verb = isUpgrade ? 'Upgrade to' : 'Purchase';
-  return price ? `${verb} ${label} — ${price}` : `${verb} ${label}`;
+  const showPrice = price && price !== 'Free' && price !== 'Negotiated';
+  return showPrice ? `${verb} ${label} — ${price}` : `${verb} ${label}`;
 }
 
 function _updateDatingNote(el, tier) {
@@ -1552,6 +1564,13 @@ async function _loadCaseDocument(el, appState) {
     return;
   }
 
+  // Commercial terms come from the client-side single source of truth,
+  // not from the server response. This ensures price changes propagate
+  // from tier-definitions.js without needing server updates.
+  if (doc.recommendation && COMMERCIAL_TERMS[doc.recommendation]) {
+    doc.commercial_terms = COMMERCIAL_TERMS[doc.recommendation];
+  }
+
   _renderCaseDocument(el, doc, appState);
 }
 
@@ -1699,7 +1718,7 @@ function _downloadCaseDocument(doc) {
   const tierLabel = doc.recommendation_label || doc.recommendation || 'Unknown';
   const isTentative = doc.recommendation_status === 'tentative';
   const ev = doc.governance_evidence || {};
-  const terms = doc.commercial_terms || {};
+  const terms = (doc.recommendation && COMMERCIAL_TERMS[doc.recommendation]) || doc.commercial_terms || {};
 
   let md = `# Atested Case Document\n\n`;
   md += `Generated: ${doc.generated_at || 'N/A'}\n\n`;
