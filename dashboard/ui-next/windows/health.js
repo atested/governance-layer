@@ -17,7 +17,7 @@ export function openHealthWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'hw-root';
 
-  const result = _openAsChild('Health', trigger, content);
+  const result = _openAsChild('Health', 'System diagnostics and chain integrity', trigger, content);
   if (!result) return;
 
   const state = { el: content, data: null };
@@ -331,7 +331,7 @@ async function _openChainDetail(state, h) {
     content.appendChild(evtSection);
   }
 
-  modalManager.open({ title: 'Chain Integrity', trigger: state.el, content });
+  modalManager.open({ title: 'Chain Integrity', subtitle: 'Chain verification detail', trigger: state.el, content });
 }
 
 // ---------- Grandchild: Deny Rate Detail ----------
@@ -406,7 +406,7 @@ async function _openDenyRateDetail(state, h) {
     content.appendChild(denySection);
   }
 
-  modalManager.open({ title: 'Deny Rate', trigger: state.el, content });
+  modalManager.open({ title: 'Deny Rate', subtitle: 'Recent deny patterns and context', trigger: state.el, content });
 }
 
 // ---------- Recent health events table ----------
@@ -516,7 +516,7 @@ function _openRawEventDetail(state, evt) {
   }
   content.appendChild(section);
 
-  modalManager.open({ title: 'Health Event', trigger: state.el, content });
+  modalManager.open({ title: 'Health Event', subtitle: 'Event detail from chain stability log', trigger: state.el, content });
 }
 
 // ---------- Event classification helpers ----------
@@ -555,9 +555,9 @@ function _eventDetails(evt) {
 
 // ---------- Utility ----------
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _statusColor(status) {

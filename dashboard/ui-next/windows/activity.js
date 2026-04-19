@@ -37,7 +37,7 @@ export function openActivityWindow(trigger, opts = {}) {
   const content = document.createElement('div');
   content.className = 'aw-root';
 
-  const result = _openAsChild('Activity', trigger, content);
+  const result = _openAsChild('Activity', 'Decision log for all Atested operations', trigger, content);
   if (!result) return;
 
   const state = {
@@ -672,11 +672,11 @@ function _getCellValue(key, entry, detail) {
 
 // ---------- Helpers ----------
 
-function _openAsChild(title, trigger, content) {
+function _openAsChild(title, subtitle, trigger, content) {
   if (modalManager.depth > 0) {
-    return modalManager.replaceChild({ title, trigger, content });
+    return modalManager.replaceChild({ title, subtitle, trigger, content });
   }
-  return modalManager.open({ title, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatTime24(isoStr) {

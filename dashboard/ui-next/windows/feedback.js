@@ -18,7 +18,7 @@ import '../components/loading-indicator.js';
  */
 export function openFeedbackWindow(trigger) {
   const content = _buildContent();
-  const result = _openAsChild('Feedback', trigger, content);
+  const result = _openAsChild('Feedback', 'Feedback and telemetry', trigger, content);
   if (!result) return;
 
   const state = { el: content };
@@ -246,9 +246,9 @@ function _truncate(str, len) {
   return str.length > len ? str.substring(0, len) + '...' : str;
 }
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatTime(iso) {

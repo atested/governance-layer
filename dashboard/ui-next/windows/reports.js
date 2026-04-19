@@ -33,7 +33,7 @@ export function openReportsWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'rp-root';
 
-  const result = _openAsChild('Reports', trigger, content);
+  const result = _openAsChild('Reports', 'Atested metrics and trends over time', trigger, content);
   if (!result) return;
 
   const state = {
@@ -352,9 +352,9 @@ function _exportCSV(state) {
 
 // ---------- Utility ----------
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _esc(str) {

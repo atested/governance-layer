@@ -107,7 +107,7 @@ export function openAlertsWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'al-root';
 
-  const result = _openAsChild('Alerts', trigger, content);
+  const result = _openAsChild('Alerts', 'Proactive monitoring from Atested', trigger, content);
   if (!result) return;
 
   const state = { el: content, data: null, tierLevel: 0, tierName: 'Personal' };
@@ -459,7 +459,7 @@ function _openAlertDetail(alert, state) {
     actions.appendChild(btn);
   }
 
-  modalManager.open({ title: 'Alert Detail', trigger: state.el, content });
+  modalManager.open({ title: 'Alert Detail', subtitle: 'Alert context and guidance', trigger: state.el, content });
 }
 
 function _describeTrigger(alert) {
@@ -573,9 +573,9 @@ function _formatTimestamp(isoStr) {
   }
 }
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _esc(str) {

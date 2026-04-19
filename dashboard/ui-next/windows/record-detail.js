@@ -27,6 +27,7 @@ export async function openRecordDetail(recordId, trigger) {
   const shortId = (recordId || '').substring(0, 8);
   const result = modalManager.open({
     title: `Record ${shortId}`,
+    subtitle: 'Decision detail from your chain',
     trigger,
     content: _loadingEl(),
   });

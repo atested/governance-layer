@@ -72,7 +72,7 @@ class ModalManager {
    * @param {HTMLElement|string|null} opts.content - Content to place in the window
    * @returns {{ frame: HTMLElement, contentSlot: HTMLElement }} - References for the caller
    */
-  open({ title, trigger = null, content = null }) {
+  open({ title, subtitle = '', trigger = null, content = null }) {
     const depth = this._stack.length + 1;
     if (depth > 2) {
       console.error('ModalManager: maximum depth 2 exceeded');
@@ -88,6 +88,7 @@ class ModalManager {
     // Create frame
     const frame = document.createElement('atd-window-frame');
     frame.setAttribute('title', title);
+    if (subtitle) frame.setAttribute('subtitle', subtitle);
     frame.setAttribute('depth', String(depth));
     frame.style.setProperty('--z-index', String(depth === 1 ? Z.CHILD : Z.GRANDCHILD));
     frame.addEventListener('frame:close', () => this.closeTopmost());
@@ -195,11 +196,11 @@ class ModalManager {
    * Used when chrome clicks open a window while another is already open.
    * Spec v2 section 3.6.
    */
-  replaceChild({ title, trigger = null, content = null }) {
+  replaceChild({ title, subtitle = '', trigger = null, content = null }) {
     // Close everything first
     this.closeAll();
     // Open the new child
-    return this.open({ title, trigger, content });
+    return this.open({ title, subtitle, trigger, content });
   }
 
   /**

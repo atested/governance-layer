@@ -73,6 +73,13 @@ const styles = `
   background: var(--surface-raised);
 }
 
+.title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
 .title {
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -80,6 +87,18 @@ const styles = `
   color: var(--ink);
   margin: 0;
   user-select: none;
+  flex-shrink: 0;
+}
+.subtitle {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin: 0;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .close-btn {
@@ -110,7 +129,7 @@ const styles = `
 `;
 
 export class AtdWindowFrame extends AtdBase {
-  static get observedAttributes() { return ['title', 'depth']; }
+  static get observedAttributes() { return ['title', 'subtitle', 'depth']; }
 
   constructor() {
     super();
@@ -120,10 +139,16 @@ export class AtdWindowFrame extends AtdBase {
 
   _render() {
     const title = this.getAttribute('title') || '';
+    const subtitle = this.getAttribute('subtitle') || '';
+    const subtitleHtml = subtitle
+      ? ` <span class="subtitle">\u2014 ${this._esc(subtitle)}</span>`
+      : '';
     this.shadowRoot.innerHTML = `
       <div class="frame">
         <div class="title-bar">
-          <span class="title">${this._esc(title)}</span>
+          <div class="title-group">
+            <span class="title">${this._esc(title)}</span>${subtitleHtml}
+          </div>
           <button class="close-btn" aria-label="Close window">&times;</button>
         </div>
         <div class="content">
@@ -140,6 +165,21 @@ export class AtdWindowFrame extends AtdBase {
     if (name === 'title') {
       const titleEl = this.shadowRoot.querySelector('.title');
       if (titleEl) titleEl.textContent = this.getAttribute('title') || '';
+    }
+    if (name === 'subtitle') {
+      const sub = this.getAttribute('subtitle') || '';
+      let subEl = this.shadowRoot.querySelector('.subtitle');
+      if (sub) {
+        if (!subEl) {
+          subEl = document.createElement('span');
+          subEl.className = 'subtitle';
+          const group = this.shadowRoot.querySelector('.title-group');
+          if (group) group.appendChild(subEl);
+        }
+        subEl.textContent = `\u2014 ${sub}`;
+      } else if (subEl) {
+        subEl.remove();
+      }
     }
   }
 

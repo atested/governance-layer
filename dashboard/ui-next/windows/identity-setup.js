@@ -15,7 +15,7 @@ import { modalManager } from '../modal-manager.js';
  */
 export function openIdentitySetupWindow(trigger) {
   const content = _buildContent();
-  _openAsChild('Identity Setup', trigger, content);
+  _openAsChild('Identity Setup', 'Configure your operator identity', trigger, content);
 }
 
 function _buildContent() {
@@ -107,9 +107,9 @@ function _buildContent() {
   return el;
 }
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 // Styles

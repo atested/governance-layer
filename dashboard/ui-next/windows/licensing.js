@@ -48,7 +48,7 @@ import {
  */
 export function openLicensingWindow(trigger) {
   const content = _buildContent();
-  const result = _openAsChild('', trigger, content);
+  const result = _openAsChild('Licensing', 'Plans, pricing, and license management', trigger, content);
   if (!result) return;
 
   const state = {
@@ -66,11 +66,11 @@ export function openLicensingWindow(trigger) {
 
 // ---------- Window chrome ----------
 
-function _openAsChild(title, trigger, content) {
+function _openAsChild(title, subtitle, trigger, content) {
   if (modalManager.depth > 0) {
-    return modalManager.replaceChild({ title, trigger, content });
+    return modalManager.replaceChild({ title, subtitle, trigger, content });
   }
-  return modalManager.open({ title, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 // ---------- Content shell (launcher grid) ----------
@@ -594,8 +594,9 @@ async function _refreshLauncher(state) {
 function _openBoxGrandchild(boxId, trigger, state) {
   if (modalManager.depth >= 2) return;
   const titles = { tiers: 'Pricing', survey: 'Survey', case: 'Case Document', purchase: 'License', terms: 'Terms' };
+  const subtitles = { tiers: 'Compare what each plan includes', survey: 'Questionnaire for plan recommendation', case: 'Your recommendation with evidence', purchase: 'Purchase and manage your license', terms: 'Atested licensing terms' };
   const content = _buildGrandchildContent(boxId, state);
-  const result = modalManager.open({ title: titles[boxId] || boxId, trigger, content });
+  const result = modalManager.open({ title: titles[boxId] || boxId, subtitle: subtitles[boxId] || '', trigger, content });
   if (!result) return;
 
   // Accent color: use action-state color, not fixed pane color

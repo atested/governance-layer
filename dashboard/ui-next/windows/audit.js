@@ -35,7 +35,7 @@ export function openAuditWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'au-root';
 
-  const result = _openAsChild('Audit', trigger, content);
+  const result = _openAsChild('Audit', 'Verify and export your chain records', trigger, content);
   if (!result) return;
 
   const state = {
@@ -676,11 +676,11 @@ function _downloadFile(content, mime, filename) {
 
 // ---------- Helpers ----------
 
-function _openAsChild(title, trigger, content) {
+function _openAsChild(title, subtitle, trigger, content) {
   if (modalManager.depth > 0) {
-    return modalManager.replaceChild({ title, trigger, content });
+    return modalManager.replaceChild({ title, subtitle, trigger, content });
   }
-  return modalManager.open({ title, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatHumanDate(isoStr) {

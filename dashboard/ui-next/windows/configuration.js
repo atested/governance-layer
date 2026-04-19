@@ -16,7 +16,7 @@ export function openConfigWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'cf-root';
 
-  const result = _openAsChild('Configuration', trigger, content);
+  const result = _openAsChild('Configuration', 'Manage your policy rules and settings', trigger, content);
   if (!result) return;
 
   const state = { el: content, config: null, editMode: false };
@@ -380,7 +380,7 @@ function _openPolicyRulesDetail(state, rules) {
   defaultNote.innerHTML = `<p class="cf-gc-note">Default decision (when no rule matches): <strong class="cf-decision cf-decision-${defaultDecision.toLowerCase()}">${_esc(defaultDecision)}</strong></p>`;
   content.appendChild(defaultNote);
 
-  modalManager.open({ title: 'Policy Rules', trigger: state.el, content });
+  modalManager.open({ title: 'Policy Rules', subtitle: 'Your declarative governance rules', trigger: state.el, content });
 }
 
 function _exportPolicyRules(policyRules) {
@@ -421,7 +421,7 @@ function _openBaseDirsDetail(state, baseDirs, displayDirs) {
     </div>
   `;
 
-  modalManager.open({ title: 'Base Directories', trigger: state.el, content });
+  modalManager.open({ title: 'Base Directories', subtitle: 'Your authorized file system paths', trigger: state.el, content });
 }
 
 // ---------- Discovered Tools detail ----------
@@ -475,7 +475,7 @@ function _openDiscoveredToolsDetail(state, mappings) {
     content.appendChild(tableSection);
   }
 
-  modalManager.open({ title: 'Discovered Tools', trigger: state.el, content });
+  modalManager.open({ title: 'Discovered Tools', subtitle: 'Auto-classified tools in your installation', trigger: state.el, content });
 }
 
 // ---------- Signing detail ----------
@@ -525,7 +525,7 @@ function _openSigningDetail(state, signing) {
     });
   }
 
-  modalManager.open({ title: 'Signing', trigger: state.el, content });
+  modalManager.open({ title: 'Signing', subtitle: 'How Atested verifies your chain', trigger: state.el, content });
 }
 
 // ---------- Proxy detail ----------
@@ -566,14 +566,14 @@ function _openProxyDetail(state, proxy) {
     </div>
   `;
 
-  modalManager.open({ title: 'Proxy', trigger: state.el, content });
+  modalManager.open({ title: 'Proxy', subtitle: 'Installation and provider configuration', trigger: state.el, content });
 }
 
 // ---------- Utility ----------
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatHumanDate(isoStr) {

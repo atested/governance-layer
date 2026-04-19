@@ -20,7 +20,7 @@ export function openApprovalsWindow(trigger, prefillOperation) {
   const content = document.createElement('div');
   content.className = 'ap-root';
 
-  const result = _openAsChild('Approvals', trigger, content);
+  const result = _openAsChild('Approvals', 'Manage your exceptions to Atested policy rules', trigger, content);
   if (!result) return;
 
   const state = {
@@ -397,11 +397,11 @@ function _exportCSV(state) {
 
 // ---------- Helpers ----------
 
-function _openAsChild(title, trigger, content) {
+function _openAsChild(title, subtitle, trigger, content) {
   if (modalManager.depth > 0) {
-    return modalManager.replaceChild({ title, trigger, content });
+    return modalManager.replaceChild({ title, subtitle, trigger, content });
   }
-  return modalManager.open({ title, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatHumanDate(isoStr) {

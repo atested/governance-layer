@@ -23,7 +23,7 @@ let _timerInterval = null;
  */
 export function openIdentitySessionWindow(trigger) {
   const content = _buildContent();
-  const result = _openAsChild('Identity Session', trigger, content);
+  const result = _openAsChild('Identity Session', 'Your active operator session', trigger, content);
   if (!result) return;
 
   const state = { el: content };
@@ -241,9 +241,9 @@ function _formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _esc(str) {

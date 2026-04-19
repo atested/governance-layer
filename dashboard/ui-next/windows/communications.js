@@ -23,7 +23,7 @@ export function openCommunicationsWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'cm-root';
 
-  const result = _openAsChild('Communications', trigger, content);
+  const result = _openAsChild('Communications', 'Submit requests and manage your telemetry', trigger, content);
   if (!result) return;
 
   const state = { el: content, data: null };
@@ -370,7 +370,7 @@ function _openSlotDetail(state, req, level) {
   paired.appendChild(rightPane);
   content.appendChild(paired);
 
-  modalManager.open({ title: `Request ${(req.request_id || '').substring(0, 8)}`, trigger: state.el, content });
+  modalManager.open({ title: `Request ${(req.request_id || '').substring(0, 8)}`, subtitle: 'Priority request exchange detail', trigger: state.el, content });
 }
 
 // ---------- Telemetry grandchild ----------
@@ -468,7 +468,7 @@ function _openTelemetryDetail(state, d) {
     content.appendChild(emptySection);
   }
 
-  modalManager.open({ title: 'Telemetry', trigger: state.el, content });
+  modalManager.open({ title: 'Telemetry', subtitle: 'Participation and traffic history', trigger: state.el, content });
 }
 
 // ---------- Request history grandchild ----------
@@ -539,14 +539,14 @@ function _openHistoryDetail(state, d) {
     content.appendChild(tableSection);
   }
 
-  modalManager.open({ title: 'Request History', trigger: state.el, content });
+  modalManager.open({ title: 'Request History', subtitle: 'All submitted requests', trigger: state.el, content });
 }
 
 // ---------- Utility ----------
 
-function _openAsChild(title, trigger, content) {
-  if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
-  return modalManager.open({ title, trigger, content });
+function _openAsChild(title, subtitle, trigger, content) {
+  if (modalManager.depth > 0) return modalManager.replaceChild({ title, subtitle, trigger, content });
+  return modalManager.open({ title, subtitle, trigger, content });
 }
 
 function _formatHumanDate(isoStr) {
