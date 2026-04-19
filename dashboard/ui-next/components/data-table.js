@@ -115,7 +115,7 @@ tbody tr.row--ungoverned {
   background: var(--warn-soft);
 }
 tbody tr.row--ungoverned:hover {
-  background: rgba(245, 158, 66, 0.18);
+  background: rgba(245, 166, 35, 0.18);
 }
 
 /* Empty state */

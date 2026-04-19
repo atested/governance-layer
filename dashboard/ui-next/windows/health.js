@@ -643,7 +643,7 @@ hwStyles.textContent = `
     margin: -24px -24px 0;
   }
   .hw-accent-green { background: #22c55e; }
-  .hw-accent-amber { background: #f59e42; }
+  .hw-accent-amber { background: #f5a623; }
   .hw-accent-red { background: #ef4444; }
   .hw-accent-muted { background: #6b7280; }
 
@@ -659,7 +659,7 @@ hwStyles.textContent = `
     border-radius: 999px;
   }
   .hw-pill-green { background: rgba(34,197,94,0.12); color: #22c55e; }
-  .hw-pill-amber { background: rgba(245,158,66,0.12); color: #f59e42; }
+  .hw-pill-amber { background: rgba(245,166,35,0.12); color: #f5a623; }
   .hw-pill-red { background: rgba(239,68,68,0.12); color: #ef4444; }
 
   /* ---- Alert pane ---- */
@@ -673,12 +673,12 @@ hwStyles.textContent = `
     border: 1px solid rgba(239,68,68,0.25);
   }
   .hw-alert-amber {
-    background: rgba(245,158,66,0.06);
-    border: 1px solid rgba(245,158,66,0.25);
+    background: rgba(245,166,35,0.06);
+    border: 1px solid rgba(245,166,35,0.25);
   }
   .hw-alert-blue {
-    background: rgba(91,138,245,0.06);
-    border: 1px solid rgba(91,138,245,0.25);
+    background: rgba(96,165,250,0.06);
+    border: 1px solid rgba(96,165,250,0.25);
   }
   .hw-alert-top {
     margin-bottom: 8px;
@@ -693,7 +693,7 @@ hwStyles.textContent = `
     border-radius: 999px;
   }
   .hw-badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
-  .hw-badge-amber { background: rgba(245,158,66,0.15); color: #f59e42; }
+  .hw-badge-amber { background: rgba(245,166,35,0.15); color: #f5a623; }
   .hw-alert-desc {
     font-size: 0.85rem;
     color: #e4e6eb;
@@ -743,8 +743,8 @@ hwStyles.textContent = `
     transition: border-color 0.12s, box-shadow 0.12s;
   }
   .hw-pane-clickable:hover {
-    border-color: rgba(91,138,245,0.3);
-    box-shadow: 0 0 0 1px rgba(91,138,245,0.15);
+    border-color: rgba(96,165,250,0.3);
+    box-shadow: 0 0 0 1px rgba(96,165,250,0.15);
   }
   .hw-pane-accent {
     height: 6px;
@@ -753,7 +753,7 @@ hwStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -778,7 +778,7 @@ hwStyles.textContent = `
     color: #e4e6eb;
   }
   .hw-kv-green { color: #22c55e; }
-  .hw-kv-amber { color: #f59e42; }
+  .hw-kv-amber { color: #f5a623; }
   .hw-kv-red { color: #ef4444; }
 
   /* ---- Events pane ---- */
@@ -833,7 +833,7 @@ hwStyles.textContent = `
     transition: background 0.1s;
   }
   .hw-evt-row:hover {
-    background: rgba(91,138,245,0.06);
+    background: rgba(96,165,250,0.06);
   }
   .hw-evt-critical {
     background: rgba(239,68,68,0.04);
@@ -842,10 +842,10 @@ hwStyles.textContent = `
     background: rgba(239,68,68,0.10);
   }
   .hw-evt-warning {
-    background: rgba(245,158,66,0.04);
+    background: rgba(245,166,35,0.04);
   }
   .hw-evt-warning:hover {
-    background: rgba(245,158,66,0.08);
+    background: rgba(245,166,35,0.08);
   }
   .hw-evt-time {
     font-family: "JetBrains Mono", monospace;
@@ -867,7 +867,7 @@ hwStyles.textContent = `
     border-radius: 999px;
   }
   .hw-sev-critical { background: rgba(239,68,68,0.12); color: #ef4444; }
-  .hw-sev-warning { background: rgba(245,158,66,0.12); color: #f59e42; }
+  .hw-sev-warning { background: rgba(245,166,35,0.12); color: #f5a623; }
   .hw-sev-info { background: rgba(107,114,128,0.12); color: #8b919a; }
 
   /* View all link */
@@ -878,7 +878,7 @@ hwStyles.textContent = `
   .hw-view-all-btn {
     background: none;
     border: none;
-    color: #5b8af5;
+    color: #60a5fa;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
     font-weight: 500;
@@ -901,7 +901,7 @@ hwStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 14px 0 10px;
   }
@@ -945,7 +945,7 @@ hwStyles.textContent = `
     transition: background 0.1s;
   }
   .hw-deny-row-click:hover {
-    background: rgba(91,138,245,0.06);
+    background: rgba(96,165,250,0.06);
   }
   .hw-deny-target {
     font-family: "JetBrains Mono", monospace;
@@ -965,8 +965,8 @@ hwStyles.textContent = `
     padding: 40px 0;
   }
   .hw-error {
-    color: #f59e42;
-    background: rgba(245,158,66,0.10);
+    color: #f5a623;
+    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
     border-radius: 8px;
     font-size: 0.82rem;

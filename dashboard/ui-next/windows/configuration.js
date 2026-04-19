@@ -636,7 +636,7 @@ cfStyles.textContent = `
     color: #e4e6eb;
   }
   .cf-val-green { color: #22c55e; }
-  .cf-val-amber { color: #f59e42; }
+  .cf-val-amber { color: #f5a623; }
 
   /* ---- Pane ---- */
   .cf-pane {
@@ -651,17 +651,17 @@ cfStyles.textContent = `
     transition: border-color 0.12s, box-shadow 0.12s;
   }
   .cf-pane-clickable:hover {
-    border-color: rgba(91,138,245,0.3);
-    box-shadow: 0 0 0 1px rgba(91,138,245,0.15);
+    border-color: rgba(96,165,250,0.3);
+    box-shadow: 0 0 0 1px rgba(96,165,250,0.15);
   }
   .cf-pane-accent { height: 6px; }
   .cf-accent-green { background: #22c55e; }
-  .cf-accent-amber { background: #f59e42; }
+  .cf-accent-amber { background: #f5a623; }
   .cf-pane-header {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -704,9 +704,9 @@ cfStyles.textContent = `
     padding: 7px 12px;
     box-sizing: border-box;
   }
-  .cf-input:focus { outline: 2px solid #5b8af5; outline-offset: 1px; }
+  .cf-input:focus { outline: 2px solid #60a5fa; outline-offset: 1px; }
   .cf-result-success { color: #22c55e; font-size: 0.82rem; margin-top: 8px; }
-  .cf-result-error { color: #f59e42; font-size: 0.82rem; margin-top: 8px; }
+  .cf-result-error { color: #f5a623; font-size: 0.82rem; margin-top: 8px; }
 
   /* ---- Buttons ---- */
   .cf-btn {
@@ -720,15 +720,15 @@ cfStyles.textContent = `
     transition: background 0.1s;
     white-space: nowrap;
   }
-  .cf-btn-primary { background: #5b8af5; color: #fff; }
-  .cf-btn-primary:hover { background: #4a7ae5; }
+  .cf-btn-primary { background: #60a5fa; color: #fff; }
+  .cf-btn-primary:hover { background: #4f95ea; }
   .cf-btn-export {
-    background: rgba(245,158,66,0.12);
-    color: #f59e42;
-    border: 1px solid rgba(245,158,66,0.3);
+    background: rgba(245,166,35,0.12);
+    color: #f5a623;
+    border: 1px solid rgba(245,166,35,0.3);
     margin-bottom: 10px;
   }
-  .cf-btn-export:hover { background: rgba(245,158,66,0.20); }
+  .cf-btn-export:hover { background: rgba(245,166,35,0.20); }
 
   /* ---- Rules preview table ---- */
   .cf-rules-table {
@@ -759,7 +759,7 @@ cfStyles.textContent = `
     cursor: pointer;
     transition: background 0.1s;
   }
-  .cf-rules-full tbody tr:hover { background: rgba(91,138,245,0.06); }
+  .cf-rules-full tbody tr:hover { background: rgba(96,165,250,0.06); }
   .cf-cell-num {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.72rem;
@@ -799,8 +799,8 @@ cfStyles.textContent = `
     margin-right: 2px;
   }
   .cf-tier-1 { background: rgba(34,197,94,0.12); color: #22c55e; }
-  .cf-tier-2 { background: rgba(91,138,245,0.12); color: #5b8af5; }
-  .cf-tier-3 { background: rgba(245,158,66,0.12); color: #f59e42; }
+  .cf-tier-2 { background: rgba(96,165,250,0.12); color: #60a5fa; }
+  .cf-tier-3 { background: rgba(245,166,35,0.12); color: #f5a623; }
   .cf-tier-4 { background: rgba(239,68,68,0.12); color: #ef4444; }
 
   .cf-preview-note {
@@ -861,8 +861,8 @@ cfStyles.textContent = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #5b8af5;
-    background: rgba(91,138,245,0.10);
+    color: #60a5fa;
+    background: rgba(96,165,250,0.10);
     padding: 2px 8px;
     border-radius: 999px;
   }
@@ -888,7 +888,7 @@ cfStyles.textContent = `
   .cf-mapping-cat {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.78rem;
-    color: #5b8af5;
+    color: #60a5fa;
   }
   .cf-tools-table {
     width: 100%;
@@ -922,7 +922,7 @@ cfStyles.textContent = `
   .cf-kv-value { font-size: 0.82rem; color: #e4e6eb; }
   .cf-kv-mono { font-family: "JetBrains Mono", monospace; font-size: 0.75rem; }
   .cf-kv-copyable { cursor: pointer; }
-  .cf-kv-copyable:hover { color: #5b8af5; }
+  .cf-kv-copyable:hover { color: #60a5fa; }
 
   /* ---- Divider ---- */
   .cf-divider {
@@ -934,7 +934,7 @@ cfStyles.textContent = `
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     margin-bottom: 6px;
   }
@@ -957,7 +957,7 @@ cfStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 14px 0 10px;
   }
@@ -1021,8 +1021,8 @@ cfStyles.textContent = `
     font-style: italic;
   }
   .cf-error {
-    color: #f59e42;
-    background: rgba(245,158,66,0.10);
+    color: #f5a623;
+    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
     border-radius: 8px;
     font-size: 0.82rem;

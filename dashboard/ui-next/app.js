@@ -132,7 +132,7 @@ function _showDisclosureCard() {
 
   const btn = document.createElement('button');
   Object.assign(btn.style, {
-    background: '#5b8af5',
+    background: '#60a5fa',
     color: '#fff',
     border: 'none',
     borderRadius: '8px',
@@ -267,10 +267,10 @@ async function _loadLicenseState() {
       dotColor = 'var(--ok, #22c55e)';
     } else if (license_status === 'personal') {
       tierName = 'Personal';
-      dotColor = 'var(--warning, #f59e42)';
+      dotColor = 'var(--warning, #f5a623)';
     } else if (license_status === 'unlicensed') {
       tierName = 'Unlicensed';
-      dotColor = 'var(--warning, #f59e42)';
+      dotColor = 'var(--warning, #f5a623)';
     } else if (license_status === 'clock_anomaly') {
       tierName = 'Clock Issue';
       dotColor = 'var(--danger, #ef4444)';

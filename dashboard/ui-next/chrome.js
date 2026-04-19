@@ -192,7 +192,7 @@ chromeStyles.textContent = `
     background: rgba(255, 255, 255, 0.06);
   }
   .chrome-zone:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .chrome-identity {
@@ -203,7 +203,7 @@ chromeStyles.textContent = `
     font-size: 0.82rem;
   }
   .chrome-identity:hover .chrome-identity-text {
-    color: #5b8af5;
+    color: #60a5fa;
   }
   .chrome-identity.identity-configured .chrome-identity-text {
     color: #e4e6eb;
@@ -251,7 +251,7 @@ chromeStyles.textContent = `
     color: #8b919a;
   }
   .chrome-license-amber .chrome-license-tier {
-    color: #f59e42;
+    color: #f5a623;
   }
   .chrome-license-dot {
     width: 8px;
@@ -312,14 +312,14 @@ chromeStyles.textContent = `
     border-bottom: 1px solid rgba(239, 68, 68, 0.3);
   }
   .chrome-banner-bar.severity-critical {
-    background: rgba(245, 158, 66, 0.15);
-    color: #f59e42;
-    border-bottom: 1px solid rgba(245, 158, 66, 0.3);
+    background: rgba(245, 166, 35, 0.15);
+    color: #f5a623;
+    border-bottom: 1px solid rgba(245, 166, 35, 0.3);
   }
   .chrome-banner-bar.severity-routine {
-    background: rgba(91, 138, 245, 0.12);
-    color: #5b8af5;
-    border-bottom: 1px solid rgba(91, 138, 245, 0.3);
+    background: rgba(96, 165, 250, 0.12);
+    color: #60a5fa;
+    border-bottom: 1px solid rgba(96, 165, 250, 0.3);
   }
   .chrome-banner-text {
     flex: 1;

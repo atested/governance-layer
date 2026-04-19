@@ -594,7 +594,7 @@ alStyles.textContent = `
   }
   .al-loading { color: #8b919a; }
   .al-error {
-    color: #f59e42; background: rgba(245,158,66,0.10);
+    color: #f5a623; background: rgba(245,166,35,0.10);
     padding: 12px 16px; border-radius: 8px;
   }
 
@@ -623,7 +623,7 @@ alStyles.textContent = `
   .al-sc-red { color: #ef4444; }
   .al-sc-amber { color: #f5a623; }
   .al-sc-green { color: #22c55e; }
-  .al-sc-blue { color: #5b8af5; }
+  .al-sc-blue { color: #60a5fa; }
 
   /* Monitoring panes */
   .al-monitor-pane {
@@ -641,7 +641,7 @@ alStyles.textContent = `
   }
   .al-pane-title {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #5b8af5; margin: 0; font-weight: 600;
+    color: #60a5fa; margin: 0; font-weight: 600;
   }
   .al-pane-inactive .al-pane-title { color: #8b919a; }
 
@@ -675,7 +675,7 @@ alStyles.textContent = `
   }
   .al-alert-card:hover { background: #20232b; }
   .al-alert-card:focus-visible {
-    outline: 2px solid #5b8af5; outline-offset: 2px;
+    outline: 2px solid #60a5fa; outline-offset: 2px;
   }
   .al-alert-card:last-child { margin-bottom: 0; }
 
@@ -686,7 +686,7 @@ alStyles.textContent = `
   .al-card-left { display: flex; align-items: center; gap: 8px; }
   .al-unread-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: #5b8af5; flex-shrink: 0;
+    background: #60a5fa; flex-shrink: 0;
   }
   .al-card-sev {
     font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
@@ -730,7 +730,7 @@ alStyles.textContent = `
   .al-gc-section { margin-bottom: 16px; }
   .al-gc-section-head {
     font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #5b8af5; font-weight: 600; margin: 0 0 6px;
+    color: #60a5fa; font-weight: 600; margin: 0 0 6px;
   }
   .al-gc-text {
     font-size: 0.82rem; color: #c4c8d0; margin: 0; line-height: 1.55;
@@ -757,9 +757,9 @@ alStyles.textContent = `
     background: rgba(34,197,94,0.15) !important; color: #22c55e !important;
   }
   .al-gc-btn-link {
-    background: rgba(91,138,245,0.12); color: #5b8af5;
+    background: rgba(96,165,250,0.12); color: #60a5fa;
   }
-  .al-gc-btn-link:hover { background: rgba(91,138,245,0.22); }
+  .al-gc-btn-link:hover { background: rgba(96,165,250,0.22); }
 
   /* Responsive */
   @media (max-width: 600px) {

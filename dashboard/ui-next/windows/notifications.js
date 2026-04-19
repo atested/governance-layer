@@ -18,8 +18,8 @@ const SEVERITY_ORDER = { security: 0, critical: 1, routine: 2, informational: 3 
 /** Severity colors */
 const SEVERITY_COLORS = {
   security: '#ef4444',
-  critical: '#f59e42',
-  routine: '#5b8af5',
+  critical: '#f5a623',
+  routine: '#60a5fa',
   informational: '#8b919a',
 };
 
@@ -151,8 +151,8 @@ nfStyles.textContent = `
     border-radius: 10px; padding: 14px 18px; margin-bottom: 10px;
   }
   .nf-severity-security { border-left: 3px solid #ef4444; }
-  .nf-severity-critical { border-left: 3px solid #f59e42; }
-  .nf-severity-routine { border-left: 3px solid #5b8af5; }
+  .nf-severity-critical { border-left: 3px solid #f5a623; }
+  .nf-severity-routine { border-left: 3px solid #60a5fa; }
   .nf-severity-informational { border-left: 3px solid #8b919a; }
   .nf-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   .nf-severity-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -165,7 +165,7 @@ nfStyles.textContent = `
     margin: 0; font-style: italic;
   }
   .nf-error {
-    color: #f59e42; background: rgba(245,158,66,0.10);
+    color: #f5a623; background: rgba(245,166,35,0.10);
     padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
   }
 `;

@@ -5,12 +5,12 @@
   --ink: #e4e6eb;
   --muted: #8b919a;
   --line: rgba(255, 255, 255, 0.08);
-  --accent: #5b8af5;
-  --accent-soft: rgba(91, 138, 245, 0.12);
-  --ok: #4ade80;
-  --ok-soft: rgba(74, 222, 128, 0.10);
-  --warn: #f59e42;
-  --warn-soft: rgba(245, 158, 66, 0.10);
+  --accent: #60a5fa;
+  --accent-soft: rgba(96, 165, 250, 0.12);
+  --ok: #22c55e;
+  --ok-soft: rgba(34, 197, 94, 0.10);
+  --warn: #f5a623;
+  --warn-soft: rgba(245, 166, 35, 0.10);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.10);
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
@@ -117,7 +117,7 @@ input {
 .pill.active,
 .button.primary {
   background: var(--accent-soft);
-  border-color: rgba(91, 138, 245, 0.25);
+  border-color: rgba(96, 165, 250, 0.25);
   color: var(--accent);
 }
 
@@ -556,7 +556,7 @@ input {
 }
 
 .audit-results-table tr:hover td {
-  background: rgba(91, 138, 245, 0.04);
+  background: rgba(96, 165, 250, 0.04);
 }
 
 .audit-results-table tr.clickable-row {
@@ -635,7 +635,7 @@ input {
 
 .detail-panel--highlight {
   background: var(--accent-soft);
-  border-color: rgba(91, 138, 245, 0.2);
+  border-color: rgba(96, 165, 250, 0.2);
 }
 
 .attempt-head,
@@ -795,7 +795,7 @@ input {
 .tab-bar a.active {
   background: var(--surface);
   color: var(--accent);
-  border-color: rgba(91, 138, 245, 0.25);
+  border-color: rgba(96, 165, 250, 0.25);
 }
 
 /* Pre blocks (record detail) */
@@ -1062,7 +1062,7 @@ pre {
 
 .config-edit-banner {
   background: var(--accent-soft);
-  border: 1px solid rgba(91, 138, 245, 0.25);
+  border: 1px solid rgba(96, 165, 250, 0.25);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -1153,7 +1153,7 @@ pre {
 
 .update-banner {
   background: var(--accent-soft);
-  border: 1px solid rgba(91, 138, 245, 0.25);
+  border: 1px solid rgba(96, 165, 250, 0.25);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -1321,7 +1321,7 @@ pre {
 .copy-btn:hover {
   color: var(--ink);
   background: var(--accent-soft);
-  border-color: rgba(91, 138, 245, 0.25);
+  border-color: rgba(96, 165, 250, 0.25);
 }
 
 .copy-btn .copy-icon {
@@ -1331,7 +1331,7 @@ pre {
 
 .copy-btn.copied {
   color: var(--ok);
-  border-color: rgba(74, 222, 128, 0.25);
+  border-color: rgba(34, 197, 94, 0.25);
 }
 
 .pre-wrapper {
@@ -1419,13 +1419,13 @@ pre {
 
 .mediated-tool {
   font-weight: 600;
-  color: var(--accent, #5b8af5);
+  color: var(--accent, #60a5fa);
   text-transform: uppercase;
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--accent-soft, rgba(91, 138, 245, 0.08));
+  background: var(--accent-soft, rgba(96, 165, 250, 0.08));
 }
 
 .mediated-action {
@@ -1486,7 +1486,7 @@ pre {
 
 .ungoverned-alt code {
   font-size: 0.76rem;
-  background: var(--accent-soft, rgba(91, 138, 245, 0.08));
+  background: var(--accent-soft, rgba(96, 165, 250, 0.08));
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -1575,7 +1575,7 @@ pre {
 
 .record-context .kv li strong code {
   font-size: 0.88rem;
-  background: var(--accent-soft, rgba(91, 138, 245, 0.08));
+  background: var(--accent-soft, rgba(96, 165, 250, 0.08));
   padding: 2px 6px;
   border-radius: 4px;
 }

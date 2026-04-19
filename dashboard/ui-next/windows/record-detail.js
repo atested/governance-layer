@@ -315,7 +315,7 @@ rdStyles.textContent = `
     text-align: center;
     padding: 40px 0;
   }
-  .rd-error { color: #f59e42; }
+  .rd-error { color: #f5a623; }
   .rd-content {
     font-family: "Inter", system-ui, sans-serif;
   }
@@ -357,7 +357,7 @@ rdStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -377,8 +377,8 @@ rdStyles.textContent = `
 
   /* ---- Warning banner ---- */
   .rd-warning-banner {
-    background: rgba(245, 158, 66, 0.10);
-    color: #f59e42;
+    background: rgba(245, 166, 35,0.10);
+    color: #f5a623;
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 0.82rem;

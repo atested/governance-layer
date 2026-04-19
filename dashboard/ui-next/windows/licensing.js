@@ -2585,7 +2585,7 @@ licStyles.textContent = `
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
-    color: #5b8af5;
+    color: #60a5fa;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -2594,17 +2594,17 @@ licStyles.textContent = `
     transition: background 0.15s, border-color 0.15s;
   }
   .lic-action-btn:hover {
-    background: rgba(91, 138, 245, 0.12);
-    border-color: #5b8af5;
+    background: rgba(96, 165, 250, 0.12);
+    border-color: #60a5fa;
   }
   .lic-action-btn:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .lic-action-btn.lic-action-primary {
-    background: #5b8af5;
+    background: #60a5fa;
     color: #fff;
-    border-color: #5b8af5;
+    border-color: #60a5fa;
   }
   .lic-action-btn.lic-action-primary:hover {
     background: #4a79e4;
@@ -2749,7 +2749,7 @@ licStyles.textContent = `
     border-color: rgba(255, 255, 255, 0.14);
   }
   .ll-terms-sliver:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .ll-ts-accent {
@@ -2833,7 +2833,7 @@ licStyles.textContent = `
   .ll-box-green:hover { border-color: rgba(34, 197, 94, 0.3); }
   .ll-box-amber:hover { border-color: rgba(245, 166, 35, 0.3); }
   .ll-box:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .ll-box:active {
@@ -2918,7 +2918,7 @@ licStyles.textContent = `
     cursor: pointer;
   }
   .lt-ack-check input {
-    accent-color: #5b8af5;
+    accent-color: #60a5fa;
     width: 16px;
     height: 16px;
   }
@@ -2928,7 +2928,7 @@ licStyles.textContent = `
     font-size: 0.9rem;
     font-weight: 500;
     color: #fff;
-    background: #5b8af5;
+    background: #60a5fa;
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -2998,7 +2998,7 @@ licStyles.textContent = `
     transition: border-color 0.15s;
   }
   .lq-input:focus {
-    border-color: #5b8af5;
+    border-color: #60a5fa;
   }
   .lq-input::placeholder {
     color: #6b7280;
@@ -3008,8 +3008,8 @@ licStyles.textContent = `
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
-    background: rgba(91, 138, 245, 0.08);
-    border: 1px solid rgba(91, 138, 245, 0.2);
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.2);
     border-radius: 8px;
     font-size: 0.9rem;
     color: #e4e6eb;
@@ -3019,7 +3019,7 @@ licStyles.textContent = `
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #5b8af5;
+    background: #60a5fa;
     flex-shrink: 0;
   }
 
@@ -3083,11 +3083,11 @@ licStyles.textContent = `
     transition: background 0.15s, border-color 0.15s;
   }
   .lq-option-btn:hover {
-    background: rgba(91, 138, 245, 0.10);
-    border-color: #5b8af5;
+    background: rgba(96, 165, 250, 0.10);
+    border-color: #60a5fa;
   }
   .lq-option-btn:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .lq-option-btn:disabled {
@@ -3363,12 +3363,12 @@ licStyles.textContent = `
     color: #e4e6eb;
   }
   .lcd-plan-btn:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .lcd-plan-active {
-    background: rgba(91, 138, 245, 0.12);
-    border-color: rgba(91, 138, 245, 0.3);
+    background: rgba(96, 165, 250, 0.12);
+    border-color: rgba(96, 165, 250, 0.3);
     color: #60a5fa;
     font-weight: 600;
   }
@@ -3405,7 +3405,7 @@ licStyles.textContent = `
     letter-spacing: 0.04em;
   }
   .lcd-rec-exploring {
-    background: rgba(91, 138, 245, 0.15);
+    background: rgba(96, 165, 250, 0.15);
     color: #60a5fa;
   }
   .lcd-rec-tier {
@@ -3626,7 +3626,7 @@ licStyles.textContent = `
     background: rgba(255, 255, 255, 0.05);
   }
   .lp-tier-row:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: -2px;
   }
   .lp-tier-active {
@@ -3737,7 +3737,7 @@ licStyles.textContent = `
     position: absolute;
     left: 0; top: 0; bottom: 0;
     width: 3px;
-    background: #5b8af5;
+    background: #60a5fa;
     border-radius: 2px;
   }
   .lup-context-bar-green { background: #22c55e; }
@@ -3772,16 +3772,16 @@ licStyles.textContent = `
     transition: background 0.15s, border-color 0.15s;
   }
   .lup-sel-row:hover:not([disabled]) {
-    background: rgba(91, 138, 245, 0.06);
+    background: rgba(96, 165, 250, 0.06);
   }
   .lup-sel-row:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .lup-sel-active {
-    background: rgba(91, 138, 245, 0.08);
-    border-color: rgba(91, 138, 245, 0.3);
-    border-left-color: #5b8af5;
+    background: rgba(96, 165, 250, 0.08);
+    border-color: rgba(96, 165, 250, 0.3);
+    border-left-color: #60a5fa;
   }
   .lup-sel-recommended {
     border-left-color: #22c55e;
@@ -3802,7 +3802,7 @@ licStyles.textContent = `
   }
   .lup-sel-spec {
     font-size: 0.82rem;
-    color: #5b8af5;
+    color: #60a5fa;
   }
   .lup-sel-price {
     font-size: 0.82rem;
@@ -3822,8 +3822,8 @@ licStyles.textContent = `
     color: #22c55e;
   }
   .lup-sel-badge-current {
-    background: rgba(91, 138, 245, 0.15);
-    color: #5b8af5;
+    background: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
   }
 
   /* Two-column layout */
@@ -3859,12 +3859,12 @@ licStyles.textContent = `
     border-radius: 10px 0 0 10px;
   }
   .lup-pane-bar-amber { background: #f5a623; }
-  .lup-pane-bar-blue { background: #5b8af5; }
+  .lup-pane-bar-blue { background: #60a5fa; }
   .lup-pane-bar-green { background: #22c55e; }
   .lup-pane-heading {
     font-size: 1rem;
     font-weight: 600;
-    color: #5b8af5;
+    color: #60a5fa;
     margin: 0 0 12px 0;
   }
   .lup-pane-desc {
@@ -3911,7 +3911,7 @@ licStyles.textContent = `
     outline: none;
     transition: border-color 0.15s;
   }
-  .lup-input:focus { border-color: #5b8af5; }
+  .lup-input:focus { border-color: #60a5fa; }
   .lup-input::placeholder { color: #6b7280; }
   .lup-input-wide { width: 100%; box-sizing: border-box; }
   .lup-textarea {
@@ -3928,7 +3928,7 @@ licStyles.textContent = `
     resize: vertical;
     transition: border-color 0.15s;
   }
-  .lup-textarea:focus { border-color: #5b8af5; }
+  .lup-textarea:focus { border-color: #60a5fa; }
   .lup-textarea::placeholder { color: #6b7280; }
 
   /* Selectable card options */
@@ -3952,10 +3952,10 @@ licStyles.textContent = `
     gap: 3px;
   }
   .lup-card-option:hover {
-    background: rgba(91, 138, 245, 0.06);
+    background: rgba(96, 165, 250, 0.06);
   }
   .lup-card-option:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 2px;
   }
   .lup-card-selected {
@@ -3988,7 +3988,7 @@ licStyles.textContent = `
     transition: background 0.15s, border-color 0.15s;
   }
   .lup-yn-btn:hover {
-    background: rgba(91, 138, 245, 0.06);
+    background: rgba(96, 165, 250, 0.06);
   }
   .lup-yn-active {
     background: rgba(34, 197, 94, 0.06);
@@ -4020,7 +4020,7 @@ licStyles.textContent = `
   .lup-purchase-price {
     font-size: 1rem;
     font-weight: 600;
-    color: #5b8af5;
+    color: #60a5fa;
   }
   .lup-purchase-billing {
     font-size: 0.82rem;
@@ -4032,7 +4032,7 @@ licStyles.textContent = `
     margin-bottom: 14px;
   }
   .lup-date-blue {
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 500;
   }
   .lup-purchase-divider {
@@ -4051,7 +4051,7 @@ licStyles.textContent = `
     padding: 8px 14px;
     transition: background 0.15s;
   }
-  .lup-invoice-btn:hover { background: rgba(91, 138, 245, 0.08); }
+  .lup-invoice-btn:hover { background: rgba(96, 165, 250, 0.08); }
   .lup-invoice-disabled {
     opacity: 0.4;
     cursor: default;

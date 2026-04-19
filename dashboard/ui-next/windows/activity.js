@@ -732,7 +732,7 @@ awStyles.textContent = `
     text-align: center;
   }
   .aw-stat-green { border-color: rgba(34,197,94,0.25); }
-  .aw-stat-amber { border-color: rgba(245,158,66,0.25); }
+  .aw-stat-amber { border-color: rgba(245,166,35,0.25); }
   .aw-stat-label {
     display: block;
     font-size: 0.68rem;
@@ -772,7 +772,7 @@ awStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #5b8af5;
+    color: #60a5fa;
     font-weight: 600;
     padding: 12px 16px 6px;
   }
@@ -807,7 +807,7 @@ awStyles.textContent = `
     box-sizing: border-box;
   }
   .aw-input:focus, .aw-select:focus {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: 1px;
   }
   .aw-select {
@@ -872,8 +872,8 @@ awStyles.textContent = `
   .aw-dtoggle:hover { color: #e4e6eb; }
   .aw-dtoggle-active {
     color: #e4e6eb;
-    border-color: rgba(91,138,245,0.4);
-    background: rgba(91,138,245,0.1);
+    border-color: rgba(96,165,250,0.4);
+    background: rgba(96,165,250,0.1);
   }
   .aw-dtoggle-allow.aw-dtoggle-active {
     border-color: rgba(34,197,94,0.5);
@@ -907,21 +907,21 @@ awStyles.textContent = `
     transition: background 0.1s;
   }
   .aw-btn-primary {
-    background: #5b8af5;
+    background: #60a5fa;
     color: #fff;
   }
-  .aw-btn-primary:hover { background: #4a7ae5; }
+  .aw-btn-primary:hover { background: #4f95ea; }
   .aw-btn-muted {
     background: rgba(255,255,255,0.06);
     color: #8b919a;
   }
   .aw-btn-muted:hover { background: rgba(255,255,255,0.10); color: #e4e6eb; }
   .aw-btn-export {
-    background: rgba(245,158,66,0.12);
+    background: rgba(245,166,35,0.12);
     color: #f5a623;
-    border: 1px solid rgba(245,158,66,0.3);
+    border: 1px solid rgba(245,166,35,0.3);
   }
-  .aw-btn-export:hover { background: rgba(245,158,66,0.2); }
+  .aw-btn-export:hover { background: rgba(245,166,35,0.2); }
 
   /* ---- Results bar ---- */
   .aw-results-bar {
@@ -963,9 +963,9 @@ awStyles.textContent = `
   }
   .aw-ps-btn:hover { color: #e4e6eb; }
   .aw-ps-active {
-    color: #5b8af5;
-    border-color: rgba(91,138,245,0.4);
-    background: rgba(91,138,245,0.08);
+    color: #60a5fa;
+    border-color: rgba(96,165,250,0.4);
+    background: rgba(96,165,250,0.08);
   }
 
   /* ---- Column bar ---- */
@@ -990,9 +990,9 @@ awStyles.textContent = `
   }
   .aw-col-preset:hover { color: #e4e6eb; }
   .aw-col-preset-active {
-    color: #5b8af5;
-    border-color: rgba(91,138,245,0.4);
-    background: rgba(91,138,245,0.08);
+    color: #60a5fa;
+    border-color: rgba(96,165,250,0.4);
+    background: rgba(96,165,250,0.08);
   }
   .aw-col-sep {
     width: 1px;
@@ -1057,17 +1057,17 @@ awStyles.textContent = `
     transition: background 0.1s;
   }
   .aw-row:hover {
-    background: rgba(91,138,245,0.06);
+    background: rgba(96,165,250,0.06);
   }
   .aw-row:focus-visible {
-    outline: 2px solid #5b8af5;
+    outline: 2px solid #60a5fa;
     outline-offset: -2px;
   }
   .aw-row-deny {
-    background: rgba(245,158,66,0.04);
+    background: rgba(245,166,35,0.04);
   }
   .aw-row-deny:hover {
-    background: rgba(245,158,66,0.10);
+    background: rgba(245,166,35,0.10);
   }
 
   /* Cell styles */
@@ -1078,7 +1078,7 @@ awStyles.textContent = `
   }
   .aw-cell-tool {
     font-family: "JetBrains Mono", monospace;
-    color: #5b8af5;
+    color: #60a5fa;
   }
   .aw-cell-target {
     font-family: "JetBrains Mono", monospace;
@@ -1143,9 +1143,9 @@ awStyles.textContent = `
   }
   .aw-pag-num:hover { color: #e4e6eb; }
   .aw-pag-num-active {
-    color: #5b8af5;
-    border-color: rgba(91,138,245,0.3);
-    background: rgba(91,138,245,0.08);
+    color: #60a5fa;
+    border-color: rgba(96,165,250,0.3);
+    background: rgba(96,165,250,0.08);
   }
   .aw-pag-ellipsis {
     color: #6b7280;
@@ -1169,8 +1169,8 @@ awStyles.textContent = `
     font-style: italic;
   }
   .aw-error {
-    color: #f59e42;
-    background: rgba(245,158,66,0.10);
+    color: #f5a623;
+    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
     border-radius: 8px;
     font-size: 0.82rem;
