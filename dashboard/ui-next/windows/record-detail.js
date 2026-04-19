@@ -59,17 +59,37 @@ function _buildContent(data, recordId) {
   const eventType = chain.event_type || sidecar?.event_type || '';
   const decision = chain.policy_decision || sidecar?.policy_decision || '';
 
-  // Record header
-  const header = document.createElement('div');
-  header.className = 'rd-header';
-  header.innerHTML = `
-    <span class="rd-header-label">Record ID</span>
-    <span class="rd-header-id">${_esc(recordId)}</span>
-  `;
-  el.appendChild(header);
+  // Determine accent color based on decision
+  let accentClass = 'rd-accent-muted';
+  if (decision === 'ALLOW') accentClass = 'rd-accent-green';
+  else if (decision === 'DENY') accentClass = 'rd-accent-red';
 
-  // Context card (type-specific)
-  el.appendChild(_buildContextCard(chain, sidecar, eventType, decision));
+  // Top accent bar reflecting decision
+  const topAccent = document.createElement('div');
+  topAccent.className = `rd-top-accent ${accentClass}`;
+  el.appendChild(topAccent);
+
+  // Record ID subtitle (full ID in muted text below the window title)
+  const subtitle = document.createElement('div');
+  subtitle.className = 'rd-subtitle';
+  subtitle.innerHTML = `<span class="rd-subtitle-id">${_esc(recordId)}</span>`;
+  el.appendChild(subtitle);
+
+  // Record pane — context card with kv fields
+  const recordPane = document.createElement('div');
+  recordPane.className = 'rd-pane';
+  const recordAccent = document.createElement('div');
+  recordAccent.className = `rd-pane-accent ${accentClass}`;
+  recordPane.appendChild(recordAccent);
+  const recordHeader = document.createElement('div');
+  recordHeader.className = 'rd-pane-header';
+  recordHeader.textContent = 'Record';
+  recordPane.appendChild(recordHeader);
+  const recordBody = document.createElement('div');
+  recordBody.className = 'rd-pane-body';
+  recordBody.appendChild(_buildContextCard(chain, sidecar, eventType, decision));
+  recordPane.appendChild(recordBody);
+  el.appendChild(recordPane);
 
   // DENY: "Approve this operation" button
   if (decision === 'DENY') {
@@ -81,7 +101,6 @@ function _buildContent(data, recordId) {
     btn.addEventListener('click', () => {
       const operation = sidecar?.target || chain.target || sidecar?.tool_name || chain.tool || '';
       modalManager.closeAll();
-      // Defer to next tick so closeAll finishes before opening Approvals
       setTimeout(() => {
         import('./approvals.js').then(mod => {
           mod.openApprovalsWindow(null, operation);
@@ -92,112 +111,137 @@ function _buildContent(data, recordId) {
     el.appendChild(approveSection);
   }
 
-  // Chain record JSON
-  const chainSection = document.createElement('div');
-  chainSection.className = 'rd-json-section';
-  chainSection.innerHTML = '<h3 class="rd-section-title">Chain Record</h3>';
+  // Chain Record pane — raw JSON
+  const chainPane = document.createElement('div');
+  chainPane.className = 'rd-pane';
+  const chainAccent = document.createElement('div');
+  chainAccent.className = 'rd-pane-accent rd-accent-muted';
+  chainPane.appendChild(chainAccent);
+  const chainHeader = document.createElement('div');
+  chainHeader.className = 'rd-pane-header';
+  chainHeader.textContent = 'Chain record';
+  chainPane.appendChild(chainHeader);
+  const chainBody = document.createElement('div');
+  chainBody.className = 'rd-pane-body';
   const chainBlock = document.createElement('atd-code-block');
   chainBlock.setAttribute('language', 'json');
   chainBlock.content = chain;
-  chainSection.appendChild(chainBlock);
-  el.appendChild(chainSection);
+  chainBody.appendChild(chainBlock);
+  chainPane.appendChild(chainBody);
+  el.appendChild(chainPane);
 
-  // Sidecar record JSON (conditional)
+  // Sidecar record pane (conditional)
   if (sidecar) {
-    const sidecarSection = document.createElement('div');
-    sidecarSection.className = 'rd-json-section';
-    sidecarSection.innerHTML = '<h3 class="rd-section-title">Sidecar Record</h3>';
+    const sidecarPane = document.createElement('div');
+    sidecarPane.className = 'rd-pane';
+    const sidecarAccent = document.createElement('div');
+    sidecarAccent.className = 'rd-pane-accent rd-accent-muted';
+    sidecarPane.appendChild(sidecarAccent);
+    const sidecarHeader = document.createElement('div');
+    sidecarHeader.className = 'rd-pane-header';
+    sidecarHeader.textContent = 'Sidecar record';
+    sidecarPane.appendChild(sidecarHeader);
+    const sidecarBody = document.createElement('div');
+    sidecarBody.className = 'rd-pane-body';
     const sidecarBlock = document.createElement('atd-code-block');
     sidecarBlock.setAttribute('language', 'json');
     sidecarBlock.content = sidecar;
-    sidecarSection.appendChild(sidecarBlock);
-    el.appendChild(sidecarSection);
+    sidecarBody.appendChild(sidecarBlock);
+    sidecarPane.appendChild(sidecarBody);
+    el.appendChild(sidecarPane);
   }
 
   return el;
 }
 
 function _buildContextCard(chain, sidecar, eventType, decision) {
-  const card = document.createElement('div');
-  card.className = 'rd-context-card';
+  const frag = document.createDocumentFragment();
 
   const rec = sidecar || chain;
 
-  // Determine record type and build appropriate kv-list
   if (_isMediatedDecision(eventType)) {
-    card.innerHTML = '<h3 class="rd-section-title">Mediated Decision</h3>';
     const kv = document.createElement('atd-kv-list');
     const items = [
-      { key: 'Decision', value: decision || '--' },
-      { key: 'Tool', value: rec.tool_name || rec.tool || '--', variant: 'code' },
-      { key: 'Target', value: rec.target || '--', variant: 'code' },
-      { key: 'User', value: rec.user_identity || '--' },
-      { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '--' },
-      { key: 'Action Type', value: rec.action_type || rec.event_type || '--' },
-      { key: 'Scope', value: rec.governed_family || rec.scope || '--' },
-      { key: 'Matched Rule', value: rec.matched_rule || '--' },
+      { key: 'Decision', value: decision || '\u2014' },
+      { key: 'Tool', value: rec.tool_name || rec.tool || '\u2014', variant: 'code' },
+      { key: 'Target', value: rec.target || '\u2014', variant: 'code' },
+      { key: 'User', value: rec.user_identity || '\u2014' },
+      { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014' },
+      { key: 'Action Type', value: rec.action_type || rec.event_type || '\u2014' },
+      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014' },
+      { key: 'Matched Rule', value: rec.matched_rule || '\u2014' },
     ];
     if (decision === 'DENY') {
       items.push({ key: 'Denial Reason', value: rec.denial_reason || rec.deny_reason || 'Policy denied', variant: 'danger' });
     }
-    items.push({ key: 'Verification State', value: rec.verification_state || '--', variant: rec.verification_state === 'verified' ? 'success' : undefined });
+    items.push({ key: 'Verification State', value: rec.verification_state || '\u2014', variant: rec.verification_state === 'verified' ? 'success' : undefined });
     items.push({ key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) });
     kv.items = items;
-
-    // Insert decision-tag and tier-badge as HTML in kv items
-    card.appendChild(kv);
+    frag.appendChild(kv);
 
   } else if (_isBoundaryObservation(eventType)) {
     const banner = document.createElement('div');
     banner.className = 'rd-warning-banner';
     banner.textContent = 'This operation was observed outside the mediation boundary and was not policy-evaluated.';
-    card.appendChild(banner);
+    frag.appendChild(banner);
 
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Operation', value: rec.operation_type || rec.event_type || '--' },
-      { key: 'Target', value: rec.target || '--', variant: 'code' },
-      { key: 'Source', value: rec.source || '--' },
+      { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014' },
+      { key: 'Target', value: rec.target || '\u2014', variant: 'code' },
+      { key: 'Source', value: rec.source || '\u2014' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
     ];
-    card.appendChild(kv);
+    frag.appendChild(kv);
 
   } else if (_isApproval(eventType)) {
-    card.innerHTML = `<h3 class="rd-section-title">${eventType.includes('revoc') ? 'Operation Revocation' : 'Operation Approval'}</h3>`;
+    const label = document.createElement('div');
+    label.className = 'rd-context-label';
+    label.textContent = eventType.includes('revoc') ? 'Operation Revocation' : 'Operation Approval';
+    frag.appendChild(label);
+
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Operation', value: rec.artifact_identity || rec.operation || '--', variant: 'code' },
-      { key: 'Operator', value: rec.operator_identity || rec.approving_operator || rec.operator || '--' },
-      { key: 'Scope', value: rec.governed_family || rec.scope || '--' },
-      { key: 'Context', value: rec.deployment_context || rec.context || '--' },
+      { key: 'Operation', value: rec.artifact_identity || rec.operation || '\u2014', variant: 'code' },
+      { key: 'Operator', value: rec.operator_identity || rec.approving_operator || rec.operator || '\u2014' },
+      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014' },
+      { key: 'Context', value: rec.deployment_context || rec.context || '\u2014' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
     ];
-    card.appendChild(kv);
+    frag.appendChild(kv);
 
   } else if (_isVerificationChange(eventType)) {
-    card.innerHTML = '<h3 class="rd-section-title">Verification Change</h3>';
+    const label = document.createElement('div');
+    label.className = 'rd-context-label';
+    label.textContent = 'Verification Change';
+    frag.appendChild(label);
+
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Surface', value: rec.governed_family || '--' },
-      { key: 'Previous State', value: rec.previous_state || '--' },
-      { key: 'New State', value: rec.new_state || rec.current_state || '--' },
+      { key: 'Surface', value: rec.governed_family || '\u2014' },
+      { key: 'Previous State', value: rec.previous_state || '\u2014' },
+      { key: 'New State', value: rec.new_state || rec.current_state || '\u2014' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
     ];
-    card.appendChild(kv);
+    frag.appendChild(kv);
 
   } else {
     // Generic fallback
-    card.innerHTML = `<h3 class="rd-section-title">${_esc(eventType || 'Record')}</h3>`;
+    const label = document.createElement('div');
+    label.className = 'rd-context-label';
+    label.textContent = eventType || 'Record';
+    frag.appendChild(label);
+
     const kv = document.createElement('atd-kv-list');
     const items = Object.entries(rec).slice(0, 12).map(([k, v]) => ({
       key: k,
-      value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '--'),
+      value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '\u2014'),
     }));
     kv.items = items;
-    card.appendChild(kv);
+    frag.appendChild(kv);
   }
 
-  return card;
+  return frag;
 }
 
 // ---------- Type detection helpers ----------
@@ -235,20 +279,23 @@ function _errorEl(msg) {
 }
 
 function _replaceContent(frame, newContent) {
-  // Clear slotted content inside the frame
   const slot = frame.querySelector('.rd-loading') || frame.querySelector('.rd-content') || frame.querySelector('.rd-error');
   if (slot) {
     slot.replaceWith(newContent);
   } else {
-    // Fallback: append
     frame.appendChild(newContent);
   }
 }
 
 function _formatTimestamp(iso) {
-  if (!iso) return '--';
+  if (!iso) return '\u2014';
   try {
-    return new Date(iso).toLocaleString();
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    const date = d.toLocaleDateString();
+    return `${date} ${hh}:${mm}:${ss}`;
   } catch { return iso; }
 }
 
@@ -271,38 +318,63 @@ rdStyles.textContent = `
   .rd-content {
     font-family: "Inter", system-ui, sans-serif;
   }
-  .rd-header {
+
+  /* ---- Top accent bar ---- */
+  .rd-top-accent {
+    height: 6px;
+    border-radius: 4px 4px 0 0;
+    margin: -24px -24px 0;
+    /* Stretch to fill the content padding */
+  }
+  .rd-accent-green { background: #22c55e; }
+  .rd-accent-red { background: #ef4444; }
+  .rd-accent-muted { background: #6b7280; }
+
+  /* ---- Record ID subtitle ---- */
+  .rd-subtitle {
+    padding: 14px 0 16px;
+  }
+  .rd-subtitle-id {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    color: #6b7280;
+    word-break: break-all;
+  }
+
+  /* ---- Pane container ---- */
+  .rd-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
     margin-bottom: 16px;
   }
-  .rd-header-label {
-    display: block;
+  .rd-pane-accent {
+    height: 6px;
+  }
+  .rd-pane-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b8af5;
+    font-weight: 600;
+    padding: 12px 20px 4px;
+  }
+  .rd-pane-body {
+    padding: 8px 20px 16px;
+  }
+
+  /* ---- Context label (sub-type within Record pane) ---- */
+  .rd-context-label {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: #8b919a;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    font-weight: 500;
   }
-  .rd-header-id {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.82rem;
-    color: #e4e6eb;
-    word-break: break-all;
-  }
-  .rd-context-card {
-    background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
-  }
-  .rd-section-title {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #5b8af5;
-    margin: 0 0 12px;
-    font-weight: 600;
-  }
+
+  /* ---- Warning banner ---- */
   .rd-warning-banner {
     background: rgba(245, 158, 66, 0.10);
     color: #f59e42;
@@ -311,11 +383,10 @@ rdStyles.textContent = `
     font-size: 0.82rem;
     margin-bottom: 12px;
   }
+
+  /* ---- Approve button ---- */
   .rd-approve-section {
-    margin-bottom: 20px;
-  }
-  .rd-json-section {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 `;
 document.head.appendChild(rdStyles);
