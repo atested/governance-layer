@@ -63,12 +63,12 @@ export function renderMainPage() {
   _page = document.createElement('div');
   _page.id = 'main-page';
   _page.innerHTML = `
+    <h1 class="mp-page-title">Atested AI Operations</h1>
     <div class="mp-top-panes">
       <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">
         <div class="mp-pane-accent" id="mp-health-accent"></div>
         <div class="mp-pane-header">
           <h2 class="mp-pane-title">Chain health</h2>
-          <span class="mp-click-hint">Click to open</span>
         </div>
         <div class="mp-pane-metrics">
           <div class="mp-metric">
@@ -93,7 +93,6 @@ export function renderMainPage() {
         <div class="mp-pane-accent mp-accent-green" id="mp-activity-accent"></div>
         <div class="mp-pane-header">
           <h2 class="mp-pane-title">Atested activity</h2>
-          <span class="mp-click-hint">Click to open</span>
         </div>
         <div class="mp-pane-metrics">
           <div class="mp-metric">
@@ -120,7 +119,6 @@ export function renderMainPage() {
       <div class="mp-pane-accent mp-accent-green"></div>
       <div class="mp-pane-header">
         <h2 class="mp-pane-title">Recent activity</h2>
-        <span class="mp-click-hint">Click to open</span>
       </div>
       <div class="mp-feed" id="recent-feed">
         <div class="mp-feed-header">
@@ -177,7 +175,6 @@ export function renderMainPage() {
       <div class="mp-wf-accent ${accentColor}" data-accent-bar="${launcher.id}"></div>
       <div class="mp-wf-title">${_esc(launcher.label)}</div>
       <div class="mp-wf-desc">${_esc(launcher.desc)}</div>
-      <div class="mp-wf-click">Click to open</div>
     `;
 
     card.addEventListener('click', () => {
@@ -456,6 +453,15 @@ mpStyles.textContent = `
     pointer-events: none;
   }
 
+  /* ---- Page title ---- */
+  .mp-page-title {
+    font-size: 32px;
+    font-weight: 500;
+    color: #e4e6eb;
+    text-align: center;
+    margin: 0 0 20px;
+  }
+
   /* ---- Top display panes ---- */
   .mp-top-panes {
     display: grid;
@@ -509,12 +515,6 @@ mpStyles.textContent = `
     margin: 0;
     font-weight: 600;
   }
-  .mp-click-hint {
-    font-size: 0.68rem;
-    color: #fbbf24;
-    font-weight: 500;
-  }
-
   /* Pane metrics */
   .mp-pane-metrics {
     display: flex;
@@ -550,7 +550,7 @@ mpStyles.textContent = `
   }
   .mp-feed-header {
     display: grid;
-    grid-template-columns: 80px 1fr 1fr 70px;
+    grid-template-columns: 80px 100px 1fr 70px;
     align-items: center;
     gap: 12px;
     padding: 4px 18px 2px;
@@ -567,7 +567,7 @@ mpStyles.textContent = `
   }
   .mp-feed-row {
     display: grid;
-    grid-template-columns: 80px 1fr 1fr 70px;
+    grid-template-columns: 80px 100px 1fr 70px;
     align-items: center;
     gap: 12px;
     padding: 7px 18px;
@@ -668,14 +668,8 @@ mpStyles.textContent = `
     font-size: 0.75rem;
     color: #8b919a;
     line-height: 1.4;
-    margin: 0 16px 8px;
-    min-height: 32px;
-  }
-  .mp-wf-click {
-    font-size: 0.68rem;
-    color: #fbbf24;
-    font-weight: 500;
     margin: 0 16px 12px;
+    min-height: 32px;
   }
 
   /* ---- License card ---- */
@@ -765,7 +759,7 @@ mpStyles.textContent = `
     }
     .mp-feed-header,
     .mp-feed-row {
-      grid-template-columns: 60px 1fr 1fr auto;
+      grid-template-columns: 60px 80px 1fr auto;
       gap: 6px;
     }
     .mp-pane-metrics {
