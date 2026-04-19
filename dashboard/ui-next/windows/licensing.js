@@ -2024,12 +2024,12 @@ const PRICING_FEATURES = {
     categories: [
       { name: 'Operations', features: [
         { name: 'Unlimited Machines', desc: 'No machine limit. Run Atested across your entire infrastructure under one license.' },
-        { name: 'Team Oversight', desc: 'When multiple people use Atested under one license, their activity is governed together. Shared policies, combined views, and organizational-level reporting. One team, one set of rules, one complete picture of what is happening. Everyone on the license shares governance with no way to segment data within a license.' },
+        { name: 'Multi-User Governance', desc: 'When multiple people use Atested under one license, their activity is governed together. Shared policies, combined views, and organizational-level reporting. One set of rules, one complete picture of what is happening. Everyone on the license shares governance, giving you complete organizational visibility across all users.' },
       ]},
       { name: 'Communication', features: [
-        { name: 'Telemetry Communication', telemetry: true, inbound: 'Aggregate team patterns visible in your dashboard. Cross-install intelligence feeds back into your operational views. You see how your team compares to similar deployments.' },
-        { name: 'Priority Requests', priority: true, detail: '4 Medium priority slots and 2 High priority slots. High priority requests move to the front of the queue ahead of Medium. Response time targets: 3 business days for Medium, 2 business days for High. These are targets, not contractual commitments. Contractual SLA begins at Team.' },
-        { name: 'Team Pattern Detection', monitoring: true, desc: 'Atested monitors cross-user patterns within your license. If one user generates significantly more DENYs than others, or if your team\u2019s classifier confidence trends toward opaque operations, we flag it with specifics. We are watching team dynamics, not just the installation.' },
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Aggregate patterns across your users visible in your dashboard. Cross-install intelligence feeds back into your operational views. You see how your deployment compares to similar installations.' },
+        { name: 'Priority Requests', priority: true, detail: '4 Medium priority slots and 2 High priority slots. Elevated requests receive priority handling with faster response times.' },
+        { name: 'Usage Pattern Detection', monitoring: true, desc: 'Atested monitors cross-user patterns within your license. If one user generates significantly more DENYs than others, or if classifier confidence trends toward opaque operations, we flag it with specifics. We are watching user dynamics, not just the installation.' },
       ]},
     ],
   },
