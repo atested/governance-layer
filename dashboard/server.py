@@ -1090,8 +1090,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "total": len(notifications),
                 "dismissed_count": len(dismissed),
             })
+        except BrokenPipeError:
+            pass  # Client disconnected before response
         except Exception as exc:
-            _json_response(self, {"error": str(exc)}, 500)
+            try:
+                _json_response(self, {"error": str(exc)}, 500)
+            except BrokenPipeError:
+                pass
 
     def _load_dismissed_notifications(self):
         """Load set of dismissed notification IDs from the dismissal file."""
