@@ -30,7 +30,8 @@ const DEFAULT_PAGE_SIZE = 20;
 /**
  * Open the Activity window.
  * @param {HTMLElement|null} trigger
- * @param {object} opts - { scrollToRecord?: string }
+ * @param {object} opts - { scrollToRecord?, startTime?, endTime?,
+ *                          toolFilter?, eventTypeFilter?, decisionFilter? }
  */
 export function openActivityWindow(trigger, opts = {}) {
   const content = document.createElement('div');
@@ -41,12 +42,12 @@ export function openActivityWindow(trigger, opts = {}) {
 
   const state = {
     el: content,
-    // Filters
-    startTime: '',
-    endTime: '',
-    decisionFilter: '',       // '', 'ALLOW', 'DENY'
-    eventTypeFilter: '',
-    toolFilter: '',
+    // Filters — accept pre-set values from opts (for cross-window navigation)
+    startTime: opts.startTime || '',
+    endTime: opts.endTime || '',
+    decisionFilter: opts.decisionFilter || '',       // '', 'ALLOW', 'DENY'
+    eventTypeFilter: opts.eventTypeFilter || '',
+    toolFilter: opts.toolFilter || '',
     // Pagination
     currentPage: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -66,6 +67,31 @@ export function openActivityWindow(trigger, opts = {}) {
   }
 
   _buildUI(state);
+
+  // Apply pre-set filters to UI controls
+  if (state.startTime) {
+    const fromEl = state.el.querySelector('#aw-from');
+    if (fromEl) fromEl.value = _isoToLocal(state.startTime);
+  }
+  if (state.endTime) {
+    const toEl = state.el.querySelector('#aw-to');
+    if (toEl) toEl.value = _isoToLocal(state.endTime);
+  }
+  if (state.toolFilter) {
+    const toolEl = state.el.querySelector('#aw-tool-filter');
+    if (toolEl) toolEl.value = state.toolFilter;
+  }
+  if (state.eventTypeFilter) {
+    const etEl = state.el.querySelector('#aw-event-type');
+    if (etEl) etEl.value = state.eventTypeFilter;
+  }
+  if (state.decisionFilter) {
+    const toggles = state.el.querySelectorAll('.aw-dtoggle');
+    toggles.forEach(b => {
+      b.classList.toggle('aw-dtoggle-active', b.dataset.decision === state.decisionFilter);
+    });
+  }
+
   _loadData(state);
 }
 

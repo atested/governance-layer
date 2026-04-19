@@ -962,8 +962,9 @@ def audit_report(
 ) -> dict:
     """Generate an audit summary report over a time period.
 
-    group_by: "tool", "user", "decision", or "category".
-    Returns counts grouped by the specified dimension.
+    group_by: "tool", "user", "decision", "category", or "hour".
+    Returns counts grouped by the specified dimension with per-group
+    deny counts for highlighting.
     """
     rows = load_chain_rows(chain_path)
     sidecar_by_request_id: dict[str, dict] = {}
@@ -973,6 +974,7 @@ def audit_report(
             sidecar_by_request_id[rid] = rec
 
     groups: Counter[str] = Counter()
+    group_deny: Counter[str] = Counter()
     decision_counts: Counter[str] = Counter()
     total = 0
 
@@ -986,31 +988,60 @@ def audit_report(
         if pd:
             decision_counts[pd] += 1
 
+        # Resolve group key based on group_by dimension
+        key = ""
         if group_by == "tool":
-            key = rec.get("tool", rec.get("capability_class", ""))
+            # Use same normalization as activity entries for proper names
+            is_v2 = rec.get("record_version") == "2.0"
+            key = rec.get("original_tool") if is_v2 else None
+            if not key:
+                key = rec.get("tool", rec.get("capability_class", ""))
             event_type = rec.get("event_type", "")
             if not key and event_type:
                 key = event_type
-            groups[key or "unknown"] += 1
+            key = key or "Unknown"
+            # Capitalize first letter for display
+            if key and key[0].islower() and "_" not in key:
+                key = key[0].upper() + key[1:]
 
         elif group_by == "user":
             uid = rec.get("user_identity", "")
             if not uid:
                 sidecar = sidecar_by_request_id.get(rec.get("request_id", ""), {})
                 uid = sidecar.get("user_identity", "")
-            groups[uid or "anonymous"] += 1
+            key = uid or "Anonymous"
 
         elif group_by == "decision":
             key = rec.get("policy_decision", "")
             event_type = rec.get("event_type", "")
             if not key and event_type:
                 key = event_type
-            groups[key or "event"] += 1
+            key = key or "Event"
 
         elif group_by == "category":
             entry = _normalize_activity_entry(rec, sequence_position=0)
             cat = entry["event_category"] if entry else "unknown"
-            groups[cat] += 1
+            key = cat
+
+        elif group_by == "hour":
+            if ts:
+                # Extract HH:00 from timestamp
+                key = ts[11:13] + ":00" if len(ts) >= 13 else "Unknown"
+            else:
+                key = "Unknown"
+
+        groups[key] += 1
+        if pd == "DENY":
+            group_deny[key] += 1
+
+    # Build groups list with deny counts for amber-bar highlighting
+    group_list = []
+    for k, v in groups.most_common():
+        entry = {"key": k, "count": v}
+        deny_n = group_deny.get(k, 0)
+        if deny_n > 0:
+            entry["deny_count"] = deny_n
+        group_list.append(entry)
 
     return {
         "timestamp_utc": _now_utc_z(),
@@ -1019,7 +1050,5 @@ def audit_report(
         "time_range": {"start": start_time, "end": end_time},
         "total_records": total,
         "decision_summary": dict(decision_counts.most_common()),
-        "groups": [
-            {"key": k, "count": v} for k, v in groups.most_common()
-        ],
+        "groups": group_list,
     }

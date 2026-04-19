@@ -1,149 +1,356 @@
 /**
  * Reports window — child window (depth 1).
- * Spec v2 section 7.4.
- *
- * Aggregate views of governance activity with grouped bar charts.
+ * D-040 redesign: dual filter panes, toggle-based grouping, clickable
+ * bar chart rows with atomic navigation to Activity, CSV export.
  */
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
-import '../components/status-card.js';
-import '../components/status-grid.js';
-import '../components/pill.js';
-import '../components/loading-indicator.js';
+
+const GROUP_OPTIONS = [
+  { key: 'tool',     label: 'Tool' },
+  { key: 'category', label: 'Category' },
+  { key: 'decision', label: 'Decision' },
+  { key: 'user',     label: 'User' },
+  { key: 'hour',     label: 'Hour' },
+];
+
+const GROUP_LABELS = {
+  tool: 'By tool', category: 'By category', decision: 'By decision',
+  user: 'By user', hour: 'By hour',
+};
+
+const GROUP_COUNT_LABELS = {
+  tool: 'tools', category: 'categories', decision: 'decisions',
+  user: 'users', hour: 'hours',
+};
 
 /**
  * Open the Reports window.
  * @param {HTMLElement|null} trigger
  */
 export function openReportsWindow(trigger) {
-  const content = _buildContent();
+  const content = document.createElement('div');
+  content.className = 'rp-root';
+
   const result = _openAsChild('Reports', trigger, content);
   if (!result) return;
 
-  const state = { el: content };
+  const state = {
+    el: content,
+    startTime: '',
+    endTime: '',
+    groupBy: 'tool',
+    data: null,
+  };
+
+  _buildUI(state);
   _wireControls(state);
-}
-
-function _buildContent() {
-  const el = document.createElement('div');
-  el.className = 'rp-content';
-  el.innerHTML = `
-    <div class="rp-header">
-      <span class="rp-eyebrow">Analytics</span>
-      <span class="rp-heading">Reports</span>
-    </div>
-    <div class="rp-form">
-      <label class="rp-field">
-        Start Time
-        <input type="datetime-local" class="rp-input" id="rp-start">
-      </label>
-      <label class="rp-field">
-        End Time
-        <input type="datetime-local" class="rp-input" id="rp-end">
-      </label>
-      <label class="rp-field">
-        Group By
-        <select class="rp-input" id="rp-group">
-          <option value="tool">Tool</option>
-          <option value="user">User</option>
-          <option value="decision">Decision</option>
-          <option value="category">Category</option>
-        </select>
-      </label>
-      <div class="rp-field rp-field-btn">
-        <atd-pill variant="primary" id="rp-generate">Generate</atd-pill>
-      </div>
-    </div>
-    <div id="rp-results"></div>
-  `;
-  return el;
-}
-
-function _wireControls(state) {
-  state.el.querySelector('#rp-generate').addEventListener('click', () => _loadReport(state));
-  // Auto-generate on open with defaults
   _loadReport(state);
 }
 
-async function _loadReport(state) {
+// ---------- Build UI ----------
+
+function _buildUI(state) {
   const el = state.el;
-  const results = el.querySelector('#rp-results');
-  results.innerHTML = '<atd-loading-indicator label="Generating report"></atd-loading-indicator>';
+  el.innerHTML = `
+    <!-- Filter panes -->
+    <div class="rp-filter-row">
+      <div class="rp-filter-pane">
+        <div class="rp-fp-accent"></div>
+        <div class="rp-fp-header">Time range</div>
+        <div class="rp-fp-body">
+          <div class="rp-fp-fields">
+            <label class="rp-fp-label">
+              From
+              <input type="datetime-local" class="rp-input" id="rp-from">
+            </label>
+            <label class="rp-fp-label">
+              To
+              <input type="datetime-local" class="rp-input" id="rp-to">
+            </label>
+          </div>
+          <div class="rp-fp-quick" id="rp-quick-btns">
+            <button class="rp-quick-btn" data-range="1h">Last hour</button>
+            <button class="rp-quick-btn" data-range="today">Today</button>
+            <button class="rp-quick-btn" data-range="7d">Last 7 days</button>
+            <button class="rp-quick-btn" data-range="30d">Last 30 days</button>
+            <button class="rp-quick-btn" data-range="all">All time</button>
+          </div>
+        </div>
+      </div>
+      <div class="rp-filter-pane">
+        <div class="rp-fp-accent"></div>
+        <div class="rp-fp-header">Report options</div>
+        <div class="rp-fp-body">
+          <div class="rp-group-section">
+            <span class="rp-fp-mini-label">Group by</span>
+            <div class="rp-group-toggles" id="rp-group-toggles">
+              ${GROUP_OPTIONS.map(o =>
+                `<button class="rp-gtoggle${o.key === 'tool' ? ' rp-gtoggle-active' : ''}" data-group="${o.key}">${o.label}</button>`
+              ).join('')}
+            </div>
+          </div>
+          <div class="rp-fp-actions">
+            <button class="rp-btn rp-btn-primary" id="rp-generate">Generate</button>
+            <button class="rp-btn rp-btn-export" id="rp-export">Export CSV</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  const params = {};
-  const start = el.querySelector('#rp-start').value;
-  const end = el.querySelector('#rp-end').value;
-  const groupBy = el.querySelector('#rp-group').value;
+    <!-- Stat cards -->
+    <div class="rp-stats">
+      <div class="rp-stat-card">
+        <span class="rp-stat-label">Total records</span>
+        <span class="rp-stat-value" id="rp-stat-total">\u2014</span>
+      </div>
+      <div class="rp-stat-card rp-stat-green">
+        <span class="rp-stat-label">Allow</span>
+        <span class="rp-stat-value rp-val-green" id="rp-stat-allow">\u2014</span>
+      </div>
+      <div class="rp-stat-card rp-stat-amber">
+        <span class="rp-stat-label">Deny</span>
+        <span class="rp-stat-value rp-val-amber" id="rp-stat-deny">\u2014</span>
+      </div>
+      <div class="rp-stat-card">
+        <span class="rp-stat-label">Deny rate</span>
+        <span class="rp-stat-value" id="rp-stat-rate">\u2014</span>
+      </div>
+    </div>
 
-  if (start) params.start_time = new Date(start).toISOString();
-  if (end) params.end_time = new Date(end).toISOString();
-  params.group_by = groupBy;
+    <!-- Grouping pane -->
+    <div class="rp-group-pane" id="rp-group-pane">
+      <div class="rp-gp-accent"></div>
+      <div class="rp-gp-header">
+        <span id="rp-gp-title">By tool</span>
+        <span class="rp-gp-count" id="rp-gp-count"></span>
+      </div>
+      <div class="rp-gp-body" id="rp-gp-body">
+        <div class="rp-loading">Loading\u2026</div>
+      </div>
+    </div>
+  `;
+}
+
+// ---------- Wire controls ----------
+
+function _wireControls(state) {
+  const el = state.el;
+
+  // Quick-select time buttons
+  el.querySelector('#rp-quick-btns').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-range]');
+    if (!btn) return;
+    const range = btn.dataset.range;
+    const now = new Date();
+    let from = '';
+    if (range === '1h') {
+      from = new Date(now.getTime() - 3600000).toISOString();
+    } else if (range === 'today') {
+      const d = new Date(now); d.setHours(0, 0, 0, 0);
+      from = d.toISOString();
+    } else if (range === '7d') {
+      from = new Date(now.getTime() - 7 * 86400000).toISOString();
+    } else if (range === '30d') {
+      from = new Date(now.getTime() - 30 * 86400000).toISOString();
+    } else {
+      from = '';
+    }
+    state.startTime = from;
+    state.endTime = range === 'all' ? '' : now.toISOString();
+    el.querySelector('#rp-from').value = from ? _isoToLocal(from) : '';
+    el.querySelector('#rp-to').value = state.endTime ? _isoToLocal(state.endTime) : '';
+  });
+
+  // Group by toggles
+  el.querySelector('#rp-group-toggles').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-group]');
+    if (!btn) return;
+    el.querySelectorAll('.rp-gtoggle').forEach(b => b.classList.remove('rp-gtoggle-active'));
+    btn.classList.add('rp-gtoggle-active');
+    state.groupBy = btn.dataset.group;
+  });
+
+  // Generate button
+  el.querySelector('#rp-generate').addEventListener('click', () => {
+    _readTimeFilters(state);
+    _loadReport(state);
+  });
+
+  // Export button
+  el.querySelector('#rp-export').addEventListener('click', () => _exportCSV(state));
+}
+
+function _readTimeFilters(state) {
+  const fromVal = state.el.querySelector('#rp-from').value;
+  const toVal = state.el.querySelector('#rp-to').value;
+  state.startTime = fromVal ? new Date(fromVal).toISOString() : '';
+  state.endTime = toVal ? new Date(toVal).toISOString() : '';
+}
+
+// ---------- Load report ----------
+
+async function _loadReport(state) {
+  const body = state.el.querySelector('#rp-gp-body');
+  body.innerHTML = '<div class="rp-loading">Loading\u2026</div>';
+
+  const params = { group_by: state.groupBy };
+  if (state.startTime) params.start_time = state.startTime;
+  if (state.endTime) params.end_time = state.endTime;
 
   const res = await api.getAuditReport(params);
   if (!res.ok) {
-    results.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
+    body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
     return;
   }
 
-  results.innerHTML = '';
+  state.data = res.data;
+  _renderStats(state);
+  _renderBars(state);
+}
 
-  // Decision summary cards
-  const summary = res.data.decision_summary || {};
-  const summarySection = document.createElement('div');
-  summarySection.className = 'rp-section';
-  summarySection.innerHTML = '<h3 class="rp-section-title">Decision Summary</h3>';
-  const grid = document.createElement('atd-status-grid');
+// ---------- Render stats ----------
 
-  const totalCard = document.createElement('atd-status-card');
-  totalCard.setAttribute('label', 'Total Records');
-  totalCard.setAttribute('value', String(res.data.total_records ?? 0));
-  grid.appendChild(totalCard);
+function _renderStats(state) {
+  const d = state.data;
+  const summary = d.decision_summary || {};
+  const total = d.total_records || 0;
+  const allow = summary.ALLOW || 0;
+  const deny = summary.DENY || 0;
+  const rate = total > 0 ? ((deny / total) * 100).toFixed(1) + '%' : '0%';
 
-  const allowCard = document.createElement('atd-status-card');
-  allowCard.setAttribute('label', 'ALLOW');
-  allowCard.setAttribute('value', String(summary.ALLOW ?? 0));
-  allowCard.setAttribute('variant', 'success');
-  grid.appendChild(allowCard);
+  state.el.querySelector('#rp-stat-total').textContent = _fmtNum(total);
+  state.el.querySelector('#rp-stat-allow').textContent = _fmtNum(allow);
+  state.el.querySelector('#rp-stat-deny').textContent = _fmtNum(deny);
+  state.el.querySelector('#rp-stat-rate').textContent = rate;
+}
 
-  const denyCard = document.createElement('atd-status-card');
-  denyCard.setAttribute('label', 'DENY');
-  denyCard.setAttribute('value', String(summary.DENY ?? 0));
-  if ((summary.DENY ?? 0) > 0) denyCard.setAttribute('variant', 'danger');
-  grid.appendChild(denyCard);
+// ---------- Render bars ----------
 
-  summarySection.appendChild(grid);
-  results.appendChild(summarySection);
+function _renderBars(state) {
+  const d = state.data;
+  const groups = d.groups || [];
+  const groupBy = d.group_by || state.groupBy;
 
-  // Grouped results as bar chart
-  const groups = res.data.groups || [];
-  if (groups.length) {
-    const groupSection = document.createElement('div');
-    groupSection.className = 'rp-section';
-    groupSection.innerHTML = `<h3 class="rp-section-title">By ${_esc(groupBy)}</h3>`;
+  // Update header
+  state.el.querySelector('#rp-gp-title').textContent = GROUP_LABELS[groupBy] || `By ${groupBy}`;
+  const countLabel = GROUP_COUNT_LABELS[groupBy] || 'groups';
+  state.el.querySelector('#rp-gp-count').textContent = `${groups.length} ${countLabel}`;
 
-    const maxCount = Math.max(...groups.map(g => g.count || 0), 1);
-    const barList = document.createElement('div');
-    barList.className = 'rp-bars';
+  const body = state.el.querySelector('#rp-gp-body');
+  body.innerHTML = '';
 
-    for (const group of groups) {
-      const pct = ((group.count || 0) / maxCount * 100).toFixed(1);
-      const bar = document.createElement('div');
-      bar.className = 'rp-bar-row';
-      bar.innerHTML = `
-        <span class="rp-bar-label">${_esc(group.key || '--')}</span>
-        <div class="rp-bar-track">
-          <div class="rp-bar-fill" style="width: ${pct}%"></div>
-        </div>
-        <span class="rp-bar-count">${group.count || 0}</span>
-      `;
-      barList.appendChild(bar);
-    }
+  if (!groups.length) {
+    body.innerHTML = '<div class="rp-empty">No data for the selected time range.</div>';
+    return;
+  }
 
-    groupSection.appendChild(barList);
-    results.appendChild(groupSection);
+  const maxCount = Math.max(...groups.map(g => g.count || 0), 1);
+
+  // Compute average deny rate for amber-bar highlighting
+  const totalDeny = groups.reduce((sum, g) => sum + (g.deny_count || 0), 0);
+  const totalCount = groups.reduce((sum, g) => sum + (g.count || 0), 0);
+  const avgDenyRate = totalCount > 0 ? totalDeny / totalCount : 0;
+
+  for (const group of groups) {
+    const pct = ((group.count || 0) / maxCount * 100).toFixed(1);
+    const denyCount = group.deny_count || 0;
+    const denyRate = group.count > 0 ? denyCount / group.count : 0;
+    // Amber bar if this group's deny rate is >2x the average and has at least 1 deny
+    const isAmber = denyCount > 0 && avgDenyRate > 0 && denyRate > avgDenyRate * 2;
+
+    const row = document.createElement('div');
+    row.className = 'rp-bar-row';
+    row.title = `Click to view in Activity`;
+    row.innerHTML = `
+      <span class="rp-bar-label">${_esc(group.key || '\u2014')}</span>
+      <div class="rp-bar-track">
+        <div class="rp-bar-fill${isAmber ? ' rp-bar-amber' : ''}" style="width: ${pct}%"></div>
+      </div>
+      <span class="rp-bar-count">${_fmtNum(group.count || 0)}</span>
+    `;
+
+    // Click handler — atomic navigation to Activity
+    row.addEventListener('click', () => {
+      _navigateToActivity(state, groupBy, group.key);
+    });
+
+    body.appendChild(row);
   }
 }
+
+// ---------- Atomic navigation ----------
+
+function _navigateToActivity(state, groupBy, groupKey) {
+  // Build filter opts for Activity window
+  const opts = {};
+  if (state.startTime) opts.startTime = state.startTime;
+  if (state.endTime) opts.endTime = state.endTime;
+
+  if (groupBy === 'tool') {
+    opts.toolFilter = groupKey;
+  } else if (groupBy === 'category') {
+    opts.eventTypeFilter = groupKey;
+  } else if (groupBy === 'decision') {
+    opts.decisionFilter = groupKey;
+  } else if (groupBy === 'hour') {
+    // Hour grouping: set time range to that specific hour
+    // groupKey is like "14:00"
+    const hourStr = groupKey.replace(':00', '');
+    const hour = parseInt(hourStr, 10);
+    if (!isNaN(hour)) {
+      // Use the report's date context — find a date from start/end time or today
+      const baseDate = state.startTime ? new Date(state.startTime) : new Date();
+      const fromDate = new Date(baseDate);
+      fromDate.setHours(hour, 0, 0, 0);
+      const toDate = new Date(fromDate);
+      toDate.setHours(hour + 1, 0, 0, 0);
+      opts.startTime = fromDate.toISOString();
+      opts.endTime = toDate.toISOString();
+    }
+  }
+  // user grouping — no direct filter in Activity, just pass time range
+
+  // Close Reports, open Activity with pre-set filters
+  modalManager.closeAll();
+  setTimeout(() => {
+    import('./activity.js').then(mod => {
+      mod.openActivityWindow(null, opts);
+    });
+  }, 0);
+}
+
+// ---------- CSV export ----------
+
+function _exportCSV(state) {
+  if (!state.data || !state.data.groups || !state.data.groups.length) return;
+
+  const groupBy = state.data.group_by || state.groupBy;
+  const lines = [`"${groupBy}","count","deny_count"`];
+  for (const g of state.data.groups) {
+    lines.push(`"${(g.key || '').replace(/"/g, '""')}",${g.count || 0},${g.deny_count || 0}`);
+  }
+
+  // Add summary
+  const summary = state.data.decision_summary || {};
+  lines.push('');
+  lines.push('"Summary"');
+  lines.push(`"Total records",${state.data.total_records || 0}`);
+  lines.push(`"ALLOW",${summary.ALLOW || 0}`);
+  lines.push(`"DENY",${summary.DENY || 0}`);
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = `atested-report-${groupBy}-${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Utility ----------
 
 function _openAsChild(title, trigger, content) {
   if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
@@ -156,55 +363,311 @@ function _esc(str) {
   return el.innerHTML;
 }
 
-// Styles
+function _fmtNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : String(n);
+}
+
+function _isoToLocal(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  } catch { return ''; }
+}
+
+// ---------- Styles ----------
+
 const rpStyles = document.createElement('style');
 rpStyles.textContent = `
-  .rp-content { font-family: "Inter", system-ui, sans-serif; }
-  .rp-header { margin-bottom: 16px; }
-  .rp-eyebrow {
-    display: block; font-size: 0.72rem; text-transform: uppercase;
-    letter-spacing: 0.06em; color: #8b919a; margin-bottom: 4px;
+  .rp-root { font-family: "Inter", system-ui, sans-serif; }
+
+  /* ---- Filter row ---- */
+  .rp-filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
   }
-  .rp-heading { font-size: 1.25rem; font-weight: 600; color: #e4e6eb; }
-  .rp-form {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px; margin-bottom: 20px;
+
+  .rp-filter-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
   }
-  .rp-field {
-    display: flex; flex-direction: column; font-size: 0.72rem; color: #8b919a;
-    text-transform: uppercase; letter-spacing: 0.04em; gap: 4px;
+  .rp-fp-accent {
+    height: 6px;
+    background: #22c55e;
   }
-  .rp-field-btn { justify-content: flex-end; }
+  .rp-fp-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b8af5;
+    font-weight: 600;
+    padding: 12px 20px 4px;
+  }
+  .rp-fp-body {
+    padding: 8px 20px 16px;
+  }
+  .rp-fp-fields {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .rp-fp-label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.72rem;
+    color: #8b919a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    gap: 4px;
+    flex: 1;
+  }
   .rp-input {
-    background: #1a1d23; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px; color: #e4e6eb; font-family: "Inter", system-ui, sans-serif;
-    font-size: 0.82rem; padding: 6px 10px;
+    background: #1a1d23;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    padding: 6px 10px;
   }
   .rp-input:focus { outline: 2px solid #5b8af5; outline-offset: 1px; }
-  .rp-section { margin-bottom: 24px; }
-  .rp-section-title {
-    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-    color: #5b8af5; margin: 0 0 10px; font-weight: 600;
+
+  /* Quick buttons */
+  .rp-fp-quick {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
   }
-  .rp-bars {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 8px 0;
+  .rp-quick-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #8b919a;
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
   }
+  .rp-quick-btn:hover {
+    background: rgba(91,138,245,0.12);
+    color: #5b8af5;
+    border-color: rgba(91,138,245,0.3);
+  }
+
+  /* Group by toggles */
+  .rp-group-section { margin-bottom: 14px; }
+  .rp-fp-mini-label {
+    display: block;
+    font-size: 0.68rem;
+    color: #8b919a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .rp-group-toggles {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .rp-gtoggle {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    color: #8b919a;
+    font-size: 0.78rem;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .rp-gtoggle:hover {
+    background: rgba(91,138,245,0.08);
+    color: #c4d0f0;
+  }
+  .rp-gtoggle-active {
+    background: rgba(91,138,245,0.15);
+    color: #5b8af5;
+    border-color: rgba(91,138,245,0.4);
+    font-weight: 600;
+  }
+
+  /* Action buttons */
+  .rp-fp-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .rp-btn {
+    border: none;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    padding: 7px 18px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .rp-btn-primary {
+    background: #5b8af5;
+    color: #fff;
+  }
+  .rp-btn-primary:hover { background: #4a7ae5; }
+  .rp-btn-export {
+    background: rgba(245,158,66,0.12);
+    color: #f59e42;
+    border: 1px solid rgba(245,158,66,0.3);
+  }
+  .rp-btn-export:hover {
+    background: rgba(245,158,66,0.20);
+  }
+
+  /* ---- Stat cards ---- */
+  .rp-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .rp-stat-card {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .rp-stat-green { border-color: rgba(34,197,94,0.25); }
+  .rp-stat-amber { border-color: rgba(245,158,66,0.25); }
+  .rp-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b919a;
+    margin-bottom: 4px;
+  }
+  .rp-stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+    color: #e4e6eb;
+  }
+  .rp-val-green { color: #22c55e; }
+  .rp-val-amber { color: #f59e42; }
+
+  /* ---- Grouping pane ---- */
+  .rp-group-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .rp-gp-accent {
+    height: 6px;
+    background: #22c55e;
+  }
+  .rp-gp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px 4px;
+  }
+  .rp-gp-header #rp-gp-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b8af5;
+    font-weight: 600;
+  }
+  .rp-gp-count {
+    font-size: 0.72rem;
+    color: #8b919a;
+    font-weight: 500;
+  }
+  .rp-gp-body {
+    padding: 8px 0;
+  }
+
+  /* ---- Bar rows ---- */
   .rp-bar-row {
-    display: flex; align-items: center; gap: 12px; padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 20px;
+    cursor: pointer;
+    transition: background 0.12s;
   }
-  .rp-bar-label { flex: 0 0 140px; font-size: 0.82rem; color: #e4e6eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rp-bar-track { flex: 1; height: 16px; background: rgba(255,255,255,0.04); border-radius: 8px; overflow: hidden; }
-  .rp-bar-fill { height: 100%; background: #5b8af5; border-radius: 8px; transition: width 0.3s; }
-  .rp-bar-count { flex: 0 0 50px; text-align: right; font-family: "JetBrains Mono", monospace; font-size: 0.82rem; color: #8b919a; }
-  .rp-loading { color: #8b919a; font-size: 0.82rem; text-align: center; padding: 40px 0; margin: 0; }
+  .rp-bar-row:hover {
+    background: rgba(91,138,245,0.06);
+  }
+  .rp-bar-label {
+    flex: 0 0 140px;
+    font-size: 0.82rem;
+    color: #e4e6eb;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .rp-bar-track {
+    flex: 1;
+    height: 18px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .rp-bar-fill {
+    height: 100%;
+    background: #60a5fa;
+    border-radius: 9px;
+    transition: width 0.3s;
+    min-width: 2px;
+  }
+  .rp-bar-fill.rp-bar-amber {
+    background: #f59e42;
+  }
+  .rp-bar-count {
+    flex: 0 0 50px;
+    text-align: right;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.82rem;
+    color: #8b919a;
+  }
+
+  /* ---- States ---- */
+  .rp-loading {
+    color: #8b919a;
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 40px 0;
+  }
+  .rp-empty {
+    color: #8b919a;
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 30px 0;
+  }
   .rp-error {
-    color: #f59e42; background: rgba(245,158,66,0.10);
-    padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+    color: #f59e42;
+    background: rgba(245,158,66,0.10);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    margin: 0 20px;
   }
+
+  /* ---- Responsive ---- */
   @media (max-width: 600px) {
-    .rp-form { grid-template-columns: 1fr; }
+    .rp-filter-row { grid-template-columns: 1fr; }
+    .rp-stats { grid-template-columns: repeat(2, 1fr); }
     .rp-bar-label { flex: 0 0 80px; font-size: 0.72rem; }
+    .rp-fp-fields { flex-direction: column; }
   }
 `;
 document.head.appendChild(rpStyles);
