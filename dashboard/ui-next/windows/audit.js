@@ -161,7 +161,7 @@ function _buildUI(state) {
             </label>
           </div>
           <div class="au-fp-actions">
-            <button class="au-btn au-btn-primary" id="au-search">Search</button>
+            <button class="au-btn au-btn-primary" id="au-search">Apply</button>
             <button class="au-btn au-btn-muted" id="au-clear">Clear</button>
           </div>
         </div>
@@ -170,7 +170,7 @@ function _buildUI(state) {
 
     <!-- Results bar -->
     <div class="au-results-bar">
-      <span class="au-results-showing" id="au-results-showing">Search to view records</span>
+      <span class="au-results-showing" id="au-results-showing">Apply to view records</span>
       <div class="au-results-controls">
         <div class="au-page-size" id="au-page-size">
           <span class="au-ps-label">Per page:</span>
@@ -193,7 +193,7 @@ function _buildUI(state) {
 
     <!-- Table -->
     <div class="au-table-wrap" id="au-table-wrap">
-      <div class="au-empty">Use the filters above and click Search to query the chain.</div>
+      <div class="au-empty">Use the filters above and click Apply to query the chain.</div>
     </div>
 
     <!-- Pagination -->
@@ -336,7 +336,7 @@ function _readFilters(state) {
 
 async function _loadData(state) {
   const wrap = state.el.querySelector('#au-table-wrap');
-  wrap.innerHTML = '<div class="au-loading">Searching chain...</div>';
+  wrap.innerHTML = '<div class="au-loading">Applying filters...</div>';
 
   const params = {
     limit: state.pageSize,

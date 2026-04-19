@@ -94,7 +94,6 @@ echo "  copied windows/licensing.js (patched _refreshLicenseState)"
 # handled gracefully by the fixture api.js returning success.
 
 WINDOWS=(
-  "activity.js"
   "approvals.js"
   "audit.js"
   "alerts.js"
@@ -113,6 +112,66 @@ for f in "${WINDOWS[@]}"; do
   cp "$SRC/windows/$f" "$DST/windows/$f"
   echo "  copied windows/$f"
 done
+
+# ---------- Patched copy: windows/activity.js ----------
+# Patch 1: Replace tool filter text input with <select> dropdown
+# Patch 2: Add Apply button to time range pane
+# Patch 3: Wire time-range Apply button
+# Patch 4: Add _populateToolDropdown function and call from _loadData
+
+cp "$SRC/windows/activity.js" "$DST/windows/activity.js"
+
+# Patch 1: tool filter input → select
+sed -i '' 's|<input type="text" class="aw-input" id="aw-tool-filter" placeholder="All tools">|<select class="aw-select" id="aw-tool-filter"><option value="">All tools</option></select>|' \
+  "$DST/windows/activity.js"
+
+# Patch 2: Add Apply button after quick-select buttons
+sed -i '' '/data-range="all">All time<\/button>/a\
+\          </div>\
+\          <div class="aw-fp-actions" style="margin-top:8px">\
+\            <button class="aw-btn aw-btn-primary" id="aw-time-apply">Apply</button>
+' "$DST/windows/activity.js"
+
+# Patch 3: Wire time-range Apply button (insert after existing Apply handler)
+sed -i '' '/aw-apply.*addEventListener.*click.*=>/,/});/{
+  /});/a\
+\
+\  // Apply button (time range pane)\
+\  el.querySelector('\''#aw-time-apply'\'').addEventListener('\''click'\'', () => {\
+\    _readFilters(state);\
+\    state.currentPage = 1;\
+\    _loadData(state);\
+\  });
+}' "$DST/windows/activity.js"
+
+# Patch 4: Add _populateToolDropdown and call it from _loadData
+sed -i '' 's/_updateStats(state);/_updateStats(state);\n  _populateToolDropdown(state);/' \
+  "$DST/windows/activity.js"
+
+sed -i '' '/^\/\/ ---------- Stats ----------/i\
+// ---------- Tool dropdown ----------\
+\
+function _populateToolDropdown(state) {\
+  const sel = state.el.querySelector('\''#aw-tool-filter'\'');\
+  if (!sel) return;\
+  const tools = new Set();\
+  for (const e of state.data) {\
+    if (e.detail?.tool_name) tools.add(e.detail.tool_name);\
+  }\
+  const current = sel.value;\
+  const sorted = [...tools].sort();\
+  sel.innerHTML = '\''<option value="">All tools</option>'\'';\
+  for (const t of sorted) {\
+    const opt = document.createElement('\''option'\'');\
+    opt.value = t;\
+    opt.textContent = t;\
+    sel.appendChild(opt);\
+  }\
+  sel.value = current;\
+}\
+' "$DST/windows/activity.js"
+
+echo "  copied windows/activity.js (patched: tool dropdown + time-range Apply)"
 
 # ---------- Manifest ----------
 
