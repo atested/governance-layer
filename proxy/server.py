@@ -32,6 +32,7 @@ import threading
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse as _urlparse
 
 import httpx
 
@@ -1158,14 +1159,6 @@ class ProxyServer:
         server = await asyncio.start_server(
             self._handle_client, self._host, self._port
         )
-        logger.info(
-            "Atested governance proxy listening on http://%s:%d",
-            self._host, self._port,
-        )
-        logger.info(
-            "Configure your agent: ANTHROPIC_BASE_URL=http://%s:%d/anthropic",
-            self._host, self._port,
-        )
         async with server:
             await server.serve_forever()
 
@@ -1173,6 +1166,41 @@ class ProxyServer:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+def _log_startup_banner(*, host: str, port: int, upstream: str, runtime: Path):
+    """Print clean, human-readable startup status lines."""
+    lines = []
+
+    # 1. Signing status
+    if _SIGNING_KEY_ID:
+        lines.append(f"Signing: active ({_SIGNING_KEY_ID})")
+    else:
+        lines.append("Signing: inactive — no signing key configured")
+
+    # 2. Provider routes
+    parsed = _urlparse(upstream)
+    upstream_host = parsed.hostname or upstream
+    lines.append(f"Providers: /anthropic (upstream: {upstream_host})")
+
+    # 3. Proxy port
+    lines.append(f"Listening on port {port}")
+
+    # 4. Dashboard port (if co-hosted)
+    dashboard_port = os.environ.get("DASHBOARD_PORT", "").strip()
+    if dashboard_port:
+        lines.append(f"Dashboard on port {dashboard_port}")
+
+    # 5. Runtime directory
+    try:
+        display_runtime = runtime.relative_to(Path.cwd())
+    except ValueError:
+        display_runtime = runtime
+    lines.append(f"Runtime: {display_runtime}/")
+
+    # Log each line at INFO level
+    for line in lines:
+        logger.info(line)
 
 
 def main():
@@ -1220,6 +1248,13 @@ def main():
     )
 
     server = ProxyServer(proxy, args.host, args.port)
+
+    _log_startup_banner(
+        host=args.host,
+        port=args.port,
+        upstream=args.upstream,
+        runtime=runtime,
+    )
 
     try:
         asyncio.run(server.start())
