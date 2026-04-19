@@ -37,7 +37,26 @@ class ModalManager {
     /** @type {{ depth: number, frame: HTMLElement, backdrop: HTMLElement, trigger: HTMLElement|null, content: HTMLElement|null }[]} */
     this._stack = [];
     this._onKeyDown = this._onKeyDown.bind(this);
+    this._changeListeners = [];
     document.addEventListener('keydown', this._onKeyDown);
+  }
+
+  /**
+   * Register a listener called whenever the window stack changes.
+   * Callback receives { depth, title } where title is the topmost window title or null.
+   * @param {Function} fn
+   */
+  onChange(fn) {
+    this._changeListeners.push(fn);
+  }
+
+  _notifyChange() {
+    const top = this._stack.length > 0 ? this._stack[this._stack.length - 1] : null;
+    const title = top ? (top.frame.getAttribute('title') || null) : null;
+    const info = { depth: this._stack.length, title };
+    for (const fn of this._changeListeners) {
+      try { fn(info); } catch (e) { console.warn('ModalManager onChange error:', e); }
+    }
   }
 
   /** Current stack depth (0 = nothing open, 1 = child, 2 = grandchild) */
@@ -104,6 +123,8 @@ class ModalManager {
     // Move focus into the window
     this._trapFocus(frame);
 
+    this._notifyChange();
+
     return {
       frame,
       contentSlot: frame,
@@ -143,6 +164,8 @@ class ModalManager {
 
     // Fire onClose callback if set
     if (entry.onClose) entry.onClose();
+
+    this._notifyChange();
 
     return true;
   }

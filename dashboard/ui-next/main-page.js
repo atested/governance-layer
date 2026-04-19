@@ -39,17 +39,32 @@ const WINDOW_OPENERS = {
   licensing: openLicensingWindow,
 };
 
-/** Workflow launcher definitions — nine pane cards in a 3x3 grid */
-const LAUNCHERS = [
-  { id: 'activity',       label: 'Activity',       desc: 'Full decision log with filtering and record detail',         accent: 'green' },
-  { id: 'approvals',      label: 'Approvals',      desc: 'Manage your approvals for exceptions to rules',              accent: 'green' },
-  { id: 'audit',          label: 'Audit',           desc: 'Searchable chain records for compliance and review',         accent: 'green' },
-  { id: 'reports',        label: 'Reports',         desc: 'Atested metrics and trends over time',                      accent: 'green' },
-  { id: 'health',         label: 'Health',          desc: 'Chain integrity, signing status, system diagnostics',        accent: 'amber' },
-  { id: 'configuration',  label: 'Configuration',   desc: 'Policy rules, capability registry, base directories',       accent: 'green' },
-  { id: 'communications', label: 'Communications',  desc: 'Telemetry, escalations, and priority requests',             accent: 'green' },
-  { id: 'alerts',          label: 'Alerts',            desc: 'Proactive monitoring, security alerts, system notices',     accent: 'green' },
-  { id: 'licensing',      label: 'Licensing',        desc: 'Pricing, survey, case document, purchase',                 accent: 'amber' },
+/** Workflow launcher definitions — three labeled groups of three */
+const LAUNCHER_GROUPS = [
+  {
+    heading: "What's happening",
+    launchers: [
+      { id: 'activity',  label: 'Activity',  desc: 'Full decision log with filtering and record detail',     accent: 'green' },
+      { id: 'reports',   label: 'Reports',   desc: 'Atested metrics and trends over time',                  accent: 'green' },
+      { id: 'alerts',    label: 'Alerts',    desc: 'Proactive monitoring, security alerts, system notices',  accent: 'green' },
+    ],
+  },
+  {
+    heading: 'What to do about it',
+    launchers: [
+      { id: 'approvals',      label: 'Approvals',      desc: 'Manage your approvals for exceptions to rules',   accent: 'green' },
+      { id: 'health',         label: 'Health',          desc: 'Chain integrity, signing status, system diagnostics', accent: 'amber' },
+      { id: 'configuration',  label: 'Configuration',   desc: 'Policy rules, capability registry, base directories', accent: 'green' },
+    ],
+  },
+  {
+    heading: 'Administration',
+    launchers: [
+      { id: 'communications', label: 'Communications',  desc: 'Telemetry, escalations, and priority requests',  accent: 'green' },
+      { id: 'audit',          label: 'Audit',           desc: 'Searchable chain records for compliance and review', accent: 'green' },
+      { id: 'licensing',      label: 'Licensing',       desc: 'Pricing, survey, case document, purchase',       accent: 'amber' },
+    ],
+  },
 ];
 
 /** DOM references populated during render */
@@ -63,7 +78,10 @@ export function renderMainPage() {
   _page = document.createElement('div');
   _page.id = 'main-page';
   _page.innerHTML = `
-    <h1 class="mp-page-title">Atested AI Operations</h1>
+    <div class="mp-title-pane">
+      <div class="mp-title-accent"></div>
+      <h1 class="mp-page-title">Atested AI Operations</h1>
+    </div>
     <div class="mp-top-panes">
       <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">
         <div class="mp-pane-accent" id="mp-health-accent"></div>
@@ -160,36 +178,47 @@ export function renderMainPage() {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openActivityWindow(recentPane); }
   });
 
-  // Render workflow launcher pane cards
+  // Render workflow launcher groups with section headings
   const grid = _page.querySelector('#launcher-grid');
-  for (const launcher of LAUNCHERS) {
-    const card = document.createElement('div');
-    card.className = 'mp-wf-card';
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
-    card.dataset.windowId = launcher.id;
-    card.dataset.defaultAccent = launcher.accent;
+  for (const group of LAUNCHER_GROUPS) {
+    const heading = document.createElement('div');
+    heading.className = 'mp-section-heading';
+    heading.textContent = group.heading;
+    grid.appendChild(heading);
 
-    const accentColor = launcher.accent === 'amber' ? 'mp-wf-accent-amber' : 'mp-wf-accent-green';
-    card.innerHTML = `
-      <div class="mp-wf-accent ${accentColor}" data-accent-bar="${launcher.id}"></div>
-      <div class="mp-wf-title">${_esc(launcher.label)}</div>
-      <div class="mp-wf-desc">${_esc(launcher.desc)}</div>
-    `;
+    const row = document.createElement('div');
+    row.className = 'mp-launcher-row';
 
-    card.addEventListener('click', () => {
-      const opener = WINDOW_OPENERS[launcher.id];
-      if (opener) opener(card);
-    });
-    card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
+    for (const launcher of group.launchers) {
+      const card = document.createElement('div');
+      card.className = 'mp-wf-card';
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.dataset.windowId = launcher.id;
+      card.dataset.defaultAccent = launcher.accent;
+
+      const accentColor = launcher.accent === 'amber' ? 'mp-wf-accent-amber' : 'mp-wf-accent-green';
+      card.innerHTML = `
+        <div class="mp-wf-accent ${accentColor}" data-accent-bar="${launcher.id}"></div>
+        <div class="mp-wf-title">${_esc(launcher.label)}</div>
+        <div class="mp-wf-desc">${_esc(launcher.desc)}</div>
+      `;
+
+      card.addEventListener('click', () => {
         const opener = WINDOW_OPENERS[launcher.id];
         if (opener) opener(card);
-      }
-    });
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const opener = WINDOW_OPENERS[launcher.id];
+          if (opener) opener(card);
+        }
+      });
 
-    grid.appendChild(card);
+      row.appendChild(card);
+    }
+    grid.appendChild(row);
   }
 
   return _page;
@@ -476,13 +505,25 @@ mpStyles.textContent = `
     pointer-events: none;
   }
 
-  /* ---- Page title ---- */
+  /* ---- Title pane ---- */
+  .mp-title-pane {
+    background: #22262e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .mp-title-accent {
+    height: 6px;
+    background: #60a5fa;
+  }
   .mp-page-title {
     font-size: 32px;
     font-weight: 500;
     color: #e4e6eb;
     text-align: center;
-    margin: 0 0 20px;
+    margin: 0;
+    padding: 18px 20px;
   }
 
   /* ---- Top display panes ---- */
@@ -651,9 +692,26 @@ mpStyles.textContent = `
     margin-bottom: 24px;
   }
   .mp-launcher-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .mp-section-heading {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8b919a;
+    font-weight: 600;
+    padding: 12px 0 8px;
+  }
+  .mp-section-heading:first-child {
+    padding-top: 0;
+  }
+  .mp-launcher-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
+    margin-bottom: 4px;
   }
   .mp-wf-card {
     background: #22262e;
@@ -766,7 +824,7 @@ mpStyles.textContent = `
 
   /* ---- Responsive ---- */
   @media (max-width: 900px) {
-    .mp-launcher-grid {
+    .mp-launcher-row {
       grid-template-columns: repeat(2, 1fr);
     }
   }
@@ -778,7 +836,7 @@ mpStyles.textContent = `
     .mp-top-panes {
       grid-template-columns: 1fr;
     }
-    .mp-launcher-grid {
+    .mp-launcher-row {
       grid-template-columns: 1fr;
     }
     .mp-feed-header,

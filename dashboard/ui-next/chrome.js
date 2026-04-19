@@ -15,11 +15,12 @@ export function renderChrome() {
   chrome.id = 'chrome-bar';
   chrome.innerHTML = `
     <div class="chrome-zone chrome-identity" tabindex="0" role="button" aria-label="Identity">
-      <span class="chrome-identity-text">Set up identity</span>
+      <span class="chrome-identity-text"></span>
     </div>
     <div class="chrome-brand">Atested</div>
     <div class="chrome-right">
       <div class="chrome-zone chrome-license" tabindex="0" role="button" aria-label="License">
+        <span class="chrome-license-prefix">License Status:</span>
         <span class="chrome-license-tier">Trial</span>
         <span class="chrome-license-dot" style="background: var(--ok)"></span>
       </div>
@@ -114,9 +115,11 @@ export function updateIdentityZone(session) {
   zone.classList.remove('identity-configured', 'identity-locked', 'identity-unlocked');
 
   if (!session || !session.configured) {
-    text.textContent = 'Set up identity';
+    text.textContent = '';
+    zone.style.cursor = 'default';
     return;
   }
+  zone.style.cursor = '';
 
   zone.classList.add('identity-configured');
   const name = session.operator_name || 'Operator';
@@ -146,6 +149,17 @@ export function updateLicenseZone(tierName, dotColor) {
 
   // Add/remove amber state class for post-trial unlicensed
   zone.classList.toggle('chrome-license-amber', tierName === 'Personal' && dotColor && dotColor.includes('f59e42'));
+}
+
+/**
+ * Update the chrome center breadcrumb.
+ * Shows "Atested" when no window is open, "Atested — [title]" when a child window is open.
+ * @param {string|null} windowTitle
+ */
+export function updateBreadcrumb(windowTitle) {
+  const brand = document.querySelector('.chrome-brand');
+  if (!brand) return;
+  brand.textContent = windowTitle ? `Atested \u2014 ${windowTitle}` : 'Atested';
 }
 
 function _formatRemaining(seconds) {
@@ -224,6 +238,10 @@ chromeStyles.textContent = `
     align-items: center;
     gap: 6px;
     font-size: 0.82rem;
+  }
+  .chrome-license-prefix {
+    color: #6b7280;
+    font-size: 0.78rem;
   }
   .chrome-license-tier {
     color: #8b919a;
@@ -323,6 +341,7 @@ chromeStyles.textContent = `
       font-size: 0.88rem;
       margin: 0 8px;
     }
+    .chrome-license-prefix,
     .chrome-license-tier {
       display: none;
     }

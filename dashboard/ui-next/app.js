@@ -5,7 +5,7 @@
  * Triggers data loading for the main page via the data-access layer.
  */
 
-import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone, updateLicenseZone } from './chrome.js';
+import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone, updateLicenseZone, updateBreadcrumb } from './chrome.js';
 import { renderMainPage, loadMainPageData, setLicenseMode } from './main-page.js';
 import { modalManager } from './modal-manager.js';
 import { openAlertsWindow } from './windows/alerts.js';
@@ -44,6 +44,11 @@ function init() {
   notifZone.addEventListener('click', (e) => openAlertsWindow(e.currentTarget));
   notifZone.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlertsWindow(e.currentTarget); }
+  });
+
+  // Wire chrome breadcrumb to modal manager
+  modalManager.onChange(({ depth, title }) => {
+    updateBreadcrumb(depth > 0 ? title : null);
   });
 
   // Render main page structure, then load live data
