@@ -1286,313 +1286,447 @@ async function _loadUnifiedPurchase(el, state) {
   _renderUnifiedPurchase(el, state);
 }
 
+// Compute license period dates for a tier
+function _computeLicenseDates(tier, state) {
+  const now = new Date();
+  const fmt = d => d.toISOString().slice(0, 10);
+  const addYear = d => { const r = new Date(d); r.setFullYear(r.getFullYear() + 1); return r; };
+
+  if (tier === 'personal' || tier === 'personal_plus') {
+    return { start: fmt(now), end: fmt(addYear(now)) };
+  }
+  // Crew, Team: date from trial completion if available
+  const tc = state.modeData?.trial_completion_date;
+  if (tc) {
+    const tcDate = new Date(tc);
+    return { start: fmt(tcDate), end: fmt(addYear(tcDate)) };
+  }
+  return { start: fmt(now), end: fmt(addYear(now)) };
+}
+
 function _renderUnifiedPurchase(el, state) {
   const modeData = state.modeData || {};
   const currentTier = modeData.license_tier || '';
   const currentStatus = modeData.license_status || '';
   const isLicensed = currentStatus === 'licensed';
+  const isRegistered = modeData.registered === true;
   const operatorName = modeData.operator_name || '';
 
   const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
   const currentIdx = TIER_ORDER.indexOf(currentTier);
 
-  // All 5 tiers including Personal
-  const ALL_TIERS = TIER_ORDER.map(id => ({
-    id,
-    label: TIER_LABELS[id] || _tierLabel(id),
-    price: COMMERCIAL_TERMS[id]?.price || 'Free',
-    dating: COMMERCIAL_TERMS[id]?.dating || '',
-    selfServe: id !== 'institution',
-    isPersonal: id === 'personal',
-  }));
+  // Determine recommended tier from survey
+  const recTier = state.qState?.recommendation || null;
 
-  let selectedTier = isLicensed
-    ? (ALL_TIERS.find(t => TIER_ORDER.indexOf(t.id) > currentIdx) || ALL_TIERS[1]).id
-    : 'personal';
+  // Initial selection: recommended > next above current > personal
+  let selectedTier = recTier || 'personal';
+  if (isLicensed) {
+    selectedTier = (TIER_ORDER.find(t => TIER_ORDER.indexOf(t) > currentIdx)) || 'institution';
+  }
 
-  // Registration data
-  const regData = {
+  // Form data object — persists across tier switches
+  const formData = {
     operator_name: operatorName,
-    context_note: '',
-    telemetry_opted_in: true,
+    operator_role: modeData.operator_role || '',
+    how_found: modeData.how_found || '',
+    deciding_factor: modeData.deciding_factor || '',
+    biggest_insight: modeData.biggest_insight || '',
+    organization_name: modeData.organization_name || '',
+    industry_sector: modeData.industry_sector || '',
+    billing_contact: modeData.billing_contact || '',
+    primary_operator: modeData.primary_operator || '',
+    telemetry_opted_in: modeData.telemetry_opted_in !== false,
+    research_opted_in: modeData.research_opted_in === true,
+    // Institution questions
+    simultaneous_policies: '',
+    cross_jurisdiction: '',
+    certification_value: '',
+    data_residency: '',
   };
 
   el.innerHTML = '';
 
-  // A. Management section (if licensed)
-  let managementHtml = '';
-  if (isLicensed) {
-    const purchaseDate = (modeData.purchase_date || '').slice(0, 10) || 'N/A';
-    const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
-    const autoRenewal = modeData.auto_renewal !== false;
-    const pendingDowngrade = modeData.pending_downgrade || null;
-
-    const downgradeTiers = TIER_ORDER.slice(0, Math.max(0, currentIdx)).filter(t => t !== 'personal');
-    let downgradeOptions = downgradeTiers.map(dt =>
-      `<option value="${dt}">${_tierLabel(dt)}</option>`
-    ).join('');
-
-    managementHtml = `
-      <div class="lup-management">
-        <h3 class="lup-heading">License Management</h3>
-        <div class="lup-mgmt-card">
-          <div class="lup-mgmt-row"><span class="lup-mgmt-label">Current Tier</span><span class="lup-mgmt-value">${_esc(_tierLabel(currentTier))}</span></div>
-          <div class="lup-mgmt-row"><span class="lup-mgmt-label">Purchase Date</span><span class="lup-mgmt-value">${_esc(purchaseDate)}</span></div>
-          <div class="lup-mgmt-row"><span class="lup-mgmt-label">Renewal Date</span><span class="lup-mgmt-value">${_esc(expiryDate)}</span></div>
-        </div>
-
-        <div class="lup-renewal-section">
-          <div class="lup-renewal-status">
-            <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f5a623'}"></span>
-            <span>Auto-renewal ${autoRenewal ? 'enabled' : 'disabled'}</span>
-          </div>
-          <button class="lic-action-btn lup-renewal-toggle">${autoRenewal ? 'Turn Off' : 'Turn On'}</button>
-        </div>
-
-        ${pendingDowngrade ? `
-          <div class="lup-pending-downgrade">
-            Downgrade to <strong>${_esc(_tierLabel(pendingDowngrade.to_tier))}</strong>
-            scheduled for <strong>${_esc((pendingDowngrade.effective_date || '').slice(0, 10))}</strong>
-            <button class="lic-action-btn lup-cancel-downgrade">Cancel</button>
-          </div>
-        ` : (downgradeTiers.length > 0 ? `
-          <div class="lup-downgrade-section">
-            <span class="lup-section-label">Downgrade at renewal</span>
-            <div class="lup-downgrade-row">
-              <select class="lup-downgrade-select">${downgradeOptions}</select>
-              <button class="lic-action-btn lup-downgrade-btn">Schedule</button>
-            </div>
-          </div>
-        ` : '')}
-
-        <div class="lup-divider"></div>
-        <p class="lup-upgrade-prompt">Upgrade to a higher tier</p>
-      </div>
-    `;
+  // If post-purchase/registered, render management view
+  if (isLicensed || isRegistered) {
+    _renderManagementView(el, state, formData, selectedTier);
+    return;
   }
 
-  // B. Tier selector grid
-  let tiersHtml = '';
-  for (const t of ALL_TIERS) {
-    const tierIdx = TIER_ORDER.indexOf(t.id);
-    const belowCurrent = isLicensed && tierIdx <= currentIdx;
-    const selected = t.id === selectedTier ? 'lup-tier-selected' : '';
-    const disabled = belowCurrent ? 'lup-tier-disabled' : '';
-    const tag = belowCurrent ? '<span class="lup-tier-tag">Current or lower</span>'
-      : t.id === 'institution' ? '<span class="lup-tier-tag">Contact us</span>' : '';
-    tiersHtml += `
-      <button class="lup-tier-btn ${selected} ${disabled}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
-        <span class="lup-tier-label">${_esc(t.label)}</span>
-        <span class="lup-tier-price">${_esc(t.price)}</span>
-        ${tag}
-      </button>
-    `;
+  // --- Pre-purchase flow ---
+
+  // 3A. Context pane
+  const recLabel = recTier ? (TIER_LABELS[recTier] || _tierLabel(recTier)) : null;
+  const recPrice = recTier ? (COMMERCIAL_TERMS[recTier]?.price || '') : '';
+  const contextText = recLabel
+    ? `Your survey recommends <strong>${_esc(recLabel)}</strong>${recPrice ? ` at <strong>${_esc(recPrice)}</strong>/yr` : ''}. Select any plan below.`
+    : 'Select a plan below.';
+
+  // 3B. Plan selector — five full-width panes
+  let selectorHtml = '';
+  for (const t of _TIER_SELECTOR) {
+    const isCurrent = isLicensed && t.id === currentTier;
+    const isRec = t.id === recTier;
+    const isSelected = t.id === selectedTier;
+    const belowCurrent = isLicensed && TIER_ORDER.indexOf(t.id) <= currentIdx;
+    let badgeHtml = '';
+    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">CURRENT</span>';
+    else if (isRec) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-rec">RECOMMENDED</span>';
+
+    selectorHtml += `<button class="lup-sel-row${isSelected ? ' lup-sel-active' : ''}${isRec && !isCurrent ? ' lup-sel-recommended' : ''}${belowCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
+      <span class="lup-sel-name">${_esc(t.name)}</span>
+      <span class="lup-sel-spec">${_esc(t.spec)}</span>
+      <span class="lup-sel-price">${_esc(t.price)}</span>
+      ${badgeHtml}
+    </button>`;
   }
 
-  // C. Detail + action area placeholder
   el.innerHTML = `
-    ${managementHtml}
-    <div class="lup-section">
-      <div class="lup-section-label">Select Tier</div>
-      <div class="lup-tier-grid">${tiersHtml}</div>
-    </div>
-    <div class="lup-detail-area"></div>
+    <div class="lup-context"><div class="lup-context-bar"></div><p class="lup-context-text">${contextText}</p></div>
+    <div class="lup-selector">${selectorHtml}</div>
+    <div class="lup-body-area"></div>
     <div class="lup-confirm-dialog" style="display:none"></div>
     <div class="lup-error" style="display:none"></div>
   `;
 
-  // Render detail for initial selection
-  _renderPurchaseDetail(el, selectedTier, regData, state, isLicensed);
+  // Render body for initial selection
+  _renderPurchaseBody(el, selectedTier, formData, state);
 
-  // Wire tier selection
-  el.querySelectorAll('.lup-tier-btn:not([disabled])').forEach(btn => {
+  // Wire selector clicks
+  el.querySelectorAll('.lup-sel-row:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
-      el.querySelectorAll('.lup-tier-btn').forEach(b => b.classList.remove('lup-tier-selected'));
-      btn.classList.add('lup-tier-selected');
+      el.querySelectorAll('.lup-sel-row').forEach(b => b.classList.remove('lup-sel-active'));
+      btn.classList.add('lup-sel-active');
       selectedTier = btn.dataset.tier;
-      _renderPurchaseDetail(el, selectedTier, regData, state, isLicensed);
+      _renderPurchaseBody(el, selectedTier, formData, state);
     });
   });
-
-  // Wire management actions (if licensed)
-  if (isLicensed) {
-    const confirmArea = el.querySelector('.lup-confirm-dialog');
-    const errorEl = el.querySelector('.lup-error');
-    const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
-    const autoRenewal = modeData.auto_renewal !== false;
-
-    const renewalToggle = el.querySelector('.lup-renewal-toggle');
-    if (renewalToggle) {
-      renewalToggle.addEventListener('click', () => {
-        _showConfirmDialog(confirmArea, errorEl, state, {
-          message: autoRenewal
-            ? `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`
-            : `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`,
-          action: () => api.postAutoRenewal({ auto_renewal: !autoRenewal }),
-          onSuccess: () => _loadUnifiedPurchase(el, state),
-        });
-      });
-    }
-
-    const cancelDowngrade = el.querySelector('.lup-cancel-downgrade');
-    if (cancelDowngrade) {
-      const pendingDowngrade = modeData.pending_downgrade;
-      cancelDowngrade.addEventListener('click', () => {
-        _showConfirmDialog(confirmArea, errorEl, state, {
-          message: `Cancel the pending downgrade to ${_tierLabel(pendingDowngrade.to_tier)}?`,
-          action: () => api.postPurchase({ tier: currentTier, payment_ref: 'cancel_downgrade', operator_name: operatorName }),
-          onSuccess: () => _loadUnifiedPurchase(el, state),
-        });
-      });
-    }
-
-    const downgradeBtn = el.querySelector('.lup-downgrade-btn');
-    if (downgradeBtn) {
-      downgradeBtn.addEventListener('click', () => {
-        const selectEl = el.querySelector('.lup-downgrade-select');
-        const toTier = selectEl.value;
-        const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
-        _showConfirmDialog(confirmArea, errorEl, state, {
-          message: `Schedule downgrade from ${_tierLabel(currentTier)} to ${_tierLabel(toTier)}? You keep ${_tierLabel(currentTier)} until ${expiryDate}.`,
-          action: () => api.postDowngrade({ to_tier: toTier }),
-          onSuccess: () => _loadUnifiedPurchase(el, state),
-        });
-      });
-    }
-  }
 }
 
-function _renderPurchaseDetail(el, tier, regData, state, isLicensed) {
-  const detailArea = el.querySelector('.lup-detail-area');
-  if (!detailArea) return;
+// ---------- Purchase body: About You + Communication/Research + Purchase pane ----------
 
-  const terms = COMMERCIAL_TERMS[tier] || {};
-  const isPersonal = tier === 'personal';
+function _renderPurchaseBody(el, tier, formData, state) {
+  const bodyArea = el.querySelector('.lup-body-area');
+  if (!bodyArea) return;
+
   const isInstitution = tier === 'institution';
+  const isPersonal = tier === 'personal';
+  const isCrew = tier === 'crew' || tier === 'team' || tier === 'institution';
+  const isTeam = tier === 'team' || tier === 'institution';
+  const terms = COMMERCIAL_TERMS[tier] || {};
   const price = terms.price || (isPersonal ? 'Free' : '');
+  const isLicensed = (state.modeData?.license_status === 'licensed');
+  const dates = _computeLicenseDates(tier, state);
 
-  // Institution: show contact card
-  if (isInstitution) {
-    detailArea.innerHTML = `
-      <div class="lup-inst-card">
-        <h4 class="lup-inst-heading">Institution Tier</h4>
-        <p class="lup-inst-text">
-          Institution licenses are tailored to your organization. Download
-          your case document to share with your team, then contact us.
-        </p>
-        <div class="lup-inst-actions">
-          <button class="lic-action-btn lup-inst-case-btn">View Case Document</button>
-          <a href="mailto:hello@atested.com" class="lic-action-btn lic-action-primary" style="text-decoration:none;text-align:center">
-            Contact hello@atested.com
-          </a>
-        </div>
-      </div>
-    `;
-    detailArea.querySelector('.lup-inst-case-btn')?.addEventListener('click', () => {
-      _switchPanel(state, 'case-document');
-    });
-    return;
-  }
-
-  // Registration fields + telemetry + action
-  const actionLabel = isPersonal
-    ? 'Register \u2014 Free'
-    : `${isLicensed ? 'Upgrade to' : 'Purchase'} ${_tierLabel(tier)} \u2014 ${price}`;
-
-  detailArea.innerHTML = `
-    <div class="lup-detail-card">
-      <div class="lup-detail-row"><span class="lup-detail-label">Price</span><span class="lup-detail-value lup-detail-price">${_esc(price)}</span></div>
-      <div class="lup-detail-row"><span class="lup-detail-label">Billing</span><span class="lup-detail-value">${isPersonal ? 'Free' : (terms.billing || 'Annual')}</span></div>
-      <div class="lup-detail-row"><span class="lup-detail-label">License Dating</span><span class="lup-detail-value">${_esc(terms.dating || 'From registration')}</span></div>
+  // --- Left column: About You ---
+  let aboutFields = `
+    <div class="lup-field">
+      <label class="lup-label">Your name</label>
+      <input class="lup-input lup-input-wide" data-field="operator_name" type="text" placeholder="e.g. your name or handle" value="${_esc(formData.operator_name)}" autocomplete="off" />
     </div>
-
-    <div class="lup-reg-fields">
-      <div class="lup-field">
-        <label class="lup-label" for="lup-name">Your name or identifier</label>
-        <input class="lup-input" id="lup-name" type="text" placeholder="e.g. your name or handle"
-               value="${_esc(regData.operator_name)}" autocomplete="off" />
-      </div>
-      <div class="lup-field">
-        <label class="lup-label" for="lup-context">What are you using Atested for? (optional)</label>
-        <input class="lup-input lup-input-wide" id="lup-context" type="text"
-               placeholder="e.g. personal development, team governance"
-               value="${_esc(regData.context_note)}" autocomplete="off" />
-      </div>
+    <div class="lup-field">
+      <label class="lup-label">Your role</label>
+      <input class="lup-input lup-input-wide" data-field="operator_role" type="text" placeholder="e.g. developer, security engineer, CTO" value="${_esc(formData.operator_role)}" autocomplete="off" />
     </div>
-
-    <div class="lup-tele-section">
-      <div class="lup-section-label">Telemetry Exchange</div>
-      <p class="lup-tele-desc">
-        Participating operators share anonymous, aggregated usage data and receive
-        shared insights and routine notifications in return.
-      </p>
-      <div class="lup-tele-options">
-        <button class="lup-tele-btn ${regData.telemetry_opted_in ? 'lup-tele-selected' : ''}" data-choice="in">
-          <span class="lup-tele-title">Participate</span>
-          <span class="lup-tele-hint">Share anonymous data. Receive community insights.</span>
-        </button>
-        <button class="lup-tele-btn ${!regData.telemetry_opted_in ? 'lup-tele-selected' : ''}" data-choice="out">
-          <span class="lup-tele-title">Decline</span>
-          <span class="lup-tele-hint">No data shared. Critical notifications continue.</span>
-        </button>
-      </div>
+    <div class="lup-field">
+      <label class="lup-label">How did you find Atested?</label>
+      <input class="lup-input lup-input-wide" data-field="how_found" type="text" placeholder="e.g. colleague, search, conference" value="${_esc(formData.how_found)}" autocomplete="off" />
     </div>
-
-    <div class="lup-actions">
-      <button class="lic-action-btn lic-action-primary lup-action-btn">${_esc(actionLabel)}</button>
+    <div class="lup-field">
+      <label class="lup-label">What was the deciding factor?</label>
+      <input class="lup-input lup-input-wide" data-field="deciding_factor" type="text" placeholder="e.g. governance chain, auditability" value="${_esc(formData.deciding_factor)}" autocomplete="off" />
     </div>
-    <div class="lup-action-error" style="display:none"></div>
+    <div class="lup-field">
+      <label class="lup-label">For you, what is the single biggest insight you have had about AI tech?</label>
+      <textarea class="lup-textarea" data-field="biggest_insight" rows="3" placeholder="Share your perspective">${_esc(formData.biggest_insight)}</textarea>
+    </div>
   `;
 
-  // Wire telemetry selection
-  detailArea.querySelectorAll('.lup-tele-btn').forEach(btn => {
+  if (isCrew) {
+    aboutFields += `
+      <div class="lup-field">
+        <label class="lup-label">Organization name</label>
+        <input class="lup-input lup-input-wide" data-field="organization_name" type="text" placeholder="Your organization" value="${_esc(formData.organization_name)}" autocomplete="off" />
+      </div>
+      <div class="lup-field">
+        <label class="lup-label">Industry or sector</label>
+        <input class="lup-input lup-input-wide" data-field="industry_sector" type="text" placeholder="e.g. fintech, healthcare, government" value="${_esc(formData.industry_sector)}" autocomplete="off" />
+      </div>
+      <div class="lup-field">
+        <label class="lup-label">Billing contact if different from you</label>
+        <input class="lup-input lup-input-wide" data-field="billing_contact" type="text" placeholder="Name or email" value="${_esc(formData.billing_contact)}" autocomplete="off" />
+      </div>
+    `;
+  }
+
+  if (isTeam) {
+    aboutFields += `
+      <div class="lup-field">
+        <label class="lup-label">Primary operator's name</label>
+        <input class="lup-input lup-input-wide" data-field="primary_operator" type="text" placeholder="The person who will manage the license" value="${_esc(formData.primary_operator)}" autocomplete="off" />
+      </div>
+    `;
+  }
+
+  // --- Right column: Communication + Research ---
+  const commHtml = `
+    <div class="lup-pane">
+      <div class="lup-pane-bar lup-pane-bar-amber"></div>
+      <h4 class="lup-pane-heading">Communication</h4>
+      <p class="lup-pane-desc">Atested maintains a bidirectional telemetry channel. Participating operators share anonymous, aggregated usage data and receive shared insights and routine notifications in return.</p>
+      <div class="lup-card-options">
+        <button class="lup-card-option${formData.telemetry_opted_in ? ' lup-card-selected' : ''}" data-comm="in">
+          <span class="lup-card-title">Participate</span>
+          <span class="lup-card-hint">Share anonymous data. Receive community insights.</span>
+        </button>
+        <button class="lup-card-option${!formData.telemetry_opted_in ? ' lup-card-selected' : ''}" data-comm="out">
+          <span class="lup-card-title">Decline</span>
+          <span class="lup-card-hint">No data shared. Critical notifications continue.</span>
+        </button>
+      </div>
+      <p class="lup-pane-note">You can change this choice at any time.</p>
+    </div>
+  `;
+
+  const researchHtml = `
+    <div class="lup-pane">
+      <div class="lup-pane-bar lup-pane-bar-blue"></div>
+      <h4 class="lup-pane-heading">Research program</h4>
+      <p class="lup-pane-desc">Atested conducts in-house evaluation of AI application governance patterns. Participants may be invited to share anonymized governance data for research purposes.</p>
+      <div class="lup-card-options">
+        <button class="lup-card-option${formData.research_opted_in ? ' lup-card-selected' : ''}" data-research="in">
+          <span class="lup-card-title">I am open to this</span>
+          <span class="lup-card-hint">You may be contacted about research participation.</span>
+        </button>
+        <button class="lup-card-option${!formData.research_opted_in ? ' lup-card-selected' : ''}" data-research="out">
+          <span class="lup-card-title">Not right now</span>
+          <span class="lup-card-hint">No research contact. You can opt in later.</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // --- Purchase pane ---
+  let purchaseHtml = '';
+  if (isInstitution) {
+    purchaseHtml = _buildInstitutionQuestions(formData);
+  } else {
+    const actionLabel = isPersonal
+      ? 'Register \u2014 Free'
+      : `${isLicensed ? 'Upgrade to' : 'Purchase'} ${_tierLabel(tier)} \u2014 ${price}`;
+
+    purchaseHtml = `
+      <div class="lup-purchase-pane">
+        <div class="lup-pane-bar lup-pane-bar-green"></div>
+        <div class="lup-purchase-header">
+          <span class="lup-purchase-plan">${_esc(_tierLabel(tier))}</span>
+          <span class="lup-purchase-price">${_esc(price)}</span>
+          <span class="lup-purchase-billing">${isPersonal ? 'Free forever' : (terms.billing || 'Annual billing')}</span>
+        </div>
+        <div class="lup-purchase-dates">License period: <span class="lup-date-blue">${_esc(dates.start)}</span> to <span class="lup-date-blue">${_esc(dates.end)}</span></div>
+        <button class="lic-action-btn lic-action-primary lup-action-btn">${_esc(actionLabel)}</button>
+        <div class="lup-purchase-divider"></div>
+        <button class="lup-invoice-btn lup-invoice-disabled" disabled>Invoice available after purchase</button>
+        <div class="lup-action-error" style="display:none"></div>
+      </div>
+    `;
+  }
+
+  bodyArea.innerHTML = `
+    <div class="lup-columns">
+      <div class="lup-col-left">
+        <div class="lup-pane">
+          <div class="lup-pane-bar lup-pane-bar-amber"></div>
+          <h4 class="lup-pane-heading">About you</h4>
+          <div class="lup-about-fields">${aboutFields}</div>
+        </div>
+      </div>
+      <div class="lup-col-right">
+        ${commHtml}
+        ${researchHtml}
+      </div>
+    </div>
+    ${purchaseHtml}
+  `;
+
+  // Wire form field syncing
+  bodyArea.querySelectorAll('[data-field]').forEach(input => {
+    const field = input.dataset.field;
+    input.addEventListener('input', () => { formData[field] = input.value.trim(); });
+  });
+
+  // Wire communication cards
+  bodyArea.querySelectorAll('[data-comm]').forEach(btn => {
     btn.addEventListener('click', () => {
-      regData.telemetry_opted_in = btn.dataset.choice === 'in';
-      detailArea.querySelectorAll('.lup-tele-btn').forEach(b =>
-        b.classList.toggle('lup-tele-selected', b === btn)
+      formData.telemetry_opted_in = btn.dataset.comm === 'in';
+      bodyArea.querySelectorAll('[data-comm]').forEach(b =>
+        b.classList.toggle('lup-card-selected', b === btn)
       );
     });
   });
 
-  // Sync name/context inputs back to regData on change
-  const nameInput = detailArea.querySelector('#lup-name');
-  const contextInput = detailArea.querySelector('#lup-context');
-  nameInput.addEventListener('input', () => { regData.operator_name = nameInput.value.trim(); });
-  contextInput.addEventListener('input', () => { regData.context_note = contextInput.value.trim(); });
+  // Wire research cards
+  bodyArea.querySelectorAll('[data-research]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      formData.research_opted_in = btn.dataset.research === 'in';
+      bodyArea.querySelectorAll('[data-research]').forEach(b =>
+        b.classList.toggle('lup-card-selected', b === btn)
+      );
+    });
+  });
 
-  // Wire action button
-  const actionBtn = detailArea.querySelector('.lup-action-btn');
-  const errorEl = detailArea.querySelector('.lup-action-error');
+  // Wire purchase/register action (non-institution)
+  if (!isInstitution) {
+    _wirePurchaseAction(bodyArea, el, tier, formData, state);
+  } else {
+    _wireInstitutionSubmit(bodyArea, el, formData, state);
+  }
+}
 
-  actionBtn.addEventListener('click', async () => {
-    // Validate name
-    const name = nameInput.value.trim();
-    if (!name) {
-      errorEl.textContent = 'Please enter a name or identifier.';
+function _buildInstitutionQuestions(formData) {
+  return `
+    <div class="lup-purchase-pane lup-inst-questions">
+      <div class="lup-pane-bar lup-pane-bar-green"></div>
+      <h4 class="lup-pane-heading">Institution \u2014 Let's start a conversation</h4>
+      <div class="lup-field">
+        <label class="lup-label">How many distinct governance policies does your organization need to maintain simultaneously?</label>
+        <input class="lup-input lup-input-wide" data-inst="simultaneous_policies" type="text" placeholder="e.g. 3, 10+" value="${_esc(formData.simultaneous_policies)}" autocomplete="off" />
+      </div>
+      <div class="lup-field">
+        <label class="lup-label">Do your AI application operations cross regulatory jurisdictions?</label>
+        <div class="lup-yn-row">
+          <button class="lup-yn-btn${formData.cross_jurisdiction === 'yes' ? ' lup-yn-active' : ''}" data-inst-yn="cross_jurisdiction" data-val="yes">Yes</button>
+          <button class="lup-yn-btn${formData.cross_jurisdiction === 'no' ? ' lup-yn-active' : ''}" data-inst-yn="cross_jurisdiction" data-val="no">No</button>
+        </div>
+      </div>
+      <div class="lup-field">
+        <label class="lup-label">Would independent certification of your governance chain data be valuable for your legal or compliance requirements?</label>
+        <div class="lup-yn-row">
+          <button class="lup-yn-btn${formData.certification_value === 'yes' ? ' lup-yn-active' : ''}" data-inst-yn="certification_value" data-val="yes">Yes</button>
+          <button class="lup-yn-btn${formData.certification_value === 'no' ? ' lup-yn-active' : ''}" data-inst-yn="certification_value" data-val="no">No</button>
+        </div>
+      </div>
+      <div class="lup-field">
+        <label class="lup-label">Does your organization require on-premises deployment or do you have flexibility on data residency?</label>
+        <input class="lup-input lup-input-wide" data-inst="data_residency" type="text" placeholder="e.g. on-premises required, cloud OK, hybrid" value="${_esc(formData.data_residency)}" autocomplete="off" />
+      </div>
+      <p class="lup-pane-desc">We'll use your answers and About You information to prepare a tailored proposal.</p>
+      <button class="lic-action-btn lic-action-primary lup-inst-submit-btn">Submit for proposal</button>
+      <div class="lup-action-error" style="display:none"></div>
+    </div>
+  `;
+}
+
+function _wireInstitutionSubmit(bodyArea, el, formData, state) {
+  // Wire institution text inputs
+  bodyArea.querySelectorAll('[data-inst]').forEach(input => {
+    const field = input.dataset.inst;
+    input.addEventListener('input', () => { formData[field] = input.value.trim(); });
+  });
+
+  // Wire yes/no buttons
+  bodyArea.querySelectorAll('[data-inst-yn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const field = btn.dataset.instYn;
+      formData[field] = btn.dataset.val;
+      bodyArea.querySelectorAll(`[data-inst-yn="${field}"]`).forEach(b =>
+        b.classList.toggle('lup-yn-active', b === btn)
+      );
+    });
+  });
+
+  const submitBtn = bodyArea.querySelector('.lup-inst-submit-btn');
+  const errorEl = bodyArea.querySelector('.lup-action-error');
+
+  submitBtn?.addEventListener('click', async () => {
+    if (!formData.operator_name) {
+      errorEl.textContent = 'Please enter your name in the About You section.';
       errorEl.style.display = '';
-      nameInput.focus();
       return;
     }
-    // Terms gate: require acknowledgment before purchase
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting\u2026';
+    errorEl.style.display = 'none';
+
+    const res = await api.postInstitutionInquiry({
+      operator_name: formData.operator_name,
+      operator_role: formData.operator_role,
+      how_found: formData.how_found,
+      deciding_factor: formData.deciding_factor,
+      biggest_insight: formData.biggest_insight,
+      organization_name: formData.organization_name,
+      industry_sector: formData.industry_sector,
+      billing_contact: formData.billing_contact,
+      primary_operator: formData.primary_operator,
+      research_opted_in: formData.research_opted_in,
+      simultaneous_policies: formData.simultaneous_policies,
+      cross_jurisdiction: formData.cross_jurisdiction,
+      certification_value: formData.certification_value,
+      data_residency: formData.data_residency,
+    });
+
+    if (!res.ok) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit for proposal';
+      errorEl.textContent = res.error || 'Submission failed.';
+      errorEl.style.display = '';
+      return;
+    }
+
+    submitBtn.textContent = 'Submitted';
+    submitBtn.style.background = 'rgba(34, 197, 94, 0.15)';
+    submitBtn.style.color = '#22c55e';
+    submitBtn.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+  });
+}
+
+function _wirePurchaseAction(bodyArea, el, tier, formData, state) {
+  const actionBtn = bodyArea.querySelector('.lup-action-btn');
+  const errorEl = bodyArea.querySelector('.lup-action-error');
+  if (!actionBtn) return;
+
+  const isPersonal = tier === 'personal';
+  const isLicensed = (state.modeData?.license_status === 'licensed');
+  const terms = COMMERCIAL_TERMS[tier] || {};
+  const price = terms.price || 'Free';
+  const actionLabel = isPersonal
+    ? 'Register \u2014 Free'
+    : `${isLicensed ? 'Upgrade to' : 'Purchase'} ${_tierLabel(tier)} \u2014 ${price}`;
+
+  actionBtn.addEventListener('click', async () => {
+    if (!formData.operator_name) {
+      errorEl.textContent = 'Please enter your name in the About You section.';
+      errorEl.style.display = '';
+      return;
+    }
     if (!state.modeData?.terms_acknowledged) {
       errorEl.textContent = 'Review the licensing terms first. Close this window and click the Terms pane.';
       errorEl.style.display = '';
       return;
     }
 
-    regData.operator_name = name;
-    regData.context_note = contextInput.value.trim();
-
     actionBtn.disabled = true;
     actionBtn.textContent = 'Processing\u2026';
     errorEl.style.display = 'none';
 
+    const ciFields = {
+      operator_role: formData.operator_role,
+      how_found: formData.how_found,
+      deciding_factor: formData.deciding_factor,
+      biggest_insight: formData.biggest_insight,
+      research_opted_in: formData.research_opted_in,
+    };
+    if (formData.organization_name) ciFields.organization_name = formData.organization_name;
+    if (formData.industry_sector) ciFields.industry_sector = formData.industry_sector;
+    if (formData.billing_contact) ciFields.billing_contact = formData.billing_contact;
+    if (formData.primary_operator) ciFields.primary_operator = formData.primary_operator;
+
     if (isPersonal) {
-      // Register for Personal (free)
       const res = await api.postRegister({
-        operator_name: regData.operator_name,
-        context_note: regData.context_note,
-        telemetry_opted_in: regData.telemetry_opted_in,
+        operator_name: formData.operator_name,
+        context_note: '',
+        telemetry_opted_in: formData.telemetry_opted_in,
+        ...ciFields,
       });
 
       if (!res.ok) {
@@ -1603,11 +1737,9 @@ function _renderPurchaseDetail(el, tier, regData, state, isLicensed) {
         return;
       }
 
-      // Success
-      _renderPurchaseSuccess(el, { ...res.data, tier: 'personal' }, state, 'Registered', 'Personal License Active');
       _refreshLicenseState();
+      _loadUnifiedPurchase(el, state);
     } else {
-      // Paid tier purchase/upgrade
       const payRes = await licensingApi.initiatePurchase({ tier });
       if (!payRes.ok) {
         actionBtn.disabled = false;
@@ -1620,7 +1752,8 @@ function _renderPurchaseDetail(el, tier, regData, state, isLicensed) {
       const res = await api.postPurchase({
         tier,
         payment_ref: payRes.data.payment_ref,
-        operator_name: regData.operator_name,
+        operator_name: formData.operator_name,
+        ...ciFields,
       });
 
       if (!res.ok) {
@@ -1631,48 +1764,261 @@ function _renderPurchaseDetail(el, tier, regData, state, isLicensed) {
         return;
       }
 
-      const badge = isLicensed ? 'Upgraded' : 'Purchased';
-      const headline = isLicensed ? `Upgraded to ${_tierLabel(tier)}` : `${_tierLabel(tier)} License Active`;
-      _renderPurchaseSuccess(el, res.data, state, badge, headline);
       _refreshLicenseState();
+      _loadUnifiedPurchase(el, state);
     }
   });
 }
 
-function _renderPurchaseSuccess(el, data, state, badge, headline) {
-  const tier = data.tier || 'personal';
-  const label = _tierLabel(tier);
+// ---------- Post-purchase management view ----------
+
+function _renderManagementView(el, state, formData, upgradeTarget) {
+  const modeData = state.modeData || {};
+  const currentTier = modeData.license_tier || 'personal';
+  const isLicensed = modeData.license_status === 'licensed';
+  const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
+  const currentIdx = TIER_ORDER.indexOf(currentTier);
+  const purchaseDate = (modeData.purchase_date || modeData.registration_date || '').slice(0, 10) || 'N/A';
+  const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
+  const autoRenewal = modeData.auto_renewal !== false;
+  const pendingDowngrade = modeData.pending_downgrade || null;
+  const operatorName = modeData.operator_name || '';
+
+  // Plan selector — informational
+  let selectorHtml = '';
+  for (const t of _TIER_SELECTOR) {
+    const isCurrent = t.id === currentTier;
+    const isAbove = TIER_ORDER.indexOf(t.id) > currentIdx;
+    let badgeHtml = '';
+    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">CURRENT</span>';
+
+    selectorHtml += `<button class="lup-sel-row${isCurrent ? ' lup-sel-active' : ''}${!isAbove && !isCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${!isAbove && !isCurrent ? 'disabled' : ''}>
+      <span class="lup-sel-name">${_esc(t.name)}</span>
+      <span class="lup-sel-spec">${_esc(t.spec)}</span>
+      <span class="lup-sel-price">${_esc(t.price)}</span>
+      ${badgeHtml}
+    </button>`;
+  }
+
+  // About You — readonly with edit toggle
+  const readonlyFields = [
+    { label: 'Name', value: operatorName },
+    { label: 'Role', value: modeData.operator_role || '' },
+    { label: 'How found', value: modeData.how_found || '' },
+    { label: 'Deciding factor', value: modeData.deciding_factor || '' },
+    { label: 'Biggest insight', value: modeData.biggest_insight || '' },
+  ];
+  if (modeData.organization_name) readonlyFields.push({ label: 'Organization', value: modeData.organization_name });
+  if (modeData.industry_sector) readonlyFields.push({ label: 'Industry', value: modeData.industry_sector });
+  if (modeData.billing_contact) readonlyFields.push({ label: 'Billing contact', value: modeData.billing_contact });
+  if (modeData.primary_operator) readonlyFields.push({ label: 'Primary operator', value: modeData.primary_operator });
+
+  let aboutHtml = readonlyFields
+    .filter(f => f.value)
+    .map(f => `<div class="lup-mgmt-row"><span class="lup-mgmt-label">${_esc(f.label)}</span><span class="lup-mgmt-value">${_esc(f.value)}</span></div>`)
+    .join('');
+
+  // Downgrade options
+  const downgradeTiers = TIER_ORDER.slice(0, Math.max(0, currentIdx)).filter(t => t !== 'personal');
+  const downgradeOptions = downgradeTiers.map(dt =>
+    `<option value="${dt}">${_tierLabel(dt)}</option>`
+  ).join('');
 
   el.innerHTML = `
-    <div class="lup-success">
-      <div class="lup-success-badge">${_esc(badge)}</div>
-      <h3 class="lup-heading">${_esc(headline)}</h3>
-      <p class="lup-text-muted">Your ${_esc(label)} license is now active.</p>
-      <div class="lup-mgmt-card">
-        <div class="lup-mgmt-row">
-          <span class="lup-mgmt-label">Tier</span>
-          <span class="lup-mgmt-value" style="color:#22c55e">${_esc(label)}</span>
+    <div class="lup-context"><div class="lup-context-bar lup-context-bar-green"></div><p class="lup-context-text">Your <strong>${_esc(_tierLabel(currentTier))}</strong> license is active.</p></div>
+    <div class="lup-selector">${selectorHtml}</div>
+    <div class="lup-columns">
+      <div class="lup-col-left">
+        <div class="lup-pane">
+          <div class="lup-pane-bar lup-pane-bar-amber"></div>
+          <h4 class="lup-pane-heading">Customer record</h4>
+          <div class="lup-mgmt-card">${aboutHtml || '<span class="lup-pane-desc">No customer information on file.</span>'}</div>
         </div>
-        ${data.license_expiry ? `
-          <div class="lup-mgmt-row">
-            <span class="lup-mgmt-label">Expires</span>
-            <span class="lup-mgmt-value">${_esc((data.license_expiry || '').slice(0, 10))}</span>
-          </div>
-        ` : ''}
       </div>
-      <div class="lup-actions" style="justify-content:center">
-        <button class="lic-action-btn lup-view-tiers">View Tier Details</button>
+      <div class="lup-col-right">
+        <div class="lup-pane">
+          <div class="lup-pane-bar lup-pane-bar-amber"></div>
+          <h4 class="lup-pane-heading">Communication</h4>
+          <div class="lup-card-options">
+            <button class="lup-card-option${formData.telemetry_opted_in ? ' lup-card-selected' : ''}" data-comm="in">
+              <span class="lup-card-title">Participating</span>
+            </button>
+            <button class="lup-card-option${!formData.telemetry_opted_in ? ' lup-card-selected' : ''}" data-comm="out">
+              <span class="lup-card-title">Declined</span>
+            </button>
+          </div>
+        </div>
+        <div class="lup-pane">
+          <div class="lup-pane-bar lup-pane-bar-blue"></div>
+          <h4 class="lup-pane-heading">Research program</h4>
+          <div class="lup-card-options">
+            <button class="lup-card-option${formData.research_opted_in ? ' lup-card-selected' : ''}" data-research="in">
+              <span class="lup-card-title">Opted in</span>
+            </button>
+            <button class="lup-card-option${!formData.research_opted_in ? ' lup-card-selected' : ''}" data-research="out">
+              <span class="lup-card-title">Not participating</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
+    <div class="lup-purchase-pane">
+      <div class="lup-pane-bar lup-pane-bar-green"></div>
+      <div class="lup-purchase-header">
+        <span class="lup-purchase-plan">${_esc(_tierLabel(currentTier))}</span>
+        <span class="lup-purchase-billing">Renewal: ${_esc(expiryDate)}</span>
+      </div>
+      <div class="lup-renewal-section">
+        <div class="lup-renewal-status">
+          <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f5a623'}"></span>
+          <span>Auto-renewal ${autoRenewal ? 'enabled' : 'disabled'}</span>
+        </div>
+        <button class="lic-action-btn lup-renewal-toggle">${autoRenewal ? 'Turn Off' : 'Turn On'}</button>
+      </div>
+      ${pendingDowngrade ? `
+        <div class="lup-pending-downgrade">
+          Downgrade to <strong>${_esc(_tierLabel(pendingDowngrade.to_tier))}</strong>
+          scheduled for <strong>${_esc((pendingDowngrade.effective_date || '').slice(0, 10))}</strong>
+          <button class="lic-action-btn lup-cancel-downgrade">Cancel</button>
+        </div>
+      ` : (downgradeTiers.length > 0 ? `
+        <div class="lup-downgrade-section">
+          <span class="lup-section-label">Downgrade at renewal</span>
+          <div class="lup-downgrade-row">
+            <select class="lup-downgrade-select">${downgradeOptions}</select>
+            <button class="lic-action-btn lup-downgrade-btn">Schedule</button>
+          </div>
+        </div>
+      ` : '')}
+      <div class="lup-purchase-divider"></div>
+      <button class="lup-invoice-btn" data-tier="${currentTier}" data-start="${purchaseDate}" data-end="${expiryDate}" data-name="${_esc(operatorName)}">Download invoice</button>
+    </div>
+    <div class="lup-confirm-dialog" style="display:none"></div>
+    <div class="lup-error" style="display:none"></div>
   `;
 
-  // Update state
-  state.mode = tier === 'personal' ? 'personal_registered' : tier;
-  state.modeData = { ...state.modeData, license_status: tier === 'personal' ? 'personal' : 'licensed', license_tier: tier, registered: true };
-
-  el.querySelector('.lup-view-tiers')?.addEventListener('click', () => {
-    _switchPanel(state, 'tiers');
+  // Wire communication toggle
+  el.querySelectorAll('[data-comm]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      formData.telemetry_opted_in = btn.dataset.comm === 'in';
+      el.querySelectorAll('[data-comm]').forEach(b =>
+        b.classList.toggle('lup-card-selected', b === btn)
+      );
+      await api.postTelemetryOptIn({ opted_in: formData.telemetry_opted_in });
+    });
   });
+
+  // Wire research toggle
+  el.querySelectorAll('[data-research]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      formData.research_opted_in = btn.dataset.research === 'in';
+      el.querySelectorAll('[data-research]').forEach(b =>
+        b.classList.toggle('lup-card-selected', b === btn)
+      );
+      await api.postResearchOptIn({ opted_in: formData.research_opted_in });
+    });
+  });
+
+  // Wire invoice download
+  const invoiceBtn = el.querySelector('.lup-invoice-btn');
+  if (invoiceBtn) {
+    invoiceBtn.addEventListener('click', () => {
+      _downloadInvoice({
+        tier: invoiceBtn.dataset.tier,
+        start: invoiceBtn.dataset.start,
+        end: invoiceBtn.dataset.end,
+        name: invoiceBtn.dataset.name,
+        price: COMMERCIAL_TERMS[invoiceBtn.dataset.tier]?.price || 'Free',
+      });
+    });
+  }
+
+  // Wire management actions
+  const confirmArea = el.querySelector('.lup-confirm-dialog');
+  const errorEl = el.querySelector('.lup-error');
+
+  const renewalToggle = el.querySelector('.lup-renewal-toggle');
+  if (renewalToggle) {
+    renewalToggle.addEventListener('click', () => {
+      _showConfirmDialog(confirmArea, errorEl, state, {
+        message: autoRenewal
+          ? `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`
+          : `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`,
+        action: () => api.postAutoRenewal({ auto_renewal: !autoRenewal }),
+        onSuccess: () => _loadUnifiedPurchase(el, state),
+      });
+    });
+  }
+
+  const cancelDowngrade = el.querySelector('.lup-cancel-downgrade');
+  if (cancelDowngrade) {
+    cancelDowngrade.addEventListener('click', () => {
+      _showConfirmDialog(confirmArea, errorEl, state, {
+        message: `Cancel the pending downgrade to ${_tierLabel(pendingDowngrade.to_tier)}?`,
+        action: () => api.postPurchase({ tier: currentTier, payment_ref: 'cancel_downgrade', operator_name: operatorName }),
+        onSuccess: () => _loadUnifiedPurchase(el, state),
+      });
+    });
+  }
+
+  const downgradeBtn = el.querySelector('.lup-downgrade-btn');
+  if (downgradeBtn) {
+    downgradeBtn.addEventListener('click', () => {
+      const selectEl = el.querySelector('.lup-downgrade-select');
+      const toTier = selectEl.value;
+      _showConfirmDialog(confirmArea, errorEl, state, {
+        message: `Schedule downgrade from ${_tierLabel(currentTier)} to ${_tierLabel(toTier)}? You keep ${_tierLabel(currentTier)} until ${expiryDate}.`,
+        action: () => api.postDowngrade({ to_tier: toTier }),
+        onSuccess: () => _loadUnifiedPurchase(el, state),
+      });
+    });
+  }
+
+  // Wire plan selector for upgrades
+  el.querySelectorAll('.lup-sel-row:not([disabled])').forEach(btn => {
+    if (btn.dataset.tier === currentTier) return;
+    btn.addEventListener('click', () => {
+      // Switch to purchase flow for upgrade
+      state.modeData = { ...state.modeData, license_status: 'licensed' };
+      el.querySelectorAll('.lup-sel-row').forEach(b => b.classList.remove('lup-sel-active'));
+      btn.classList.add('lup-sel-active');
+      // Re-render as purchase body for the upgrade tier
+      const bodyArea = el.querySelector('.lup-columns')?.parentElement;
+      if (bodyArea) {
+        // Rebuild: remove columns + purchase pane, add body area
+        const oldCols = el.querySelector('.lup-columns');
+        const oldPurch = el.querySelector('.lup-purchase-pane');
+        if (oldCols) oldCols.remove();
+        if (oldPurch) oldPurch.remove();
+        const newBody = document.createElement('div');
+        newBody.className = 'lup-body-area';
+        el.querySelector('.lup-selector').after(newBody);
+        _renderPurchaseBody(el, btn.dataset.tier, formData, state);
+      }
+    });
+  });
+}
+
+// ---------- Invoice download ----------
+
+function _downloadInvoice({ tier, start, end, name, price }) {
+  const today = new Date().toISOString().slice(0, 10);
+  let md = `# Atested License Invoice\n\n`;
+  md += `Plan: ${_tierLabel(tier)}\n`;
+  md += `License period: ${start} to ${end}\n`;
+  md += `Price: ${price}\n`;
+  md += `Operator: ${name}\n`;
+  md += `Date: ${today}\n`;
+
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `atested-invoice-${today}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function _showConfirmDialog(confirmArea, errorEl, state, { message, action, onSuccess }) {
@@ -3410,25 +3756,164 @@ licStyles.textContent = `
 
   /* ---- Unified Purchase panel ---- */
   .lup-panel {
-    max-width: 600px;
+    max-width: 900px;
     font-family: "Inter", system-ui, sans-serif;
     color: #e4e6eb;
   }
-  .lup-heading {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin: 0 0 12px 0;
-    color: #e4e6eb;
+
+  /* Context pane */
+  .lup-context {
+    margin-bottom: 20px;
+    position: relative;
+    padding-left: 16px;
   }
-  .lup-text-muted {
-    font-size: 1rem;
-    color: #8b919a;
-    margin: 0 0 16px 0;
+  .lup-context-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: #5b8af5;
+    border-radius: 2px;
+  }
+  .lup-context-bar-green { background: #22c55e; }
+  .lup-context-text {
+    font-size: 0.95rem;
+    color: #e4e6eb;
+    margin: 0;
     line-height: 1.6;
   }
-  .lup-section {
+
+  /* Plan selector — full-width panes (reuses lp-tier-row pattern) */
+  .lup-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     margin-bottom: 20px;
   }
+  .lup-sel-row {
+    display: grid;
+    grid-template-columns: 140px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    color: #e4e6eb;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    padding: 10px 16px;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .lup-sel-row:hover:not([disabled]) {
+    background: rgba(91, 138, 245, 0.06);
+  }
+  .lup-sel-row:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: 2px;
+  }
+  .lup-sel-active {
+    background: rgba(91, 138, 245, 0.08);
+    border-color: rgba(91, 138, 245, 0.3);
+    border-left-color: #5b8af5;
+  }
+  .lup-sel-recommended {
+    border-left-color: #22c55e;
+    background: rgba(34, 197, 94, 0.04);
+  }
+  .lup-sel-recommended.lup-sel-active {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    border-left-color: #22c55e;
+  }
+  .lup-sel-disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .lup-sel-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .lup-sel-spec {
+    font-size: 0.82rem;
+    color: #5b8af5;
+  }
+  .lup-sel-price {
+    font-size: 0.82rem;
+    color: #8b919a;
+    text-align: right;
+  }
+  .lup-sel-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lup-sel-badge-rec {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+  .lup-sel-badge-current {
+    background: rgba(91, 138, 245, 0.15);
+    color: #5b8af5;
+  }
+
+  /* Two-column layout */
+  .lup-columns {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .lup-col-left {
+    flex: 1;
+    min-width: 0;
+  }
+  .lup-col-right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Pane containers */
+  .lup-pane {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+  }
+  .lup-pane-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 10px 0 0 10px;
+  }
+  .lup-pane-bar-amber { background: #f5a623; }
+  .lup-pane-bar-blue { background: #5b8af5; }
+  .lup-pane-bar-green { background: #22c55e; }
+  .lup-pane-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #5b8af5;
+    margin: 0 0 12px 0;
+  }
+  .lup-pane-desc {
+    font-size: 0.82rem;
+    color: #8b919a;
+    line-height: 1.5;
+    margin: 0 0 12px 0;
+  }
+  .lup-pane-note {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin: 8px 0 0 0;
+  }
+
+  /* Form fields */
   .lup-section-label {
     font-size: 0.82rem;
     font-weight: 600;
@@ -3437,89 +3922,6 @@ licStyles.textContent = `
     letter-spacing: 0.04em;
     margin-bottom: 8px;
   }
-  .lup-tier-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .lup-tier-btn {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    color: #e4e6eb;
-    cursor: pointer;
-    font-family: "Inter", system-ui, sans-serif;
-    padding: 12px 16px;
-    text-align: left;
-    transition: background 0.15s, border-color 0.15s;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .lup-tier-btn:hover:not([disabled]) {
-    background: rgba(91, 138, 245, 0.08);
-    border-color: rgba(91, 138, 245, 0.3);
-  }
-  .lup-tier-btn:focus-visible {
-    outline: 2px solid #5b8af5;
-    outline-offset: 2px;
-  }
-  .lup-tier-selected {
-    background: rgba(91, 138, 245, 0.10);
-    border-color: #5b8af5;
-  }
-  .lup-tier-disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .lup-tier-label {
-    font-size: 1rem;
-    font-weight: 600;
-  }
-  .lup-tier-price {
-    font-size: 0.82rem;
-    color: #8b919a;
-  }
-  .lup-tier-tag {
-    font-size: 0.68rem;
-    color: #6b7280;
-    font-style: italic;
-  }
-
-  /* Detail card */
-  .lup-detail-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-  .lup-detail-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: 0.9rem;
-  }
-  .lup-detail-label {
-    color: #6b7280;
-    font-weight: 500;
-  }
-  .lup-detail-value {
-    color: #e4e6eb;
-    font-weight: 600;
-  }
-  .lup-detail-price {
-    font-size: 1.2rem;
-    color: #5b8af5;
-  }
-
-  /* Registration fields */
-  .lup-reg-fields {
-    margin-bottom: 16px;
-  }
   .lup-field {
     display: flex;
     flex-direction: column;
@@ -3527,9 +3929,10 @@ licStyles.textContent = `
     margin-bottom: 12px;
   }
   .lup-label {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-weight: 500;
     color: #e4e6eb;
+    line-height: 1.4;
   }
   .lup-input {
     background: rgba(255, 255, 255, 0.06);
@@ -3537,78 +3940,159 @@ licStyles.textContent = `
     border-radius: 8px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 1rem;
+    font-size: 0.9rem;
     padding: 8px 12px;
-    width: 260px;
     outline: none;
     transition: border-color 0.15s;
   }
-  .lup-input:focus {
-    border-color: #5b8af5;
-  }
-  .lup-input::placeholder {
-    color: #6b7280;
-  }
-  .lup-input-wide {
+  .lup-input:focus { border-color: #5b8af5; }
+  .lup-input::placeholder { color: #6b7280; }
+  .lup-input-wide { width: 100%; box-sizing: border-box; }
+  .lup-textarea {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.9rem;
+    padding: 8px 12px;
     width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s;
   }
+  .lup-textarea:focus { border-color: #5b8af5; }
+  .lup-textarea::placeholder { color: #6b7280; }
 
-  /* Telemetry */
-  .lup-tele-section {
-    margin-bottom: 20px;
-  }
-  .lup-tele-desc {
-    font-size: 0.82rem;
-    color: #8b919a;
-    line-height: 1.5;
-    margin: 0 0 10px 0;
-  }
-  .lup-tele-options {
+  /* Selectable card options */
+  .lup-card-options {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
-  .lup-tele-btn {
+  .lup-card-option {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
-    padding: 12px 16px;
+    padding: 10px 14px;
     text-align: left;
     transition: background 0.15s, border-color 0.15s;
     display: flex;
     flex-direction: column;
     gap: 3px;
   }
-  .lup-tele-btn:hover {
-    background: rgba(91, 138, 245, 0.08);
-    border-color: rgba(91, 138, 245, 0.3);
+  .lup-card-option:hover {
+    background: rgba(91, 138, 245, 0.06);
   }
-  .lup-tele-btn:focus-visible {
+  .lup-card-option:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: 2px;
   }
-  .lup-tele-selected {
-    background: rgba(91, 138, 245, 0.10);
-    border-color: #5b8af5;
+  .lup-card-selected {
+    background: rgba(34, 197, 94, 0.06);
+    border-color: rgba(34, 197, 94, 0.4);
   }
-  .lup-tele-title {
-    font-size: 1rem;
+  .lup-card-title {
+    font-size: 0.9rem;
     font-weight: 600;
   }
-  .lup-tele-hint {
-    font-size: 0.82rem;
+  .lup-card-hint {
+    font-size: 0.75rem;
     color: #8b919a;
   }
 
-  /* Actions */
-  .lup-actions {
+  /* Institution yes/no buttons */
+  .lup-yn-row {
     display: flex;
     gap: 8px;
+  }
+  .lup-yn-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e4e6eb;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.9rem;
+    padding: 6px 20px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .lup-yn-btn:hover {
+    background: rgba(91, 138, 245, 0.06);
+  }
+  .lup-yn-active {
+    background: rgba(34, 197, 94, 0.06);
+    border-color: rgba(34, 197, 94, 0.4);
+    color: #22c55e;
+  }
+
+  /* Purchase pane */
+  .lup-purchase-pane {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .lup-purchase-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
   }
+  .lup-purchase-plan {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #e4e6eb;
+  }
+  .lup-purchase-price {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #5b8af5;
+  }
+  .lup-purchase-billing {
+    font-size: 0.82rem;
+    color: #8b919a;
+  }
+  .lup-purchase-dates {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin-bottom: 14px;
+  }
+  .lup-date-blue {
+    color: #5b8af5;
+    font-weight: 500;
+  }
+  .lup-purchase-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 14px 0;
+  }
+  .lup-invoice-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e4e6eb;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    padding: 8px 14px;
+    transition: background 0.15s;
+  }
+  .lup-invoice-btn:hover { background: rgba(91, 138, 245, 0.08); }
+  .lup-invoice-disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .lup-invoice-disabled:hover { background: rgba(255, 255, 255, 0.04); }
+
+  /* Action error */
   .lup-action-error {
     color: #f5a623;
     background: rgba(245, 166, 35, 0.10);
@@ -3618,10 +4102,7 @@ licStyles.textContent = `
     margin-top: 12px;
   }
 
-  /* Management section */
-  .lup-management {
-    margin-bottom: 24px;
-  }
+  /* Management card */
   .lup-mgmt-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -3630,13 +4111,13 @@ licStyles.textContent = `
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
   .lup-mgmt-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
   }
   .lup-mgmt-label {
     color: #6b7280;
@@ -3646,17 +4127,19 @@ licStyles.textContent = `
     color: #e4e6eb;
     font-weight: 600;
   }
+
+  /* Renewal & downgrade */
   .lup-renewal-section {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
   .lup-renewal-status {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     color: #e4e6eb;
   }
   .lup-renewal-dot {
@@ -3669,18 +4152,18 @@ licStyles.textContent = `
     background: rgba(245, 166, 35, 0.06);
     border: 1px solid rgba(245, 166, 35, 0.2);
     border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 0.9rem;
+    padding: 12px 16px;
+    font-size: 0.82rem;
     color: #f5a623;
     line-height: 1.5;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
   }
   .lup-downgrade-section {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
   .lup-downgrade-row {
     display: flex;
@@ -3693,7 +4176,7 @@ licStyles.textContent = `
     border-radius: 6px;
     color: #e4e6eb;
     padding: 6px 10px;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-family: "Inter", system-ui, sans-serif;
     min-width: 140px;
     outline: none;
@@ -3703,16 +4186,6 @@ licStyles.textContent = `
     border-color: #5b8af5;
     outline: 2px solid #5b8af5;
     outline-offset: 1px;
-  }
-  .lup-divider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.06);
-    margin: 4px 0 16px 0;
-  }
-  .lup-upgrade-prompt {
-    font-size: 0.9rem;
-    color: #8b919a;
-    margin: 0;
   }
 
   /* Confirm dialog */
@@ -3739,56 +4212,6 @@ licStyles.textContent = `
     font-size: 0.82rem;
     padding: 10px 14px;
     border-radius: 8px;
-  }
-
-  /* Success */
-  .lup-success {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-  }
-  .lup-success-badge {
-    display: inline-block;
-    background: rgba(34, 197, 94, 0.15);
-    color: #22c55e;
-    font-size: 0.82rem;
-    font-weight: 600;
-    padding: 4px 14px;
-    border-radius: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .lup-success .lup-mgmt-card {
-    width: 100%;
-    max-width: 340px;
-  }
-
-  /* Institution contact */
-  .lup-inst-card {
-    background: rgba(139, 92, 246, 0.06);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-  .lup-inst-heading {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #e4e6eb;
-    margin: 0 0 8px 0;
-  }
-  .lup-inst-text {
-    font-size: 0.9rem;
-    color: #8b919a;
-    line-height: 1.5;
-    margin: 0 0 12px 0;
-  }
-  .lup-inst-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
   }
 
 
@@ -3830,11 +4253,14 @@ licStyles.textContent = `
     .lp-detail {
       padding: 18px 16px;
     }
+    .lup-columns {
+      flex-direction: column;
+    }
+    .lup-sel-row {
+      grid-template-columns: 100px 1fr auto;
+    }
     .lup-input {
       width: 100%;
-    }
-    .lup-tier-grid {
-      grid-template-columns: 1fr;
     }
     .lup-downgrade-row {
       flex-wrap: wrap;

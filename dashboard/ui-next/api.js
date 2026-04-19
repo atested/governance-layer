@@ -372,23 +372,36 @@ export function getCaseDocument() {
 /**
  * Register for Personal license.
  * POST /api/licensing/register
- * @param {Object} opts - { operator_name, context_note, telemetry_opted_in }
+ * @param {Object} opts - { operator_name, context_note, telemetry_opted_in, operator_role, how_found, deciding_factor, biggest_insight, research_opted_in }
  */
-export function postRegister({ operator_name, context_note, telemetry_opted_in } = {}) {
-  return _request('POST', '/licensing/register', {
-    body: { operator_name, context_note, telemetry_opted_in },
-  });
+export function postRegister(opts = {}) {
+  return _request('POST', '/licensing/register', { body: opts });
 }
 
 /**
  * Purchase a paid tier license.
  * POST /api/licensing/purchase
- * @param {Object} opts - { tier, payment_ref, operator_name }
+ * @param {Object} opts - { tier, payment_ref, operator_name, operator_role, how_found, deciding_factor, biggest_insight, research_opted_in, organization_name, industry_sector, billing_contact, primary_operator }
  */
-export function postPurchase({ tier, payment_ref, operator_name } = {}) {
-  return _request('POST', '/licensing/purchase', {
-    body: { tier, payment_ref, operator_name },
-  });
+export function postPurchase(opts = {}) {
+  return _request('POST', '/licensing/purchase', { body: opts });
+}
+
+/**
+ * Submit institution inquiry.
+ * POST /api/licensing/institution-inquiry
+ */
+export function postInstitutionInquiry(opts = {}) {
+  return _request('POST', '/licensing/institution-inquiry', { body: opts });
+}
+
+/**
+ * Change research program opt-in.
+ * POST /api/licensing/research-opt-in
+ * @param {Object} opts - { opted_in }
+ */
+export function postResearchOptIn({ opted_in } = {}) {
+  return _request('POST', '/licensing/research-opt-in', { body: { opted_in } });
 }
 
 /**

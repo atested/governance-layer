@@ -34,109 +34,148 @@ const WINDOW_OPENERS = {
   reports: openReportsWindow,
   health: openHealthWindow,
   configuration: openConfigWindow,
-  feedback: openFeedbackWindow,
+  communications: openFeedbackWindow,
   notifications: openNotificationsWindow,
   licensing: openLicensingWindow,
 };
 
-/** Launcher definitions for all workflow windows */
+/** Workflow launcher definitions — nine pane cards in a 3x3 grid */
 const LAUNCHERS = [
-  { id: 'activity', label: 'Activity' },
-  { id: 'approvals', label: 'Approvals' },
-  { id: 'audit', label: 'Audit' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'health', label: 'Health' },
-  { id: 'configuration', label: 'Configuration' },
-  { id: 'feedback', label: 'Feedback' },
-  { id: 'notifications', label: 'Notifications' },
-  { id: 'licensing', label: 'Licensing' },
+  { id: 'activity',       label: 'Activity',       desc: 'Full decision log with filtering and record detail',         accent: 'green' },
+  { id: 'approvals',      label: 'Approvals',      desc: 'Manage your approvals for exceptions to rules',              accent: 'green' },
+  { id: 'audit',          label: 'Audit',           desc: 'Searchable chain records for compliance and review',         accent: 'green' },
+  { id: 'reports',        label: 'Reports',         desc: 'Atested metrics and trends over time',                      accent: 'green' },
+  { id: 'health',         label: 'Health',          desc: 'Chain integrity, signing status, system diagnostics',        accent: 'amber' },
+  { id: 'configuration',  label: 'Configuration',   desc: 'Policy rules, capability registry, base directories',       accent: 'green' },
+  { id: 'communications', label: 'Communications',  desc: 'Telemetry, escalations, and priority requests',             accent: 'green' },
+  { id: 'notifications',  label: 'Notifications',   desc: 'Security alerts, version updates, system notices',          accent: 'green' },
+  { id: 'licensing',      label: 'Licensing',        desc: 'Pricing, survey, case document, purchase',                 accent: 'amber' },
 ];
 
 /** DOM references populated during render */
 let _page = null;
 
+/** Cached state for dynamic accent colors */
+let _healthState = 'unknown';  // 'healthy', 'degraded', 'critical', 'unknown'
+let _licenseState = 'amber';   // 'green' or 'amber'
+
 export function renderMainPage() {
   _page = document.createElement('div');
   _page.id = 'main-page';
   _page.innerHTML = `
-    <section class="mp-section" id="mp-chain-health">
-      <h2 class="mp-section-title">Chain Health</h2>
-      <atd-status-grid id="health-grid">
-        <atd-status-card label="Chain Events" value="--" id="card-chain-events"></atd-status-card>
-        <atd-status-card label="Chain Integrity" value="--" id="card-chain-integrity"></atd-status-card>
-      </atd-status-grid>
-    </section>
+    <div class="mp-top-panes">
+      <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">
+        <div class="mp-pane-accent" id="mp-health-accent"></div>
+        <div class="mp-pane-header">
+          <h2 class="mp-pane-title">Chain health</h2>
+          <span class="mp-click-hint">Click to open</span>
+        </div>
+        <div class="mp-pane-metrics">
+          <div class="mp-metric">
+            <span class="mp-metric-label">Chain Events</span>
+            <span class="mp-metric-value" id="mv-chain-events">--</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Integrity</span>
+            <span class="mp-metric-value" id="mv-chain-integrity">--</span>
+          </div>
+        </div>
+      </div>
+      <div class="mp-pane mp-pane-clickable" id="mp-atested-activity" tabindex="0" role="button">
+        <div class="mp-pane-accent mp-accent-green" id="mp-activity-accent"></div>
+        <div class="mp-pane-header">
+          <h2 class="mp-pane-title">Atested activity</h2>
+          <span class="mp-click-hint">Click to open</span>
+        </div>
+        <div class="mp-pane-metrics">
+          <div class="mp-metric">
+            <span class="mp-metric-label">Mediated</span>
+            <span class="mp-metric-value" id="mv-mediated">--</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Denied</span>
+            <span class="mp-metric-value" id="mv-denied">--</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Approved</span>
+            <span class="mp-metric-value" id="mv-approved">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <section class="mp-section" id="mp-gov-activity">
-      <h2 class="mp-section-title">Governance Activity</h2>
-      <atd-status-grid id="activity-grid">
-        <atd-status-card label="Mediated Operations" value="--" id="card-mediated" clickable></atd-status-card>
-        <atd-status-card label="Actions Denied" value="--" id="card-denied" clickable></atd-status-card>
-        <atd-status-card label="Approved Operations" value="--" id="card-approved" clickable></atd-status-card>
-        <atd-status-card label="Approval-Gated" value="--" id="card-gated" clickable></atd-status-card>
-      </atd-status-grid>
-    </section>
-
-    <section class="mp-section" id="mp-transparency">
-      <h2 class="mp-section-title">Transparency & Coverage</h2>
-      <atd-status-grid id="transparency-grid">
-        <atd-status-card label="Governed Operations" value="--" id="card-governed"></atd-status-card>
-        <atd-status-card label="Ungoverned Operations" value="--" id="card-ungoverned"></atd-status-card>
-        <atd-status-card label="Transparency Rate" value="--" id="card-transparency"></atd-status-card>
-        <atd-status-card label="Unique Users" value="--" id="card-users"></atd-status-card>
-      </atd-status-grid>
-    </section>
-
-    <section class="mp-section" id="mp-recent">
-      <h2 class="mp-section-title">Recent Activity</h2>
+    <div class="mp-pane mp-pane-clickable mp-pane-full" id="mp-recent" tabindex="0" role="button">
+      <div class="mp-pane-accent mp-accent-green"></div>
+      <div class="mp-pane-header">
+        <h2 class="mp-pane-title">Recent activity</h2>
+        <span class="mp-click-hint">Click to open</span>
+      </div>
       <div class="mp-feed" id="recent-feed">
         <atd-loading-indicator label="Loading activity"></atd-loading-indicator>
       </div>
-    </section>
+    </div>
 
     <section class="mp-section" id="mp-launchers">
-      <h2 class="mp-section-title">Workflows</h2>
-      <div class="mp-launchers" id="launcher-grid"></div>
+      <div class="mp-launcher-grid" id="launcher-grid"></div>
     </section>
   `;
 
-  // Render launcher buttons
+  // Wire top pane clicks
+  const healthPane = _page.querySelector('#mp-chain-health');
+  healthPane.addEventListener('click', () => openHealthWindow(healthPane));
+  healthPane.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHealthWindow(healthPane); }
+  });
+
+  const activityPane = _page.querySelector('#mp-atested-activity');
+  activityPane.addEventListener('click', () => openActivityWindow(activityPane));
+  activityPane.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openActivityWindow(activityPane); }
+  });
+
+  // Wire recent activity pane click (on the pane itself, not individual rows)
+  const recentPane = _page.querySelector('#mp-recent');
+  recentPane.addEventListener('click', (e) => {
+    // Only open if clicking the pane header area, not individual feed rows
+    if (e.target.closest('.mp-feed-row')) return;
+    openActivityWindow(recentPane);
+  });
+  recentPane.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openActivityWindow(recentPane); }
+  });
+
+  // Render workflow launcher pane cards
   const grid = _page.querySelector('#launcher-grid');
   for (const launcher of LAUNCHERS) {
-    const btn = document.createElement('button');
-    btn.className = 'mp-launcher';
-    if (launcher.comingSoon) {
-      btn.classList.add('mp-launcher-disabled');
-      btn.textContent = `${launcher.label} (coming soon)`;
-      btn.disabled = true;
-    } else {
-      btn.textContent = launcher.label;
-    }
-    btn.dataset.windowId = launcher.id;
-    btn.addEventListener('click', () => {
+    const card = document.createElement('div');
+    card.className = 'mp-wf-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.dataset.windowId = launcher.id;
+    card.dataset.defaultAccent = launcher.accent;
+
+    const accentColor = launcher.accent === 'amber' ? 'mp-wf-accent-amber' : 'mp-wf-accent-green';
+    card.innerHTML = `
+      <div class="mp-wf-accent ${accentColor}" data-accent-bar="${launcher.id}"></div>
+      <div class="mp-wf-title">${_esc(launcher.label)}</div>
+      <div class="mp-wf-desc">${_esc(launcher.desc)}</div>
+      <div class="mp-wf-click">Click to open</div>
+    `;
+
+    card.addEventListener('click', () => {
       const opener = WINDOW_OPENERS[launcher.id];
-      if (opener) {
-        opener(btn);
-      } else {
-        _openPlaceholderWindow(launcher.label, btn);
+      if (opener) opener(card);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const opener = WINDOW_OPENERS[launcher.id];
+        if (opener) opener(card);
       }
     });
-    grid.appendChild(btn);
-  }
 
-  // Wire card click handlers to open corresponding windows
-  _page.querySelector('#card-mediated').addEventListener('card:click', () => {
-    openActivityWindow(_page.querySelector('#card-mediated'));
-  });
-  _page.querySelector('#card-denied').addEventListener('card:click', () => {
-    openActivityWindow(_page.querySelector('#card-denied'));
-  });
-  _page.querySelector('#card-approved').addEventListener('card:click', () => {
-    openApprovalsWindow(_page.querySelector('#card-approved'));
-  });
-  _page.querySelector('#card-gated').addEventListener('card:click', () => {
-    openApprovalsWindow(_page.querySelector('#card-gated'));
-  });
+    grid.appendChild(card);
+  }
 
   return _page;
 }
@@ -149,89 +188,63 @@ export function renderMainPage() {
 export async function loadMainPageData() {
   if (!_page) return;
 
-  const [healthRes, statusRes, transparencyRes, activityRes] = await Promise.all([
+  const [healthRes, statusRes, activityRes] = await Promise.all([
     api.getHealth(),
     api.getStatus(),
-    api.getTransparency(),
     api.getActivity({ limit: 8 }),
   ]);
 
-  // Chain Health section
+  // Chain Health pane
   if (healthRes.ok) {
     const h = healthRes.data;
-    _setCard('card-chain-events', String(h.chain?.chain_event_count ?? '--'));
-    const integrity = h.chain?.status ?? '--';
-    const integrityCard = _page.querySelector('#card-chain-integrity');
-    integrityCard.setAttribute('value', integrity.toUpperCase());
-    if (integrity === 'ok') {
-      integrityCard.setAttribute('variant', 'success');
-    } else if (integrity === 'broken') {
-      integrityCard.setAttribute('variant', 'danger');
-    } else if (integrity === 'repaired') {
-      integrityCard.setAttribute('variant', 'warning');
-    }
-  } else {
-    _showError('mp-chain-health', healthRes.error);
-  }
+    _setMetric('mv-chain-events', String(h.chain?.chain_event_count ?? '--'));
 
-  // Governance Activity section — derives from status + health
-  if (statusRes.ok) {
-    const s = statusRes.data;
-    // Mediated ops from opacity_posture or runtime data
-    const mediated = s.opacity_posture?.transparent_count ?? '--';
-    _setCard('card-mediated', String(mediated));
-  }
-  if (healthRes.ok) {
-    const h = healthRes.data;
-    // Deny rate — show count from audit report or deny_rate info
+    const integrity = h.chain?.status ?? '--';
+    const intEl = _page.querySelector('#mv-chain-integrity');
+    intEl.textContent = integrity.toUpperCase();
+
+    // Color the integrity value and set accent bar
+    if (integrity === 'ok') {
+      intEl.classList.add('mp-metric-green');
+      _healthState = 'healthy';
+    } else if (integrity === 'broken') {
+      intEl.classList.add('mp-metric-red');
+      _healthState = 'critical';
+    } else if (integrity === 'repaired') {
+      intEl.classList.add('mp-metric-amber');
+      _healthState = 'degraded';
+    } else {
+      _healthState = 'unknown';
+    }
+
+    _updateHealthAccent();
+
+    // Denied count from deny_rate
     const denyRate = h.deny_rate;
     if (denyRate) {
       const pct = denyRate.recent_deny_rate;
-      const card = _page.querySelector('#card-denied');
-      card.setAttribute('value', pct != null ? `${(pct * 100).toFixed(1)}%` : '--');
-      if (pct > 0.05) card.setAttribute('variant', 'danger');
-      else if (pct > 0) card.setAttribute('variant', 'warning');
+      const deniedEl = _page.querySelector('#mv-denied');
+      deniedEl.textContent = pct != null ? `${(pct * 100).toFixed(1)}%` : '--';
+      if (pct > 0.05) deniedEl.classList.add('mp-metric-red');
+      else if (pct > 0) deniedEl.classList.add('mp-metric-amber');
     }
   }
 
-  // Approved operations from approvals endpoint (already fetched via status)
+  // Atested Activity pane — derives from status
   if (statusRes.ok) {
     const s = statusRes.data;
+    const mediated = s.opacity_posture?.transparent_count ?? '--';
+    _setMetric('mv-mediated', String(mediated));
+
     const approved = s.approval_snapshot?.active_approvals ?? '--';
-    _setCard('card-approved', String(approved));
-
-    // Approval-gated from runtime outcome summary
-    const opaque = s.opacity_posture?.opaque_count ?? '--';
-    _setCard('card-gated', String(opaque));
-  }
-
-  // Transparency section
-  if (transparencyRes.ok) {
-    const t = transparencyRes.data;
-    _setCard('card-governed', String(t.governed_operations ?? '--'));
-    const ungov = t.ungoverned_observations ?? 0;
-    const ungovCard = _page.querySelector('#card-ungoverned');
-    ungovCard.setAttribute('value', String(ungov));
-    if (ungov > 0) ungovCard.setAttribute('variant', 'warning');
-
-    const pct = t.transparency_pct;
-    const transpCard = _page.querySelector('#card-transparency');
-    transpCard.setAttribute('value', pct != null ? `${pct.toFixed(1)}%` : '--');
-    if (pct != null && pct >= 90) transpCard.setAttribute('variant', 'success');
-    else if (pct != null && pct >= 70) transpCard.setAttribute('variant', 'warning');
-    else if (pct != null) transpCard.setAttribute('variant', 'danger');
-  } else {
-    _showError('mp-transparency', transparencyRes.error);
-  }
-
-  // Unique users from health
-  if (healthRes.ok) {
-    const users = healthRes.data.users?.unique_users ?? '--';
-    _setCard('card-users', String(users));
+    _setMetric('mv-approved', String(approved));
   }
 
   // Recent Activity feed
   _renderRecentActivity(activityRes);
+
+  // Update workflow card accent for Health based on integrity state
+  _updateWorkflowAccent('health', _healthState === 'healthy' ? 'green' : 'amber');
 }
 
 /**
@@ -246,6 +259,15 @@ export function setLicenseMode(modeData) {
   if (existing) existing.remove();
 
   const status = modeData?.license_status;
+
+  // Update licensing workflow card accent
+  if (status === 'licensed' || status === 'trial') {
+    _licenseState = 'green';
+  } else {
+    _licenseState = 'amber';
+  }
+  _updateWorkflowAccent('licensing', _licenseState === 'green' ? 'green' : 'amber');
+
   if (status === 'personal' || status === 'unlicensed') {
     const card = document.createElement('div');
     card.id = 'mp-license-card';
@@ -271,20 +293,25 @@ export function setLicenseMode(modeData) {
 
 // ---------- Internal helpers ----------
 
-function _setCard(id, value) {
-  const card = _page?.querySelector(`#${id}`);
-  if (card) card.setAttribute('value', value);
+function _setMetric(id, value) {
+  const el = _page?.querySelector(`#${id}`);
+  if (el) el.textContent = value;
 }
 
-function _showError(sectionId, error) {
-  const section = _page?.querySelector(`#${sectionId}`);
-  if (!section) return;
-  const existing = section.querySelector('.mp-error');
-  if (existing) return; // don't stack errors
-  const el = document.createElement('div');
-  el.className = 'mp-error';
-  el.textContent = error || 'An error occurred';
-  section.appendChild(el);
+function _updateHealthAccent() {
+  const accent = _page?.querySelector('#mp-health-accent');
+  if (!accent) return;
+  accent.className = 'mp-pane-accent';
+  if (_healthState === 'critical') accent.classList.add('mp-accent-red');
+  else if (_healthState === 'degraded') accent.classList.add('mp-accent-amber');
+  else accent.classList.add('mp-accent-green');
+}
+
+function _updateWorkflowAccent(id, color) {
+  const bar = _page?.querySelector(`[data-accent-bar="${id}"]`);
+  if (!bar) return;
+  bar.className = 'mp-wf-accent';
+  bar.classList.add(color === 'amber' ? 'mp-wf-accent-amber' : 'mp-wf-accent-green');
 }
 
 function _renderRecentActivity(result) {
@@ -311,33 +338,37 @@ function _renderRecentActivity(result) {
     const time = _formatTime(entry.timestamp_utc);
     const decision = entry.policy_decision || entry.event_category || '';
     const tool = entry.tool || entry.event_type || '';
-    const user = entry.user_identity || '';
 
-    // Build row content
+    // Three columns: timestamp, event type, decision
     row.innerHTML = `
       <span class="mp-feed-time">${_esc(time)}</span>
-      <span class="mp-feed-decision"></span>
       <span class="mp-feed-tool">${_esc(tool)}</span>
-      <span class="mp-feed-user">${_esc(user)}</span>
+      <span class="mp-feed-decision"></span>
     `;
 
-    // Insert decision tag if applicable
+    // Insert decision tag
     const decisionSlot = row.querySelector('.mp-feed-decision');
-    if (decision === 'ALLOW' || decision === 'DENY') {
-      const tag = document.createElement('atd-decision-tag');
-      tag.setAttribute('decision', decision);
-      decisionSlot.appendChild(tag);
+    if (decision === 'ALLOW') {
+      decisionSlot.innerHTML = '<span class="mp-decision-allow">ALLOW</span>';
+    } else if (decision === 'DENY') {
+      decisionSlot.innerHTML = '<span class="mp-decision-deny">DENY</span>';
     } else if (decision) {
-      decisionSlot.textContent = decision;
+      decisionSlot.innerHTML = `<span class="mp-decision-muted">\u2014</span>`;
+    } else {
+      decisionSlot.innerHTML = `<span class="mp-decision-muted">\u2014</span>`;
     }
 
     // Click handler — opens Activity with Record Detail for this entry
     const recordId = entry.request_id || entry.event_id || '';
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation(); // Don't trigger pane click
       openActivityWindow(row, { scrollToRecord: recordId });
     });
     row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') openActivityWindow(row, { scrollToRecord: recordId });
+      if (e.key === 'Enter') {
+        e.stopPropagation();
+        openActivityWindow(row, { scrollToRecord: recordId });
+      }
     });
 
     feed.appendChild(row);
@@ -360,23 +391,6 @@ function _esc(str) {
   return el.innerHTML;
 }
 
-/**
- * Open a placeholder window for windows not yet built (Notifications, Licensing).
- */
-function _openPlaceholderWindow(title, trigger) {
-  const el = document.createElement('div');
-  el.innerHTML = `
-    <p style="color: #8b919a; text-align: center; padding: 40px 0;">
-      ${_esc(title)} window. Built in a later phase.
-    </p>
-  `;
-  if (modalManager.depth > 0) {
-    modalManager.replaceChild({ title, trigger, content: el });
-  } else {
-    modalManager.open({ title, trigger, content: el });
-  }
-}
-
 // Inject main page styles
 const mpStyles = document.createElement('style');
 mpStyles.textContent = `
@@ -391,29 +405,105 @@ mpStyles.textContent = `
   #main-page[aria-hidden="true"] {
     pointer-events: none;
   }
-  .mp-section {
-    margin-bottom: 24px;
+
+  /* ---- Top display panes ---- */
+  .mp-top-panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
   }
-  .mp-section-title {
+  .mp-pane {
+    background: #22262e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .mp-pane-full {
+    margin-bottom: 20px;
+  }
+  .mp-pane-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .mp-pane-clickable:hover {
+    background: #272b34;
+  }
+  .mp-pane-clickable:focus-visible {
+    outline: 2px solid #5b8af5;
+    outline-offset: 2px;
+  }
+
+  /* Accent bars — 6px top */
+  .mp-pane-accent {
+    height: 6px;
+    background: #6b7280;
+  }
+  .mp-accent-green { background: #22c55e; }
+  .mp-accent-amber { background: #f5a623; }
+  .mp-accent-red { background: #ef4444; }
+
+  /* Pane header */
+  .mp-pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px 8px;
+  }
+  .mp-pane-title {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #5b8af5;
-    margin: 0 0 12px 0;
+    margin: 0;
     font-weight: 600;
   }
+  .mp-click-hint {
+    font-size: 0.68rem;
+    color: #fbbf24;
+    font-weight: 500;
+  }
+
+  /* Pane metrics */
+  .mp-pane-metrics {
+    display: flex;
+    gap: 24px;
+    padding: 4px 18px 16px;
+  }
+  .mp-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mp-metric-label {
+    font-size: 0.68rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+  .mp-metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #e4e6eb;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .mp-metric-green { color: #22c55e; }
+  .mp-metric-amber { color: #f5a623; }
+  .mp-metric-red { color: #ef4444; }
+
+  /* ---- Recent activity feed ---- */
   .mp-feed {
-    background: #22262e;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
     padding: 4px 0;
-    min-height: 60px;
+    min-height: 48px;
   }
   .mp-feed-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 80px 1fr 70px;
     align-items: center;
     gap: 12px;
-    padding: 8px 16px;
+    padding: 7px 18px;
     cursor: pointer;
     transition: background 0.1s;
     font-size: 0.82rem;
@@ -427,83 +517,95 @@ mpStyles.textContent = `
     border-radius: 6px;
   }
   .mp-feed-time {
-    flex: 0 0 80px;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.72rem;
     color: #8b919a;
   }
-  .mp-feed-decision {
-    flex: 0 0 70px;
-  }
   .mp-feed-tool {
-    flex: 1;
     font-family: "JetBrains Mono", monospace;
     color: #e4e6eb;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .mp-feed-user {
-    flex: 0 0 80px;
-    color: #8b919a;
+  .mp-feed-decision {
     text-align: right;
   }
-  .mp-loading {
-    color: #8b919a;
-    font-size: 0.82rem;
-    margin: 0;
-    padding: 16px;
-    text-align: center;
+  .mp-decision-allow {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #22c55e;
+    letter-spacing: 0.03em;
   }
-  .mp-placeholder {
-    color: #8b919a;
-    font-size: 0.82rem;
-    margin: 0;
-    padding: 16px;
-    text-align: center;
-    font-style: italic;
+  .mp-decision-deny {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #ef4444;
+    letter-spacing: 0.03em;
   }
-  .mp-error {
-    color: #f59e42;
-    background: rgba(245, 158, 66, 0.10);
-    font-size: 0.82rem;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-top: 8px;
+  .mp-decision-muted {
+    font-size: 0.72rem;
+    color: #6b7280;
   }
-  .mp-launchers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+
+  /* ---- Workflow launcher grid ---- */
+  .mp-section {
+    margin-bottom: 24px;
   }
-  .mp-launcher {
-    background: none;
+  .mp-launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .mp-wf-card {
+    background: #22262e;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    color: #5b8af5;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
     cursor: pointer;
-    font-family: "Inter", system-ui, sans-serif;
-    font-size: 0.88rem;
-    font-weight: 500;
-    padding: 8px 16px;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s;
+    padding: 0;
+    text-align: center;
   }
-  .mp-launcher:hover {
-    background: rgba(91, 138, 245, 0.12);
-    border-color: #5b8af5;
+  .mp-wf-card:hover {
+    background: #272b34;
   }
-  .mp-launcher:focus-visible {
+  .mp-wf-card:focus-visible {
     outline: 2px solid #5b8af5;
     outline-offset: 2px;
   }
-  .mp-launcher-disabled {
+
+  /* Workflow accent bar — 4px top */
+  .mp-wf-accent {
+    height: 4px;
+  }
+  .mp-wf-accent-green { background: #22c55e; }
+  .mp-wf-accent-amber { background: #f5a623; }
+
+  .mp-wf-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #e4e6eb;
+    margin: 14px 16px 6px;
+  }
+  .mp-wf-desc {
+    font-size: 0.75rem;
     color: #8b919a;
-    cursor: default;
-    opacity: 0.5;
+    line-height: 1.4;
+    margin: 0 16px 8px;
+    min-height: 32px;
   }
-  .mp-launcher-disabled:hover {
-    background: none;
-    border-color: rgba(255, 255, 255, 0.08);
+  .mp-wf-click {
+    font-size: 0.68rem;
+    color: #fbbf24;
+    font-weight: 500;
+    margin: 0 16px 12px;
   }
+
+  /* ---- License card ---- */
   .mp-license-card {
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
   .mp-license-card-inner {
     display: flex;
@@ -551,20 +653,49 @@ mpStyles.textContent = `
     background: rgba(245, 158, 66, 0.12);
   }
 
-  /* Responsive: narrow viewports */
+  /* ---- Utility ---- */
+  .mp-placeholder {
+    color: #8b919a;
+    font-size: 0.82rem;
+    margin: 0;
+    padding: 16px;
+    text-align: center;
+    font-style: italic;
+  }
+  .mp-error {
+    color: #f59e42;
+    background: rgba(245, 158, 66, 0.10);
+    font-size: 0.82rem;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 900px) {
+    .mp-launcher-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
   @media (max-width: 600px) {
     #main-page {
       padding: 12px;
       padding-top: calc(48px + 12px);
     }
-    .mp-feed-row {
-      flex-wrap: wrap;
-      gap: 4px 8px;
+    .mp-top-panes {
+      grid-template-columns: 1fr;
     }
-    .mp-feed-time { flex: 0 0 auto; }
-    .mp-feed-decision { flex: 0 0 auto; }
-    .mp-feed-tool { flex: 1 1 100%; order: 3; }
-    .mp-feed-user { flex: 0 0 auto; text-align: left; }
+    .mp-launcher-grid {
+      grid-template-columns: 1fr;
+    }
+    .mp-feed-row {
+      grid-template-columns: 60px 1fr auto;
+      gap: 6px;
+    }
+    .mp-pane-metrics {
+      flex-wrap: wrap;
+      gap: 12px;
+    }
   }
 `;
 document.head.appendChild(mpStyles);

@@ -421,6 +421,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_licensing_downgrade()
             elif parsed.path == "/api/licensing/terms-acknowledge":
                 self._handle_terms_acknowledge()
+            elif parsed.path == "/api/licensing/institution-inquiry":
+                self._handle_institution_inquiry()
+            elif parsed.path == "/api/licensing/research-opt-in":
+                self._handle_research_opt_in()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1439,6 +1443,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         context_note = str(data.get("context_note", "")).strip()
         telemetry_opted_in = bool(data.get("telemetry_opted_in", True))
 
+        # Customer intelligence fields
+        operator_role = str(data.get("operator_role", "")).strip()
+        how_found = str(data.get("how_found", "")).strip()
+        deciding_factor = str(data.get("deciding_factor", "")).strip()
+        biggest_insight = str(data.get("biggest_insight", "")).strip()
+        research_opted_in = bool(data.get("research_opted_in", False))
+
         if not operator_name:
             _json_response(self, {"error": "operator_name is required"}, 400)
             return
@@ -1474,6 +1485,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "operator_name": operator_name,
                 "context_note": context_note,
                 "telemetry_opted_in": telemetry_opted_in,
+                "operator_role": operator_role,
+                "how_found": how_found,
+                "deciding_factor": deciding_factor,
+                "biggest_insight": biggest_insight,
+                "research_opted_in": research_opted_in,
                 "license_expiry": expiry,
             })
 
@@ -1490,6 +1506,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "tier": "personal",
                     "registration_date": now,
                     "telemetry_opted_in": telemetry_opted_in,
+                    "operator_role": operator_role,
+                    "how_found": how_found,
+                    "deciding_factor": deciding_factor,
+                    "biggest_insight": biggest_insight,
+                    "research_opted_in": research_opted_in,
                 },
                 prev_record_hash=None,
             )
@@ -1503,6 +1524,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     prev_record_hash=None,
                 )
                 _append_chain_record_atomic(tel_event)
+
+            # If research opted in, record separate chain event
+            if research_opted_in:
+                research_event = build_non_action_event(
+                    "research_program_opted_in",
+                    {"opted_in": True, "source": "registration"},
+                    prev_record_hash=None,
+                )
+                _append_chain_record_atomic(research_event)
 
             _json_response(self, {
                 "registered": True,
@@ -1543,6 +1573,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         tier = str(data.get("tier", "")).strip()
         payment_ref = str(data.get("payment_ref", "")).strip()
         operator_name = str(data.get("operator_name", "")).strip()
+
+        # Customer intelligence fields
+        operator_role = str(data.get("operator_role", "")).strip()
+        how_found = str(data.get("how_found", "")).strip()
+        deciding_factor = str(data.get("deciding_factor", "")).strip()
+        biggest_insight = str(data.get("biggest_insight", "")).strip()
+        research_opted_in = bool(data.get("research_opted_in", False))
+        # Crew+ fields
+        organization_name = str(data.get("organization_name", "")).strip()
+        industry_sector = str(data.get("industry_sector", "")).strip()
+        billing_contact = str(data.get("billing_contact", "")).strip()
+        # Team+ fields
+        primary_operator = str(data.get("primary_operator", "")).strip()
 
         PURCHASABLE_TIERS = {"personal_plus", "crew", "team"}
         if tier not in PURCHASABLE_TIERS:
@@ -1613,7 +1656,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "license_start": term_start,
                 "payment_ref": payment_ref or "mock_payment",
                 "auto_renewal": True,
+                "operator_role": operator_role,
+                "how_found": how_found,
+                "deciding_factor": deciding_factor,
+                "biggest_insight": biggest_insight,
+                "research_opted_in": research_opted_in,
             })
+            if organization_name:
+                existing["organization_name"] = organization_name
+            if industry_sector:
+                existing["industry_sector"] = industry_sector
+            if billing_contact:
+                existing["billing_contact"] = billing_contact
+            if primary_operator:
+                existing["primary_operator"] = primary_operator
             # Clear any pending downgrade on purchase/upgrade
             existing.pop("pending_downgrade", None)
             if operator_name:
@@ -1625,6 +1681,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             )
 
             # Write chain event
+            # Build customer intelligence payload for chain event
+            ci_payload = {
+                "operator_role": operator_role,
+                "how_found": how_found,
+                "deciding_factor": deciding_factor,
+                "biggest_insight": biggest_insight,
+                "research_opted_in": research_opted_in,
+            }
+            if organization_name:
+                ci_payload["organization_name"] = organization_name
+            if industry_sector:
+                ci_payload["industry_sector"] = industry_sector
+            if billing_contact:
+                ci_payload["billing_contact"] = billing_contact
+            if primary_operator:
+                ci_payload["primary_operator"] = primary_operator
+
             if is_upgrade:
                 event = build_non_action_event(
                     "license_upgraded",
@@ -1634,6 +1707,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "payment_ref": payment_ref or "mock_payment",
                         "term_start": term_start,
                         "term_end": term_end,
+                        **ci_payload,
                     },
                     prev_record_hash=None,
                 )
@@ -1646,10 +1720,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "term_start": term_start,
                         "term_end": term_end,
                         "operator_name": operator_name,
+                        **ci_payload,
                     },
                     prev_record_hash=None,
                 )
             _append_chain_record_atomic(event)
+
+            # If research opted in, record separate chain event
+            if research_opted_in:
+                research_event = build_non_action_event(
+                    "research_program_opted_in",
+                    {"opted_in": True, "source": "purchase"},
+                    prev_record_hash=None,
+                )
+                _append_chain_record_atomic(research_event)
 
             _json_response(self, {
                 "purchased": True,
@@ -1687,6 +1771,125 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except OSError:
             pass
         return None
+
+    def _handle_institution_inquiry(self):
+        """POST /api/licensing/institution-inquiry — submit institution inquiry."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        try:
+            from event_model import build_non_action_event
+
+            operator_name = str(data.get("operator_name", "")).strip()
+            simultaneous_policies = str(data.get("simultaneous_policies", "")).strip()
+            cross_jurisdiction = str(data.get("cross_jurisdiction", "")).strip()
+            certification_value = str(data.get("certification_value", "")).strip()
+            data_residency = str(data.get("data_residency", "")).strip()
+
+            # Customer intelligence fields
+            operator_role = str(data.get("operator_role", "")).strip()
+            how_found = str(data.get("how_found", "")).strip()
+            deciding_factor = str(data.get("deciding_factor", "")).strip()
+            biggest_insight = str(data.get("biggest_insight", "")).strip()
+            organization_name = str(data.get("organization_name", "")).strip()
+            industry_sector = str(data.get("industry_sector", "")).strip()
+            billing_contact = str(data.get("billing_contact", "")).strip()
+            primary_operator = str(data.get("primary_operator", "")).strip()
+            research_opted_in = bool(data.get("research_opted_in", False))
+
+            payload = {
+                "operator_name": operator_name,
+                "simultaneous_policies": simultaneous_policies,
+                "cross_jurisdiction": cross_jurisdiction,
+                "certification_value": certification_value,
+                "data_residency": data_residency,
+                "operator_role": operator_role,
+                "how_found": how_found,
+                "deciding_factor": deciding_factor,
+                "biggest_insight": biggest_insight,
+                "organization_name": organization_name,
+                "industry_sector": industry_sector,
+                "billing_contact": billing_contact,
+                "primary_operator": primary_operator,
+                "research_opted_in": research_opted_in,
+            }
+
+            event = build_non_action_event(
+                "institution_inquiry_submitted",
+                payload,
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            if research_opted_in:
+                research_event = build_non_action_event(
+                    "research_program_opted_in",
+                    {"opted_in": True, "source": "institution_inquiry"},
+                    prev_record_hash=None,
+                )
+                _append_chain_record_atomic(research_event)
+
+            _json_response(self, {
+                "submitted": True,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_research_opt_in(self):
+        """POST /api/licensing/research-opt-in — change research program opt-in."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        opted_in = bool(data.get("opted_in", False))
+
+        try:
+            from event_model import build_non_action_event
+
+            event = build_non_action_event(
+                "research_program_opt_in_changed",
+                {"opted_in": opted_in},
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            # Update license file if it exists
+            license_file = RUNTIME / "license.json"
+            if license_file.exists():
+                try:
+                    existing = json.loads(
+                        license_file.read_text(encoding="utf-8")
+                    )
+                    existing["research_opted_in"] = opted_in
+                    license_file.write_text(
+                        json.dumps(existing, indent=2, sort_keys=True),
+                        encoding="utf-8",
+                    )
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            _json_response(self, {
+                "opted_in": opted_in,
+                "event_id": event.get("event_id"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
 
     def _handle_auto_renewal(self):
         """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
