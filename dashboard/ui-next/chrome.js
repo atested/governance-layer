@@ -11,6 +11,10 @@
 import { Z_INDEX } from './modal-manager.js';
 
 export function renderChrome() {
+  // Guard: remove any existing chrome bar to prevent duplicates
+  const existing = document.getElementById('chrome-bar');
+  if (existing) existing.remove();
+
   const chrome = document.createElement('div');
   chrome.id = 'chrome-bar';
   chrome.innerHTML = `

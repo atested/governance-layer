@@ -75,6 +75,10 @@ let _healthState = 'unknown';  // 'healthy', 'degraded', 'critical', 'unknown'
 let _licenseState = 'amber';   // 'green' or 'amber'
 
 export function renderMainPage() {
+  // Guard: remove any existing main page to prevent duplicates
+  const existing = document.getElementById('main-page');
+  if (existing) existing.remove();
+
   _page = document.createElement('div');
   _page.id = 'main-page';
   _page.innerHTML = `

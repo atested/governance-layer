@@ -22,7 +22,12 @@ if (!('adoptedStyleSheets' in Document.prototype)) {
   );
 }
 
+let _initialized = false;
+
 function init() {
+  if (_initialized) return;
+  _initialized = true;
+
   // Render chrome bar (fixed position, always visible)
   const chrome = renderChrome();
   document.body.appendChild(chrome);
