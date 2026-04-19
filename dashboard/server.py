@@ -2701,7 +2701,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 from licensing import resolve_posture
 
                 registry_path = REPO / "capabilities" / "capability-registry.json"
-                messaging_map_path = REPO / "capabilities" / "messaging-tool-map.v1.json"
+                policy_rules_path = REPO / "capabilities" / "policy-rules.json"
+                learned_mappings_path = REPO / "capabilities" / "learned-tool-mappings.json"
 
                 # Read capability registry
                 registry_data = {}
@@ -2715,15 +2716,50 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     except (json.JSONDecodeError, OSError) as exc:
                         registry_data = {"error": str(exc)}
 
-                # Read messaging map
-                messaging_map = {}
-                if messaging_map_path.exists():
+                # Read policy rules
+                policy_rules = {}
+                if policy_rules_path.exists():
                     try:
-                        messaging_map = json.loads(
-                            messaging_map_path.read_text(encoding="utf-8")
+                        policy_rules = json.loads(
+                            policy_rules_path.read_text(encoding="utf-8")
                         )
                     except (json.JSONDecodeError, OSError):
-                        messaging_map = {}
+                        policy_rules = {}
+
+                # Read learned tool mappings
+                learned_mappings = {}
+                if learned_mappings_path.exists():
+                    try:
+                        learned_mappings = json.loads(
+                            learned_mappings_path.read_text(encoding="utf-8")
+                        )
+                    except (json.JSONDecodeError, OSError):
+                        learned_mappings = {}
+
+                # Signing status
+                signing_info = {"active": False, "algorithm": "Ed25519"}
+                try:
+                    key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+                    if key_path and Path(key_path).exists():
+                        signing_info["active"] = True
+                        signing_info["key_path"] = key_path
+                        # Compute fingerprint
+                        from receipt_signing import _read_private_key, _public_key_fingerprint
+                        from cryptography.hazmat.primitives import serialization as _ser
+                        priv = _read_private_key(key_path)
+                        fp = _public_key_fingerprint(priv.public_key(), _ser)
+                        signing_info["fingerprint"] = fp
+                except Exception:
+                    pass
+
+                # Proxy status
+                proxy_info = {
+                    "port": int(os.environ.get("GOV_PROXY_PORT", "8080")),
+                    "host": "127.0.0.1",
+                    "provider": "Anthropic",
+                    "upstream": "https://api.anthropic.com",
+                    "identity": os.environ.get("GOV_PROXY_IDENTITY", ""),
+                }
 
                 # Resolve license posture
                 posture = resolve_posture(RUNTIME)
@@ -2731,7 +2767,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 _json_response(self, {
                     "registry": registry_data,
                     "registry_hash": registry_hash,
-                    "messaging_map": messaging_map,
+                    "policy_rules": policy_rules,
+                    "learned_mappings": learned_mappings,
+                    "signing": signing_info,
+                    "proxy": proxy_info,
                     "license_posture": posture,
                 })
             except Exception as exc:
