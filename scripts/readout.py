@@ -258,12 +258,34 @@ def governance_approvals_view(
     approval_store: ApprovalStore,
     *,
     governed_family: Optional[str] = None,
+    staleness_days: int = 30,
 ) -> dict:
     approvals = _approval_projection(approval_store, governed_family=governed_family)
+    now = datetime.now(timezone.utc)
+    stale_count = 0
+    latest_ts = ""
+    for a in approvals:
+        ts = a.get("timestamp_utc", "")
+        if ts and (not latest_ts or ts > latest_ts):
+            latest_ts = ts
+        # Staleness: approved more than staleness_days ago
+        parsed = _parse_ts(ts) if ts else None
+        if parsed:
+            age_days = (now - parsed).days
+            a["age_days"] = age_days
+            a["stale"] = age_days >= staleness_days
+            if a["stale"]:
+                stale_count += 1
+        else:
+            a["age_days"] = 0
+            a["stale"] = False
     return {
         "timestamp_utc": _now_utc_z(),
         "active_approvals": approvals,
         "total_count": len(approvals),
+        "stale_count": stale_count,
+        "staleness_days": staleness_days,
+        "latest_approval_utc": latest_ts,
         "chain_event_count": len(load_chain_rows(chain_path)),
     }
 
