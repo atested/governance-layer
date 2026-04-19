@@ -23,7 +23,7 @@ import { openHealthWindow } from './windows/health.js';
 import { openReportsWindow } from './windows/reports.js';
 import { openConfigWindow } from './windows/configuration.js';
 import { openFeedbackWindow } from './windows/communications.js';
-import { openNotificationsWindow } from './windows/notifications.js';
+import { openAlertsWindow } from './windows/alerts.js';
 import { openLicensingWindow } from './windows/licensing.js';
 
 /** Map launcher IDs to window open functions */
@@ -35,7 +35,7 @@ const WINDOW_OPENERS = {
   health: openHealthWindow,
   configuration: openConfigWindow,
   communications: openFeedbackWindow,
-  notifications: openNotificationsWindow,
+  alerts: openAlertsWindow,
   licensing: openLicensingWindow,
 };
 
@@ -48,7 +48,7 @@ const LAUNCHERS = [
   { id: 'health',         label: 'Health',          desc: 'Chain integrity, signing status, system diagnostics',        accent: 'amber' },
   { id: 'configuration',  label: 'Configuration',   desc: 'Policy rules, capability registry, base directories',       accent: 'green' },
   { id: 'communications', label: 'Communications',  desc: 'Telemetry, escalations, and priority requests',             accent: 'green' },
-  { id: 'notifications',  label: 'Notifications',   desc: 'Security alerts, version updates, system notices',          accent: 'green' },
+  { id: 'alerts',          label: 'Alerts',            desc: 'Proactive monitoring, security alerts, system notices',     accent: 'green' },
   { id: 'licensing',      label: 'Licensing',        desc: 'Pricing, survey, case document, purchase',                 accent: 'amber' },
 ];
 
@@ -285,6 +285,9 @@ export async function loadMainPageData() {
 
   // Update workflow card accent for Health based on integrity state
   _updateWorkflowAccent('health', _healthState === 'healthy' ? 'green' : 'amber');
+
+  // Update Alerts workflow card accent based on notification state
+  _updateAlertsAccent();
 }
 
 /**
@@ -347,11 +350,31 @@ function _updateHealthAccent() {
   else accent.classList.add('mp-accent-green');
 }
 
+async function _updateAlertsAccent() {
+  try {
+    const res = await api.getNotifications();
+    if (!res.ok) return;
+    const notifications = res.data.notifications || [];
+    if (!notifications.length) {
+      _updateWorkflowAccent('alerts', 'green');
+      return;
+    }
+    const hasCritical = notifications.some(n =>
+      n.severity === 'security' || n.severity === 'critical'
+    );
+    _updateWorkflowAccent('alerts', hasCritical ? 'red' : 'amber');
+  } catch {
+    // Non-critical
+  }
+}
+
 function _updateWorkflowAccent(id, color) {
   const bar = _page?.querySelector(`[data-accent-bar="${id}"]`);
   if (!bar) return;
   bar.className = 'mp-wf-accent';
-  bar.classList.add(color === 'amber' ? 'mp-wf-accent-amber' : 'mp-wf-accent-green');
+  if (color === 'red') bar.classList.add('mp-wf-accent-red');
+  else if (color === 'amber') bar.classList.add('mp-wf-accent-amber');
+  else bar.classList.add('mp-wf-accent-green');
 }
 
 function _renderRecentActivity(result) {
@@ -657,6 +680,7 @@ mpStyles.textContent = `
   }
   .mp-wf-accent-green { background: #22c55e; }
   .mp-wf-accent-amber { background: #f5a623; }
+  .mp-wf-accent-red { background: #ef4444; }
 
   .mp-wf-title {
     font-size: 0.95rem;

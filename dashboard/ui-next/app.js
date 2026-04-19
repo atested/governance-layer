@@ -8,7 +8,7 @@
 import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone, updateLicenseZone } from './chrome.js';
 import { renderMainPage, loadMainPageData, setLicenseMode } from './main-page.js';
 import { modalManager } from './modal-manager.js';
-import { openNotificationsWindow } from './windows/notifications.js';
+import { openAlertsWindow } from './windows/alerts.js';
 import { openIdentitySetupWindow } from './windows/identity-setup.js';
 import { openIdentitySessionWindow } from './windows/identity-session.js';
 import { openLicensingWindow } from './windows/licensing.js';
@@ -41,9 +41,9 @@ function init() {
   });
 
   const notifZone = chrome.querySelector('.chrome-notif-indicator');
-  notifZone.addEventListener('click', (e) => openNotificationsWindow(e.currentTarget));
+  notifZone.addEventListener('click', (e) => openAlertsWindow(e.currentTarget));
   notifZone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotificationsWindow(e.currentTarget); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlertsWindow(e.currentTarget); }
   });
 
   // Render main page structure, then load live data
