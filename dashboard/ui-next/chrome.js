@@ -152,7 +152,7 @@ export function updateLicenseZone(tierName, dotColor) {
   if (dotEl) dotEl.style.background = dotColor || 'var(--muted, #8b919a)';
 
   // Add/remove amber state class for post-trial unlicensed
-  zone.classList.toggle('chrome-license-amber', tierName === 'Personal' && dotColor && dotColor.includes('f59e42'));
+  zone.classList.toggle('chrome-license-amber', tierName === 'Personal' && dotColor && dotColor.includes('f5a623'));
 }
 
 /**
