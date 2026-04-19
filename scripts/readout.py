@@ -861,15 +861,43 @@ def audit_query(
     entries.reverse()
     total_matching = len(entries)
 
+    # Summary counts over filtered set (before pagination).
+    allow_count = sum(
+        1 for e in entries
+        if e["detail"].get("policy_decision") == "ALLOW"
+    )
+    deny_count = sum(
+        1 for e in entries
+        if e["detail"].get("policy_decision") == "DENY"
+    )
+    tool_categories = len({
+        e["detail"].get("tool_name", "")
+        for e in entries
+        if e["detail"].get("tool_name")
+    })
+
     if offset > 0:
         entries = entries[offset:]
     entries = entries[:limit]
+
+    # Chain verification summary.
+    integrity = check_chain_integrity(chain_path)
 
     return {
         "timestamp_utc": _now_utc_z(),
         "entries": entries,
         "total_matching": total_matching,
         "chain_event_count": len(rows),
+        "summary": {
+            "allow_count": allow_count,
+            "deny_count": deny_count,
+            "tool_categories": tool_categories,
+        },
+        "verification": {
+            "status": integrity.get("status", "unknown"),
+            "checked": integrity.get("checked", False),
+            "break_count": integrity.get("break_count", 0),
+        },
         "window": {"limit": limit, "offset": offset},
         "filters": {
             "start_time": start_time,
