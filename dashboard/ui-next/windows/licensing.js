@@ -999,73 +999,77 @@ async function _submitClimbingAnswer(el, question, value, qState, appState) {
 function _renderThreshold(el, qState, appState) {
   const reasoning = thresholdReasoning(qState);
   const tierLabel = TIER_LABELS[qState.recommendation] || qState.recommendation;
-
-  // Build side-by-side reasoning cards
+  const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
   const hasLower = !!reasoning.whyNotLower;
   const hasHigher = !!reasoning.whyNotHigher;
-  const hasBoth = hasLower && hasHigher;
 
   el.innerHTML = `
     <div class="lq-threshold">
-      <!-- Row 1: Recommendation (full width) -->
-      <div class="lq-recommendation-card">
-        <div class="lq-recommendation-badge">Verified Recommendation</div>
-        <h3 class="lq-recommendation-tier">${_esc(tierLabel)}</h3>
-        <p class="lq-recommendation-summary">
-          Based on your answers, <strong>${_esc(tierLabel)}</strong> is the right tier
-          for your organization.
-        </p>
+      <div class="lqc-rec-pane">
+        <div class="lqc-accent lqc-accent-green"></div>
+        <div class="lqc-rec-badge">Verified Recommendation</div>
+        <h3 class="lqc-rec-tier">${_esc(tierLabel)}</h3>
+        <div class="lqc-rec-price">${_esc(price)}</div>
+        <p class="lqc-rec-summary">Based on your answers, ${_esc(tierLabel)} is the right plan for your organization.</p>
       </div>
 
-      <!-- Row 2: Why panes side by side -->
       ${(hasLower || hasHigher) ? `
-        <div class="lq-why-row ${hasBoth ? 'lq-why-row-pair' : ''}">
+        <div class="lqc-why-row">
           ${hasLower ? `
-            <div class="lq-reasoning-card">
-              <h4 class="lq-reasoning-heading">Why not a lower tier?</h4>
-              <p class="lq-reasoning-text">${_esc(reasoning.whyNotLower)}</p>
+            <div class="lqc-why-pane">
+              <div class="lqc-accent lqc-accent-amber"></div>
+              <h4 class="lqc-why-heading">Why not a lower plan?</h4>
+              <p class="lqc-why-text">${_esc(reasoning.whyNotLower)}</p>
             </div>
           ` : ''}
           ${hasHigher ? `
-            <div class="lq-reasoning-card">
-              <h4 class="lq-reasoning-heading">Why not a higher tier?</h4>
-              <p class="lq-reasoning-text">${_esc(reasoning.whyNotHigher)}</p>
+            <div class="lqc-why-pane">
+              <div class="lqc-accent lqc-accent-green"></div>
+              <h4 class="lqc-why-heading">Why not a higher plan?</h4>
+              <p class="lqc-why-text">${_esc(reasoning.whyNotHigher)}</p>
             </div>
           ` : ''}
         </div>
       ` : ''}
 
-      <!-- Row 3: Workflow pane -->
-      <div class="lq-workflow-pane">
-        <div class="lq-workflow-primary">
-          <button class="lic-action-btn lic-action-primary lq-see-case">Review your case document</button>
-          <span class="lq-workflow-hint">See the full recommendation with evidence before sharing or purchasing.</span>
-        </div>
-
-        <div class="lq-workflow-secondary">
-          <button class="lic-action-btn lq-continue-refining">Answer more questions to strengthen your case</button>
-          <span class="lq-workflow-hint">Adds detail useful for justifying the purchase to your organization.</span>
-        </div>
-
-        <div class="lq-workflow-tertiary">
-          <button class="lic-action-btn lq-restart-btn">Restart Survey</button>
-          <span class="lq-restart-hint">Restart if your situation has changed \u2014 different team size, different machine count, or different priorities than when you first answered. Your previous answers are cleared and the survey begins fresh.</span>
+      <div class="lqc-workflow-pane">
+        <div class="lqc-accent lqc-accent-amber"></div>
+        <h4 class="lqc-workflow-heading">What to do next</h4>
+        <div class="lqc-action-row">
+          <div class="lqc-action-card lqc-action-review">
+            <div class="lqc-card-accent lqc-card-accent-green"></div>
+            <h5 class="lqc-card-title">Review your case</h5>
+            <p class="lqc-card-desc">Your trial generated data that shows Atested does what it says it does.</p>
+            <span class="lqc-card-click lqc-nav-case">Click to review</span>
+          </div>
+          <div class="lqc-action-card lqc-action-strengthen">
+            <div class="lqc-card-accent lqc-card-accent-amber"></div>
+            <h5 class="lqc-card-title">Strengthen your case</h5>
+            <p class="lqc-card-desc">Tell us more and maybe it will help make a better case, but it can\u2019t change the recommendation.</p>
+            <span class="lqc-card-click lqc-nav-strengthen">Click to continue</span>
+          </div>
+          <div class="lqc-action-card lqc-action-restart">
+            <div class="lqc-card-accent lqc-card-accent-gray"></div>
+            <h5 class="lqc-card-title">Restart survey</h5>
+            <p class="lqc-card-desc">If you want to start over, click here. You can do this again if you want to.</p>
+            <span class="lqc-card-click lqc-nav-restart">Click to restart</span>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  el.querySelector('.lq-see-case').addEventListener('click', () => {
+  el.querySelector('.lqc-nav-case').addEventListener('click', () => {
     _switchPanel(appState, 'case-document');
   });
 
-  el.querySelector('.lq-continue-refining').addEventListener('click', () => {
+  el.querySelector('.lqc-nav-strengthen').addEventListener('click', () => {
     const p2State = { ...qState, state: STATES.PHASE_TWO };
     p2State.nextQuestion = getNextPhaseTwoQuestion(qState.recommendation, qState.answers);
     _renderQuestionnaireState(el, p2State, appState);
   });
 
-  el.querySelector('.lq-restart-btn').addEventListener('click', () => {
+  el.querySelector('.lqc-nav-restart').addEventListener('click', () => {
     _restartQuestionnaire(appState);
   });
 }
@@ -1086,7 +1090,7 @@ function _renderPhaseTwo(el, qState, appState) {
   el.innerHTML = `
     <div class="lq-phase-two">
       <div class="lq-phase-two-header">
-        <span class="lq-recommendation-badge lq-recommendation-badge-small">
+        <span class="lqc-rec-badge" style="font-size:0.82rem;padding:3px 10px;">
           Recommendation verified: ${_esc(tierLabel)}
         </span>
         <span class="lq-phase-two-count">
@@ -1150,70 +1154,76 @@ function _renderPhaseTwo(el, qState, appState) {
 
 function _renderComplete(el, qState, appState) {
   const tierLabel = TIER_LABELS[qState.recommendation] || qState.recommendation;
+  const price = COMMERCIAL_TERMS[qState.recommendation]?.price || '';
   const reasoning = thresholdReasoning(qState);
   const hasLower = !!reasoning.whyNotLower;
   const hasHigher = !!reasoning.whyNotHigher;
-  const hasBoth = hasLower && hasHigher;
 
   el.innerHTML = `
     <div class="lq-threshold">
-      <!-- Row 1: Recommendation (full width) -->
-      <div class="lq-recommendation-card">
-        <div class="lq-recommendation-badge">Verified Recommendation</div>
-        <h3 class="lq-recommendation-tier">${_esc(tierLabel)}</h3>
-        <p class="lq-recommendation-summary">
-          All available questions have been answered. Your recommendation is
-          <strong>${_esc(tierLabel)}</strong>.
-        </p>
+      <div class="lqc-rec-pane">
+        <div class="lqc-accent lqc-accent-green"></div>
+        <div class="lqc-rec-badge">Verified Recommendation</div>
+        <h3 class="lqc-rec-tier">${_esc(tierLabel)}</h3>
+        <div class="lqc-rec-price">${_esc(price)}</div>
+        <p class="lqc-rec-summary">Based on your answers, ${_esc(tierLabel)} is the right plan for your organization.</p>
       </div>
 
-      <!-- Row 2: Why panes side by side -->
       ${(hasLower || hasHigher) ? `
-        <div class="lq-why-row ${hasBoth ? 'lq-why-row-pair' : ''}">
+        <div class="lqc-why-row">
           ${hasLower ? `
-            <div class="lq-reasoning-card">
-              <h4 class="lq-reasoning-heading">Why not a lower tier?</h4>
-              <p class="lq-reasoning-text">${_esc(reasoning.whyNotLower)}</p>
+            <div class="lqc-why-pane">
+              <div class="lqc-accent lqc-accent-amber"></div>
+              <h4 class="lqc-why-heading">Why not a lower plan?</h4>
+              <p class="lqc-why-text">${_esc(reasoning.whyNotLower)}</p>
             </div>
           ` : ''}
           ${hasHigher ? `
-            <div class="lq-reasoning-card">
-              <h4 class="lq-reasoning-heading">Why not a higher tier?</h4>
-              <p class="lq-reasoning-text">${_esc(reasoning.whyNotHigher)}</p>
+            <div class="lqc-why-pane">
+              <div class="lqc-accent lqc-accent-green"></div>
+              <h4 class="lqc-why-heading">Why not a higher plan?</h4>
+              <p class="lqc-why-text">${_esc(reasoning.whyNotHigher)}</p>
             </div>
           ` : ''}
         </div>
       ` : ''}
 
-      <!-- Row 3: Workflow pane -->
-      <div class="lq-workflow-pane">
-        <div class="lq-workflow-primary">
-          <button class="lic-action-btn lic-action-primary lq-view-case">Review your case document</button>
-          <span class="lq-workflow-hint">See the full recommendation with evidence before sharing or purchasing.</span>
-        </div>
-
-        <div class="lq-workflow-secondary">
-          <button class="lic-action-btn lq-view-tiers">View Tier Details</button>
-          <span class="lq-workflow-hint">Compare all tiers side by side with fit assessments.</span>
-        </div>
-
-        <div class="lq-workflow-tertiary">
-          <button class="lic-action-btn lq-restart-btn">Restart Survey</button>
-          <span class="lq-restart-hint">Restart if your situation has changed \u2014 different team size, different machine count, or different priorities than when you first answered. Your previous answers are cleared and the survey begins fresh.</span>
+      <div class="lqc-workflow-pane">
+        <div class="lqc-accent lqc-accent-amber"></div>
+        <h4 class="lqc-workflow-heading">What to do next</h4>
+        <div class="lqc-action-row">
+          <div class="lqc-action-card lqc-action-review">
+            <div class="lqc-card-accent lqc-card-accent-green"></div>
+            <h5 class="lqc-card-title">Review your case</h5>
+            <p class="lqc-card-desc">Your trial generated data that shows Atested does what it says it does.</p>
+            <span class="lqc-card-click lqc-nav-case">Click to review</span>
+          </div>
+          <div class="lqc-action-card lqc-action-strengthen">
+            <div class="lqc-card-accent lqc-card-accent-amber"></div>
+            <h5 class="lqc-card-title">Strengthen your case</h5>
+            <p class="lqc-card-desc">Tell us more and maybe it will help make a better case, but it can\u2019t change the recommendation.</p>
+            <span class="lqc-card-click lqc-nav-strengthen">Click to continue</span>
+          </div>
+          <div class="lqc-action-card lqc-action-restart">
+            <div class="lqc-card-accent lqc-card-accent-gray"></div>
+            <h5 class="lqc-card-title">Restart survey</h5>
+            <p class="lqc-card-desc">If you want to start over, click here. You can do this again if you want to.</p>
+            <span class="lqc-card-click lqc-nav-restart">Click to restart</span>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  el.querySelector('.lq-view-case').addEventListener('click', () => {
+  el.querySelector('.lqc-nav-case').addEventListener('click', () => {
     _switchPanel(appState, 'case-document');
   });
 
-  el.querySelector('.lq-view-tiers').addEventListener('click', () => {
-    _switchPanel(appState, 'tiers');
+  el.querySelector('.lqc-nav-strengthen').addEventListener('click', () => {
+    _switchPanel(appState, 'questionnaire');
   });
 
-  el.querySelector('.lq-restart-btn').addEventListener('click', () => {
+  el.querySelector('.lqc-nav-restart').addEventListener('click', () => {
     _restartQuestionnaire(appState);
   });
 }
@@ -1786,7 +1796,7 @@ function _renderCaseForTier(el, doc, tierId, isExploring, appState) {
   // Recommendation pane
   const badgeText = isExploring ? `Exploring: ${tierLabel}` : (isTentative ? 'Tentative recommendation' : 'Verified recommendation');
   const badgeClass = isExploring ? 'lcd-rec-badge lcd-rec-exploring' : 'lcd-rec-badge';
-  const descText = 'Combining your responses with the evidence you generated in the trial, Atested creates a document you can use to communicate internally to formally move Atested into production in your environment. This is intended to make this part of your job easier.';
+  const descText = 'Your responses and trial data combined into one document. Use it to make the case internally for moving Atested into production.';
 
   // Why panes — use threshold reasoning from questionnaire engine
   const qState = appState.qState;
@@ -2780,66 +2790,160 @@ licStyles.textContent = `
     font-weight: 400;
   }
 
-  /* Recommendation card */
-  .lq-recommendation-card {
-    background: rgba(91, 138, 245, 0.06);
-    border: 1px solid rgba(91, 138, 245, 0.2);
+  /* ---- Survey completion panes ---- */
+  .lqc-rec-pane {
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
+    padding: 24px 20px 20px;
+    margin-bottom: 16px;
     text-align: center;
+    overflow: hidden;
   }
-  .lq-recommendation-badge {
+  .lqc-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    border-radius: 12px 12px 0 0;
+  }
+  .lqc-accent-green { background: #22c55e; }
+  .lqc-accent-amber { background: #f5a623; }
+  .lqc-rec-badge {
     display: inline-block;
     background: rgba(34, 197, 94, 0.15);
     color: #22c55e;
     font-size: 0.82rem;
     font-weight: 600;
-    padding: 4px 12px;
+    padding: 3px 12px;
     border-radius: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-  .lq-recommendation-badge-small {
-    font-size: 0.82rem;
-    padding: 3px 10px;
-    margin-bottom: 0;
-  }
-  .lq-recommendation-tier {
-    font-size: 1.7rem;
+  .lqc-rec-tier {
+    font-size: 1.75rem;
     font-weight: 700;
-    margin: 0 0 8px 0;
+    margin: 0 0 4px 0;
     color: #e4e6eb;
   }
-  .lq-recommendation-summary {
+  .lqc-rec-price {
     font-size: 1rem;
+    font-weight: 500;
+    color: #60a5fa;
+    margin: 0 0 10px 0;
+  }
+  .lqc-rec-summary {
+    font-size: 0.9rem;
     color: #8b919a;
     margin: 0;
     line-height: 1.6;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
-  /* Reasoning cards */
-  .lq-reasoning-card {
+  /* Why panes — side by side */
+  .lqc-why-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .lqc-why-pane {
+    flex: 1;
+    min-width: 0;
+    position: relative;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    border-radius: 12px;
+    padding: 16px 16px 14px;
+    overflow: hidden;
   }
-  .lq-reasoning-heading {
+  .lqc-why-heading {
     font-size: 0.82rem;
     font-weight: 600;
-    color: #8b919a;
-    margin: 0 0 6px 0;
+    color: #60a5fa;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    margin: 4px 0 8px 0;
   }
-  .lq-reasoning-text {
-    font-size: 0.9rem;
-    color: #e4e6eb;
+  .lqc-why-text {
+    font-size: 0.82rem;
+    color: #b0b6c0;
+    line-height: 1.6;
     margin: 0;
+  }
+
+  /* Workflow pane with nested action cards */
+  .lqc-workflow-pane {
+    position: relative;
+    background: #22262e;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 20px 20px 16px;
+    overflow: hidden;
+  }
+  .lqc-workflow-heading {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #60a5fa;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 4px 0 16px 0;
+  }
+  .lqc-action-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .lqc-action-card {
+    position: relative;
+    background: #1a1d23;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .lqc-card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 10px 10px 0 0;
+  }
+  .lqc-card-accent-green { background: #22c55e; }
+  .lqc-card-accent-amber { background: #f5a623; }
+  .lqc-card-accent-gray { background: #6b7280; }
+  .lqc-card-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    margin: 4px 0 8px 0;
+  }
+  .lqc-card-desc {
+    font-size: 0.82rem;
+    color: #b0b6c0;
     line-height: 1.5;
+    margin: 0 0 12px 0;
+    flex: 1;
+  }
+  .lqc-card-click {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #fbbf24;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s;
+  }
+  .lqc-card-click:hover {
+    opacity: 0.8;
   }
 
   /* Threshold actions */
@@ -2899,15 +3003,6 @@ licStyles.textContent = `
   .lq-prev-val {
     color: #8b919a;
     font-weight: 500;
-  }
-
-  /* Complete state */
-  .lq-complete {
-    text-align: center;
-    padding: 20px 0;
-  }
-  .lq-complete .lq-actions {
-    justify-content: center;
   }
 
   /* ---- Case Document panel ---- */
@@ -3187,18 +3282,6 @@ licStyles.textContent = `
   }
   .lcd-action-click:hover {
     opacity: 0.8;
-  }
-
-  /* ---- Restart section ---- */
-  .lq-restart-section {
-    margin-top: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .lq-restart-hint {
-    font-size: 0.82rem;
-    color: #8b919a;
   }
 
   /* ---- Pricing grandchild ---- */
@@ -3708,58 +3791,6 @@ licStyles.textContent = `
     flex-wrap: wrap;
   }
 
-  /* ---- Survey completion: why-row + workflow pane ---- */
-  .lq-why-row {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-  .lq-why-row-pair {
-    flex-direction: row;
-    gap: 16px;
-  }
-  .lq-why-row-pair > .lq-reasoning-card {
-    flex: 1;
-    min-width: 0;
-    margin-bottom: 0;
-  }
-  .lq-workflow-pane {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-  .lq-workflow-primary,
-  .lq-workflow-secondary,
-  .lq-workflow-tertiary {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .lq-workflow-primary {
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .lq-workflow-secondary {
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  }
-  .lq-workflow-hint {
-    font-size: 0.82rem;
-    color: #8b919a;
-    line-height: 1.4;
-    padding-left: 2px;
-  }
-  .lq-restart-hint {
-    font-size: 0.82rem;
-    color: #6b7280;
-    line-height: 1.4;
-    padding-left: 2px;
-  }
 
   @media (max-width: 600px) {
     .ll-status-pane {
@@ -3812,8 +3843,11 @@ licStyles.textContent = `
       min-width: 120px;
       flex: 1;
     }
-    .lq-why-row-pair {
+    .lqc-why-row {
       flex-direction: column;
+    }
+    .lqc-action-row {
+      grid-template-columns: 1fr;
     }
   }
 `;

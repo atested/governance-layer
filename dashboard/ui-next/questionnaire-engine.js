@@ -345,78 +345,55 @@ export function thresholdReasoning(state) {
   let whyNotLower = null;
   let whyNotHigher = null;
 
-  // --- Why not lower: list ALL specific constraints ---
+  // --- Why not lower: specific constraints in direct voice ---
   if (recIndex > 0) {
     const reasons = [];
 
-    // 1. Capacity gate constraints
+    // Capacity gate constraints
     if (state.capacity) {
       const userCount = state.capacity.user_count;
       const machineCount = state.capacity.machine_count || 1;
 
-      // Check each tier below the recommendation to see which capacity gates were hit
       if (userCount >= 51 && recIndex >= TIERS.indexOf('institution')) {
-        reasons.push(`You indicated ${userCount} users. Team supports up to 50 users, so Institution is required.`);
+        reasons.push(`Users. You have ${userCount} people. Team caps at 50.`);
       } else if (userCount >= 13 && recIndex >= TIERS.indexOf('team')) {
-        reasons.push(`You indicated ${userCount} users. Crew supports up to 12 users, so Team or higher is required.`);
+        reasons.push(`Users. You have ${userCount} people. Crew is for 12 or fewer.`);
       } else if (userCount >= 2 && recIndex >= TIERS.indexOf('crew')) {
-        reasons.push(`You indicated ${userCount} users. Personal Plus supports a single user, so Crew or higher is required.`);
+        reasons.push(`Users. You have ${userCount} people. Personal Plus is for one person.`);
       }
 
       if (userCount === 1 && machineCount > 3 && recIndex >= TIERS.indexOf('crew')) {
-        reasons.push(`You indicated ${machineCount} machines. Personal Plus supports up to 3 machines, so Crew or higher is required.`);
+        reasons.push(`Machines. You have ${machineCount - 3} more than Personal Plus allows.`);
       } else if (userCount === 1 && machineCount >= 2 && recIndex >= TIERS.indexOf('personal_plus')) {
-        reasons.push(`You indicated ${machineCount} machines. Personal supports a single machine, so Personal Plus or higher is required.`);
+        reasons.push(`Machines. You have ${machineCount}. Personal is for one machine.`);
       }
     }
 
-    // 2. Feature answers that climbed through boundaries
+    // Feature answers that climbed through boundaries
     const baseTierIndex = TIERS.indexOf(state.baseTier);
     for (let i = baseTierIndex; i < recIndex; i++) {
       const boundary = BOUNDARIES[i];
       if (!boundary) continue;
       const questions = CLIMBING_QUESTIONS[boundary.key] || [];
       const yesQuestions = questions.filter(q => state.answers[q.id] === 'yes');
-      if (yesQuestions.length > 0) {
-        const featureNames = yesQuestions.map(q => {
-          // Extract a concise feature reference from the question text
-          return q.text.replace(/^Do you /, 'you ').replace(/^Does your /, 'your ').replace(/^Would /, '').replace(/\?$/, '');
-        });
-        reasons.push(`You indicated that ${featureNames.join('; ')}. This requires ${TIER_LABELS[boundary.to]} or higher.`);
+      for (const q of yesQuestions) {
+        const feature = q.text.replace(/^Do you /, '').replace(/^Does your /, '').replace(/^Would you /, '').replace(/^Would /, '').replace(/\?$/, '');
+        reasons.push(`You said you need: ${feature}. That starts at ${TIER_LABELS[boundary.to]}.`);
       }
     }
 
-    if (reasons.length > 0) {
+    if (reasons.length === 1) {
+      whyNotLower = reasons[0];
+    } else if (reasons.length > 1) {
       whyNotLower = reasons.join(' ');
-    } else if (state.capacity) {
-      // Fallback — should not happen but safe
-      whyNotLower = `Your organization size places you at ${TIER_LABELS[state.recommendation]} as the minimum tier.`;
     }
   }
 
-  // --- Why not higher: name specific features tested and not needed ---
+  // --- Why not higher: direct voice ---
   if (state.recommendation === 'institution') {
-    whyNotHigher = 'Institution is the highest tier \u2014 it includes everything.';
-  } else if (state.failedBoundary) {
-    const boundary = BOUNDARIES.find(b => b.key === state.failedBoundary);
-    if (boundary) {
-      const questions = CLIMBING_QUESTIONS[boundary.key] || [];
-      const noQuestions = questions.filter(q => {
-        const v = state.answers[q.id];
-        return v === 'no' || v === 'skip';
-      });
-      if (noQuestions.length > 0) {
-        const featureNames = noQuestions.map(q => {
-          // Extract the feature being tested from the question's context field
-          // or fall back to a cleaned-up version of the question text
-          return q.context.replace(/^This helps determine whether /, '').replace(/\.$/, '') || q.text;
-        });
-        whyNotHigher = `You indicated you don\u2019t need: ${featureNames.join('; ')}. ` +
-          `These are the features that distinguish ${TIER_LABELS[boundary.to]} from ${TIER_LABELS[boundary.from]}.`;
-      } else {
-        whyNotHigher = `Your answers indicate that ${TIER_LABELS[boundary.to]} features are not needed for your current situation.`;
-      }
-    }
+    whyNotHigher = 'Institution is the highest plan. It includes everything.';
+  } else {
+    whyNotHigher = 'You don\u2019t need it. We asked and you said no. If that\u2019s wrong, restart the survey.';
   }
 
   return { whyNotLower, whyNotHigher };
