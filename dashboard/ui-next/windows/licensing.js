@@ -1336,7 +1336,7 @@ function _renderUnifiedPurchase(el, state) {
     billing_contact: modeData.billing_contact || '',
     primary_operator: modeData.primary_operator || '',
     telemetry_opted_in: modeData.telemetry_opted_in !== false,
-    research_opted_in: modeData.research_opted_in === true,
+    research_opted_in: modeData.research_opted_in !== false,
     // Institution questions
     simultaneous_policies: '',
     cross_jurisdiction: '',
@@ -1491,7 +1491,7 @@ function _renderPurchaseBody(el, tier, formData, state) {
     <div class="lup-pane">
       <div class="lup-pane-bar lup-pane-bar-blue"></div>
       <h4 class="lup-pane-heading">Research program</h4>
-      <p class="lup-pane-desc">Atested conducts in-house evaluation of AI application governance patterns. Participants may be invited to share anonymized governance data for research purposes.</p>
+      <p class="lup-pane-desc">Often we invite clients to help us evaluate a new AI application we are developing. These are in-house developed applications that are often high-concept prototypes. Not everyone will want to play, so if it is not right for you, no worries.</p>
       <div class="lup-card-options">
         <button class="lup-card-option${formData.research_opted_in ? ' lup-card-selected' : ''}" data-research="in">
           <span class="lup-card-title">I am open to this</span>
