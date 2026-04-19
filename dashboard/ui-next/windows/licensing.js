@@ -1782,7 +1782,6 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
   const purchaseDate = (modeData.purchase_date || modeData.registration_date || '').slice(0, 10) || 'N/A';
   const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
   const autoRenewal = modeData.auto_renewal !== false;
-  const pendingDowngrade = modeData.pending_downgrade || null;
   const operatorName = modeData.operator_name || '';
 
   // Plan selector — informational
@@ -1819,11 +1818,9 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
     .map(f => `<div class="lup-mgmt-row"><span class="lup-mgmt-label">${_esc(f.label)}</span><span class="lup-mgmt-value">${_esc(f.value)}</span></div>`)
     .join('');
 
-  // Downgrade options
-  const downgradeTiers = TIER_ORDER.slice(0, Math.max(0, currentIdx)).filter(t => t !== 'personal');
-  const downgradeOptions = downgradeTiers.map(dt =>
-    `<option value="${dt}">${_tierLabel(dt)}</option>`
-  ).join('');
+  // Renewal section varies by tier
+  const showAutoRenewal = currentTier === 'personal_plus';
+  const showRenewalGuidance = ['crew', 'team', 'institution'].includes(currentTier);
 
   el.innerHTML = `
     <div class="lup-context"><div class="lup-context-bar lup-context-bar-green"></div><p class="lup-context-text">Your <strong>${_esc(_tierLabel(currentTier))}</strong> license is active.</p></div>
@@ -1869,6 +1866,7 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
         <span class="lup-purchase-plan">${_esc(_tierLabel(currentTier))}</span>
         <span class="lup-purchase-billing">Renewal: ${_esc(expiryDate)}</span>
       </div>
+      ${showAutoRenewal ? `
       <div class="lup-renewal-section">
         <div class="lup-renewal-status">
           <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f5a623'}"></span>
@@ -1876,21 +1874,12 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
         </div>
         <button class="lic-action-btn lup-renewal-toggle">${autoRenewal ? 'Turn Off' : 'Turn On'}</button>
       </div>
-      ${pendingDowngrade ? `
-        <div class="lup-pending-downgrade">
-          Downgrade to <strong>${_esc(_tierLabel(pendingDowngrade.to_tier))}</strong>
-          scheduled for <strong>${_esc((pendingDowngrade.effective_date || '').slice(0, 10))}</strong>
-          <button class="lic-action-btn lup-cancel-downgrade">Cancel</button>
-        </div>
-      ` : (downgradeTiers.length > 0 ? `
-        <div class="lup-downgrade-section">
-          <span class="lup-section-label">Downgrade at renewal</span>
-          <div class="lup-downgrade-row">
-            <select class="lup-downgrade-select">${downgradeOptions}</select>
-            <button class="lic-action-btn lup-downgrade-btn">Schedule</button>
-          </div>
-        </div>
-      ` : '')}
+      ` : ''}
+      ${showRenewalGuidance ? `
+      <div class="lup-renewal-guidance">
+        <p class="lup-renewal-guidance-text">Review your case document before renewal to confirm your plan is still the right fit.</p>
+      </div>
+      ` : ''}
       <div class="lup-purchase-divider"></div>
       <button class="lup-invoice-btn" data-tier="${currentTier}" data-start="${purchaseDate}" data-end="${expiryDate}" data-name="${_esc(operatorName)}">Download invoice</button>
     </div>
@@ -1946,30 +1935,6 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
           ? `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`
           : `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`,
         action: () => api.postAutoRenewal({ auto_renewal: !autoRenewal }),
-        onSuccess: () => _loadUnifiedPurchase(el, state),
-      });
-    });
-  }
-
-  const cancelDowngrade = el.querySelector('.lup-cancel-downgrade');
-  if (cancelDowngrade) {
-    cancelDowngrade.addEventListener('click', () => {
-      _showConfirmDialog(confirmArea, errorEl, state, {
-        message: `Cancel the pending downgrade to ${_tierLabel(pendingDowngrade.to_tier)}?`,
-        action: () => api.postPurchase({ tier: currentTier, payment_ref: 'cancel_downgrade', operator_name: operatorName }),
-        onSuccess: () => _loadUnifiedPurchase(el, state),
-      });
-    });
-  }
-
-  const downgradeBtn = el.querySelector('.lup-downgrade-btn');
-  if (downgradeBtn) {
-    downgradeBtn.addEventListener('click', () => {
-      const selectEl = el.querySelector('.lup-downgrade-select');
-      const toTier = selectEl.value;
-      _showConfirmDialog(confirmArea, errorEl, state, {
-        message: `Schedule downgrade from ${_tierLabel(currentTier)} to ${_tierLabel(toTier)}? You keep ${_tierLabel(currentTier)} until ${expiryDate}.`,
-        action: () => api.postDowngrade({ to_tier: toTier }),
         onSuccess: () => _loadUnifiedPurchase(el, state),
       });
     });
@@ -4129,7 +4094,7 @@ licStyles.textContent = `
     font-weight: 600;
   }
 
-  /* Renewal & downgrade */
+  /* Renewal */
   .lup-renewal-section {
     display: flex;
     align-items: center;
@@ -4149,44 +4114,14 @@ licStyles.textContent = `
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .lup-pending-downgrade {
-    background: rgba(245, 166, 35, 0.06);
-    border: 1px solid rgba(245, 166, 35, 0.2);
-    border-radius: 10px;
-    padding: 12px 16px;
-    font-size: 0.82rem;
-    color: #f5a623;
+  .lup-renewal-guidance {
+    margin-bottom: 14px;
+  }
+  .lup-renewal-guidance-text {
+    font-size: 0.85rem;
+    color: var(--muted, #8b919a);
+    margin: 0;
     line-height: 1.5;
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .lup-downgrade-section {
-    margin-bottom: 14px;
-  }
-  .lup-downgrade-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .lup-downgrade-select {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    color: #e4e6eb;
-    padding: 6px 10px;
-    font-size: 0.82rem;
-    font-family: "Inter", system-ui, sans-serif;
-    min-width: 140px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .lup-downgrade-select:focus-visible {
-    border-color: #5b8af5;
-    outline: 2px solid #5b8af5;
-    outline-offset: 1px;
   }
 
   /* Confirm dialog */
@@ -4262,13 +4197,6 @@ licStyles.textContent = `
     }
     .lup-input {
       width: 100%;
-    }
-    .lup-downgrade-row {
-      flex-wrap: wrap;
-    }
-    .lup-downgrade-select {
-      min-width: 120px;
-      flex: 1;
     }
     .lqc-why-row {
       flex-direction: column;
