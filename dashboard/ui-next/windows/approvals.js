@@ -274,7 +274,10 @@ function _renderBulkSection(state) {
   const div = document.createElement('div');
   div.className = 'ap-bulk';
   div.innerHTML = `
-    <span class="ap-bulk-text">${state.staleCount} approval${state.staleCount === 1 ? ' has' : 's have'} not been used in ${state.stalenessDays} or more days.</span>
+    <div class="ap-bulk-content">
+      <span class="ap-bulk-text">${state.staleCount} approval${state.staleCount === 1 ? ' has' : 's have'} not been used in ${state.stalenessDays} or more days.</span>
+      <p class="ap-bulk-explain">Approvals that haven\u2019t been used in 30 days are open exceptions to your rules with no current purpose. Revoking them reduces your exposure without affecting your operations. You can always easily re-approve if you need to.</p>
+    </div>
     <button class="ap-btn ap-btn-bulk" id="ap-bulk-revoke">Revoke all recommended</button>
   `;
 
@@ -690,10 +693,19 @@ apStyles.textContent = `
     border-top: 1px solid rgba(255,255,255,0.06);
     margin-top: 12px;
   }
+  .ap-bulk-content {
+    flex: 1;
+  }
   .ap-bulk-text {
     font-size: 0.78rem;
     color: #8b919a;
-    flex: 1;
+    display: block;
+  }
+  .ap-bulk-explain {
+    font-size: 0.78rem;
+    color: #6b7280;
+    line-height: 1.5;
+    margin: 6px 0 0;
   }
 
   /* ---- Footer ---- */

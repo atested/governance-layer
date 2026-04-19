@@ -1,189 +1,624 @@
 /**
  * Health window — child window (depth 1).
- * Spec v2 section 7.5.
- *
- * Infrastructure status: overall health, alerts, chain integrity,
- * deny rate, transparency, storage, users, license, recent events.
+ * D-041 redesign: accent bars reflecting state, critical alert pane,
+ * six data panes in 3x2 grid, clickable drill-downs for Chain Integrity
+ * and Deny Rate, recent health events table with grandchild drill-down.
  */
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
-import '../components/status-card.js';
-import '../components/status-grid.js';
-import '../components/pill.js';
-import '../components/loading-indicator.js';
+import { openRecordDetail } from './record-detail.js';
 
 /**
  * Open the Health window.
  * @param {HTMLElement|null} trigger
  */
 export function openHealthWindow(trigger) {
-  const content = _buildContent();
+  const content = document.createElement('div');
+  content.className = 'hw-root';
+
   const result = _openAsChild('Health', trigger, content);
   if (!result) return;
-  _loadData(content);
+
+  const state = { el: content, data: null };
+  _loadData(state);
 }
 
-function _buildContent() {
-  const el = document.createElement('div');
-  el.className = 'hw-content';
-  el.innerHTML = `
-    <div class="hw-header">
-      <span class="hw-eyebrow">Infrastructure</span>
-      <span class="hw-heading">System Health</span>
-      <span class="hw-overall" id="hw-overall">--</span>
-    </div>
-    <div id="hw-alerts"></div>
-    <div id="hw-sections">
-      <atd-loading-indicator label="Loading health data"></atd-loading-indicator>
-    </div>
-  `;
-  return el;
-}
+// ---------- Data loading ----------
 
-async function _loadData(el) {
+async function _loadData(state) {
+  state.el.innerHTML = '<div class="hw-loading">Loading health data\u2026</div>';
+
   const res = await api.getHealth();
-  const sections = el.querySelector('#hw-sections');
-
   if (!res.ok) {
-    sections.innerHTML = `<div class="hw-error">${_esc(res.error)}</div>`;
+    state.el.innerHTML = `<div class="hw-error">${_esc(res.error)}</div>`;
     return;
   }
 
-  const h = res.data;
-
-  // Overall status
-  const overall = el.querySelector('#hw-overall');
-  const status = h.overall_status || 'unknown';
-  overall.textContent = status.toUpperCase();
-  overall.className = `hw-overall hw-status-${status}`;
-
-  // Alerts
-  _renderAlerts(el.querySelector('#hw-alerts'), h.alerts || [], el);
-
-  // Build all sections
-  sections.innerHTML = '';
-
-  // Chain integrity
-  sections.appendChild(_buildSection('Chain Integrity', [
-    { label: 'Status', value: h.chain?.status?.toUpperCase() || '--', variant: h.chain?.status === 'ok' ? 'success' : h.chain?.status === 'broken' ? 'danger' : 'warning' },
-    { label: 'Event Count', value: String(h.chain?.chain_event_count ?? '--') },
-    { label: 'Verified', value: h.chain?.checked ? 'Yes' : 'No' },
-  ]));
-
-  // Deny rate
-  sections.appendChild(_buildSection('DENY Rate', [
-    { label: 'Recent DENY Rate', value: h.deny_rate?.recent_deny_rate != null ? `${(h.deny_rate.recent_deny_rate * 100).toFixed(1)}%` : '--', variant: h.deny_rate?.anomaly ? 'danger' : undefined },
-    { label: 'Historical Average', value: h.deny_rate?.historical_average != null ? `${(h.deny_rate.historical_average * 100).toFixed(1)}%` : '--' },
-    { label: 'Anomaly', value: h.deny_rate?.anomaly ? 'DETECTED' : 'None', variant: h.deny_rate?.anomaly ? 'danger' : 'success' },
-  ]));
-
-  // Transparency
-  sections.appendChild(_buildSection('Transparency', [
-    { label: 'Hook Data', value: h.observations?.gap_detected === false ? 'Active' : h.observations?.gap_detected ? 'Gap Detected' : '--', variant: h.observations?.gap_detected ? 'warning' : 'success' },
-    { label: 'Hours Since Last', value: h.observations?.hours_since_last != null ? String(Math.round(h.observations.hours_since_last)) : '--' },
-    { label: 'Ungoverned Ops', value: String(h.observations?.ungoverned_operation_count ?? '--'), variant: (h.observations?.ungoverned_operation_count || 0) > 0 ? 'warning' : undefined },
-  ]));
-
-  // Storage
-  sections.appendChild(_buildSection('Storage', [
-    { label: 'Chain Size', value: _formatBytes(h.storage?.chain_size_bytes) },
-    { label: 'Stability Log', value: _formatBytes(h.storage?.stability_log_size_bytes) },
-    { label: 'Archive Size', value: _formatBytes(h.storage?.archive_size_bytes) },
-    { label: 'Archive Count', value: String(h.storage?.archive_count ?? '--') },
-  ]));
-
-  // Users
-  sections.appendChild(_buildSection('Users', [
-    { label: 'Unique Users', value: String(h.users?.unique_users ?? '--') },
-    { label: 'Anomalies', value: h.users?.anomalies?.length ? String(h.users.anomalies.length) : 'None', variant: h.users?.anomalies?.length ? 'warning' : 'success' },
-  ]));
-
-  // License
-  sections.appendChild(_buildSection('License', [
-    { label: 'Status', value: h.license?.status?.toUpperCase() || '--' },
-  ]));
-
-  // Recent stability events
-  if (h.recent_stability_events?.length) {
-    const evtSection = document.createElement('div');
-    evtSection.className = 'hw-section';
-    evtSection.innerHTML = '<h3 class="hw-section-title">Recent Health Events</h3>';
-    const list = document.createElement('div');
-    list.className = 'hw-event-list';
-    for (const evt of h.recent_stability_events.slice(0, 10)) {
-      const row = document.createElement('div');
-      row.className = 'hw-event-row';
-      row.innerHTML = `
-        <span class="hw-event-time">${_esc(_formatTime(evt.timestamp))}</span>
-        <span class="hw-event-type">${_esc(evt.event_type || '--')}</span>
-        <span class="hw-event-detail">${_esc(typeof evt.payload === 'object' ? JSON.stringify(evt.payload) : String(evt.payload || '--'))}</span>
-      `;
-      list.appendChild(row);
-    }
-    evtSection.appendChild(list);
-    sections.appendChild(evtSection);
-  }
+  state.data = res.data;
+  _renderAll(state);
 }
 
-function _renderAlerts(container, alerts, rootEl) {
-  container.innerHTML = '';
+// ---------- Render ----------
+
+function _renderAll(state) {
+  const h = state.data;
+  const el = state.el;
+  el.innerHTML = '';
+
+  const overall = h.overall_status || 'healthy';
+
+  // Title accent bar
+  const accentBar = document.createElement('div');
+  accentBar.className = `hw-title-accent hw-accent-${_statusColor(overall)}`;
+  el.appendChild(accentBar);
+
+  // Overall status pill
+  const statusRow = document.createElement('div');
+  statusRow.className = 'hw-status-row';
+  statusRow.innerHTML = `<span class="hw-status-pill hw-pill-${_statusColor(overall)}">${_esc(_statusLabel(overall))}</span>`;
+  el.appendChild(statusRow);
+
+  // Critical alert pane (conditional)
+  _renderAlertPane(state, h.alerts || []);
+
+  // Six data panes in 3 rows of 2
+  const grid = document.createElement('div');
+  grid.className = 'hw-pane-grid';
+
+  grid.appendChild(_buildChainPane(state, h));
+  grid.appendChild(_buildDenyRatePane(state, h));
+  grid.appendChild(_buildTransparencyPane(h));
+  grid.appendChild(_buildStoragePane(h));
+  grid.appendChild(_buildUsersPane(h));
+  grid.appendChild(_buildLicensePane(h));
+
+  el.appendChild(grid);
+
+  // Recent health events table
+  _renderEventsTable(state, h);
+}
+
+// ---------- Alert pane ----------
+
+function _renderAlertPane(state, alerts) {
   if (!alerts.length) return;
 
   for (const alert of alerts) {
-    const card = document.createElement('div');
-    card.className = `hw-alert hw-alert-${alert.severity || 'info'}`;
-    card.innerHTML = `
-      <div class="hw-alert-header">
-        <span class="hw-alert-severity">${_esc((alert.severity || 'info').toUpperCase())}</span>
-        <span class="hw-alert-source">${_esc(alert.source || '')}</span>
+    const severity = alert.severity || 'info';
+    const pane = document.createElement('div');
+    pane.className = `hw-alert-pane hw-alert-${severity === 'critical' ? 'red' : severity === 'attention' ? 'amber' : 'blue'}`;
+
+    pane.innerHTML = `
+      <div class="hw-alert-top">
+        <span class="hw-alert-badge hw-badge-${severity === 'critical' ? 'red' : 'amber'}">${_esc(severity === 'critical' ? 'Critical' : 'Warning')}</span>
       </div>
-      <p class="hw-alert-message">${_esc(alert.message || '')}</p>
+      <p class="hw-alert-desc">${_esc(alert.message || '')}</p>
       ${alert.guidance ? `<p class="hw-alert-guidance">${_esc(alert.guidance)}</p>` : ''}
     `;
-    const ackBtn = document.createElement('atd-pill');
-    ackBtn.setAttribute('variant', 'outline');
+
+    const ackBtn = document.createElement('button');
+    ackBtn.className = 'hw-alert-ack';
     ackBtn.textContent = 'Acknowledge';
     ackBtn.addEventListener('click', async () => {
       const res = await api.postHealthAcknowledge({ source: alert.source, message: alert.message });
-      if (res.ok) _loadData(rootEl);
+      if (res.ok) _loadData(state);
     });
-    card.appendChild(ackBtn);
-    container.appendChild(card);
+    pane.appendChild(ackBtn);
+
+    state.el.appendChild(pane);
   }
 }
 
-function _buildSection(title, cards) {
-  const section = document.createElement('div');
-  section.className = 'hw-section';
-  section.innerHTML = `<h3 class="hw-section-title">${_esc(title)}</h3>`;
-  const grid = document.createElement('atd-status-grid');
-  for (const c of cards) {
-    const card = document.createElement('atd-status-card');
-    card.setAttribute('label', c.label);
-    card.setAttribute('value', c.value);
-    if (c.variant) card.setAttribute('variant', c.variant);
-    grid.appendChild(card);
-  }
-  section.appendChild(grid);
-  return section;
+// ---------- Data panes ----------
+
+function _buildChainPane(state, h) {
+  const chain = h.chain || {};
+  const chainStatus = chain.status || 'healthy';
+  const color = chainStatus === 'critical' ? 'red' : chainStatus === 'attention' ? 'amber' : 'green';
+
+  const pane = _pane(color, 'Chain integrity', true);
+  const body = pane.querySelector('.hw-pane-body');
+
+  body.appendChild(_kvRow('Status', _statusLabel(chainStatus), color === 'red' ? 'red' : color === 'amber' ? 'amber' : 'green'));
+  body.appendChild(_kvRow('Event count', _fmtNum(chain.chain_event_count ?? 0)));
+  body.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No', chain.checked ? 'green' : 'amber'));
+
+  pane.addEventListener('click', () => _openChainDetail(state, h));
+  return pane;
 }
+
+function _buildDenyRatePane(state, h) {
+  const dr = h.deny_rate || {};
+  const color = dr.anomaly ? 'amber' : 'green';
+
+  const pane = _pane(color, 'Deny rate', true);
+  const body = pane.querySelector('.hw-pane-body');
+
+  const recentPct = dr.deny_rate != null ? (dr.deny_rate * 100).toFixed(1) + '%' : '0%';
+  const histPct = dr.historical_average != null ? (dr.historical_average * 100).toFixed(1) + '%' : '0%';
+
+  body.appendChild(_kvRow('Recent', recentPct, dr.anomaly ? 'amber' : undefined));
+  body.appendChild(_kvRow('Historical avg', histPct));
+  body.appendChild(_kvRow('Anomaly', dr.anomaly ? 'Detected' : 'None', dr.anomaly ? 'amber' : 'green'));
+
+  pane.addEventListener('click', () => _openDenyRateDetail(state, h));
+  return pane;
+}
+
+function _buildTransparencyPane(h) {
+  const obs = h.observations || {};
+  const pane = _pane('green', 'Transparency', false);
+  const body = pane.querySelector('.hw-pane-body');
+
+  let hookStatus = 'N/A';
+  let hookColor;
+  if (obs.has_observations === false) {
+    hookStatus = 'No data';
+  } else if (obs.gap_detected) {
+    hookStatus = 'Gap detected';
+    hookColor = 'amber';
+  } else if (obs.has_observations) {
+    hookStatus = 'Active';
+    hookColor = 'green';
+  }
+
+  body.appendChild(_kvRow('Hook data', hookStatus, hookColor));
+  body.appendChild(_kvRow('Hours since last', obs.hours_since_last != null ? String(Math.round(obs.hours_since_last)) : 'N/A'));
+  body.appendChild(_kvRow('Ungoverned ops', _fmtNum(obs.ungoverned_operation_count ?? obs.observation_count ?? 0)));
+
+  return pane;
+}
+
+function _buildStoragePane(h) {
+  const s = h.storage || {};
+  const pane = _pane('green', 'Storage', false);
+  const body = pane.querySelector('.hw-pane-body');
+
+  body.appendChild(_kvRow('Chain size', _formatBytes(s.chain_size_bytes)));
+  body.appendChild(_kvRow('Stability log', _formatBytes(s.stability_log_size_bytes)));
+  body.appendChild(_kvRow('Archive size', _formatBytes(s.archive_size_bytes)));
+  body.appendChild(_kvRow('Archives', _fmtNum(s.archive_count ?? 0)));
+
+  return pane;
+}
+
+function _buildUsersPane(h) {
+  const u = h.users || {};
+  const pane = _pane('green', 'Users', false);
+  const body = pane.querySelector('.hw-pane-body');
+
+  body.appendChild(_kvRow('Unique users', _fmtNum(u.unique_users ?? 0)));
+  body.appendChild(_kvRow('Anomalies', u.anomalies?.length ? String(u.anomalies.length) : 'None', u.anomalies?.length ? 'amber' : 'green'));
+
+  return pane;
+}
+
+function _buildLicensePane(h) {
+  const lic = h.license || {};
+  const rawStatus = lic.status || 'unknown';
+  // Map internal status to human-readable labels
+  const labelMap = { unknown: 'Trial', trial: 'Trial', active: 'Licensed', expired: 'Expired' };
+  const label = labelMap[rawStatus.toLowerCase()] || rawStatus;
+  const color = rawStatus.toLowerCase() === 'active' ? 'green' : 'amber';
+
+  const pane = _pane(color, 'License', false);
+  const body = pane.querySelector('.hw-pane-body');
+
+  body.appendChild(_kvRow('Status', label, color));
+
+  // Show trial days remaining if available
+  if (lic.trial_days_remaining != null) {
+    body.appendChild(_kvRow('Trial days left', String(lic.trial_days_remaining)));
+  }
+  if (lic.tier) {
+    body.appendChild(_kvRow('Tier', lic.tier));
+  }
+
+  return pane;
+}
+
+// ---------- Pane builder ----------
+
+function _pane(accentColor, title, clickable) {
+  const pane = document.createElement('div');
+  pane.className = 'hw-pane' + (clickable ? ' hw-pane-clickable' : '');
+
+  pane.innerHTML = `
+    <div class="hw-pane-accent hw-accent-${accentColor}"></div>
+    <div class="hw-pane-header">${_esc(title)}</div>
+    <div class="hw-pane-body"></div>
+  `;
+  return pane;
+}
+
+function _kvRow(label, value, color) {
+  const row = document.createElement('div');
+  row.className = 'hw-kv-row';
+  row.innerHTML = `
+    <span class="hw-kv-label">${_esc(label)}</span>
+    <span class="hw-kv-value${color ? ` hw-kv-${color}` : ''}">${_esc(value)}</span>
+  `;
+  return row;
+}
+
+// ---------- Grandchild: Chain Integrity Detail ----------
+
+async function _openChainDetail(state, h) {
+  const chain = h.chain || {};
+  const chainStatus = chain.status || 'healthy';
+  const color = chainStatus === 'critical' ? 'red' : chainStatus === 'attention' ? 'amber' : 'green';
+
+  const content = document.createElement('div');
+  content.className = 'hw-gc';
+
+  // Accent bar
+  const accent = document.createElement('div');
+  accent.className = `hw-gc-accent hw-accent-${color}`;
+  content.appendChild(accent);
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'hw-gc-header';
+  header.textContent = 'Chain integrity detail';
+  content.appendChild(header);
+
+  // Summary KV
+  const kvSection = document.createElement('div');
+  kvSection.className = 'hw-gc-section';
+  kvSection.appendChild(_kvRow('Status', _statusLabel(chainStatus), color));
+  kvSection.appendChild(_kvRow('Event count', _fmtNum(chain.chain_event_count ?? 0)));
+  kvSection.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No'));
+
+  if (chain.break_info) {
+    const bi = chain.break_info;
+    kvSection.appendChild(_kvRow('Break reason', bi.reason || 'Unknown', 'red'));
+    if (bi.break_line != null) kvSection.appendChild(_kvRow('Break at line', String(bi.break_line)));
+    if (bi.break_type) kvSection.appendChild(_kvRow('Break type', bi.break_type));
+    if (bi.expected_hash) kvSection.appendChild(_kvRow('Expected hash', _truncHash(bi.expected_hash)));
+    if (bi.actual_hash) kvSection.appendChild(_kvRow('Actual hash', _truncHash(bi.actual_hash)));
+  }
+  content.appendChild(kvSection);
+
+  if (chain.repair_info) {
+    const ri = chain.repair_info;
+    const repairSection = document.createElement('div');
+    repairSection.className = 'hw-gc-section';
+    const repairHeader = document.createElement('div');
+    repairHeader.className = 'hw-gc-sub-header';
+    repairHeader.textContent = 'Repair information';
+    repairSection.appendChild(repairHeader);
+    repairSection.appendChild(_kvRow('Repaired', ri.repaired ? 'Yes' : 'No', ri.repaired ? 'green' : 'amber'));
+    if (ri.repair_timestamp) repairSection.appendChild(_kvRow('Repaired at', _formatHumanDate(ri.repair_timestamp)));
+    if (ri.repair_type) repairSection.appendChild(_kvRow('Repair type', ri.repair_type));
+    content.appendChild(repairSection);
+  }
+
+  if (chain.pattern_alert) {
+    const pa = chain.pattern_alert;
+    const patternSection = document.createElement('div');
+    patternSection.className = 'hw-gc-section';
+    const patternHeader = document.createElement('div');
+    patternHeader.className = 'hw-gc-sub-header';
+    patternHeader.textContent = 'Pattern analysis';
+    patternSection.appendChild(patternHeader);
+    if (pa.pattern) patternSection.appendChild(_kvRow('Pattern', pa.pattern));
+    if (pa.frequency) patternSection.appendChild(_kvRow('Frequency', pa.frequency));
+    if (pa.assessment) patternSection.appendChild(_kvRow('Assessment', pa.assessment, 'amber'));
+    content.appendChild(patternSection);
+  }
+
+  // Recent stability events related to chain
+  const chainEvents = (h.recent_stability_events || []).filter(
+    e => (e.event_type || '').includes('chain') || (e.event_type || '').includes('integrity') || (e.event_type || '').includes('break')
+  ).slice(0, 5);
+  if (chainEvents.length) {
+    const evtSection = document.createElement('div');
+    evtSection.className = 'hw-gc-section';
+    const evtHeader = document.createElement('div');
+    evtHeader.className = 'hw-gc-sub-header';
+    evtHeader.textContent = 'Related events';
+    evtSection.appendChild(evtHeader);
+    for (const evt of chainEvents) {
+      const row = document.createElement('div');
+      row.className = 'hw-kv-row';
+      row.innerHTML = `
+        <span class="hw-kv-label">${_esc(_formatHumanDate(evt.timestamp))}</span>
+        <span class="hw-kv-value">${_esc(evt.event_type || 'Unknown')}</span>
+      `;
+      evtSection.appendChild(row);
+    }
+    content.appendChild(evtSection);
+  }
+
+  modalManager.open({ title: 'Chain Integrity', trigger: state.el, content });
+}
+
+// ---------- Grandchild: Deny Rate Detail ----------
+
+async function _openDenyRateDetail(state, h) {
+  const dr = h.deny_rate || {};
+  const color = dr.anomaly ? 'amber' : 'green';
+
+  const content = document.createElement('div');
+  content.className = 'hw-gc';
+
+  const accent = document.createElement('div');
+  accent.className = `hw-gc-accent hw-accent-${color}`;
+  content.appendChild(accent);
+
+  const header = document.createElement('div');
+  header.className = 'hw-gc-header';
+  header.textContent = 'Deny rate detail';
+  content.appendChild(header);
+
+  // Summary
+  const kvSection = document.createElement('div');
+  kvSection.className = 'hw-gc-section';
+
+  const recentPct = dr.deny_rate != null ? (dr.deny_rate * 100).toFixed(1) + '%' : '0%';
+  const histPct = dr.historical_average != null ? (dr.historical_average * 100).toFixed(1) + '%' : '0%';
+
+  kvSection.appendChild(_kvRow('Recent deny rate (last 100)', recentPct, dr.anomaly ? 'amber' : undefined));
+  kvSection.appendChild(_kvRow('Historical average', histPct));
+  kvSection.appendChild(_kvRow('DENY count (recent)', _fmtNum(dr.deny_count ?? 0), 'amber'));
+  kvSection.appendChild(_kvRow('ALLOW count (recent)', _fmtNum(dr.allow_count ?? 0), 'green'));
+  kvSection.appendChild(_kvRow('Total decisions (recent)', _fmtNum(dr.total ?? 0)));
+  kvSection.appendChild(_kvRow('Anomaly detected', dr.anomaly ? 'Yes' : 'No', dr.anomaly ? 'amber' : 'green'));
+  content.appendChild(kvSection);
+
+  // Fetch recent DENYs for context
+  const res = await api.getActivity({ policy_decision: 'DENY', limit: 10 });
+  if (res.ok && res.data?.entries?.length) {
+    const denySection = document.createElement('div');
+    denySection.className = 'hw-gc-section';
+    const denyHeader = document.createElement('div');
+    denyHeader.className = 'hw-gc-sub-header';
+    denyHeader.textContent = 'Recent denied operations';
+    denySection.appendChild(denyHeader);
+
+    const table = document.createElement('table');
+    table.className = 'hw-deny-table';
+    table.innerHTML = `<thead><tr>
+      <th>Time</th><th>Tool</th><th>Target</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    for (const entry of res.data.entries.slice(0, 10)) {
+      const detail = entry.detail || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${_esc(_formatHumanDate(entry.timestamp_utc))}</td>
+        <td>${_esc(detail.tool_name || 'Unknown')}</td>
+        <td class="hw-deny-target">${_esc(_truncTarget(detail.target || 'N/A'))}</td>
+      `;
+      // Click to open record detail
+      const evidence = entry.evidence || {};
+      const recordId = evidence.request_id || evidence.event_id || evidence.record_hash;
+      if (recordId) {
+        tr.className = 'hw-deny-row-click';
+        tr.addEventListener('click', () => openRecordDetail(recordId, state.el));
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    denySection.appendChild(table);
+    content.appendChild(denySection);
+  }
+
+  modalManager.open({ title: 'Deny Rate', trigger: state.el, content });
+}
+
+// ---------- Recent health events table ----------
+
+function _renderEventsTable(state, h) {
+  const events = h.recent_stability_events || [];
+  if (!events.length) return;
+
+  const hasCritical = events.some(e => _eventSeverity(e) === 'critical');
+  const color = hasCritical ? 'red' : 'green';
+
+  const pane = document.createElement('div');
+  pane.className = 'hw-events-pane';
+  pane.innerHTML = `
+    <div class="hw-pane-accent hw-accent-${color}"></div>
+    <div class="hw-pane-header-row">
+      <span class="hw-pane-header">Recent health events</span>
+      <span class="hw-pane-count">${events.length > 10 ? '10 of ' + events.length : events.length} events</span>
+    </div>
+  `;
+
+  const table = document.createElement('table');
+  table.className = 'hw-events-table';
+  table.innerHTML = `<thead><tr>
+    <th style="width:100px">Time</th>
+    <th style="width:160px">Event</th>
+    <th style="width:80px">Severity</th>
+    <th style="width:90px">Source</th>
+    <th>Details</th>
+  </tr></thead>`;
+
+  const tbody = document.createElement('tbody');
+  for (const evt of events.slice(0, 10)) {
+    const severity = _eventSeverity(evt);
+    const source = _eventSource(evt);
+    const details = _eventDetails(evt);
+    const tr = document.createElement('tr');
+    tr.className = `hw-evt-row hw-evt-${severity}`;
+    tr.innerHTML = `
+      <td class="hw-evt-time">${_esc(_formatHumanDate(evt.timestamp))}</td>
+      <td>${_esc(evt.event_type || 'Unknown')}</td>
+      <td><span class="hw-sev-badge hw-sev-${severity}">${_esc(_capitalize(severity))}</span></td>
+      <td>${_esc(source)}</td>
+      <td class="hw-evt-detail">${_esc(details)}</td>
+    `;
+
+    // Clickable — open event record as grandchild
+    tr.addEventListener('click', () => {
+      const eventId = evt.event_id || evt.record_hash || evt.request_id;
+      if (eventId) {
+        openRecordDetail(eventId, state.el);
+      } else {
+        // If no ID, show raw event as grandchild
+        _openRawEventDetail(state, evt);
+      }
+    });
+
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  pane.appendChild(table);
+
+  // View all in Audit link
+  if (events.length > 10) {
+    const viewAll = document.createElement('div');
+    viewAll.className = 'hw-view-all';
+    const link = document.createElement('button');
+    link.className = 'hw-view-all-btn';
+    link.textContent = 'View all in Audit';
+    link.addEventListener('click', () => {
+      modalManager.closeAll();
+      setTimeout(() => {
+        import('./audit.js').then(mod => mod.openAuditWindow(null));
+      }, 0);
+    });
+    viewAll.appendChild(link);
+    pane.appendChild(viewAll);
+  }
+
+  state.el.appendChild(pane);
+}
+
+function _openRawEventDetail(state, evt) {
+  const content = document.createElement('div');
+  content.className = 'hw-gc';
+
+  const accent = document.createElement('div');
+  accent.className = 'hw-gc-accent hw-accent-muted';
+  content.appendChild(accent);
+
+  const header = document.createElement('div');
+  header.className = 'hw-gc-header';
+  header.textContent = 'Health event detail';
+  content.appendChild(header);
+
+  const section = document.createElement('div');
+  section.className = 'hw-gc-section';
+  section.appendChild(_kvRow('Event type', evt.event_type || 'Unknown'));
+  section.appendChild(_kvRow('Time', _formatHumanDate(evt.timestamp)));
+  section.appendChild(_kvRow('Severity', _capitalize(_eventSeverity(evt))));
+  section.appendChild(_kvRow('Source', _eventSource(evt)));
+
+  if (evt.payload && typeof evt.payload === 'object') {
+    for (const [k, v] of Object.entries(evt.payload)) {
+      section.appendChild(_kvRow(k, typeof v === 'object' ? JSON.stringify(v) : String(v ?? 'N/A')));
+    }
+  }
+  content.appendChild(section);
+
+  modalManager.open({ title: 'Health Event', trigger: state.el, content });
+}
+
+// ---------- Event classification helpers ----------
+
+function _eventSeverity(evt) {
+  const type = (evt.event_type || '').toLowerCase();
+  if (type.includes('break') || type.includes('critical') || type.includes('tamper')) return 'critical';
+  if (type.includes('warn') || type.includes('attention') || type.includes('anomal') || type.includes('gap')) return 'warning';
+  return 'info';
+}
+
+function _eventSource(evt) {
+  const type = (evt.event_type || '').toLowerCase();
+  if (type.includes('chain') || type.includes('integrity') || type.includes('hash')) return 'verifier';
+  if (type.includes('sign')) return 'signing';
+  if (type.includes('deny') || type.includes('policy')) return 'proxy';
+  if (type.includes('observ')) return 'hooks';
+  return 'system';
+}
+
+function _eventDetails(evt) {
+  if (!evt.payload) return '';
+  if (typeof evt.payload === 'string') return evt.payload;
+  if (typeof evt.payload === 'object') {
+    // Try to extract a meaningful summary
+    const p = evt.payload;
+    if (p.message) return p.message;
+    if (p.reason) return p.reason;
+    if (p.description) return p.description;
+    // Compact JSON
+    const json = JSON.stringify(p);
+    return json.length > 120 ? json.substring(0, 117) + '\u2026' : json;
+  }
+  return String(evt.payload);
+}
+
+// ---------- Utility ----------
 
 function _openAsChild(title, trigger, content) {
   if (modalManager.depth > 0) return modalManager.replaceChild({ title, trigger, content });
   return modalManager.open({ title, trigger, content });
 }
 
+function _statusColor(status) {
+  if (status === 'critical') return 'red';
+  if (status === 'attention') return 'amber';
+  if (status === 'healthy_auto_repaired' || status === 'repaired') return 'green';
+  return 'green';
+}
+
+function _statusLabel(status) {
+  const map = {
+    healthy: 'Healthy',
+    critical: 'Critical',
+    attention: 'Attention',
+    healthy_auto_repaired: 'Healthy (repaired)',
+    repaired: 'Healthy (repaired)',
+  };
+  return map[status] || _capitalize(status);
+}
+
 function _formatBytes(bytes) {
-  if (bytes == null) return '--';
+  if (bytes == null) return 'N/A';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function _formatTime(iso) {
-  if (!iso) return '--';
-  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+function _formatHumanDate(isoStr) {
+  if (!isoStr) return 'N/A';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    // Same day: just time. Different day: "Apr 18, 23:20"
+    if (d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+      return `${hh}:${mm}:${ss}`;
+    }
+    return `${months[d.getMonth()]} ${d.getDate()}, ${hh}:${mm}:${ss}`;
+  } catch { return isoStr; }
+}
+
+function _fmtNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : String(n);
+}
+
+function _truncHash(hash) {
+  if (!hash) return 'N/A';
+  return hash.length > 16 ? hash.substring(0, 8) + '\u2026' + hash.substring(hash.length - 8) : hash;
+}
+
+function _truncTarget(target) {
+  if (!target || target.length <= 40) return target;
+  return '\u2026' + target.substring(target.length - 37);
+}
+
+function _capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function _esc(str) {
@@ -192,60 +627,358 @@ function _esc(str) {
   return el.innerHTML;
 }
 
-// Styles
+// ---------- Styles ----------
+
 const hwStyles = document.createElement('style');
 hwStyles.textContent = `
-  .hw-content { font-family: "Inter", system-ui, sans-serif; }
-  .hw-header { margin-bottom: 16px; }
-  .hw-eyebrow {
-    display: block; font-size: 0.72rem; text-transform: uppercase;
-    letter-spacing: 0.06em; color: #8b919a; margin-bottom: 4px;
+  .hw-root {
+    font-family: "Inter", system-ui, sans-serif;
+    color: #e4e6eb;
   }
-  .hw-heading { font-size: 1.25rem; font-weight: 600; color: #e4e6eb; margin-right: 12px; }
-  .hw-overall {
-    display: inline-block; font-size: 0.82rem; font-weight: 600;
-    padding: 2px 10px; border-radius: 999px;
+
+  /* ---- Title accent ---- */
+  .hw-title-accent {
+    height: 6px;
+    border-radius: 4px 4px 0 0;
+    margin: -24px -24px 0;
   }
-  .hw-status-healthy { background: rgba(74,222,128,0.10); color: #4ade80; }
-  .hw-status-attention { background: rgba(245,158,66,0.10); color: #f59e42; }
-  .hw-status-critical { background: rgba(239,68,68,0.10); color: #ef4444; }
-  .hw-status-repaired { background: rgba(91,138,245,0.12); color: #5b8af5; }
-  .hw-alert {
-    border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
-    padding: 14px 18px; margin-bottom: 12px;
+  .hw-accent-green { background: #22c55e; }
+  .hw-accent-amber { background: #f59e42; }
+  .hw-accent-red { background: #ef4444; }
+  .hw-accent-muted { background: #6b7280; }
+
+  /* ---- Status pill ---- */
+  .hw-status-row {
+    padding: 14px 0 16px;
   }
-  .hw-alert-critical { border-left: 3px solid #ef4444; background: rgba(239,68,68,0.06); }
-  .hw-alert-attention { border-left: 3px solid #f59e42; background: rgba(245,158,66,0.06); }
-  .hw-alert-info { border-left: 3px solid #5b8af5; background: rgba(91,138,245,0.06); }
-  .hw-alert-header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-  .hw-alert-severity { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
-  .hw-alert-source { font-size: 0.72rem; color: #8b919a; }
-  .hw-alert-message { font-size: 0.82rem; color: #e4e6eb; margin: 0 0 4px; }
-  .hw-alert-guidance { font-size: 0.82rem; color: #8b919a; margin: 0 0 8px; font-style: italic; }
-  .hw-section { margin-bottom: 20px; }
-  .hw-section-title {
-    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-    color: #5b8af5; margin: 0 0 10px; font-weight: 600;
+  .hw-status-pill {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 3px 14px;
+    border-radius: 999px;
   }
-  .hw-loading { color: #8b919a; font-size: 0.82rem; text-align: center; padding: 40px 0; margin: 0; }
-  .hw-error {
-    color: #f59e42; background: rgba(245,158,66,0.10);
-    padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+  .hw-pill-green { background: rgba(34,197,94,0.12); color: #22c55e; }
+  .hw-pill-amber { background: rgba(245,158,66,0.12); color: #f59e42; }
+  .hw-pill-red { background: rgba(239,68,68,0.12); color: #ef4444; }
+
+  /* ---- Alert pane ---- */
+  .hw-alert-pane {
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
   }
-  .hw-event-list { background: #22262e; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; }
-  .hw-event-row {
-    display: flex; gap: 12px; padding: 8px 16px; font-size: 0.82rem;
+  .hw-alert-red {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.25);
+  }
+  .hw-alert-amber {
+    background: rgba(245,158,66,0.06);
+    border: 1px solid rgba(245,158,66,0.25);
+  }
+  .hw-alert-blue {
+    background: rgba(91,138,245,0.06);
+    border: 1px solid rgba(91,138,245,0.25);
+  }
+  .hw-alert-top {
+    margin-bottom: 8px;
+  }
+  .hw-alert-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 10px;
+    border-radius: 999px;
+  }
+  .hw-badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .hw-badge-amber { background: rgba(245,158,66,0.15); color: #f59e42; }
+  .hw-alert-desc {
+    font-size: 0.85rem;
+    color: #e4e6eb;
+    margin: 0 0 4px;
+    line-height: 1.5;
+  }
+  .hw-alert-guidance {
+    font-size: 0.82rem;
+    color: #8b919a;
+    margin: 0 0 10px;
+    line-height: 1.5;
+  }
+  .hw-alert-ack {
+    background: none;
+    border: 1px solid rgba(239,68,68,0.4);
+    border-radius: 6px;
+    color: #ef4444;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 5px 14px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .hw-alert-ack:hover {
+    background: rgba(239,68,68,0.08);
+    border-color: rgba(239,68,68,0.6);
+  }
+
+  /* ---- Pane grid ---- */
+  .hw-pane-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  /* ---- Data pane ---- */
+  .hw-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .hw-pane-clickable {
+    cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s;
+  }
+  .hw-pane-clickable:hover {
+    border-color: rgba(91,138,245,0.3);
+    box-shadow: 0 0 0 1px rgba(91,138,245,0.15);
+  }
+  .hw-pane-accent {
+    height: 6px;
+  }
+  .hw-pane-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b8af5;
+    font-weight: 600;
+    padding: 12px 20px 4px;
+  }
+  .hw-pane-body {
+    padding: 6px 20px 16px;
+  }
+
+  /* ---- KV rows ---- */
+  .hw-kv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+  }
+  .hw-kv-label {
+    font-size: 0.78rem;
+    color: #8b919a;
+  }
+  .hw-kv-value {
+    font-size: 0.82rem;
+    font-family: "JetBrains Mono", monospace;
+    color: #e4e6eb;
+  }
+  .hw-kv-green { color: #22c55e; }
+  .hw-kv-amber { color: #f59e42; }
+  .hw-kv-red { color: #ef4444; }
+
+  /* ---- Events pane ---- */
+  .hw-events-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .hw-pane-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 8px;
+  }
+  .hw-pane-header-row .hw-pane-header {
+    padding: 0;
+  }
+  .hw-pane-count {
+    font-size: 0.72rem;
+    color: #8b919a;
+  }
+
+  /* Events table */
+  .hw-events-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .hw-events-table thead th {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 10px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    white-space: nowrap;
+  }
+  .hw-events-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+  .hw-evt-row {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .hw-evt-row:hover {
+    background: rgba(91,138,245,0.06);
+  }
+  .hw-evt-critical {
+    background: rgba(239,68,68,0.04);
+  }
+  .hw-evt-critical:hover {
+    background: rgba(239,68,68,0.10);
+  }
+  .hw-evt-warning {
+    background: rgba(245,158,66,0.04);
+  }
+  .hw-evt-warning:hover {
+    background: rgba(245,158,66,0.08);
+  }
+  .hw-evt-time {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: #8b919a;
+  }
+  .hw-evt-detail {
+    color: #8b919a;
+  }
+
+  /* Severity badges */
+  .hw-sev-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 8px;
+    border-radius: 999px;
+  }
+  .hw-sev-critical { background: rgba(239,68,68,0.12); color: #ef4444; }
+  .hw-sev-warning { background: rgba(245,158,66,0.12); color: #f59e42; }
+  .hw-sev-info { background: rgba(107,114,128,0.12); color: #8b919a; }
+
+  /* View all link */
+  .hw-view-all {
+    padding: 10px 20px 14px;
+    text-align: center;
+  }
+  .hw-view-all-btn {
+    background: none;
+    border: none;
+    color: #5b8af5;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+  }
+  .hw-view-all-btn:hover { color: #7da5ff; }
+
+  /* ---- Grandchild styles ---- */
+  .hw-gc {
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  .hw-gc-accent {
+    height: 6px;
+    margin: -24px -24px 0;
+    border-radius: 4px 4px 0 0;
+  }
+  .hw-gc-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5b8af5;
+    font-weight: 600;
+    padding: 14px 0 10px;
+  }
+  .hw-gc-sub-header {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b919a;
+    font-weight: 600;
+    padding: 8px 0 6px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 6px;
+  }
+  .hw-gc-section {
+    margin-bottom: 10px;
+  }
+
+  /* Deny detail table in grandchild */
+  .hw-deny-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    margin-top: 6px;
+  }
+  .hw-deny-table thead th {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .hw-deny-table tbody td {
+    padding: 6px 8px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
   }
-  .hw-event-row:last-child { border-bottom: none; }
-  .hw-event-time { flex: 0 0 140px; font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #8b919a; }
-  .hw-event-type { flex: 0 0 160px; color: #e4e6eb; }
-  .hw-event-detail { flex: 1; color: #8b919a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hw-deny-row-click {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .hw-deny-row-click:hover {
+    background: rgba(91,138,245,0.06);
+  }
+  .hw-deny-target {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: #8b919a;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---- Utility ---- */
+  .hw-loading {
+    color: #8b919a;
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 40px 0;
+  }
+  .hw-error {
+    color: #f59e42;
+    background: rgba(245,158,66,0.10);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+  }
+
+  /* ---- Responsive ---- */
   @media (max-width: 600px) {
-    .hw-event-row { flex-wrap: wrap; }
-    .hw-event-time { flex: 0 0 auto; }
-    .hw-event-type { flex: 0 0 auto; }
-    .hw-event-detail { flex: 1 1 100%; white-space: normal; }
+    .hw-pane-grid { grid-template-columns: 1fr; }
+    .hw-events-table thead th:nth-child(4),
+    .hw-events-table tbody td:nth-child(4) { display: none; }
+    .hw-deny-table thead th:nth-child(3),
+    .hw-deny-table tbody td:nth-child(3) { display: none; }
   }
 `;
 document.head.appendChild(hwStyles);

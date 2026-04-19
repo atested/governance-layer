@@ -702,8 +702,10 @@ def _compute_deny_rate(chain_path: Path, window: int = 100) -> Dict[str, Any]:
 
     # Anomaly: compare recent 10 to overall rate
     anomaly = False
+    historical_average = deny_rate  # default to same as recent if not enough data
     if len(decisions) > 20:
         overall_deny_rate = sum(1 for d in decisions if d == "DENY") / len(decisions)
+        historical_average = overall_deny_rate
         recent_10 = decisions[-10:]
         recent_deny_rate = sum(1 for d in recent_10 if d == "DENY") / len(recent_10)
         if overall_deny_rate > 0 and recent_deny_rate > overall_deny_rate * DENY_RATE_ANOMALY_MULTIPLIER:
@@ -714,6 +716,7 @@ def _compute_deny_rate(chain_path: Path, window: int = 100) -> Dict[str, Any]:
         "allow_count": allow_count,
         "total": total,
         "deny_rate": round(deny_rate, 4),
+        "historical_average": round(historical_average, 4),
         "anomaly": anomaly,
     }
 
@@ -750,6 +753,12 @@ def _observation_gap(chain_path: Path) -> Dict[str, Any]:
 
     # Gap: governed operations happening but no recent observations
     gap_detected = False
+    hours_since_last = None
+    now_utc = datetime.now(timezone.utc)
+    if last_observation_ts:
+        obs_dt = _parse_utc(last_observation_ts)
+        if obs_dt:
+            hours_since_last = round((now_utc - obs_dt).total_seconds() / 3600, 1)
     if last_governed_ts and last_observation_ts:
         gov_dt = _parse_utc(last_governed_ts)
         obs_dt = _parse_utc(last_observation_ts)
@@ -763,6 +772,8 @@ def _observation_gap(chain_path: Path) -> Dict[str, Any]:
         "gap_detected": gap_detected,
         "governed_count": governed_count,
         "observation_count": observation_count,
+        "ungoverned_operation_count": observation_count,
+        "hours_since_last": hours_since_last,
         "last_governed": last_governed_ts,
         "last_observation": last_observation_ts,
     }
