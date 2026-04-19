@@ -73,11 +73,19 @@ export function renderMainPage() {
         <div class="mp-pane-metrics">
           <div class="mp-metric">
             <span class="mp-metric-label">Chain Events</span>
-            <span class="mp-metric-value" id="mv-chain-events">--</span>
+            <span class="mp-metric-value" id="mv-chain-events">0</span>
           </div>
           <div class="mp-metric">
             <span class="mp-metric-label">Integrity</span>
-            <span class="mp-metric-value" id="mv-chain-integrity">--</span>
+            <span class="mp-metric-value" id="mv-chain-integrity">N/A</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Chain Age</span>
+            <span class="mp-metric-value" id="mv-chain-age">N/A</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Last Event</span>
+            <span class="mp-metric-value" id="mv-last-event">N/A</span>
           </div>
         </div>
       </div>
@@ -90,15 +98,19 @@ export function renderMainPage() {
         <div class="mp-pane-metrics">
           <div class="mp-metric">
             <span class="mp-metric-label">Mediated</span>
-            <span class="mp-metric-value" id="mv-mediated">--</span>
+            <span class="mp-metric-value" id="mv-mediated">0</span>
           </div>
           <div class="mp-metric">
             <span class="mp-metric-label">Denied</span>
-            <span class="mp-metric-value" id="mv-denied">--</span>
+            <span class="mp-metric-value" id="mv-denied">0</span>
           </div>
           <div class="mp-metric">
             <span class="mp-metric-label">Approved</span>
-            <span class="mp-metric-value" id="mv-approved">--</span>
+            <span class="mp-metric-value" id="mv-approved">0</span>
+          </div>
+          <div class="mp-metric">
+            <span class="mp-metric-label">Users</span>
+            <span class="mp-metric-value" id="mv-users">0</span>
           </div>
         </div>
       </div>
@@ -111,6 +123,12 @@ export function renderMainPage() {
         <span class="mp-click-hint">Click to open</span>
       </div>
       <div class="mp-feed" id="recent-feed">
+        <div class="mp-feed-header">
+          <span class="mp-feed-hcol">Time</span>
+          <span class="mp-feed-hcol">Tool</span>
+          <span class="mp-feed-hcol">Target</span>
+          <span class="mp-feed-hcol mp-feed-hcol-right">Decision</span>
+        </div>
         <atd-loading-indicator label="Loading activity"></atd-loading-indicator>
       </div>
     </div>
@@ -191,15 +209,15 @@ export async function loadMainPageData() {
   const [healthRes, statusRes, activityRes] = await Promise.all([
     api.getHealth(),
     api.getStatus(),
-    api.getActivity({ limit: 8 }),
+    api.getActivity({ limit: 5 }),
   ]);
 
   // Chain Health pane
   if (healthRes.ok) {
     const h = healthRes.data;
-    _setMetric('mv-chain-events', String(h.chain?.chain_event_count ?? '--'));
+    _setMetric('mv-chain-events', String(h.chain?.chain_event_count ?? 0));
 
-    const integrity = h.chain?.status ?? '--';
+    const integrity = h.chain?.status ?? 'N/A';
     const intEl = _page.querySelector('#mv-chain-integrity');
     intEl.textContent = integrity.toUpperCase();
 
@@ -219,24 +237,49 @@ export async function loadMainPageData() {
 
     _updateHealthAccent();
 
+    // Chain Age — compute from recent_stability_events or timestamp
+    const chainTs = h.timestamp_utc;
+    const recentEvents = h.recent_stability_events || [];
+    let firstEventTs = null;
+    // Find earliest stability event, or use current health timestamp as reference
+    for (const evt of recentEvents) {
+      const ts = evt.timestamp_utc || evt.timestamp;
+      if (ts && (!firstEventTs || ts < firstEventTs)) firstEventTs = ts;
+    }
+    // Also check the chain file creation hint from storage
+    if (firstEventTs) {
+      const ageMs = Date.now() - new Date(firstEventTs).getTime();
+      const ageDays = Math.max(0, Math.floor(ageMs / 86400000));
+      _setMetric('mv-chain-age', ageDays === 1 ? '1 day' : `${ageDays} days`);
+    }
+
+    // Last Event — use health timestamp
+    if (chainTs) {
+      _setMetric('mv-last-event', _formatTime24(chainTs));
+    }
+
     // Denied count from deny_rate
     const denyRate = h.deny_rate;
     if (denyRate) {
-      const pct = denyRate.recent_deny_rate;
       const deniedEl = _page.querySelector('#mv-denied');
-      deniedEl.textContent = pct != null ? `${(pct * 100).toFixed(1)}%` : '--';
-      if (pct > 0.05) deniedEl.classList.add('mp-metric-red');
-      else if (pct > 0) deniedEl.classList.add('mp-metric-amber');
+      const denyCount = denyRate.deny_count ?? 0;
+      deniedEl.textContent = String(denyCount);
+      if (denyCount > 5) deniedEl.classList.add('mp-metric-red');
+      else if (denyCount > 0) deniedEl.classList.add('mp-metric-amber');
     }
+
+    // Unique users
+    const uniqueUsers = h.users?.unique_users ?? 0;
+    _setMetric('mv-users', String(uniqueUsers));
   }
 
   // Atested Activity pane — derives from status
   if (statusRes.ok) {
     const s = statusRes.data;
-    const mediated = s.opacity_posture?.transparent_count ?? '--';
+    const mediated = s.opacity_posture?.transparent_count ?? 0;
     _setMetric('mv-mediated', String(mediated));
 
-    const approved = s.approval_snapshot?.active_approvals ?? '--';
+    const approved = s.approval_snapshot?.active_approvals ?? 0;
     _setMetric('mv-approved', String(approved));
   }
 
@@ -329,39 +372,43 @@ function _renderRecentActivity(result) {
     return;
   }
 
+  // Keep the column header, clear the rest
+  const header = feed.querySelector('.mp-feed-header');
   feed.innerHTML = '';
+  if (header) feed.appendChild(header);
+
   for (const entry of entries) {
     const row = document.createElement('div');
     row.className = 'mp-feed-row';
     row.tabIndex = 0;
 
-    const time = _formatTime(entry.timestamp_utc);
-    const decision = entry.policy_decision || entry.event_category || '';
-    const tool = entry.tool || entry.event_type || '';
+    const time = _formatTime24(entry.timestamp_utc);
+    const detail = entry.detail || {};
+    const tool = detail.tool_name || entry.tool || entry.event_type || '';
+    const target = detail.target || '';
+    const decision = detail.policy_decision || entry.policy_decision || entry.event_category || '';
 
-    // Three columns: timestamp, event type, decision
+    // Four columns: time, tool, target, decision
+    let decisionHtml;
+    if (decision === 'ALLOW') {
+      decisionHtml = '<span class="mp-decision-allow">ALLOW</span>';
+    } else if (decision === 'DENY') {
+      decisionHtml = '<span class="mp-decision-deny">DENY</span>';
+    } else {
+      decisionHtml = '<span class="mp-decision-muted">\u2014</span>';
+    }
+
     row.innerHTML = `
       <span class="mp-feed-time">${_esc(time)}</span>
       <span class="mp-feed-tool">${_esc(tool)}</span>
-      <span class="mp-feed-decision"></span>
+      <span class="mp-feed-target">${_esc(target)}</span>
+      <span class="mp-feed-decision">${decisionHtml}</span>
     `;
-
-    // Insert decision tag
-    const decisionSlot = row.querySelector('.mp-feed-decision');
-    if (decision === 'ALLOW') {
-      decisionSlot.innerHTML = '<span class="mp-decision-allow">ALLOW</span>';
-    } else if (decision === 'DENY') {
-      decisionSlot.innerHTML = '<span class="mp-decision-deny">DENY</span>';
-    } else if (decision) {
-      decisionSlot.innerHTML = `<span class="mp-decision-muted">\u2014</span>`;
-    } else {
-      decisionSlot.innerHTML = `<span class="mp-decision-muted">\u2014</span>`;
-    }
 
     // Click handler — opens Activity with Record Detail for this entry
     const recordId = entry.request_id || entry.event_id || '';
     row.addEventListener('click', (e) => {
-      e.stopPropagation(); // Don't trigger pane click
+      e.stopPropagation();
       openActivityWindow(row, { scrollToRecord: recordId });
     });
     row.addEventListener('keydown', (e) => {
@@ -375,11 +422,14 @@ function _renderRecentActivity(result) {
   }
 }
 
-function _formatTime(isoStr) {
+function _formatTime24(isoStr) {
   if (!isoStr) return '--';
   try {
     const d = new Date(isoStr);
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
   } catch {
     return isoStr;
   }
@@ -498,9 +548,26 @@ mpStyles.textContent = `
     padding: 4px 0;
     min-height: 48px;
   }
+  .mp-feed-header {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 18px 2px;
+  }
+  .mp-feed-hcol {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+  }
+  .mp-feed-hcol-right {
+    text-align: right;
+  }
   .mp-feed-row {
     display: grid;
-    grid-template-columns: 80px 1fr 70px;
+    grid-template-columns: 80px 1fr 1fr 70px;
     align-items: center;
     gap: 12px;
     padding: 7px 18px;
@@ -524,6 +591,14 @@ mpStyles.textContent = `
   .mp-feed-tool {
     font-family: "JetBrains Mono", monospace;
     color: #e4e6eb;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mp-feed-target {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    color: #8b919a;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -576,9 +651,9 @@ mpStyles.textContent = `
     outline-offset: 2px;
   }
 
-  /* Workflow accent bar — 4px top */
+  /* Workflow accent bar — 6px top */
   .mp-wf-accent {
-    height: 4px;
+    height: 6px;
   }
   .mp-wf-accent-green { background: #22c55e; }
   .mp-wf-accent-amber { background: #f5a623; }
@@ -688,8 +763,9 @@ mpStyles.textContent = `
     .mp-launcher-grid {
       grid-template-columns: 1fr;
     }
+    .mp-feed-header,
     .mp-feed-row {
-      grid-template-columns: 60px 1fr auto;
+      grid-template-columns: 60px 1fr 1fr auto;
       gap: 6px;
     }
     .mp-pane-metrics {

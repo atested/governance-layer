@@ -2479,6 +2479,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 resolution=qs("resolution") or None,
                 start_time=qs("start_time") or None,
                 end_time=qs("end_time") or None,
+                policy_decision=qs("policy_decision") or None,
+                tool_name=qs("tool_name") or None,
             )
             _json_response(self, data)
 

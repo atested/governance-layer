@@ -462,7 +462,7 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "record_hash": rec.get("record_hash", ""),
         }
 
-    return {
+    entry = {
         "sequence_position": sequence_position,
         "timestamp_utc": rec.get("timestamp_utc", ""),
         "event_category": category,
@@ -471,6 +471,13 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         "evidence": evidence,
         "detail": detail,
     }
+
+    # Propagate user_identity when present on the chain record.
+    uid = rec.get("user_identity", "")
+    if uid:
+        entry["user_identity"] = uid
+
+    return entry
 
 
 # Map from classifier action_type to hook operation_type for dedup matching.
@@ -553,6 +560,8 @@ def governance_activity_view(
     resolution: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    policy_decision: Optional[str] = None,
+    tool_name: Optional[str] = None,
 ) -> dict:
     """Assemble a Governance Activity Projection (GAP).
 
@@ -591,11 +600,36 @@ def governance_activity_view(
         entries = [e for e in entries if e["timestamp_utc"] >= start_time]
     if end_time:
         entries = [e for e in entries if e["timestamp_utc"] <= end_time]
+    if policy_decision:
+        entries = [
+            e for e in entries
+            if e["detail"].get("policy_decision", "") == policy_decision
+        ]
+    if tool_name:
+        entries = [
+            e for e in entries
+            if e["detail"].get("tool_name", "") == tool_name
+        ]
 
     # Reverse chronological order (most recent first).
     entries.reverse()
 
     total_matching = len(entries)
+
+    # Compute summary counts over the filtered set (before pagination).
+    allow_count = sum(
+        1 for e in entries
+        if e["detail"].get("policy_decision") == "ALLOW"
+    )
+    deny_count = sum(
+        1 for e in entries
+        if e["detail"].get("policy_decision") == "DENY"
+    )
+    tool_categories = len({
+        e["detail"].get("tool_name", "")
+        for e in entries
+        if e["detail"].get("tool_name")
+    })
 
     # Apply window controls.
     if offset > 0:
@@ -607,6 +641,11 @@ def governance_activity_view(
         "entries": entries,
         "total_matching": total_matching,
         "chain_event_count": len(rows),
+        "summary": {
+            "allow_count": allow_count,
+            "deny_count": deny_count,
+            "tool_categories": tool_categories,
+        },
         "window": {
             "limit": limit,
             "offset": offset,
@@ -617,6 +656,8 @@ def governance_activity_view(
             "resolution": resolution,
             "start_time": start_time,
             "end_time": end_time,
+            "policy_decision": policy_decision,
+            "tool_name": tool_name,
         },
     }
 
