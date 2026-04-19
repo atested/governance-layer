@@ -22,7 +22,7 @@ import { openApprovalsWindow } from './windows/approvals.js';
 import { openHealthWindow } from './windows/health.js';
 import { openReportsWindow } from './windows/reports.js';
 import { openConfigWindow } from './windows/configuration.js';
-import { openFeedbackWindow } from './windows/feedback.js';
+import { openFeedbackWindow } from './windows/communications.js';
 import { openNotificationsWindow } from './windows/notifications.js';
 import { openLicensingWindow } from './windows/licensing.js';
 

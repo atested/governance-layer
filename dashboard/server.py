@@ -393,6 +393,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_verify_license()
             elif parsed.path == "/api/feedback/submit":
                 self._handle_feedback_submit()
+            elif parsed.path == "/api/communications/request":
+                self._handle_communications_request()
             elif parsed.path == "/api/telemetry/submit":
                 self._handle_telemetry_submit()
             elif parsed.path == "/api/telemetry/opt-in":
@@ -935,6 +937,64 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _append_chain_record_atomic(event)
 
             _json_response(self, {"opted_in": opted_in})
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_communications_request(self):
+        """POST /api/communications/request — submit a priority request."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 16384:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        message = (data.get("message") or "").strip()
+        priority = data.get("priority", "standard")
+        if not message:
+            _json_response(self, {"error": "message is required"}, 400)
+            return
+        if priority not in ("standard", "medium", "high"):
+            _json_response(self, {"error": "invalid priority level"}, 400)
+            return
+
+        import uuid
+        from datetime import datetime, timezone
+
+        request_record = {
+            "request_id": str(uuid.uuid4()),
+            "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "message": message,
+            "priority": priority,
+            "status": "received",
+            "responses": [],
+        }
+
+        try:
+            requests_path = RUNTIME / "LOGS" / "communications_requests.jsonl"
+            requests_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(requests_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(request_record) + "\n")
+
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "communications_request_submitted",
+                {
+                    "request_id": request_record["request_id"],
+                    "priority": priority,
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "submitted": True,
+                "request_id": request_record["request_id"],
+            })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
@@ -2601,6 +2661,77 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "release_url": "",
                     "error": "could not check for updates",
                 })
+
+        elif path == "/api/communications":
+            try:
+                from licensing import resolve_posture
+
+                # Slot allocations by tier
+                _SLOT_ALLOC = {
+                    "personal": {"medium": 0, "high": 0},
+                    "personal_plus": {"medium": 2, "high": 0},
+                    "crew": {"medium": 4, "high": 2},
+                    "team": {"medium": 8, "high": 4},
+                    "institution": {"medium": 16, "high": 8},
+                }
+
+                posture = resolve_posture(RUNTIME)
+                tier = (posture.get("tier") or "personal").lower().replace(" ", "_")
+                alloc = _SLOT_ALLOC.get(tier, _SLOT_ALLOC["personal"])
+
+                # Load requests from JSONL log
+                requests_path = RUNTIME / "LOGS" / "communications_requests.jsonl"
+                requests = []
+                if requests_path.exists():
+                    for line in requests_path.read_text(encoding="utf-8").strip().splitlines():
+                        try:
+                            requests.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+
+                active_medium = [r for r in requests if r.get("priority") == "medium" and r.get("status") != "resolved"]
+                active_high = [r for r in requests if r.get("priority") == "high" and r.get("status") != "resolved"]
+                resolved = [r for r in requests if r.get("status") == "resolved"]
+                standard = [r for r in requests if r.get("priority") == "standard"]
+
+                # Telemetry status
+                opt_in_path = RUNTIME / "telemetry_opt_in"
+                telemetry_opted_in = False
+                if opt_in_path.exists():
+                    telemetry_opted_in = opt_in_path.read_text().strip() == "1"
+
+                # Telemetry traffic
+                telemetry_dir = RUNTIME / "LOGS" / "telemetry"
+                telemetry_artifacts = []
+                if telemetry_dir.exists():
+                    for fp in sorted(telemetry_dir.glob("*.json"), reverse=True)[:20]:
+                        try:
+                            telemetry_artifacts.append(json.loads(fp.read_text(encoding="utf-8")))
+                        except (json.JSONDecodeError, OSError):
+                            continue
+
+                # Last exchange timestamp
+                last_exchange = ""
+                if requests:
+                    last_exchange = requests[-1].get("timestamp_utc", "")
+                if telemetry_artifacts:
+                    t_ts = telemetry_artifacts[0].get("timestamp_utc", "")
+                    if t_ts > last_exchange:
+                        last_exchange = t_ts
+
+                _json_response(self, {
+                    "tier": tier,
+                    "slots": alloc,
+                    "active_medium": active_medium,
+                    "active_high": active_high,
+                    "resolved": resolved[:50],
+                    "standard": standard[:50],
+                    "telemetry_opted_in": telemetry_opted_in,
+                    "telemetry_traffic": telemetry_artifacts,
+                    "last_exchange": last_exchange,
+                })
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
 
         elif path == "/api/feedback":
             feedback_dir = RUNTIME / "LOGS" / "feedback"

@@ -266,6 +266,22 @@ export function postTelemetryOptIn({ opted_in } = {}) {
   return _request('POST', '/telemetry/opt-in', { body: { opted_in } });
 }
 
+/**
+ * Communications state: slots, requests, telemetry status, plan tier.
+ * GET /api/communications
+ */
+export function getCommunications() {
+  return _request('GET', '/communications');
+}
+
+/**
+ * Submit a priority request.
+ * POST /api/communications/request
+ */
+export function postCommunicationsRequest({ message, priority } = {}) {
+  return _request('POST', '/communications/request', { body: { message, priority } });
+}
+
 // ---------- Notification endpoints ----------
 
 /**
