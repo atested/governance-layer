@@ -2,22 +2,27 @@
 """
 server.py — Atested API governance proxy.
 
-An HTTP proxy that sits between an AI agent and its model provider (Anthropic).
-Intercepts tool_use blocks from streaming and non-streaming responses,
-classifies each operation by evidence inference, evaluates policy, records
-decisions in the governance chain, and allows or denies before execution.
+An HTTP proxy that sits between an AI agent and its model provider.
+Intercepts tool_use/tool_calls blocks from streaming and non-streaming
+responses, classifies each operation by evidence inference, evaluates
+policy, records decisions in the governance chain, and allows or denies
+before execution.
+
+Supports multiple providers: Anthropic, OpenAI, Gemini, LiteLLM.
 
 Usage:
     ANTHROPIC_API_KEY=sk-... python -m proxy.server [--port 8080]
 
 Agent configuration:
     ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
+    OPENAI_BASE_URL=http://localhost:8080/openai
+    GEMINI_BASE_URL=http://localhost:8080/gemini
 
 Architecture:
-    Agent → Proxy → Anthropic API
-    Proxy intercepts model responses containing tool_use blocks.
-    ALLOW: pass tool_use through to agent.
-    DENY: replace tool_use with denial text, agent never sees tool call.
+    Agent → Proxy → Provider API
+    Proxy intercepts model responses containing tool calls.
+    ALLOW: pass tool call through to agent.
+    DENY: replace tool call with denial text, agent never sees tool call.
 """
 
 import argparse
@@ -32,7 +37,6 @@ import threading
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlparse as _urlparse
 
 import httpx
 
@@ -57,6 +61,10 @@ _vr_spec = _imputil.spec_from_file_location("verify_record_mod", SCRIPTS / "veri
 _vr_mod = _imputil.module_from_spec(_vr_spec)
 _vr_spec.loader.exec_module(_vr_mod)
 signing_preimage_payload = _vr_mod.signing_preimage_payload
+
+# Provider registry
+from proxy.providers import resolve_provider, PROVIDER_PREFIXES
+from proxy.providers.base import BaseProvider, BaseStreamingCollector, ToolCall, StreamAction
 
 logger = logging.getLogger("atested.proxy")
 
@@ -227,7 +235,7 @@ class ChainRecorder:
 
 
 # ---------------------------------------------------------------------------
-# Anthropic response parser
+# Backward-compatible Anthropic-specific helpers (used by existing tests)
 # ---------------------------------------------------------------------------
 
 
@@ -290,21 +298,15 @@ def _check_approval(
     tool_name: str,
     targets: list[str],
 ) -> Optional[dict]:
-    """Check if an operation is approved by tool name or target path.
-
-    Tries the tool name first, then each target path. Returns the approval
-    record if found, None otherwise.
-    """
+    """Check if an operation is approved by tool name or target path."""
     family = _governed_family()
     context = _deployment_context()
     version = _policy_version()
 
-    # Check tool name as artifact_identity
     approval = approval_store.lookup(tool_name, family, context, version)
     if approval:
         return approval
 
-    # Check each target as artifact_identity
     for target in targets:
         if target:
             approval = approval_store.lookup(target, family, context, version)
@@ -323,6 +325,7 @@ def mediate_decision(
     approval_store: Optional[ApprovalStore] = None,
     session_id: str = "",
     user_identity: str = "",
+    provider_name: str = "",
 ) -> dict:
     """Classify, evaluate, and record a governance decision.
 
@@ -335,8 +338,6 @@ def mediate_decision(
     """
     classification = classify(tool_name, args)
 
-    # Build the record with a placeholder prev_record_hash — the atomic
-    # append will set the real value inside the cross-process lock.
     record = evaluate(
         classification,
         policy=policy,
@@ -344,6 +345,10 @@ def mediate_decision(
         user_identity=user_identity,
         session_id=session_id,
     )
+
+    # Add provider field to chain records
+    if provider_name:
+        record["provider"] = provider_name
 
     # Check approval store for denied operations
     if record["policy_decision"] == "DENY" and approval_store is not None:
@@ -369,25 +374,15 @@ def mediate_decision(
 
 
 # ---------------------------------------------------------------------------
-# SSE streaming parser
+# Backward-compatible StreamingToolCollector (wraps Anthropic provider)
 # ---------------------------------------------------------------------------
 
 
 class StreamingToolCollector:
-    """Collects tool_use blocks from an SSE stream and governs them.
+    """Backward-compatible wrapper for Anthropic streaming collection.
 
-    The Anthropic streaming API sends events like:
-        event: content_block_start
-        data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"...","name":"...","input":{}}}
-
-        event: content_block_delta
-        data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"..."}}
-
-        event: content_block_stop
-        data: {"type":"content_block_stop","index":0}
-
-    This collector buffers tool_use blocks. When a block is complete
-    (content_block_stop), it governs it and decides whether to pass or deny.
+    Maintains the same interface as the original for existing tests,
+    but delegates to the provider-based streaming collector internally.
     """
 
     def __init__(self, policy: dict, chain_recorder: Optional[ChainRecorder],
@@ -411,12 +406,7 @@ class StreamingToolCollector:
         self._replacements: dict[int, list[bytes]] = {}
 
     def process_event(self, event_type: str, data: dict) -> Optional[str]:
-        """Process an SSE event. Returns action: 'pass', 'buffer', or 'replace'.
-
-        'pass': Forward this event to the client as-is.
-        'buffer': Hold this event (part of a tool_use being collected).
-        'replace': This event should be replaced with denial content.
-        """
+        """Process an SSE event. Returns action: 'pass', 'buffer', or 'replace'."""
         msg_type = data.get("type", "")
 
         if msg_type == "content_block_start":
@@ -450,7 +440,6 @@ class StreamingToolCollector:
                 block = self._active_blocks.pop(idx)
                 fragments = self._json_fragments.pop(idx, [])
 
-                # Reconstruct the full input JSON
                 full_json = "".join(fragments)
                 if full_json:
                     try:
@@ -458,7 +447,6 @@ class StreamingToolCollector:
                     except json.JSONDecodeError:
                         block["input"] = {"_raw": full_json}
 
-                # Govern the complete tool_use block
                 record = mediate_decision(
                     block["name"],
                     block.get("input", {}),
@@ -472,7 +460,6 @@ class StreamingToolCollector:
 
                 if record["policy_decision"] == "DENY":
                     self._denied_indices.add(idx)
-                    # Build replacement SSE events
                     reasons = record.get("policy_reasons", [])
                     reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
                     self._replacements[idx] = _build_denial_sse_events(
@@ -487,12 +474,9 @@ class StreamingToolCollector:
         return "pass"
 
     def get_buffered_events(self, idx: int) -> list[bytes]:
-        """Get the original buffered SSE events for an allowed tool block."""
-        # Not used in the current flow — allowed blocks are reconstructed
         return []
 
     def get_replacement_events(self, idx: int) -> list[bytes]:
-        """Get replacement SSE events for a denied tool block."""
         return self._replacements.get(idx, [])
 
     def is_denied(self, idx: int) -> bool:
@@ -515,7 +499,6 @@ def _build_denial_sse_events(
     )
     events = []
 
-    # content_block_start with text type instead of tool_use
     start_data = json.dumps({
         "type": "content_block_start",
         "index": index,
@@ -523,7 +506,6 @@ def _build_denial_sse_events(
     })
     events.append(f"event: content_block_start\ndata: {start_data}\n\n".encode())
 
-    # content_block_delta with the denial text
     delta_data = json.dumps({
         "type": "content_block_delta",
         "index": index,
@@ -531,7 +513,6 @@ def _build_denial_sse_events(
     })
     events.append(f"event: content_block_delta\ndata: {delta_data}\n\n".encode())
 
-    # content_block_stop
     stop_data = json.dumps({
         "type": "content_block_stop",
         "index": index,
@@ -555,14 +536,7 @@ def resolve_policy_base_dirs(
     repo_path: str,
     runtime_path: str,
 ) -> list[str]:
-    """Substitute placeholder tokens in base_dirs and ensure safety invariants.
-
-    - Known placeholders (__GOV_CANONICAL_REPO_PATH__, __GOV_RUNTIME_PATH__)
-      are replaced whole-string with their runtime values.
-    - Unknown __GOV_*__ placeholders are dropped with a warning.
-    - repo_path and runtime_path are guaranteed present (safety fallback).
-    - The result is deduplicated with order preserved.
-    """
+    """Substitute placeholder tokens in base_dirs and ensure safety invariants."""
     placeholder_map = {
         "__GOV_CANONICAL_REPO_PATH__": repo_path,
         "__GOV_RUNTIME_PATH__": runtime_path,
@@ -580,7 +554,6 @@ def resolve_policy_base_dirs(
         else:
             substituted.append(entry_s)
 
-    # Safety fallback: ensure repo and runtime are always present.
     if repo_path not in substituted:
         logger.warning(
             "base_dirs missing repo path; adding safety fallback: %s",
@@ -594,7 +567,6 @@ def resolve_policy_base_dirs(
         )
         substituted.append(runtime_path)
 
-    # Deduplicate while preserving order.
     seen: set[str] = set()
     deduped: list[str] = []
     for d in substituted:
@@ -606,12 +578,16 @@ def resolve_policy_base_dirs(
 
 
 # ---------------------------------------------------------------------------
-# HTTP proxy handler
+# HTTP proxy handler (provider-agnostic)
 # ---------------------------------------------------------------------------
 
 
 class GovernanceProxy:
-    """HTTP proxy that governs Anthropic API tool calls."""
+    """HTTP proxy that governs AI provider tool calls.
+
+    Routes requests to the appropriate provider based on URL prefix.
+    Governance mediation (classify → evaluate → record) is provider-agnostic.
+    """
 
     def __init__(
         self,
@@ -622,6 +598,7 @@ class GovernanceProxy:
         chain_path: Optional[Path] = None,
         session_id: str = "",
         user_identity: str = "",
+        provider_config: Optional[dict] = None,
     ):
         self._upstream_base = upstream_base.rstrip("/")
         self._policy = policy or self._load_default_policy()
@@ -632,6 +609,11 @@ class GovernanceProxy:
         self._approval_store: Optional[ApprovalStore] = None
         self._approval_store_mtime: float = 0.0
         self._approval_lock = threading.Lock()
+        # Provider-specific config (upstream URLs, etc.)
+        self._provider_config = provider_config or {}
+        # Default: put the legacy upstream_base as the anthropic upstream
+        if "anthropic_upstream" not in self._provider_config:
+            self._provider_config["anthropic_upstream"] = self._upstream_base
 
     def _get_approval_store(self) -> Optional[ApprovalStore]:
         """Return a cached approval store, reloading when the chain file changes."""
@@ -662,10 +644,26 @@ class GovernanceProxy:
         logger.info("base_dirs loaded: %s", policy["base_dirs"])
         return policy
 
+    def _prepare_request_with_provider(
+        self, method: str, path: str, headers: dict, body: bytes,
+        provider: BaseProvider,
+    ) -> tuple[str, dict, bool, bool]:
+        """Parse request using provider interface. Returns (url, headers, is_tool_ep, is_streaming)."""
+        upstream_url = provider.get_upstream_url(path, self._provider_config)
+        forward_headers = provider.forward_headers(headers)
+        is_tool_ep = provider.is_tool_endpoint(path)
+        is_streaming = False
+        if is_tool_ep and body:
+            is_streaming = provider.is_streaming(body)
+        # Check for streaming in URL path (Gemini)
+        if hasattr(provider, 'is_streaming_path') and provider.is_streaming_path(path):
+            is_streaming = True
+        return upstream_url, forward_headers, is_tool_ep, is_streaming
+
+    # Legacy method for backward compatibility
     def _prepare_request(self, method: str, path: str, headers: dict,
                          body: bytes) -> tuple[str, dict, bool, bool]:
-        """Parse request and determine routing. Returns (url, headers, is_messages, is_streaming)."""
-        # Strip query parameters for endpoint detection (SDK may send ?beta=...)
+        """Parse request (Anthropic-only, for backward compat)."""
         path_base = path.split("?")[0]
         is_messages = path_base.rstrip("/").endswith("/v1/messages")
         upstream_url = f"{self._upstream_base}{path}"
@@ -683,13 +681,20 @@ class GovernanceProxy:
         return upstream_url, forward_headers, is_messages, is_streaming
 
     async def handle_request(self, method: str, path: str, headers: dict,
-                             body: bytes) -> tuple[int, dict, bytes]:
+                             body: bytes,
+                             provider: Optional[BaseProvider] = None,
+                             ) -> tuple[int, dict, bytes]:
         """Handle a proxied HTTP request (non-streaming or buffered fallback).
 
-        For non-messages endpoints, forwards as-is.
-        For messages endpoints, intercepts and governs tool_use blocks.
-        For streaming, use handle_streaming_to_writer() instead for real-time output.
+        If provider is given, uses the provider interface for parsing/rewriting.
+        Otherwise falls back to legacy Anthropic-only behavior.
         """
+        if provider is not None:
+            return await self._handle_request_with_provider(
+                method, path, headers, body, provider
+            )
+
+        # Legacy path (backward compat)
         url, fwd_headers, is_messages, is_streaming = self._prepare_request(
             method, path, headers, body
         )
@@ -703,16 +708,41 @@ class GovernanceProxy:
                 url, method, fwd_headers, body, is_messages
             )
 
+    async def _handle_request_with_provider(
+        self, method: str, path: str, headers: dict, body: bytes,
+        provider: BaseProvider,
+    ) -> tuple[int, dict, bytes]:
+        """Handle a request using the provider interface."""
+        url, fwd_headers, is_tool_ep, is_streaming = self._prepare_request_with_provider(
+            method, path, headers, body, provider
+        )
+
+        if is_tool_ep and is_streaming:
+            return await self._handle_streaming_buffered_provider(
+                url, fwd_headers, body, provider
+            )
+        else:
+            return await self._handle_non_streaming_provider(
+                url, method, fwd_headers, body, is_tool_ep, provider
+            )
+
     async def handle_streaming_to_writer(
         self, path: str, headers: dict, body: bytes,
         writer: asyncio.StreamWriter,
+        provider: Optional[BaseProvider] = None,
     ) -> None:
         """Handle a streaming request, forwarding text events in real time.
 
         Text blocks are written to the client immediately as they arrive.
-        Tool_use blocks are buffered until complete, governed, then flushed
+        Tool calls are buffered until complete, governed, then flushed
         (ALLOW) or replaced with denial text (DENY).
         """
+        if provider is not None:
+            return await self._handle_streaming_to_writer_provider(
+                path, headers, body, writer, provider
+            )
+
+        # Legacy Anthropic path
         url, fwd_headers, is_messages, _ = self._prepare_request(
             "POST", path, headers, body
         )
@@ -741,7 +771,6 @@ class GovernanceProxy:
                     await writer.drain()
                     return
 
-                # Send streaming response headers immediately
                 writer.write(b"HTTP/1.1 200 OK\r\n")
                 writer.write(b"content-type: text/event-stream\r\n")
                 writer.write(b"cache-control: no-cache\r\n")
@@ -814,7 +843,6 @@ class GovernanceProxy:
                                 logger.info("Tool ALLOWED (idx=%d): %s → %s",
                                             idx, decision.get("original_tool", "?"),
                                             decision.get("policy_decision", "?"))
-                            # Tool_use ALLOWED — flush buffered events
                             for event_bytes in buffered_events.pop(idx):
                                 writer.write(event_bytes)
                             writer.write(
@@ -822,17 +850,134 @@ class GovernanceProxy:
                             )
                             await writer.drain()
                         else:
-                            # Text or other non-tool event — stream immediately
                             writer.write(
                                 f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                             )
                             await writer.drain()
 
+    async def _handle_streaming_to_writer_provider(
+        self, path: str, headers: dict, body: bytes,
+        writer: asyncio.StreamWriter,
+        provider: BaseProvider,
+    ) -> None:
+        """Handle streaming with provider interface."""
+        url, fwd_headers, _, _ = self._prepare_request_with_provider(
+            "POST", path, headers, body, provider
+        )
+
+        collector = provider.create_streaming_collector()
+        _tool_call_count = 0
+        approval_store = self._get_approval_store()
+
+        logger.info("Streaming handler (%s) entered for path=%s", provider.name, path)
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST", url, headers=fwd_headers, content=body,
+            ) as resp:
+                if resp.status_code != 200:
+                    content = await resp.aread()
+                    writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
+                    writer.write(b"content-type: application/json\r\n")
+                    writer.write(f"content-length: {len(content)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(content)
+                    await writer.drain()
+                    return
+
+                writer.write(b"HTTP/1.1 200 OK\r\n")
+                writer.write(b"content-type: text/event-stream\r\n")
+                writer.write(b"cache-control: no-cache\r\n")
+                writer.write(b"connection: keep-alive\r\n")
+                for key in ("x-request-id", "request-id"):
+                    val = resp.headers.get(key)
+                    if val:
+                        writer.write(f"{key}: {val}\r\n".encode())
+                writer.write(b"\r\n")
+                await writer.drain()
+
+                current_event_type = ""
+                async for raw_line in resp.aiter_lines():
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+
+                    if line.startswith("event:"):
+                        current_event_type = line[6:].strip()
+                        continue
+
+                    if not line.startswith("data:"):
+                        continue
+
+                    data_str = line[5:].strip()
+
+                    if data_str == "[DONE]":
+                        logger.info("Stream complete (%s): %d tool calls mediated",
+                                    provider.name, _tool_call_count)
+                        writer.write(b"event: done\ndata: [DONE]\n\n")
+                        await writer.drain()
+                        continue
+
+                    try:
+                        data = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        chunk = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                        writer.write(chunk)
+                        await writer.drain()
+                        continue
+
+                    event_bytes = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                    stream_action = collector.process_event(current_event_type, data)
+
+                    if stream_action.action == "buffer":
+                        collector.add_buffered_event(stream_action.index, event_bytes)
+                        if stream_action.completed_tool_call:
+                            _tool_call_count += 1
+                            tc = stream_action.completed_tool_call
+                            logger.info("Tool call #%d (%s) detected: %s",
+                                        _tool_call_count, provider.name, tc.tool_name)
+
+                            # Mediate the completed tool call
+                            record = mediate_decision(
+                                tc.tool_name, tc.args,
+                                policy=self._policy,
+                                chain_recorder=self._chain_recorder,
+                                approval_store=approval_store,
+                                session_id=self._session_id,
+                                user_identity=self._user_identity,
+                                provider_name=provider.name,
+                            )
+
+                            if record["policy_decision"] == "DENY":
+                                reasons = record.get("policy_reasons", [])
+                                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                                logger.info("Tool DENIED (%s): %s — %s",
+                                            provider.name, tc.tool_name,
+                                            record.get("matched_rule", ""))
+                                for denial_event in collector.build_denial_events(
+                                    stream_action.index, tc,
+                                    reason_text, record.get("matched_rule", ""),
+                                ):
+                                    writer.write(denial_event)
+                                await writer.drain()
+                            else:
+                                logger.info("Tool ALLOWED (%s): %s",
+                                            provider.name, tc.tool_name)
+                                for buf_event in collector.get_buffered_events(stream_action.index):
+                                    writer.write(buf_event)
+                                # Also write the current stop event
+                                writer.write(event_bytes)
+                                await writer.drain()
+
+                    elif stream_action.action == "pass":
+                        writer.write(event_bytes)
+                        await writer.drain()
+
     async def _handle_non_streaming(
         self, url: str, method: str, headers: dict, body: bytes,
         is_messages: bool,
     ) -> tuple[int, dict, bytes]:
-        """Forward a non-streaming request and govern the response."""
+        """Forward a non-streaming request and govern the response (legacy Anthropic)."""
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.request(
                 method, url, headers=headers, content=body,
@@ -845,7 +990,6 @@ class GovernanceProxy:
         if not is_messages or resp.status_code != 200:
             return resp.status_code, resp_headers, resp_body
 
-        # Parse the response and govern tool_use blocks
         try:
             data = json.loads(resp_body)
         except json.JSONDecodeError:
@@ -857,7 +1001,6 @@ class GovernanceProxy:
         if not tool_blocks:
             return resp.status_code, resp_headers, resp_body
 
-        # Govern each tool_use block
         modified = False
         approval_store = self._get_approval_store()
         for block in tool_blocks:
@@ -884,7 +1027,6 @@ class GovernanceProxy:
                 modified = True
 
         if modified:
-            # If we removed tool_use blocks, update stop_reason
             remaining_tool_use = [
                 b for b in data["content"]
                 if isinstance(b, dict) and b.get("type") == "tool_use"
@@ -896,14 +1038,63 @@ class GovernanceProxy:
 
         return resp.status_code, resp_headers, resp_body
 
+    async def _handle_non_streaming_provider(
+        self, url: str, method: str, headers: dict, body: bytes,
+        is_tool_ep: bool, provider: BaseProvider,
+    ) -> tuple[int, dict, bytes]:
+        """Forward a non-streaming request and govern via provider interface."""
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.request(
+                method, url, headers=headers, content=body,
+            )
+
+        resp_headers = dict(resp.headers)
+        resp_body = resp.content
+
+        logger.info("Non-streaming response (%s): status=%d is_tool_ep=%s",
+                     provider.name, resp.status_code, is_tool_ep)
+        if not is_tool_ep or resp.status_code != 200:
+            return resp.status_code, resp_headers, resp_body
+
+        try:
+            data = json.loads(resp_body)
+        except json.JSONDecodeError:
+            return resp.status_code, resp_headers, resp_body
+
+        tool_calls = provider.extract_tool_calls(data)
+        if not tool_calls:
+            return resp.status_code, resp_headers, resp_body
+
+        denials: list[tuple[ToolCall, str, str]] = []
+        approval_store = self._get_approval_store()
+        for tc in tool_calls:
+            record = mediate_decision(
+                tc.tool_name,
+                tc.args,
+                policy=self._policy,
+                chain_recorder=self._chain_recorder,
+                approval_store=approval_store,
+                session_id=self._session_id,
+                user_identity=self._user_identity,
+                provider_name=provider.name,
+            )
+
+            if record["policy_decision"] == "DENY":
+                reasons = record.get("policy_reasons", [])
+                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                denials.append((tc, reason_text, record.get("matched_rule", "")))
+
+        if denials:
+            data = provider.apply_denials(data, denials)
+            resp_body = json.dumps(data).encode()
+            resp_headers["content-length"] = str(len(resp_body))
+
+        return resp.status_code, resp_headers, resp_body
+
     async def _handle_streaming_buffered(
         self, url: str, headers: dict, body: bytes,
     ) -> tuple[int, dict, bytes]:
-        """Handle a streaming request with full buffering (fallback for tests).
-
-        Returns the complete response as bytes. For real-time streaming,
-        use handle_streaming_to_writer() instead.
-        """
+        """Handle a streaming request with full buffering (legacy Anthropic)."""
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
@@ -911,7 +1102,6 @@ class GovernanceProxy:
         )
 
         output_chunks: list[bytes] = []
-        # Track which block indices are tool_use blocks being buffered
         buffered_events: dict[int, list[bytes]] = {}
         resp_status = 200
         resp_headers: dict = {}
@@ -932,7 +1122,6 @@ class GovernanceProxy:
                     line = raw_line.strip()
 
                     if not line:
-                        # Empty line = end of SSE event
                         continue
 
                     if line.startswith("event:"):
@@ -949,7 +1138,6 @@ class GovernanceProxy:
                         try:
                             data = json.loads(data_str)
                         except json.JSONDecodeError:
-                            # Forward unparseable data as-is
                             output_chunks.append(
                                 f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                             )
@@ -965,10 +1153,8 @@ class GovernanceProxy:
 
                         elif action == "replace":
                             idx = data.get("index", 0)
-                            # Emit denial replacement events
                             for event_bytes in collector.get_replacement_events(idx):
                                 output_chunks.append(event_bytes)
-                            # Clear buffered events for this block
                             buffered_events.pop(idx, None)
 
                         elif action == "pass":
@@ -976,10 +1162,8 @@ class GovernanceProxy:
                             idx = data.get("index", 0)
 
                             if msg_type == "content_block_stop" and idx in buffered_events:
-                                # This was a tool_use that was ALLOWED — flush buffered events
                                 for event_bytes in buffered_events.pop(idx):
                                     output_chunks.append(event_bytes)
-                                # Also emit the stop event
                                 output_chunks.append(
                                     f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                                 )
@@ -988,16 +1172,108 @@ class GovernanceProxy:
                                     f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                                 )
 
-        # Build the full SSE response
         full_body = b"".join(output_chunks)
 
-        # For streaming, set appropriate headers
         stream_headers = {
             "content-type": "text/event-stream",
             "cache-control": "no-cache",
             "connection": "keep-alive",
         }
-        # Preserve auth-related headers from upstream
+        for key in ("x-request-id", "request-id"):
+            if key in resp_headers:
+                stream_headers[key] = resp_headers[key]
+
+        return resp_status, stream_headers, full_body
+
+    async def _handle_streaming_buffered_provider(
+        self, url: str, headers: dict, body: bytes,
+        provider: BaseProvider,
+    ) -> tuple[int, dict, bytes]:
+        """Handle streaming with full buffering via provider interface."""
+        collector = provider.create_streaming_collector()
+        output_chunks: list[bytes] = []
+        resp_status = 200
+        resp_headers: dict = {}
+        approval_store = self._get_approval_store()
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST", url, headers=headers, content=body,
+            ) as resp:
+                resp_status = resp.status_code
+                resp_headers = dict(resp.headers)
+
+                if resp_status != 200:
+                    content = await resp.aread()
+                    return resp_status, resp_headers, content
+
+                current_event_type = ""
+                async for raw_line in resp.aiter_lines():
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+
+                    if line.startswith("event:"):
+                        current_event_type = line[6:].strip()
+                        continue
+
+                    if not line.startswith("data:"):
+                        continue
+
+                    data_str = line[5:].strip()
+
+                    if data_str == "[DONE]":
+                        output_chunks.append(b"event: done\ndata: [DONE]\n\n")
+                        continue
+
+                    try:
+                        data = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        output_chunks.append(
+                            f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                        )
+                        continue
+
+                    event_bytes = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
+                    stream_action = collector.process_event(current_event_type, data)
+
+                    if stream_action.action == "buffer":
+                        collector.add_buffered_event(stream_action.index, event_bytes)
+                        if stream_action.completed_tool_call:
+                            tc = stream_action.completed_tool_call
+                            record = mediate_decision(
+                                tc.tool_name, tc.args,
+                                policy=self._policy,
+                                chain_recorder=self._chain_recorder,
+                                approval_store=approval_store,
+                                session_id=self._session_id,
+                                user_identity=self._user_identity,
+                                provider_name=provider.name,
+                            )
+
+                            if record["policy_decision"] == "DENY":
+                                reasons = record.get("policy_reasons", [])
+                                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                                for denial_event in collector.build_denial_events(
+                                    stream_action.index, tc,
+                                    reason_text, record.get("matched_rule", ""),
+                                ):
+                                    output_chunks.append(denial_event)
+                            else:
+                                for buf_event in collector.get_buffered_events(stream_action.index):
+                                    output_chunks.append(buf_event)
+                                output_chunks.append(event_bytes)
+
+                    elif stream_action.action == "pass":
+                        output_chunks.append(event_bytes)
+
+        full_body = b"".join(output_chunks)
+
+        stream_headers = {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            "connection": "keep-alive",
+        }
         for key in ("x-request-id", "request-id"):
             if key in resp_headers:
                 stream_headers[key] = resp_headers[key]
@@ -1021,7 +1297,6 @@ class ProxyServer:
     async def _handle_client(self, reader: asyncio.StreamReader,
                               writer: asyncio.StreamWriter):
         try:
-            # Read the request line
             request_line = await asyncio.wait_for(
                 reader.readline(), timeout=30.0
             )
@@ -1037,13 +1312,18 @@ class ProxyServer:
             method = parts[0]
             raw_path = parts[1]
 
-            # Strip the /anthropic prefix if present
-            if raw_path.startswith("/anthropic"):
-                path = raw_path[len("/anthropic"):]
-                if not path:
-                    path = "/"
-            else:
-                path = raw_path
+            # Route to provider by URL prefix
+            provider = None
+            path = raw_path
+            try:
+                provider, path = resolve_provider(raw_path)
+            except ValueError:
+                # No provider prefix matched — try legacy /anthropic fallback
+                if raw_path.startswith("/anthropic"):
+                    path = raw_path[len("/anthropic"):]
+                    if not path:
+                        path = "/"
+                # else: pass raw_path through as-is (non-provider endpoint)
 
             # Read headers
             headers: dict[str, str] = {}
@@ -1058,7 +1338,7 @@ class ProxyServer:
                     key, value = line_str.split(":", 1)
                     headers[key.strip().lower()] = value.strip()
 
-            # Read body if content-length present or chunked transfer encoding
+            # Read body
             body = b""
             content_length = int(headers.get("content-length", "0"))
             if content_length > 0:
@@ -1066,7 +1346,6 @@ class ProxyServer:
                     reader.readexactly(content_length), timeout=60.0
                 )
             elif headers.get("transfer-encoding", "").lower() == "chunked":
-                # Read chunked transfer encoding
                 chunks = []
                 while True:
                     size_line = await asyncio.wait_for(
@@ -1074,65 +1353,93 @@ class ProxyServer:
                     )
                     chunk_size = int(size_line.strip(), 16)
                     if chunk_size == 0:
-                        await reader.readline()  # trailing CRLF
+                        await reader.readline()
                         break
                     chunk_data = await asyncio.wait_for(
                         reader.readexactly(chunk_size), timeout=30.0
                     )
-                    await reader.readline()  # trailing CRLF after chunk
+                    await reader.readline()
                     chunks.append(chunk_data)
                 body = b"".join(chunks)
 
-            # Restore original-case headers for upstream
-            forward_headers = {}
-            for k, v in headers.items():
-                if k == "x-api-key":
-                    forward_headers["x-api-key"] = v
-                elif k == "anthropic-version":
-                    forward_headers["anthropic-version"] = v
-                elif k == "anthropic-beta":
-                    forward_headers["anthropic-beta"] = v
-                elif k == "content-type":
-                    forward_headers["content-type"] = v
-                elif k == "authorization":
-                    forward_headers["authorization"] = v
-                elif k == "accept":
-                    forward_headers["accept"] = v
+            if provider is not None:
+                # Provider-aware path
+                forward_headers = provider.forward_headers(headers)
+                is_tool_ep = provider.is_tool_endpoint(path)
+                is_streaming = False
+                if is_tool_ep and body:
+                    is_streaming = provider.is_streaming(body)
+                if hasattr(provider, 'is_streaming_path') and provider.is_streaming_path(path):
+                    is_streaming = True
 
-            # Check if this is a streaming messages request
-            # Strip query parameters for endpoint detection (SDK may send ?beta=...)
-            is_streaming = False
-            path_base = path.split("?")[0]
-            is_messages = path_base.rstrip("/").endswith("/v1/messages")
-            if is_messages and body:
-                try:
-                    is_streaming = json.loads(body).get("stream", False)
-                except (json.JSONDecodeError, AttributeError) as e:
-                    logger.warning("Failed to parse request body for streaming detection: %s (body_len=%d)", e, len(body))
+                logger.info("Request (%s): %s %s tool_ep=%s streaming=%s body_len=%d",
+                            provider.name, method, path[:60], is_tool_ep, is_streaming, len(body))
 
-            logger.info("Request: %s %s messages=%s streaming=%s body_len=%d",
-                        method, path[:60], is_messages, is_streaming, len(body))
-
-            if is_streaming:
-                # Stream directly to the client writer — text arrives in real time
-                await self._proxy.handle_streaming_to_writer(
-                    path, forward_headers, body, writer
-                )
+                if is_streaming:
+                    await self._proxy.handle_streaming_to_writer(
+                        path, headers, body, writer, provider=provider
+                    )
+                else:
+                    status, resp_headers, resp_body = await self._proxy.handle_request(
+                        method, path, headers, body, provider=provider
+                    )
+                    status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
+                    writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+                    for k, v in resp_headers.items():
+                        if k.lower() not in ("transfer-encoding",):
+                            writer.write(f"{k}: {v}\r\n".encode())
+                    if "content-length" not in {k.lower() for k in resp_headers}:
+                        writer.write(f"content-length: {len(resp_body)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(resp_body)
+                    await writer.drain()
             else:
-                # Non-streaming: buffer full response then send
-                status, resp_headers, resp_body = await self._proxy.handle_request(
-                    method, path, forward_headers, body
-                )
-                status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
-                writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
-                for k, v in resp_headers.items():
-                    if k.lower() not in ("transfer-encoding",):
-                        writer.write(f"{k}: {v}\r\n".encode())
-                if "content-length" not in {k.lower() for k in resp_headers}:
-                    writer.write(f"content-length: {len(resp_body)}\r\n".encode())
-                writer.write(b"\r\n")
-                writer.write(resp_body)
-                await writer.drain()
+                # Legacy Anthropic-only path (no provider prefix matched)
+                forward_headers = {}
+                for k, v in headers.items():
+                    if k == "x-api-key":
+                        forward_headers["x-api-key"] = v
+                    elif k == "anthropic-version":
+                        forward_headers["anthropic-version"] = v
+                    elif k == "anthropic-beta":
+                        forward_headers["anthropic-beta"] = v
+                    elif k == "content-type":
+                        forward_headers["content-type"] = v
+                    elif k == "authorization":
+                        forward_headers["authorization"] = v
+                    elif k == "accept":
+                        forward_headers["accept"] = v
+
+                is_streaming = False
+                path_base = path.split("?")[0]
+                is_messages = path_base.rstrip("/").endswith("/v1/messages")
+                if is_messages and body:
+                    try:
+                        is_streaming = json.loads(body).get("stream", False)
+                    except (json.JSONDecodeError, AttributeError) as e:
+                        logger.warning("Failed to parse request body for streaming detection: %s (body_len=%d)", e, len(body))
+
+                logger.info("Request: %s %s messages=%s streaming=%s body_len=%d",
+                            method, path[:60], is_messages, is_streaming, len(body))
+
+                if is_streaming:
+                    await self._proxy.handle_streaming_to_writer(
+                        path, forward_headers, body, writer
+                    )
+                else:
+                    status, resp_headers, resp_body = await self._proxy.handle_request(
+                        method, path, forward_headers, body
+                    )
+                    status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
+                    writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+                    for k, v in resp_headers.items():
+                        if k.lower() not in ("transfer-encoding",):
+                            writer.write(f"{k}: {v}\r\n".encode())
+                    if "content-length" not in {k.lower() for k in resp_headers}:
+                        writer.write(f"content-length: {len(resp_body)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(resp_body)
+                    await writer.drain()
 
         except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
             pass
@@ -1159,6 +1466,17 @@ class ProxyServer:
         server = await asyncio.start_server(
             self._handle_client, self._host, self._port
         )
+        logger.info(
+            "Atested governance proxy listening on http://%s:%d",
+            self._host, self._port,
+        )
+        logger.info(
+            "Providers: /anthropic /openai /gemini /litellm"
+        )
+        logger.info(
+            "Configure your agent: ANTHROPIC_BASE_URL=http://%s:%d/anthropic",
+            self._host, self._port,
+        )
         async with server:
             await server.serve_forever()
 
@@ -1168,47 +1486,23 @@ class ProxyServer:
 # ---------------------------------------------------------------------------
 
 
-def _log_startup_banner(*, host: str, port: int, upstream: str, runtime: Path):
-    """Print clean, human-readable startup status lines."""
-    lines = []
-
-    # 1. Signing status
-    if _SIGNING_KEY_ID:
-        lines.append(f"Signing: active ({_SIGNING_KEY_ID})")
-    else:
-        lines.append("Signing: inactive — no signing key configured")
-
-    # 2. Provider routes
-    parsed = _urlparse(upstream)
-    upstream_host = parsed.hostname or upstream
-    lines.append(f"Providers: /anthropic (upstream: {upstream_host})")
-
-    # 3. Proxy port
-    lines.append(f"Listening on port {port}")
-
-    # 4. Dashboard port (if co-hosted)
-    dashboard_port = os.environ.get("DASHBOARD_PORT", "").strip()
-    if dashboard_port:
-        lines.append(f"Dashboard on port {dashboard_port}")
-
-    # 5. Runtime directory
-    try:
-        display_runtime = runtime.relative_to(Path.cwd())
-    except ValueError:
-        display_runtime = runtime
-    lines.append(f"Runtime: {display_runtime}/")
-
-    # Log each line at INFO level
-    for line in lines:
-        logger.info(line)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Atested API governance proxy")
     parser.add_argument("--host", default=DEFAULT_HOST, help="Bind address")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Bind port")
     parser.add_argument("--upstream", default=ANTHROPIC_API_BASE,
-                        help="Upstream API base URL")
+                        help="Upstream API base URL (alias for --anthropic-upstream, kept for backward compat)")
+    parser.add_argument("--anthropic-upstream", default=None,
+                        help="Anthropic upstream base URL (default: https://api.anthropic.com)")
+    parser.add_argument("--openai-upstream",
+                        default=os.environ.get("OPENAI_UPSTREAM", "https://api.openai.com"),
+                        help="OpenAI upstream base URL")
+    parser.add_argument("--gemini-upstream",
+                        default=os.environ.get("GEMINI_UPSTREAM", "https://generativelanguage.googleapis.com"),
+                        help="Gemini upstream base URL")
+    parser.add_argument("--litellm-upstream",
+                        default=os.environ.get("LITELLM_UPSTREAM", ""),
+                        help="LiteLLM upstream base URL (required for /litellm route)")
     parser.add_argument("--user-identity", default="",
                         help="User identity for chain records (default: system hostname)")
     parser.add_argument("--session-id", default="", help="Session ID for chain records")
@@ -1239,22 +1533,31 @@ def main():
     )
     logger.info("User identity: %s", user_identity)
 
+    # Resolve Anthropic upstream: explicit --anthropic-upstream > --upstream
+    anthropic_upstream = args.anthropic_upstream or args.upstream
+
+    # Build provider config
+    provider_config = {
+        "anthropic_upstream": anthropic_upstream,
+        "openai_upstream": args.openai_upstream,
+        "gemini_upstream": args.gemini_upstream,
+        "litellm_upstream": args.litellm_upstream,
+    }
+
+    logger.info("Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s",
+                anthropic_upstream, args.openai_upstream, args.gemini_upstream,
+                args.litellm_upstream or "(not configured)")
+
     proxy = GovernanceProxy(
-        upstream_base=args.upstream,
+        upstream_base=anthropic_upstream,
         chain_recorder=chain_recorder,
         chain_path=chain_path,
         session_id=args.session_id,
         user_identity=user_identity,
+        provider_config=provider_config,
     )
 
     server = ProxyServer(proxy, args.host, args.port)
-
-    _log_startup_banner(
-        host=args.host,
-        port=args.port,
-        upstream=args.upstream,
-        runtime=runtime,
-    )
 
     try:
         asyncio.run(server.start())
