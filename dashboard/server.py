@@ -904,6 +904,66 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 )
                 result["remote"] = remote_result
 
+                # Process notifications from telemetry response
+                if remote_result.get("sent") and isinstance(remote_result.get("response"), dict):
+                    notifications = remote_result["response"].get("notifications", [])
+                    if notifications:
+                        from feedback_signing import (
+                            load_processed_notifications,
+                            save_processed_notifications,
+                        )
+                        processed = load_processed_notifications(RUNTIME)
+                        processed_set = set(processed)
+                        newly_processed = []
+                        for notif in notifications:
+                            if not isinstance(notif, dict):
+                                continue
+                            notif_id = notif.get("notification_id", "")
+                            notif_type = notif.get("type", "")
+                            if not notif_id or not notif_type or notif_id in processed_set:
+                                continue
+                            payload = notif.get("payload", {})
+                            if not isinstance(payload, dict):
+                                continue
+                            event_type_map = {
+                                "license_revoked": "license_revoked",
+                                "license_delivered": "license_activated",
+                                "license_expiration_warning": "license_expiration_warning",
+                                "license_modified": "license_modified",
+                            }
+                            chain_event_type = event_type_map.get(notif_type)
+                            if not chain_event_type:
+                                continue
+                            try:
+                                evt = build_non_action_event(
+                                    chain_event_type,
+                                    {"notification_id": notif_id, "notification_type": notif_type, **payload},
+                                    prev_record_hash=None,
+                                )
+                                _append_chain_record_atomic(evt)
+                                # Activate tokens for delivered/modified
+                                if notif_type in ("license_delivered", "license_modified") and payload.get("token"):
+                                    from licensing import activate_license
+                                    activate_license(RUNTIME, payload["token"])
+                                # Revert to personal on revocation
+                                if notif_type == "license_revoked":
+                                    from licensing import load_license, save_license
+                                    try:
+                                        cfg = load_license(RUNTIME)
+                                        if cfg:
+                                            cfg["license_status"] = "personal"
+                                            cfg["license_tier"] = "personal"
+                                            save_license(RUNTIME, cfg)
+                                    except Exception:
+                                        pass
+                                processed_set.add(notif_id)
+                                newly_processed.append(notif_id)
+                            except Exception:
+                                continue
+                        if newly_processed:
+                            save_processed_notifications(RUNTIME, list(processed_set))
+                            result["notifications_processed"] = newly_processed
+
             _json_response(self, result)
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)

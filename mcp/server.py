@@ -3740,6 +3740,100 @@ def submit_feedback(
     return result
 
 
+def _process_telemetry_notifications(notifications: list) -> list:
+    """Process notifications received in a telemetry response.
+
+    For each notification:
+    - Record notification_id in local processed notifications storage
+    - Write a chain event corresponding to the notification type
+    - For license_delivered: activate the delivered license token
+    - For license_modified: activate the new token (if token present)
+    Returns list of processed notification_ids.
+    """
+    from feedback_signing import (
+        load_processed_notifications,
+        save_processed_notifications,
+    )
+
+    processed = load_processed_notifications(RUNTIME)
+    processed_set = set(processed)
+    newly_processed = []
+
+    for notif in notifications:
+        if not isinstance(notif, dict):
+            continue
+        notif_id = notif.get("notification_id", "")
+        notif_type = notif.get("type", "")
+        if not notif_id or not notif_type:
+            continue
+        if notif_id in processed_set:
+            continue
+
+        payload = notif.get("payload", {})
+        if not isinstance(payload, dict):
+            continue
+
+        # Map notification type to chain event type
+        event_type_map = {
+            "license_revoked": "license_revoked",
+            "license_delivered": "license_activated",
+            "license_expiration_warning": "license_expiration_warning",
+            "license_modified": "license_modified",
+        }
+        chain_event_type = event_type_map.get(notif_type)
+        if not chain_event_type:
+            continue
+
+        try:
+            # Write chain event
+            with _CHAIN_LOCK:
+                _verify_chain()
+                event = build_non_action_event(
+                    chain_event_type,
+                    {
+                        "notification_id": notif_id,
+                        "notification_type": notif_type,
+                        **payload,
+                    },
+                    prev_record_hash=_chain_head_record_hash(),
+                )
+                _append_non_action_event(event)
+                _verify_chain()
+
+            # For license_delivered: activate the delivered token
+            if notif_type == "license_delivered" and payload.get("token"):
+                from licensing import activate_license
+                activate_license(RUNTIME, payload["token"])
+
+            # For license_modified: activate new token if present
+            if notif_type == "license_modified" and payload.get("token"):
+                from licensing import activate_license
+                activate_license(RUNTIME, payload["token"])
+
+            # For license_revoked: revert to personal
+            if notif_type == "license_revoked":
+                from licensing import load_license, save_license
+                try:
+                    config = load_license(RUNTIME)
+                    if config:
+                        config["license_status"] = "personal"
+                        config["license_tier"] = "personal"
+                        save_license(RUNTIME, config)
+                except Exception:
+                    pass
+
+            processed_set.add(notif_id)
+            newly_processed.append(notif_id)
+        except Exception:
+            # Log and skip malformed notifications
+            continue
+
+    if newly_processed:
+        save_processed_notifications(RUNTIME, list(processed_set))
+
+    return newly_processed
+
+
 @mcp.tool()
 def submit_telemetry(send_to_remote: bool = False) -> Dict[str, Any]:
     """Generate and submit a signed telemetry artifact with aggregated usage counts.
@@ -3795,6 +3889,14 @@ def submit_telemetry(send_to_remote: bool = False) -> Dict[str, Any]:
             artifact, "https://license.atested.com/api/telemetry"
         )
         result["remote"] = remote_result
+
+        # Process notifications from telemetry response
+        if remote_result.get("sent") and isinstance(remote_result.get("response"), dict):
+            notifications = remote_result["response"].get("notifications", [])
+            if notifications:
+                result["notifications_processed"] = _process_telemetry_notifications(
+                    notifications
+                )
 
     return result
 

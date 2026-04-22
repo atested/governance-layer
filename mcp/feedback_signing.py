@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 
 ATESTED_VERSION = "1.0.0"
+NOTIFICATIONS_PROCESSED_FILE = "notifications_processed.json"
 
 
 def _b64url_nopad(data: bytes) -> str:
@@ -163,14 +164,29 @@ def build_telemetry_artifact(
                 pass
     
     # Resolve posture for version/tier (no identifying info sent)
-    from licensing import resolve_posture
+    from licensing import resolve_posture, load_license
     posture = {}
+    license_id = None
     if runtime_root and runtime_root.exists():
         try:
             posture = resolve_posture(runtime_root)
         except Exception:
             pass
-    
+        # Extract license_id from installed license token
+        try:
+            lic_config = load_license(runtime_root)
+            lic_key = lic_config.get("license_key", "")
+            if lic_key and "." in lic_key:
+                from licensing import validate_license_key
+                decoded = validate_license_key(lic_key)
+                if decoded:
+                    license_id = decoded.get("license_id")
+        except Exception:
+            pass
+
+    # Load processed notification IDs for deduplication
+    processed_notifications = load_processed_notifications(runtime_root)
+
     artifact = {
         "artifact_type": "telemetry",
         "artifact_id": artifact_id,
@@ -183,6 +199,10 @@ def build_telemetry_artifact(
         "version": ATESTED_VERSION,
         "chain_hash": chain_hash,
     }
+    if license_id:
+        artifact["license_id"] = license_id
+    if processed_notifications:
+        artifact["processed_notifications"] = processed_notifications
     
     # Compute artifact hash
     artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -215,6 +235,36 @@ def write_artifact(artifact: Dict[str, Any], artifact_dir: Path) -> Path:
     finally:
         os.close(fd)
     return out_path
+
+
+def load_processed_notifications(runtime_root: Optional[Path]) -> list:
+    """Load list of processed notification IDs from local storage."""
+    if not runtime_root:
+        return []
+    path = runtime_root / NOTIFICATIONS_PROCESSED_FILE
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return data
+    except Exception:
+        pass
+    return []
+
+
+def save_processed_notifications(runtime_root: Path, notification_ids: list) -> None:
+    """Persist processed notification IDs to local storage."""
+    import stat as _stat
+    path = runtime_root / NOTIFICATIONS_PROCESSED_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(sorted(set(notification_ids)), indent=2) + "\n"
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                  _stat.S_IRUSR | _stat.S_IWUSR)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def send_artifact_to_remote(artifact: Dict[str, Any], endpoint_url: str) -> Dict[str, Any]:
