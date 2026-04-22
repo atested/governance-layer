@@ -175,6 +175,100 @@ def test_license_activation():
     print("PASS: license activation")
 
 
+def test_license_key_scheme_v3():
+    """License token generation and validation round-trip (Ed25519 v3)."""
+    token = generate_license_token(
+        "crew", "20270601", "acme",
+        version=3, license_id="lic-abc123def456",
+        customer_id="cus_test123", origin="purchased",
+    )
+    assert "." in token, token
+    decoded = validate_license_key(token)
+    assert decoded is not None, f"valid v3 token rejected: {token}"
+    assert decoded["tier"] == "crew"
+    assert decoded["expiry_date"] == "20270601"
+    assert decoded["organization"] == "acme"
+    assert decoded["version"] == 3
+    assert decoded["license_id"] == "lic-abc123def456"
+    assert decoded["customer_id"] == "cus_test123"
+    assert decoded["origin"] == "purchased"
+    print("PASS: license key scheme (Ed25519 v3)")
+
+
+def test_v2_v3_backward_compatibility():
+    """v2 tokens still validate after v3 support is added."""
+    v2_token = generate_license_token("team", "20270101", "acme")
+    v3_token = generate_license_token(
+        "personal_plus", "20270601", "solo",
+        version=3, license_id="lic-aabbccddee01",
+        customer_id="cus_v3test", origin="purchased",
+    )
+
+    # Both validate
+    v2_decoded = validate_license_key(v2_token)
+    v3_decoded = validate_license_key(v3_token)
+    assert v2_decoded is not None
+    assert v3_decoded is not None
+
+    # v2 has version=2, no v3 fields
+    assert v2_decoded["version"] == 2
+    assert "license_id" not in v2_decoded
+    assert "customer_id" not in v2_decoded
+    assert "origin" not in v2_decoded
+
+    # v3 has version=3 with v3 fields
+    assert v3_decoded["version"] == 3
+    assert v3_decoded["license_id"] == "lic-aabbccddee01"
+    assert v3_decoded["customer_id"] == "cus_v3test"
+    assert v3_decoded["origin"] == "purchased"
+
+    # Tampered tokens still rejected
+    assert validate_license_key(v2_token + "X") is None
+    assert validate_license_key(v3_token + "X") is None
+    print("PASS: v2/v3 backward compatibility")
+
+
+def test_v3_new_tiers():
+    """v3 tier names (personal_plus, crew, institution) are accepted."""
+    for tier in ("personal_plus", "crew", "institution"):
+        token = generate_license_token(
+            tier, "20270601", "test",
+            version=3, license_id="lic-000000000000",
+            customer_id="", origin="granted",
+        )
+        decoded = validate_license_key(token)
+        assert decoded is not None, f"tier {tier} rejected"
+        assert decoded["tier"] == tier
+    # Legacy tier names still work
+    for tier in ("business", "enterprise"):
+        token = generate_license_token(tier, "20270601", "test")
+        decoded = validate_license_key(token)
+        assert decoded is not None, f"legacy tier {tier} rejected"
+    print("PASS: v3 new tier names accepted")
+
+
+def test_v3_activation():
+    """v3 tokens activate correctly and preserve v3 fields."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        runtime = Path(tmpdir)
+        initialize_trial(runtime)
+
+        token = generate_license_token(
+            "crew", "20271231", "acme-crew",
+            version=3, license_id="lic-aabbccddee02",
+            customer_id="cus_crew1", origin="purchased",
+        )
+        result = activate_license(runtime, token, organization_id="acme-crew")
+        assert result["ok"] is True, result
+        assert result["license_status"] == "licensed"
+        assert result["license_tier"] == "crew"
+
+        posture = resolve_posture(runtime)
+        assert posture["license_status"] == "licensed"
+        assert posture["license_tier"] == "crew"
+    print("PASS: v3 activation")
+
+
 def test_invalid_activation():
     """Invalid license key is rejected."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -300,6 +394,10 @@ def _choose_free_port() -> int:
 
 if __name__ == "__main__":
     test_license_key_scheme()
+    test_license_key_scheme_v3()
+    test_v2_v3_backward_compatibility()
+    test_v3_new_tiers()
+    test_v3_activation()
     test_trial_initialization()
     test_trial_expiry_unlicensed()
     test_trial_expiry_personal()

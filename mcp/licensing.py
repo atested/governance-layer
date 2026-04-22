@@ -7,14 +7,16 @@ Licensing is *evidentiary, not enforcement*.  The governance layer operates
 identically regardless of license status — ALLOW/DENY decisions are not
 affected.  Licensing fields record the truth about the operator's status.
 
-License key scheme (v2):
+License key scheme (v2/v3):
     License tokens are Ed25519-signed JSON payloads.  The signing private key
     is held by the license issuer (website/Stripe backend) and is NOT shipped
     with the client code.  The client embeds only the public key for
     verification.
 
     Token format: base64url(JSON-payload) + "." + base64url(Ed25519-signature)
-    Payload: {"tier": "team", "exp": "20271231", "org": "acme", "v": 2}
+    v2 payload: {"tier": "team", "exp": "20271231", "org": "acme", "v": 2}
+    v3 payload: {"customer_id": "cus_...", "exp": "20271231", "license_id": "lic-...",
+                 "org": "acme", "origin": "purchased", "tier": "crew", "v": 3}
 
     The public verification key is embedded in this module.  To generate
     license tokens, use the issuer tool (not shipped in this repo) with the
@@ -42,7 +44,8 @@ LICENSE_FILENAME = "license.json"
 TRIAL_DAYS = 30
 
 VALID_STATUSES = ("trial", "licensed", "unlicensed", "personal", "clock_anomaly")
-VALID_TIERS = ("personal", "team", "business", "enterprise")
+VALID_TIERS = ("personal", "personal_plus", "crew", "team", "institution",
+                "business", "enterprise")  # last two are legacy v2 names
 
 # ---------------------------------------------------------------------------
 # Ed25519 license token scheme (v2)
@@ -112,11 +115,18 @@ def _load_issuer_private_key():
         return None
 
 
-def generate_license_token(tier: str, expiry_date: str, org: str = "") -> str:
+def generate_license_token(
+    tier: str, expiry_date: str, org: str = "",
+    version: int = 2,
+    license_id: str = "", customer_id: str = "", origin: str = "",
+) -> str:
     """Generate a signed license token (issuer-side only).
 
     Requires GOV_LICENSE_SIGNING_KEY_PATH to point to the Ed25519 private key.
     This function is NOT available in production client deployments.
+
+    version=2: legacy format {tier, exp, org, v}
+    version=3: adds {license_id, customer_id, origin}
     """
     if tier not in VALID_TIERS:
         raise ValueError(f"invalid tier: {tier}")
@@ -126,9 +136,13 @@ def generate_license_token(tier: str, expiry_date: str, org: str = "") -> str:
             "GOV_LICENSE_SIGNING_KEY_PATH not set or key unreadable. "
             "License generation requires the issuer private key."
         )
+    claims: Dict[str, Any] = {"tier": tier, "exp": expiry_date, "org": org, "v": version}
+    if version >= 3:
+        claims["license_id"] = license_id
+        claims["customer_id"] = customer_id
+        claims["origin"] = origin
     payload = json.dumps(
-        {"tier": tier, "exp": expiry_date, "org": org, "v": 2},
-        sort_keys=True, separators=(",", ":"),
+        claims, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8")
     sig = priv.sign(payload)
     return _b64url_encode(payload) + "." + _b64url_encode(sig)
@@ -137,8 +151,11 @@ def generate_license_token(tier: str, expiry_date: str, org: str = "") -> str:
 def validate_license_token(token: str) -> Optional[Dict[str, str]]:
     """Validate a signed license token and return decoded fields, or None.
 
-    Only Ed25519-signed v2 tokens are accepted.  Legacy v1 GOV-* keys are
+    Accepts Ed25519-signed v2 and v3 tokens.  Legacy v1 GOV-* keys are
     rejected (C1: forgeable deterministic scheme removed).
+
+    v2 payload: {"tier", "exp", "org", "v": 2}
+    v3 payload: {"tier", "exp", "org", "v": 3, "license_id", "customer_id", "origin"}
     """
     parts = token.strip().split(".")
     if len(parts) != 2:
@@ -172,17 +189,27 @@ def validate_license_token(token: str) -> Optional[Dict[str, str]]:
         exp_date = datetime.strptime(expiry, "%Y%m%d").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
-    return {
+
+    version = claims.get("v", 2)
+    result = {
         "tier": tier,
         "expiry_date": expiry,
         "expiry_iso": exp_date.strftime("%Y-%m-%dT00:00:00Z"),
         "organization": claims.get("org", ""),
-        "version": claims.get("v", 2),
+        "version": version,
     }
+
+    # v3 additional fields
+    if version >= 3:
+        result["license_id"] = claims.get("license_id", "")
+        result["customer_id"] = claims.get("customer_id", "")
+        result["origin"] = claims.get("origin", "")
+
+    return result
 
 
 def validate_license_key(key: str) -> Optional[Dict[str, str]]:
-    """Validate a license key.  Only Ed25519-signed v2 tokens are accepted."""
+    """Validate a license key.  Accepts Ed25519-signed v2 and v3 tokens."""
     return validate_license_token(key)
 
 
@@ -359,7 +386,7 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0,
 def activate_license(
     runtime_dir: Path, license_key: str, organization_id: str = ""
 ) -> Dict[str, Any]:
-    """Activate a license key (Ed25519-signed v2 token).  Returns result dict."""
+    """Activate a license key (Ed25519-signed v2 or v3 token).  Returns result dict."""
     decoded = validate_license_key(license_key)
     if decoded is None:
         return {"ok": False, "error": "INVALID_LICENSE_KEY"}
