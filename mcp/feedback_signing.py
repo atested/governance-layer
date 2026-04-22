@@ -133,7 +133,8 @@ def build_telemetry_artifact(
     total_deterministic = 0
     total_judgment = 0
     chain_hash = None
-    
+    unique_user_ids = set()
+
     if chain_path and chain_path.exists():
         last_line = ""
         for line in chain_path.read_text(encoding="utf-8").strip().splitlines():
@@ -156,6 +157,10 @@ def build_telemetry_artifact(
                     total_judgment += 1
                 else:
                     total_deterministic += 1
+            # Track unique users
+            uid = rec.get("user_identity")
+            if uid:
+                unique_user_ids.add(uid)
         # Chain hash from last record
         if last_line:
             try:
@@ -196,6 +201,7 @@ def build_telemetry_artifact(
         "total_deny": total_deny,
         "total_deterministic": total_deterministic,
         "total_judgment": total_judgment,
+        "unique_users": len(unique_user_ids),
         "version": ATESTED_VERSION,
         "chain_hash": chain_hash,
     }
