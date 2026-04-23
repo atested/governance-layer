@@ -452,6 +452,14 @@ export function postTermsAcknowledge() {
   });
 }
 
+/**
+ * Activate a license from a pasted/uploaded key.
+ * POST /api/licensing/activate-with-key
+ */
+export function postActivateWithKey({ license_key } = {}) {
+  return _request('POST', '/licensing/activate-with-key', { body: { license_key } });
+}
+
 // ---------- Identity endpoints ----------
 
 /**

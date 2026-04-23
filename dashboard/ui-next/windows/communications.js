@@ -7,6 +7,18 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 
+let _pendingCompose = null;
+
+/**
+ * Open the Communications window with a pre-populated compose context.
+ * @param {HTMLElement|null} trigger
+ * @param {{ subject: string, context: string }} composeData
+ */
+export function openCommunicationsWindowWithCompose(trigger, composeData) {
+  _pendingCompose = composeData;
+  openCommunicationsWindow(trigger);
+}
+
 const SLOT_ALLOC = {
   personal:      { medium: 0, high: 0 },
   personal_plus: { medium: 2, high: 0 },
@@ -85,7 +97,27 @@ function _renderAll(state) {
   el.appendChild(stats);
 
   // Submit a request pane
-  el.appendChild(_buildSubmitPane(state, medAvail, highAvail));
+  const submitPane = _buildSubmitPane(state, medAvail, highAvail);
+  el.appendChild(submitPane);
+
+  // Apply pending compose data if set
+  if (_pendingCompose) {
+    const textarea = submitPane.querySelector('#cm-request-text');
+    if (textarea) {
+      const ctx = _pendingCompose;
+      let text = '';
+      if (ctx.subject) text += `Subject: ${ctx.subject}\n`;
+      if (ctx.context) text += `\n${ctx.context}\n`;
+      text += '\n--- Your message below ---\n';
+      textarea.value = text;
+      // Place cursor at end
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+      }, 50);
+    }
+    _pendingCompose = null;
+  }
 
   // Priority slot panes — side by side
   const slotRow = document.createElement('div');

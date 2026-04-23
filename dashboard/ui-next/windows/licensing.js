@@ -1547,7 +1547,99 @@ function _renderPurchaseBody(el, tier, formData, state) {
       </div>
     </div>
     ${purchaseHtml}
+    <details class="lup-activate-collapsible">
+      <summary class="lup-activate-summary">Already have a license key?</summary>
+      <div class="lup-activate-section lup-activate-inline">
+        <p class="lup-section-desc">Paste a license key or upload a <code>.key</code> file to activate.</p>
+        <textarea class="lup-activate-textarea lup-activate-prepurchase" rows="3" placeholder="Paste license key here\u2026"></textarea>
+        <input type="file" class="lup-activate-file lup-activate-prepurchase-file" accept=".key,.txt" style="margin-top:8px;font-size:0.82rem;color:#8b919a;">
+        <div class="lup-activate-preview lup-activate-prepurchase-preview" style="display:none"></div>
+        <div class="lup-activate-error lup-activate-prepurchase-error" style="display:none"></div>
+        <button class="lic-action-btn lic-action-primary lup-activate-prepurchase-btn" disabled style="margin-top:10px">Activate</button>
+      </div>
+    </details>
   `;
+
+  // Wire pre-purchase activate-with-key
+  {
+    const ppTextarea = bodyArea.querySelector('.lup-activate-prepurchase');
+    const ppPreview = bodyArea.querySelector('.lup-activate-prepurchase-preview');
+    const ppError = bodyArea.querySelector('.lup-activate-prepurchase-error');
+    const ppBtn = bodyArea.querySelector('.lup-activate-prepurchase-btn');
+    const ppFile = bodyArea.querySelector('.lup-activate-prepurchase-file');
+    let ppTimer = null;
+
+    if (ppTextarea) {
+      ppTextarea.addEventListener('input', () => {
+        clearTimeout(ppTimer);
+        ppTimer = setTimeout(async () => {
+          const key = ppTextarea.value.trim();
+          ppPreview.style.display = 'none';
+          ppError.style.display = 'none';
+          ppBtn.disabled = true;
+          if (!key) return;
+          try {
+            const res = await api.postVerifyLicense({ license_key: key });
+            if (res.ok && res.data && !res.data.error) {
+              if (res.data.expired) {
+                ppError.textContent = 'This token has expired.';
+                ppError.style.display = '';
+              } else {
+                ppPreview.textContent = `Tier: ${res.data.tier || 'N/A'} \u2022 Expires: ${(res.data.expiry_iso || res.data.expiry || '').slice(0, 10) || 'N/A'}`;
+                ppPreview.style.display = '';
+                ppBtn.disabled = false;
+              }
+            } else {
+              ppError.textContent = 'Invalid token.';
+              ppError.style.display = '';
+            }
+          } catch {
+            ppError.textContent = 'Validation failed.';
+            ppError.style.display = '';
+          }
+        }, 300);
+      });
+    }
+
+    if (ppFile) {
+      ppFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (ppTextarea) {
+            ppTextarea.value = reader.result;
+            ppTextarea.dispatchEvent(new Event('input'));
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    if (ppBtn) {
+      ppBtn.addEventListener('click', async () => {
+        const key = ppTextarea ? ppTextarea.value.trim() : '';
+        if (!key) return;
+        ppBtn.disabled = true;
+        ppError.style.display = 'none';
+        try {
+          const res = await api.postActivateWithKey({ license_key: key });
+          if (res.ok && res.data && res.data.ok) {
+            await _refreshLicenseState();
+            _loadUnifiedPurchase(el, state);
+          } else {
+            ppError.textContent = (res.data && res.data.error) || 'Activation failed.';
+            ppError.style.display = '';
+            ppBtn.disabled = false;
+          }
+        } catch {
+          ppError.textContent = 'Activation request failed.';
+          ppError.style.display = '';
+          ppBtn.disabled = false;
+        }
+      });
+    }
+  }
 
   // Wire form field syncing
   bodyArea.querySelectorAll('[data-field]').forEach(input => {
@@ -1882,7 +1974,26 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
       ` : ''}
       <div class="lup-purchase-divider"></div>
       <button class="lup-invoice-btn" data-tier="${currentTier}" data-start="${purchaseDate}" data-end="${expiryDate}" data-name="${_esc(operatorName)}">Download invoice</button>
+      <div class="lup-token-section">
+        <h4 class="lup-section-heading">License files</h4>
+        <p class="lup-section-desc">Download your license certificate or token file for safekeeping. You'll need the token if you reinstall Atested on a new machine.</p>
+        <div class="lup-token-actions">
+          <button class="lup-invoice-btn lup-download-cert-btn">Download certificate</button>
+          <button class="lup-invoice-btn lup-download-token-btn${modeData.license_key ? '' : ' lup-invoice-disabled'}">Download token</button>
+        </div>
+      </div>
     </div>
+    <div class="lup-activate-section">
+      <div class="lup-pane-bar lup-pane-bar-blue"></div>
+      <h4 class="lup-pane-heading">Activate with license key</h4>
+      <p class="lup-section-desc">Paste a license key or upload a <code>.key</code> file to activate.</p>
+      <textarea class="lup-activate-textarea" rows="3" placeholder="Paste license key here\u2026"></textarea>
+      <input type="file" class="lup-activate-file" accept=".key,.txt" style="margin-top:8px;font-size:0.82rem;color:#8b919a;">
+      <div class="lup-activate-preview" style="display:none"></div>
+      <div class="lup-activate-error" style="display:none"></div>
+      <button class="lic-action-btn lic-action-primary lup-activate-btn" disabled style="margin-top:10px">Activate</button>
+    </div>
+    <div class="lup-save-prompt" style="display:none"></div>
     <div class="lup-confirm-dialog" style="display:none"></div>
     <div class="lup-error" style="display:none"></div>
   `;
@@ -1922,6 +2033,101 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
       });
     });
   }
+
+  // Wire certificate download
+  const certBtn = el.querySelector('.lup-download-cert-btn');
+  if (certBtn) {
+    certBtn.addEventListener('click', () => _downloadCertificate(modeData));
+  }
+
+  // Wire token download
+  const tokenBtn = el.querySelector('.lup-download-token-btn');
+  if (tokenBtn && modeData.license_key) {
+    tokenBtn.addEventListener('click', () => _downloadTokenFile(modeData));
+  }
+
+  // Wire activate-with-key
+  const activateTextarea = el.querySelector('.lup-activate-textarea');
+  const activateFile = el.querySelector('.lup-activate-file');
+  const activatePreview = el.querySelector('.lup-activate-preview');
+  const activateError = el.querySelector('.lup-activate-error');
+  const activateBtn = el.querySelector('.lup-activate-btn');
+
+  let _validateTimer = null;
+  if (activateTextarea) {
+    activateTextarea.addEventListener('input', () => {
+      clearTimeout(_validateTimer);
+      _validateTimer = setTimeout(async () => {
+        const key = activateTextarea.value.trim();
+        activatePreview.style.display = 'none';
+        activateError.style.display = 'none';
+        activateBtn.disabled = true;
+        if (!key) return;
+        try {
+          const res = await api.postVerifyLicense({ license_key: key });
+          if (res.ok && res.data && !res.data.error) {
+            const d = res.data;
+            if (d.expired) {
+              activateError.textContent = 'This token has expired.';
+              activateError.style.display = '';
+            } else {
+              activatePreview.textContent = `Tier: ${d.tier || 'N/A'} \u2022 Expires: ${(d.expiry_iso || d.expiry || '').slice(0, 10) || 'N/A'}`;
+              activatePreview.style.display = '';
+              activateBtn.disabled = false;
+            }
+          } else {
+            activateError.textContent = 'Invalid token.';
+            activateError.style.display = '';
+          }
+        } catch {
+          activateError.textContent = 'Validation failed.';
+          activateError.style.display = '';
+        }
+      }, 300);
+    });
+  }
+
+  if (activateFile) {
+    activateFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (activateTextarea) {
+          activateTextarea.value = reader.result;
+          activateTextarea.dispatchEvent(new Event('input'));
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  if (activateBtn) {
+    activateBtn.addEventListener('click', async () => {
+      const key = activateTextarea ? activateTextarea.value.trim() : '';
+      if (!key) return;
+      activateBtn.disabled = true;
+      activateError.style.display = 'none';
+      try {
+        const res = await api.postActivateWithKey({ license_key: key });
+        if (res.ok && res.data && res.data.ok) {
+          await _refreshLicenseState();
+          _loadUnifiedPurchase(el, state);
+        } else {
+          activateError.textContent = (res.data && res.data.error) || 'Activation failed.';
+          activateError.style.display = '';
+          activateBtn.disabled = false;
+        }
+      } catch {
+        activateError.textContent = 'Activation request failed.';
+        activateError.style.display = '';
+        activateBtn.disabled = false;
+      }
+    });
+  }
+
+  // Save prompt — show once per license
+  _showTokenSavePrompt(el, modeData);
 
   // Wire management actions
   const confirmArea = el.querySelector('.lup-confirm-dialog');
@@ -1985,6 +2191,90 @@ function _downloadInvoice({ tier, start, end, name, price }) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function _downloadCertificate(modeData) {
+  const today = new Date().toISOString().slice(0, 10);
+  const tier = modeData.license_tier || 'personal';
+  const org = modeData.organization_name || modeData.operator_name || '';
+  const licenseId = modeData.license_id || '';
+  const issued = (modeData.purchase_date || modeData.registration_date || '').slice(0, 10) || 'N/A';
+  const expires = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Atested License Certificate</title>
+<style>
+  body { font-family: "Inter", system-ui, sans-serif; max-width: 600px; margin: 40px auto; color: #1a1a2e; }
+  h1 { color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+  table { border-collapse: collapse; width: 100%; margin: 24px 0; }
+  td { padding: 10px 14px; border: 1px solid #e2e8f0; }
+  td:first-child { font-weight: 600; background: #f7fafc; width: 140px; }
+  .footer { margin-top: 40px; font-size: 0.85rem; color: #718096; }
+</style></head><body>
+<h1>Atested License Certificate</h1>
+<table>
+  <tr><td>Tier</td><td>${_esc(tier)}</td></tr>
+  ${org ? `<tr><td>Organization</td><td>${_esc(org)}</td></tr>` : ''}
+  ${licenseId ? `<tr><td>License ID</td><td>${_esc(licenseId)}</td></tr>` : ''}
+  <tr><td>Issued</td><td>${_esc(issued)}</td></tr>
+  <tr><td>Expires</td><td>${_esc(expires)}</td></tr>
+</table>
+<p class="footer">Generated ${today} by Atested Governance Platform</p>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `atested-license-certificate-${today}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _downloadTokenFile(modeData) {
+  const key = modeData.license_key || '';
+  if (!key) return;
+  const blob = new Blob([key], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'atested-license.key';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function _showTokenSavePrompt(el, modeData) {
+  if (modeData.license_status !== 'licensed') return;
+  const key = modeData.license_key || '';
+  if (!key) return;
+  const storageKey = 'atd_token_prompted_' + key.slice(0, 16);
+  if (localStorage.getItem(storageKey)) return;
+
+  const promptEl = el.querySelector('.lup-save-prompt');
+  if (!promptEl) return;
+
+  promptEl.style.display = '';
+  promptEl.innerHTML = `
+    <div class="lup-save-prompt-card">
+      <p class="lup-save-prompt-text">Save your license file somewhere safe. You'll need it if you ever reinstall Atested on a new machine.</p>
+      <div class="lup-token-actions">
+        <button class="lup-invoice-btn lup-save-cert">Download certificate</button>
+        <button class="lup-invoice-btn lup-save-token">Download token</button>
+        <button class="lup-invoice-btn lup-save-dismiss">Got it</button>
+      </div>
+    </div>
+  `;
+
+  promptEl.querySelector('.lup-save-cert')?.addEventListener('click', () => _downloadCertificate(modeData));
+  promptEl.querySelector('.lup-save-token')?.addEventListener('click', () => _downloadTokenFile(modeData));
+  promptEl.querySelector('.lup-save-dismiss')?.addEventListener('click', () => {
+    localStorage.setItem(storageKey, '1');
+    promptEl.style.display = 'none';
+  });
 }
 
 function _showConfirmDialog(confirmArea, errorEl, state, { message, action, onSuccess }) {
@@ -4150,6 +4440,101 @@ licStyles.textContent = `
     border-radius: 8px;
   }
 
+
+  /* Token & activate sections */
+  .lup-token-section {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .lup-token-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .lup-section-heading {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    margin: 0 0 4px 0;
+  }
+  .lup-section-desc {
+    font-size: 0.82rem;
+    color: #8b919a;
+    line-height: 1.5;
+    margin: 0 0 8px 0;
+  }
+  .lup-activate-section {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .lup-activate-textarea {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e4e6eb;
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 0.82rem;
+    padding: 8px 12px;
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s;
+  }
+  .lup-activate-textarea:focus { border-color: #60a5fa; }
+  .lup-activate-textarea::placeholder { color: #6b7280; }
+  .lup-activate-preview {
+    font-size: 0.82rem;
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.06);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+  .lup-activate-error {
+    font-size: 0.82rem;
+    color: #f5a623;
+    background: rgba(245, 166, 35, 0.10);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+  .lup-save-prompt-card {
+    background: rgba(96, 165, 250, 0.06);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+  }
+  .lup-save-prompt-text {
+    font-size: 0.88rem;
+    color: #e4e6eb;
+    margin: 0 0 10px 0;
+    line-height: 1.5;
+  }
+  .lup-activate-collapsible {
+    margin-bottom: 16px;
+  }
+  .lup-activate-summary {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #60a5fa;
+    cursor: pointer;
+    padding: 8px 0;
+  }
+  .lup-activate-summary:hover { text-decoration: underline; }
+  .lup-activate-inline {
+    margin-top: 10px;
+    border: none;
+    padding: 0;
+    background: none;
+  }
 
   @media (max-width: 600px) {
     .ll-status-pane {

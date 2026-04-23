@@ -9,6 +9,8 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { openLicensingWindow } from './licensing.js';
+import { openCommunicationsWindowWithCompose } from './communications.js';
 import '../components/pill.js';
 import '../components/loading-indicator.js';
 
@@ -70,6 +72,31 @@ async function _loadData(state) {
   _renderNotifications(list, notifications, state);
 }
 
+const LICENSE_NOTIFICATION_TYPES = new Set([
+  'license_revoked', 'license_delivered',
+  'license_expiration_warning', 'license_modified',
+]);
+
+function _isLicenseNotification(notif) {
+  return LICENSE_NOTIFICATION_TYPES.has(notif.type);
+}
+
+function _licenseMessage(notif) {
+  const p = notif.payload || {};
+  switch (notif.type) {
+    case 'license_revoked':
+      return `Your license has been revoked. Reason: ${p.reason || 'N/A'}. Your installation has reverted to Personal tier. All governance functions continue normally.`;
+    case 'license_expiration_warning':
+      return `Your ${p.tier || 'N/A'} license expires on ${(p.expiry || '').slice(0, 10) || 'N/A'}. Without renewal, your installation will revert to Personal tier. Governance continues fully \u2014 proxy still governs, chain still records, all safety features remain active.`;
+    case 'license_delivered':
+      return `Your license has been updated. You now have a ${p.tier || 'N/A'} license, valid until ${(p.expiry || '').slice(0, 10) || 'N/A'}.`;
+    case 'license_modified':
+      return `Your license has been modified. Previous tier: ${p.previous_tier || 'N/A'}. New tier: ${p.new_tier || 'N/A'}. Reason: ${p.reason || 'N/A'}.`;
+    default:
+      return notif.message || '';
+  }
+}
+
 function _renderNotifications(list, notifications, state) {
   list.innerHTML = '';
 
@@ -88,6 +115,88 @@ function _renderNotifications(list, notifications, state) {
     card.className = `nf-card nf-severity-${notif.severity || 'informational'}`;
 
     const color = SEVERITY_COLORS[notif.severity] || SEVERITY_COLORS.informational;
+
+    // License notifications get type-specific rendering
+    if (_isLicenseNotification(notif)) {
+      card.innerHTML = `
+        <div class="nf-card-header">
+          <span class="nf-severity-label" style="color:${color}">${_esc((notif.severity || 'info').toUpperCase())}</span>
+          <span class="nf-card-title">${_esc(notif.title || '--')}</span>
+        </div>
+        <p class="nf-card-message">${_esc(_licenseMessage(notif))}</p>
+      `;
+
+      const actions = document.createElement('div');
+      actions.className = 'nf-card-actions';
+      const p = notif.payload || {};
+
+      // Reply button — revoked, expiration_warning, modified
+      if (['license_revoked', 'license_expiration_warning', 'license_modified'].includes(notif.type)) {
+        const replyBtn = document.createElement('atd-pill');
+        replyBtn.setAttribute('variant', 'outline');
+        replyBtn.textContent = 'Reply';
+        replyBtn.addEventListener('click', () => {
+          const subjectMap = {
+            license_revoked: `License revocation \u2014 ${p.license_id || 'N/A'}`,
+            license_expiration_warning: `License renewal \u2014 ${p.license_id || 'N/A'}`,
+            license_modified: `License modification \u2014 ${p.license_id || 'N/A'}`,
+          };
+          openCommunicationsWindowWithCompose(card, {
+            subject: subjectMap[notif.type] || 'License inquiry',
+            context: [
+              `License ID: ${p.license_id || 'N/A'}`,
+              `Tier: ${p.tier || p.new_tier || 'N/A'}`,
+              `Timestamp: ${p.timestamp_utc || 'N/A'}`,
+              p.reason ? `Reason: ${p.reason}` : '',
+            ].filter(Boolean).join('\n'),
+          });
+        });
+        actions.appendChild(replyBtn);
+      }
+
+      // Renew button — expiration_warning only
+      if (notif.type === 'license_expiration_warning') {
+        const renewBtn = document.createElement('atd-pill');
+        renewBtn.setAttribute('variant', 'outline');
+        renewBtn.textContent = 'Renew';
+        renewBtn.addEventListener('click', () => {
+          openLicensingWindow(card);
+        });
+        actions.appendChild(renewBtn);
+      }
+
+      // Dismiss button — non-persistent only
+      if (!notif.persistent) {
+        const dismissBtn = document.createElement('atd-pill');
+        dismissBtn.setAttribute('variant', 'outline');
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.addEventListener('click', async () => {
+          const res = await api.postDismissNotification({ notification_id: notif.id });
+          if (res.ok) {
+            card.remove();
+            if (!list.querySelector('.nf-card')) {
+              list.innerHTML = '<p class="nf-empty">No active notifications</p>';
+            }
+          }
+        });
+        actions.appendChild(dismissBtn);
+      }
+
+      if (actions.children.length > 0) {
+        card.appendChild(actions);
+      }
+      if (notif.persistent && actions.children.length === 0) {
+        const note = document.createElement('p');
+        note.className = 'nf-persistent-note';
+        note.textContent = 'This notification cannot be dismissed.';
+        card.appendChild(note);
+      }
+
+      list.appendChild(card);
+      continue;  // skip generic path
+    }
+
+    // Generic notifications
     card.innerHTML = `
       <div class="nf-card-header">
         <span class="nf-severity-label" style="color:${color}">${_esc((notif.severity || 'info').toUpperCase())}</span>
@@ -106,7 +215,6 @@ function _renderNotifications(list, notifications, state) {
         const res = await api.postDismissNotification({ notification_id: notif.id });
         if (res.ok) {
           card.remove();
-          // Check if list is now empty
           if (!list.querySelector('.nf-card')) {
             list.innerHTML = '<p class="nf-empty">No active notifications</p>';
           }

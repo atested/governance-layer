@@ -427,6 +427,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_institution_inquiry()
             elif parsed.path == "/api/licensing/research-opt-in":
                 self._handle_research_opt_in()
+            elif parsed.path == "/api/licensing/activate-with-key":
+                self._handle_activate_with_key()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -1062,6 +1064,111 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # Notification & disclosure endpoints (Phase 5)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # License chain notification scanner
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _scan_license_chain_notifications():
+        """Scan the chain for license notification events from the last 7 days."""
+        from datetime import datetime, timezone, timedelta
+        notifications = []
+        if not CHAIN.exists():
+            return notifications
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        target_types = {
+            "license_revoked", "license_activated",
+            "license_expiration_warning", "license_modified",
+        }
+        title_map = {
+            "license_revoked": "License Revoked",
+            "license_activated": "License Updated",
+            "license_expiration_warning": "License Expiring",
+            "license_modified": "License Modified",
+        }
+        msg_map = {
+            "license_revoked": lambda p: (
+                f"Your license has been revoked. Reason: {p.get('reason', 'N/A')}. "
+                "Your installation has reverted to Personal tier. "
+                "All governance functions continue normally."
+            ),
+            "license_activated": lambda p: (
+                f"Your license has been updated. You now have a {p.get('tier', 'N/A')} "
+                f"license, valid until {(p.get('expiry') or p.get('license_expiry', 'N/A'))[:10]}."
+            ),
+            "license_expiration_warning": lambda p: (
+                f"Your {p.get('tier', 'N/A')} license expires on "
+                f"{(p.get('expiry') or p.get('license_expiry', 'N/A'))[:10]}. "
+                "Without renewal, your installation will revert to Personal tier. "
+                "Governance continues fully \u2014 proxy still governs, chain still records, "
+                "all safety features remain active."
+            ),
+            "license_modified": lambda p: (
+                f"Your license has been modified. Previous tier: {p.get('previous_tier', 'N/A')}. "
+                f"New tier: {p.get('new_tier', 'N/A')}. Reason: {p.get('reason', 'N/A')}."
+            ),
+        }
+        # Notification type mapping: chain event_type -> notification type field
+        notif_type_map = {
+            "license_revoked": "license_revoked",
+            "license_activated": "license_delivered",
+            "license_expiration_warning": "license_expiration_warning",
+            "license_modified": "license_modified",
+        }
+
+        try:
+            lines = CHAIN.read_text(encoding="utf-8").splitlines()
+            # Read in reverse, stop after 500 lines
+            for line in reversed(lines[-500:]):
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                evt_type = rec.get("event_type", "")
+                if evt_type not in target_types:
+                    continue
+                ts = rec.get("timestamp_utc", "")
+                if ts:
+                    try:
+                        rec_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        if rec_time < cutoff:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                else:
+                    continue
+
+                payload = rec.get("payload", {})
+                if not isinstance(payload, dict):
+                    payload = {}
+
+                notif_id = payload.get("notification_id", rec.get("event_id", evt_type))
+                ntype = notif_type_map.get(evt_type, evt_type)
+                msg_fn = msg_map.get(evt_type)
+                notifications.append({
+                    "id": notif_id,
+                    "severity": "critical",
+                    "title": title_map.get(evt_type, "License Event"),
+                    "message": msg_fn(payload) if msg_fn else "",
+                    "persistent": evt_type == "license_revoked",
+                    "type": ntype,
+                    "payload": {
+                        "license_id": payload.get("license_id", ""),
+                        "tier": payload.get("tier", ""),
+                        "reason": payload.get("reason", ""),
+                        "expiry": payload.get("expiry", payload.get("license_expiry", "")),
+                        "timestamp_utc": ts,
+                        "new_tier": payload.get("new_tier", ""),
+                        "previous_tier": payload.get("previous_tier", ""),
+                    },
+                })
+        except OSError:
+            pass
+        return notifications
+
     def _handle_notifications_get(self):
         """GET /api/notifications — return active notifications derived from health signals."""
         try:
@@ -1140,6 +1247,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "message": alert.get("message", ""),
                     "persistent": False,
                 })
+
+            # License chain notifications
+            notifications.extend(self._scan_license_chain_notifications())
 
             # Filter out dismissed notifications
             dismissed = self._load_dismissed_notifications()
@@ -2016,6 +2126,81 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
+    def _handle_activate_with_key(self):
+        """POST /api/licensing/activate-with-key — activate a license from a pasted/uploaded key."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 16384:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        license_key = (data.get("license_key") or "").strip()
+        if not license_key:
+            _json_response(self, {"ok": False, "error": "No license key provided"}, 400)
+            return
+
+        try:
+            from licensing import validate_license_token, activate_license
+            from datetime import datetime, timezone
+
+            decoded = validate_license_token(license_key)
+            if decoded is None:
+                _json_response(self, {
+                    "ok": False,
+                    "error": "Invalid license key \u2014 signature verification failed",
+                })
+                return
+
+            # Check expiry
+            expiry_iso = decoded.get("expiry_iso", "")
+            if expiry_iso:
+                try:
+                    exp_dt = datetime.fromisoformat(expiry_iso.replace("Z", "+00:00"))
+                    if exp_dt < datetime.now(timezone.utc):
+                        _json_response(self, {
+                            "ok": False,
+                            "error": "This license key has expired",
+                        })
+                        return
+                except (ValueError, TypeError):
+                    pass
+
+            result = activate_license(RUNTIME, license_key)
+            if not result.get("ok", True):
+                _json_response(self, {
+                    "ok": False,
+                    "error": result.get("error", "Activation failed"),
+                })
+                return
+
+            # Write chain event
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "license_activated",
+                {
+                    "source": "manual_entry",
+                    "tier": decoded.get("tier", ""),
+                    "license_id": decoded.get("license_id", ""),
+                    "expiry": decoded.get("expiry_iso", ""),
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {
+                "ok": True,
+                "tier": decoded.get("tier", ""),
+                "expiry": decoded.get("expiry_iso", ""),
+                "license_id": decoded.get("license_id", ""),
+            })
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
     def _handle_auto_renewal(self):
         """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
         try:
@@ -2860,6 +3045,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result["pending_downgrade"] = lic_data.get("pending_downgrade", None)
                 result["terms_acknowledged"] = lic_data.get("terms_acknowledged", False)
                 result["terms_acknowledged_at"] = lic_data.get("terms_acknowledged_at", "")
+                result["license_key"] = lic_data.get("license_key", "")
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met
