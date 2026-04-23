@@ -1515,6 +1515,16 @@ def main():
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
+    # INV-005: Proxy records are trust-grade and MUST be signed.
+    # Refuse to start without a valid signing key — no silent degradation.
+    if _SIGNING_KEY is None:
+        key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+        if not key_path:
+            logger.error("GOV_SIGNING_KEY_PATH not set — proxy requires a signing key (INV-005)")
+        else:
+            logger.error("Failed to load signing key from %s — proxy requires a valid key (INV-005)", key_path)
+        sys.exit(1)
+
     # Verify API key is available
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
