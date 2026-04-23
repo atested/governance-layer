@@ -1177,7 +1177,7 @@ def governed_tool(
     canonical_path = ""
     if path_val:
         try:
-            canonical_path = canonicalize(path_val)
+            canonical_path = str(canonicalize(path_val))
         except (ValueError, OSError):
             canonical_path = path_val
         norm_args["canonical_path"] = canonical_path
@@ -1187,12 +1187,12 @@ def governed_tool(
     dst_val = norm_args.get("destination", "")
     if src_val:
         try:
-            norm_args["canonical_src_path"] = canonicalize(src_val)
+            norm_args["canonical_src_path"] = str(canonicalize(src_val))
         except (ValueError, OSError):
             norm_args["canonical_src_path"] = src_val
     if dst_val:
         try:
-            norm_args["canonical_dst_path"] = canonicalize(dst_val)
+            norm_args["canonical_dst_path"] = str(canonicalize(dst_val))
         except (ValueError, OSError):
             norm_args["canonical_dst_path"] = dst_val
 
