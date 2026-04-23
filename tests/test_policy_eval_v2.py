@@ -221,6 +221,55 @@ class TestEdgeCases:
         # Network + remote scope → denied by network rule
         assert r["policy_decision"] == "DENY"
 
+
+# ---------------------------------------------------------------------------
+# Non-absolute-path Bash commands (OI #10 — classifier fail-closed verification)
+# ---------------------------------------------------------------------------
+
+class TestBashNonAbsolutePathDenied:
+    """Verify that Bash commands without absolute paths do NOT fail open.
+
+    OI #10 concern: Bash commands without absolute paths might bypass deny
+    rules because the classifier relies on path inspection. These tests
+    confirm the classifier is fail-closed: unrecognized commands → Tier 3 → DENY.
+    """
+
+    def test_relative_path_command(self):
+        c = classify("Bash", {"command": "cat src/main.py"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
+    def test_bare_command_no_path(self):
+        c = classify("Bash", {"command": "whoami"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
+    def test_unknown_command_with_flags(self):
+        c = classify("Bash", {"command": "myctl deploy --env=prod"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
+    def test_pipe_chain_denied(self):
+        c = classify("Bash", {"command": "find . -name '*.py' | xargs grep password"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
+    def test_subshell_denied(self):
+        c = classify("Bash", {"command": "echo $(cat /etc/passwd)"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
+    def test_backtick_substitution_denied(self):
+        c = classify("Bash", {"command": "echo `id`"})
+        r = evaluate(c, _policy())
+        assert r["policy_decision"] == "DENY"
+        assert r["matched_rule"] == "tier3-approval-required"
+
     def test_original_tool_in_record(self):
         c = classify("MyCustomTool", {"file_path": str(REPO / "test.txt")})
         r = evaluate(c, _policy())
