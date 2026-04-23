@@ -66,6 +66,8 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "license_activated",
     "license_expiration_warning",
     "license_modified",
+    "machine_added",
+    "machine_revoked",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

@@ -1558,6 +1558,20 @@ function _renderPurchaseBody(el, tier, formData, state) {
         <button class="lic-action-btn lic-action-primary lup-activate-prepurchase-btn" disabled style="margin-top:10px">Activate</button>
       </div>
     </details>
+    <details class="lup-activate-collapsible">
+      <summary class="lup-activate-summary">Join a license on this network</summary>
+      <div class="lup-join-section">
+        <p class="lup-section-desc">Enter the address shown on the sharing machine's dashboard.</p>
+        <div class="lup-join-row">
+          <input class="lup-input lup-join-input" type="text" placeholder="192.168.1.5:54321">
+          <button class="lic-action-btn lic-action-primary lup-join-btn">Join</button>
+        </div>
+        <button class="lic-action-btn lup-discover-btn">Scan network</button>
+        <div class="lup-join-peers" style="display:none"></div>
+        <div class="lup-join-status" style="display:none"></div>
+        <div class="lup-join-error" style="display:none"></div>
+      </div>
+    </details>
   `;
 
   // Wire pre-purchase activate-with-key
@@ -1672,6 +1686,88 @@ function _renderPurchaseBody(el, tier, formData, state) {
     _wirePurchaseAction(bodyArea, el, tier, formData, state);
   } else {
     _wireInstitutionSubmit(bodyArea, el, formData, state);
+  }
+
+  // Wire join-a-license flow
+  const joinBtn = bodyArea.querySelector('.lup-join-btn');
+  const joinInput = bodyArea.querySelector('.lup-join-input');
+  const joinStatus = bodyArea.querySelector('.lup-join-status');
+  const joinError = bodyArea.querySelector('.lup-join-error');
+  const joinPeers = bodyArea.querySelector('.lup-join-peers');
+  const discoverBtn = bodyArea.querySelector('.lup-discover-btn');
+
+  if (joinBtn && joinInput) {
+    joinBtn.addEventListener('click', async () => {
+      const address = joinInput.value.trim();
+      if (!address) return;
+      joinError.style.display = 'none';
+      joinStatus.style.display = '';
+      joinStatus.textContent = 'Connecting\u2026';
+      joinBtn.disabled = true;
+
+      const res = await api.postJoinLicense({ address });
+      if (!res.ok || res.data?.error) {
+        joinError.textContent = res.data?.error || res.error || 'Connection failed';
+        joinError.style.display = '';
+        joinStatus.style.display = 'none';
+        joinBtn.disabled = false;
+        return;
+      }
+
+      joinStatus.textContent = 'Waiting for approval\u2026';
+      const pollId = setInterval(async () => {
+        const sr = await api.getJoinStatus();
+        if (!sr.ok) return;
+        const st = sr.data.status;
+        if (st === 'approved') {
+          clearInterval(pollId);
+          joinStatus.textContent = 'Approved! License activated.';
+          joinStatus.style.color = '#4ade80';
+          await _refreshLicenseState();
+          setTimeout(() => _loadUnifiedPurchase(el, state), 1500);
+        } else if (st === 'denied') {
+          clearInterval(pollId);
+          joinError.textContent = 'Request was denied by the sharing machine.';
+          joinError.style.display = '';
+          joinStatus.style.display = 'none';
+          joinBtn.disabled = false;
+        } else if (st === 'timeout') {
+          clearInterval(pollId);
+          joinError.textContent = 'Sharing server timed out.';
+          joinError.style.display = '';
+          joinStatus.style.display = 'none';
+          joinBtn.disabled = false;
+        }
+      }, 2000);
+    });
+  }
+
+  if (discoverBtn) {
+    discoverBtn.addEventListener('click', async () => {
+      discoverBtn.disabled = true;
+      discoverBtn.textContent = 'Scanning\u2026';
+      await api.postStartDiscovery();
+      // Poll for discovered peers for 8 seconds
+      let checks = 0;
+      const discPoll = setInterval(async () => {
+        checks++;
+        const sr = await api.getJoinStatus();
+        if (sr.ok && sr.data) {
+          const mgr = sr.data;
+          // Check discovered_peers via machines endpoint or through join-status
+          // The peers come from the manager state returned in join-status when discovering
+        }
+        if (checks >= 4) {
+          clearInterval(discPoll);
+          // Fetch final discovered peers via sharing status
+          const sr2 = await api.getSharingStatus();
+          discoverBtn.disabled = false;
+          discoverBtn.textContent = 'Scan network';
+          // Show peers from join-status discovered_peers
+          // For now, the discover results flow through the manager
+        }
+      }, 2000);
+    });
   }
 }
 
@@ -1993,6 +2089,16 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
       <div class="lup-activate-error" style="display:none"></div>
       <button class="lic-action-btn lic-action-primary lup-activate-btn" disabled style="margin-top:10px">Activate</button>
     </div>
+    ${currentTier !== 'personal' ? `
+    <div class="lup-pane lup-machines-section">
+      <div class="lup-pane-bar lup-pane-bar-green"></div>
+      <h4 class="lup-pane-heading">Authorized machines</h4>
+      <p class="lup-section-desc">Machines authorized to use this license.${currentTier === 'personal_plus' ? ' Personal Plus supports up to 3 machines.' : ''}</p>
+      <div class="lup-machines-list">Loading\u2026</div>
+      <div class="lup-machines-actions">
+        <button class="lic-action-btn lic-action-primary lup-share-btn">Share license</button>
+      </div>
+    </div>` : ''}
     <div class="lup-save-prompt" style="display:none"></div>
     <div class="lup-confirm-dialog" style="display:none"></div>
     <div class="lup-error" style="display:none"></div>
@@ -2168,6 +2274,144 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
         _renderPurchaseBody(el, btn.dataset.tier, formData, state);
       }
     });
+  });
+
+  // Wire machine list + sharing
+  if (currentTier !== 'personal') {
+    _loadMachineList(el, modeData);
+    const shareBtn = el.querySelector('.lup-share-btn');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', () => _startSharingFlow(el, modeData, state));
+    }
+  }
+}
+
+// ---------- Machine management ----------
+
+async function _loadMachineList(el, modeData) {
+  const listEl = el.querySelector('.lup-machines-list');
+  if (!listEl) return;
+
+  const res = await api.getMachines();
+  if (!res.ok) {
+    listEl.innerHTML = `<div style="color:#f5a623;font-size:0.82rem;">${_esc(res.error)}</div>`;
+    return;
+  }
+  const { machines, count, cap, tier } = res.data;
+  const myFp = modeData.install_fingerprint || '';
+  const capText = cap != null ? `${count} of ${cap} machines` : `${count} machine${count !== 1 ? 's' : ''}`;
+
+  let html = '';
+  if (machines.length === 0) {
+    html = '<div style="font-size:0.82rem;color:#8b919a;">No machines authorized yet.</div>';
+  } else {
+    for (const m of machines) {
+      const isMe = m.fingerprint === myFp;
+      html += `<div class="lup-machine-row">
+        <div class="lup-machine-info">
+          <span class="lup-machine-hostname">${_esc(m.hostname || 'Unknown')}${isMe ? ' (this machine)' : ''}</span>
+          <span class="lup-machine-meta">${_esc((m.fingerprint || '').slice(0, 8))} &middot; ${_esc((m.added_at || '').slice(0, 10))}</span>
+        </div>
+        ${!isMe ? `<button class="lic-action-btn lup-revoke-btn" data-fp="${_esc(m.fingerprint)}">Revoke</button>` : ''}
+      </div>`;
+    }
+  }
+  html += `<div class="lup-machine-count">${capText}</div>`;
+  listEl.innerHTML = html;
+
+  // Wire revoke buttons
+  listEl.querySelectorAll('.lup-revoke-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`Revoke access for this machine? It will no longer be able to use this license.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Revoking\u2026';
+      const res2 = await api.postRevokeMachine({ fingerprint: btn.dataset.fp });
+      if (res2.ok) {
+        _loadMachineList(el, modeData);
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Revoke';
+        alert(res2.error || 'Failed to revoke');
+      }
+    });
+  });
+}
+
+async function _startSharingFlow(el, modeData, state) {
+  const actionsEl = el.querySelector('.lup-machines-actions');
+  if (!actionsEl) return;
+
+  actionsEl.innerHTML = '<div style="font-size:0.82rem;color:#8b919a;">Starting sharing server\u2026</div>';
+
+  const res = await api.postStartSharing();
+  if (!res.ok) {
+    actionsEl.innerHTML = `<div class="lup-join-error">${_esc(res.data?.error || res.error)}</div>
+      <button class="lic-action-btn lic-action-primary lup-share-btn" style="margin-top:8px">Try again</button>`;
+    el.querySelector('.lup-share-btn')?.addEventListener('click', () => _startSharingFlow(el, modeData, state));
+    return;
+  }
+
+  const address = res.data.address || '';
+  actionsEl.innerHTML = `
+    <div class="lup-sharing-address">${_esc(address)}</div>
+    <p style="font-size:0.82rem;color:#8b919a;margin:4px 0 12px;">Tell the other machine to enter this address in their dashboard.</p>
+    <div class="lup-sharing-waiting">Waiting for requests\u2026</div>
+    <div class="lup-sharing-requests"></div>
+    <button class="lic-action-btn lup-stop-sharing-btn" style="margin-top:10px">Stop sharing</button>
+  `;
+
+  // Poll for requests
+  let pollId = setInterval(async () => {
+    const sr = await api.getSharingStatus();
+    if (!sr.ok || sr.data.state !== 'listening') {
+      clearInterval(pollId);
+      actionsEl.innerHTML = '<button class="lic-action-btn lic-action-primary lup-share-btn">Share license</button>';
+      el.querySelector('.lup-share-btn')?.addEventListener('click', () => _startSharingFlow(el, modeData, state));
+      return;
+    }
+    const reqs = sr.data.pending_requests || {};
+    const reqsEl = actionsEl.querySelector('.lup-sharing-requests');
+    const waitEl = actionsEl.querySelector('.lup-sharing-waiting');
+    const pending = Object.entries(reqs).filter(([, r]) => r.status === 'pending');
+    if (pending.length > 0 && waitEl) waitEl.style.display = 'none';
+
+    for (const [rid, r] of pending) {
+      if (reqsEl.querySelector(`[data-rid="${rid}"]`)) continue;
+      const reqDiv = document.createElement('div');
+      reqDiv.className = 'lup-sharing-request';
+      reqDiv.dataset.rid = rid;
+      reqDiv.innerHTML = `
+        <p class="lup-sharing-request-text"><strong>${_esc(r.hostname)}</strong> (${_esc((r.fingerprint || '').slice(0, 8))}) is requesting access. All governance activity on this machine will be visible in your chain.</p>
+        <div class="lup-sharing-request-actions">
+          <button class="lic-action-btn lic-action-primary lup-approve-btn">Approve</button>
+          <button class="lic-action-btn lup-deny-btn-inner">Deny</button>
+        </div>
+      `;
+      reqsEl.appendChild(reqDiv);
+
+      reqDiv.querySelector('.lup-approve-btn').addEventListener('click', async () => {
+        reqDiv.querySelector('.lup-sharing-request-actions').innerHTML = '<span style="color:#8b919a;font-size:0.82rem;">Approving\u2026</span>';
+        const ar = await api.postApproveShare({ request_id: rid });
+        if (ar.ok) {
+          reqDiv.innerHTML = '<p class="lup-sharing-request-text" style="color:#4ade80;">Approved! Machine has been authorized.</p>';
+          _loadMachineList(el, modeData);
+        } else {
+          reqDiv.querySelector('.lup-sharing-request-actions').innerHTML = `<span style="color:#f5a623;font-size:0.82rem;">${_esc(ar.data?.error || ar.error)}</span>`;
+        }
+      });
+      reqDiv.querySelector('.lup-deny-btn-inner').addEventListener('click', async () => {
+        await api.postDenyShare({ request_id: rid });
+        reqDiv.remove();
+      });
+    }
+  }, 2000);
+
+  // Stop sharing button
+  actionsEl.querySelector('.lup-stop-sharing-btn')?.addEventListener('click', async () => {
+    clearInterval(pollId);
+    await api.postStopSharing();
+    actionsEl.innerHTML = '<button class="lic-action-btn lic-action-primary lup-share-btn">Share license</button>';
+    el.querySelector('.lup-share-btn')?.addEventListener('click', () => _startSharingFlow(el, modeData, state));
   });
 }
 
@@ -4535,6 +4779,28 @@ licStyles.textContent = `
     padding: 0;
     background: none;
   }
+
+  .lup-machines-section { margin-bottom: 16px; }
+  .lup-machines-list { margin-bottom: 12px; }
+  .lup-machine-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .lup-machine-info { display: flex; flex-direction: column; gap: 2px; }
+  .lup-machine-hostname { font-weight: 500; font-size: 0.88rem; color: #e4e6eb; }
+  .lup-machine-meta { font-size: 0.75rem; color: #8b919a; font-family: "Menlo", monospace; }
+  .lup-machine-count { font-size: 0.82rem; color: #8b919a; margin-top: 8px; }
+  .lup-machines-actions { margin-top: 10px; }
+  .lup-sharing-address { font-family: "Menlo", monospace; font-size: 1.1rem; color: #60a5fa; background: rgba(96,165,250,0.08); padding: 10px 14px; border-radius: 8px; margin: 8px 0; text-align: center; user-select: all; }
+  .lup-sharing-waiting { font-size: 0.85rem; color: #8b919a; font-style: italic; margin: 8px 0; }
+  .lup-sharing-request { background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); border-radius: 10px; padding: 14px 18px; margin: 10px 0; }
+  .lup-sharing-request-text { font-size: 0.88rem; color: #e4e6eb; margin: 0 0 10px 0; line-height: 1.5; }
+  .lup-sharing-request-actions { display: flex; gap: 8px; }
+  .lup-join-section { margin-top: 10px; }
+  .lup-join-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .lup-join-input { flex: 1; }
+  .lup-join-status { font-size: 0.85rem; color: #8b919a; font-style: italic; margin: 8px 0; }
+  .lup-join-error { font-size: 0.82rem; color: #f5a623; background: rgba(245,166,35,0.10); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+  .lup-join-peers { margin: 8px 0; }
+  .lup-join-peer { cursor: pointer; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); margin-bottom: 4px; font-size: 0.85rem; color: #e4e6eb; }
+  .lup-join-peer:hover { background: rgba(96,165,250,0.08); }
 
   @media (max-width: 600px) {
     .ll-status-pane {

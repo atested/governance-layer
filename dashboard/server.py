@@ -31,6 +31,98 @@ RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 
+# ---------------------------------------------------------------------------
+# Peer sharing + machine management helpers
+# ---------------------------------------------------------------------------
+
+import hashlib
+import platform
+
+_peer_sharing_manager = None
+
+
+def _get_peer_sharing_manager():
+    global _peer_sharing_manager
+    if _peer_sharing_manager is None:
+        # peer_sharing.py lives in dashboard/ alongside server.py
+        dash_dir = Path(__file__).resolve().parent
+        if str(dash_dir) not in sys.path:
+            sys.path.insert(0, str(dash_dir))
+        from peer_sharing import PeerSharingManager
+        _peer_sharing_manager = PeerSharingManager()
+    return _peer_sharing_manager
+
+
+MACHINE_CAPS = {
+    "personal": 1, "personal_plus": 3,
+    "crew": None, "team": None, "institution": None,
+}
+
+
+def _get_install_fingerprint():
+    fp_file = RUNTIME / "install_fingerprint"
+    if fp_file.exists():
+        val = fp_file.read_text(encoding="utf-8").strip()
+        if val:
+            return val
+    license_file = RUNTIME / "license.json"
+    if license_file.exists():
+        try:
+            ld = json.loads(license_file.read_text(encoding="utf-8"))
+            lk = ld.get("license_key", "")
+            if lk:
+                fp = hashlib.sha256(lk.encode()).hexdigest()[:16]
+            else:
+                fp = secrets.token_hex(8)
+        except (json.JSONDecodeError, OSError):
+            fp = secrets.token_hex(8)
+    else:
+        fp = secrets.token_hex(8)
+    fp_file.write_text(fp, encoding="utf-8")
+    try:
+        fp_file.chmod(0o600)
+    except OSError:
+        pass
+    return fp
+
+
+def _get_hostname():
+    return platform.node() or "unknown"
+
+
+def _count_active_machines_from_chain():
+    """Scan chain for machine_added/machine_revoked events, return active set."""
+    machines = {}  # fingerprint → {fingerprint, hostname, added_at}
+    if not CHAIN.exists():
+        return 0, []
+    try:
+        with open(CHAIN, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                et = rec.get("event_type")
+                if et == "machine_added":
+                    fp = rec.get("fingerprint", "")
+                    if fp:
+                        machines[fp] = {
+                            "fingerprint": fp,
+                            "hostname": rec.get("hostname", ""),
+                            "added_at": rec.get("timestamp_utc", ""),
+                        }
+                elif et == "machine_revoked":
+                    fp = rec.get("fingerprint", "")
+                    machines.pop(fp, None)
+    except OSError:
+        pass
+    ml = list(machines.values())
+    return len(ml), ml
+
+
 # Lazy-loaded helpers
 _verification_tracker = None
 _approval_store = None
@@ -429,6 +521,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_research_opt_in()
             elif parsed.path == "/api/licensing/activate-with-key":
                 self._handle_activate_with_key()
+            elif parsed.path == "/api/sharing/start":
+                self._handle_sharing_start()
+            elif parsed.path == "/api/sharing/stop":
+                self._handle_sharing_stop()
+            elif parsed.path == "/api/sharing/approve":
+                self._handle_sharing_approve()
+            elif parsed.path == "/api/sharing/deny":
+                self._handle_sharing_deny()
+            elif parsed.path == "/api/sharing/join":
+                self._handle_sharing_join()
+            elif parsed.path == "/api/sharing/discover":
+                self._handle_sharing_discover()
+            elif parsed.path == "/api/sharing/revoke-machine":
+                self._handle_revoke_machine()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)
         else:
@@ -2201,6 +2307,289 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"ok": False, "error": str(exc)}, 500)
 
+    # -------------------------------------------------------------------
+    # Sharing & machine management handlers
+    # -------------------------------------------------------------------
+
+    def _handle_sharing_start(self):
+        """POST /api/sharing/start — start the peer sharing server."""
+        try:
+            # Load license
+            license_file = RUNTIME / "license.json"
+            if not license_file.exists():
+                _json_response(self, {"ok": False, "error": "No license found"}, 400)
+                return
+            ld = json.loads(license_file.read_text(encoding="utf-8"))
+            tier = ld.get("license_tier", "personal")
+            if tier == "personal":
+                _json_response(self, {"ok": False, "error": "Personal tier does not support sharing"}, 403)
+                return
+
+            # Check capacity
+            cap = MACHINE_CAPS.get(tier)
+            if cap is not None:
+                count, _ = _count_active_machines_from_chain()
+                if count >= cap:
+                    _json_response(self, {
+                        "ok": False,
+                        "error": f"Machine limit reached ({count}/{cap})",
+                    }, 403)
+                    return
+
+            mgr = _get_peer_sharing_manager()
+            result = mgr.start_sharing(
+                license_key=ld.get("license_key", ""),
+                tier=tier,
+                license_id=ld.get("license_id", ""),
+                hostname=_get_hostname(),
+                fingerprint=_get_install_fingerprint(),
+            )
+            _json_response(self, {"ok": True, **result})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_sharing_stop(self):
+        """POST /api/sharing/stop — stop the peer sharing server."""
+        try:
+            mgr = _get_peer_sharing_manager()
+            mgr.stop_sharing()
+            _json_response(self, {"ok": True})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_sharing_approve(self):
+        """POST /api/sharing/approve — approve a pending join request."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        request_id = (data.get("request_id") or "").strip()
+        if not request_id:
+            _json_response(self, {"ok": False, "error": "request_id required"}, 400)
+            return
+
+        try:
+            # Re-check capacity
+            license_file = RUNTIME / "license.json"
+            ld = json.loads(license_file.read_text(encoding="utf-8"))
+            tier = ld.get("license_tier", "personal")
+            cap = MACHINE_CAPS.get(tier)
+            if cap is not None:
+                count, _ = _count_active_machines_from_chain()
+                if count >= cap:
+                    _json_response(self, {
+                        "ok": False,
+                        "error": f"Machine limit reached ({count}/{cap})",
+                    }, 403)
+                    return
+
+            license_key = ld.get("license_key", "")
+
+            # Optional Worker call if admin key configured
+            admin_key = os.environ.get("ATESTED_ADMIN_KEY", "")
+            if admin_key:
+                import urllib.request
+                mgr = _get_peer_sharing_manager()
+                req_info = mgr.get_sharing_status().get("pending_requests", {}).get(request_id, {})
+                worker_body = json.dumps({
+                    "license_id": ld.get("license_id", ""),
+                    "requesting_fingerprint": req_info.get("fingerprint", ""),
+                    "tier": tier,
+                }).encode("utf-8")
+                try:
+                    wreq = urllib.request.Request(
+                        "https://atested.com/api/admin/authorize-sharing",
+                        data=worker_body,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {admin_key}",
+                        },
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(wreq, timeout=10) as wresp:
+                        wdata = json.loads(wresp.read())
+                    if not wdata.get("ok", True):
+                        _json_response(self, {
+                            "ok": False,
+                            "error": wdata.get("error", "Worker denied sharing"),
+                        })
+                        return
+                except Exception:
+                    pass  # Best-effort; local check already passed
+
+            mgr = _get_peer_sharing_manager()
+            req_info = mgr.get_sharing_status().get("pending_requests", {}).get(request_id, {})
+            mgr.approve_request(request_id, license_key)
+
+            # Write chain event
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "machine_added",
+                {
+                    "fingerprint": req_info.get("fingerprint", ""),
+                    "hostname": req_info.get("hostname", ""),
+                    "sharing_machine_fingerprint": _get_install_fingerprint(),
+                    "tier": tier,
+                    "license_id": ld.get("license_id", ""),
+                    "authorization_method": "worker" if admin_key else "local",
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {"ok": True, "event_id": event.get("event_id", "")})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_sharing_deny(self):
+        """POST /api/sharing/deny — deny a pending join request."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        request_id = (data.get("request_id") or "").strip()
+        if not request_id:
+            _json_response(self, {"ok": False, "error": "request_id required"}, 400)
+            return
+
+        try:
+            mgr = _get_peer_sharing_manager()
+            mgr.deny_request(request_id)
+            _json_response(self, {"ok": True})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_sharing_join(self):
+        """POST /api/sharing/join — join a sharing machine."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        address = (data.get("address") or "").strip()
+        if not address:
+            _json_response(self, {"ok": False, "error": "address required"}, 400)
+            return
+
+        try:
+            mgr = _get_peer_sharing_manager()
+            result = mgr.start_joining(
+                target_address=address,
+                fingerprint=_get_install_fingerprint(),
+                hostname=_get_hostname(),
+            )
+            if "error" in result:
+                _json_response(self, {"ok": False, "error": result["error"]})
+            else:
+                _json_response(self, {"ok": True, **result})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_sharing_discover(self):
+        """POST /api/sharing/discover — start UDP discovery."""
+        try:
+            mgr = _get_peer_sharing_manager()
+            mgr.start_discovery()
+            _json_response(self, {"ok": True})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
+    def _handle_revoke_machine(self):
+        """POST /api/sharing/revoke-machine — revoke a machine's access."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        fingerprint = (data.get("fingerprint") or "").strip()
+        if not fingerprint:
+            _json_response(self, {"ok": False, "error": "fingerprint required"}, 400)
+            return
+
+        try:
+            # Verify fingerprint is in active machines
+            _, machines = _count_active_machines_from_chain()
+            active_fps = {m["fingerprint"] for m in machines}
+            if fingerprint not in active_fps:
+                _json_response(self, {"ok": False, "error": "Machine not found in active list"}, 404)
+                return
+
+            # Optional Worker call
+            admin_key = os.environ.get("ATESTED_ADMIN_KEY", "")
+            if admin_key:
+                import urllib.request
+                license_file = RUNTIME / "license.json"
+                ld = json.loads(license_file.read_text(encoding="utf-8"))
+                worker_body = json.dumps({
+                    "license_id": ld.get("license_id", ""),
+                    "fingerprint": fingerprint,
+                }).encode("utf-8")
+                try:
+                    wreq = urllib.request.Request(
+                        "https://atested.com/api/admin/revoke-machine",
+                        data=worker_body,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {admin_key}",
+                        },
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(wreq, timeout=10) as wresp:
+                        json.loads(wresp.read())  # best-effort
+                except Exception:
+                    pass
+
+            # Find hostname for the revoked machine
+            revoked_hostname = ""
+            for m in machines:
+                if m["fingerprint"] == fingerprint:
+                    revoked_hostname = m.get("hostname", "")
+                    break
+
+            # Write chain event
+            from event_model import build_non_action_event
+            event = build_non_action_event(
+                "machine_revoked",
+                {
+                    "fingerprint": fingerprint,
+                    "hostname": revoked_hostname,
+                    "revoking_fingerprint": _get_install_fingerprint(),
+                    "reason": "operator_revoked",
+                },
+                prev_record_hash=None,
+            )
+            _append_chain_record_atomic(event)
+
+            _json_response(self, {"ok": True, "event_id": event.get("event_id", "")})
+        except Exception as exc:
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
+
     def _handle_auto_renewal(self):
         """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
         try:
@@ -3046,6 +3435,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result["terms_acknowledged"] = lic_data.get("terms_acknowledged", False)
                 result["terms_acknowledged_at"] = lic_data.get("terms_acknowledged_at", "")
                 result["license_key"] = lic_data.get("license_key", "")
+                result["install_fingerprint"] = _get_install_fingerprint()
+                result["hostname"] = _get_hostname()
+                result["machine_cap"] = MACHINE_CAPS.get(
+                    result.get("license_tier", "personal"), 1
+                )
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met
@@ -3154,6 +3548,63 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "signing": signing_info,
                     "proxy": proxy_info,
                     "license_posture": posture,
+                })
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
+
+        elif path == "/api/sharing/status":
+            mgr = _get_peer_sharing_manager()
+            _json_response(self, mgr.get_sharing_status())
+
+        elif path == "/api/sharing/join-status":
+            try:
+                mgr = _get_peer_sharing_manager()
+                result = mgr.poll_join_status()
+                # Auto-activate on approval
+                if result.get("status") == "approved" and result.get("token") and not result.get("_activated"):
+                    token = result["token"]
+                    try:
+                        from licensing import activate_license
+                        act_result = activate_license(RUNTIME, token)
+                        if act_result.get("ok", True):
+                            from event_model import build_non_action_event
+                            event = build_non_action_event(
+                                "license_activated",
+                                {
+                                    "source": "peer_sharing",
+                                    "shared_from": result.get("remote_info", {}).get("fingerprint_prefix", ""),
+                                },
+                                prev_record_hash=None,
+                            )
+                            _append_chain_record_atomic(event)
+                            result["activated"] = True
+                            result["_activated"] = True
+                        else:
+                            result["error"] = act_result.get("error", "Activation failed")
+                    except Exception as exc:
+                        result["error"] = str(exc)
+                _json_response(self, result)
+            except Exception as exc:
+                _json_response(self, {"error": str(exc)}, 500)
+
+        elif path == "/api/sharing/machines":
+            try:
+                count, machines = _count_active_machines_from_chain()
+                # Load tier
+                license_file = RUNTIME / "license.json"
+                tier = "personal"
+                if license_file.exists():
+                    try:
+                        ld = json.loads(license_file.read_text(encoding="utf-8"))
+                        tier = ld.get("license_tier", "personal")
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                cap = MACHINE_CAPS.get(tier, 1)
+                _json_response(self, {
+                    "machines": machines,
+                    "count": count,
+                    "cap": cap,
+                    "tier": tier,
                 })
             except Exception as exc:
                 _json_response(self, {"error": str(exc)}, 500)

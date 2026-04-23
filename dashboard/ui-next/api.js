@@ -460,6 +460,18 @@ export function postActivateWithKey({ license_key } = {}) {
   return _request('POST', '/licensing/activate-with-key', { body: { license_key } });
 }
 
+// ---------- Sharing & Machine Management ----------
+export function postStartSharing() { return _request('POST', '/sharing/start', { body: {} }); }
+export function postStopSharing() { return _request('POST', '/sharing/stop', { body: {} }); }
+export function getSharingStatus() { return _request('GET', '/sharing/status'); }
+export function postApproveShare({ request_id } = {}) { return _request('POST', '/sharing/approve', { body: { request_id } }); }
+export function postDenyShare({ request_id } = {}) { return _request('POST', '/sharing/deny', { body: { request_id } }); }
+export function postJoinLicense({ address } = {}) { return _request('POST', '/sharing/join', { body: { address } }); }
+export function postStartDiscovery() { return _request('POST', '/sharing/discover', { body: {} }); }
+export function getJoinStatus() { return _request('GET', '/sharing/join-status'); }
+export function getMachines() { return _request('GET', '/sharing/machines'); }
+export function postRevokeMachine({ fingerprint } = {}) { return _request('POST', '/sharing/revoke-machine', { body: { fingerprint } }); }
+
 // ---------- Identity endpoints ----------
 
 /**
