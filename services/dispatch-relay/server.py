@@ -10,6 +10,7 @@ Storage: SQLite with WAL mode
 import json
 import os
 import sqlite3
+import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -201,8 +202,6 @@ from starlette.responses import JSONResponse
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if not BEARER_TOKEN:
-            return await call_next(request)
         auth = request.headers.get("authorization", "")
         if auth == f"Bearer {BEARER_TOKEN}":
             return await call_next(request)
@@ -214,6 +213,11 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 def main():
+    # Refuse to start without auth token — no silent auth bypass.
+    if not BEARER_TOKEN:
+        print("ERROR: DISPATCH_BEARER_TOKEN not set — dispatch relay requires a bearer token", file=sys.stderr)
+        sys.exit(1)
+
     _init_db()
 
     # Get the underlying Starlette app from FastMCP
@@ -224,7 +228,7 @@ def main():
     port = int(os.environ.get("DISPATCH_PORT", "8765"))
     print(f"Dispatch Relay MCP server starting on port {port}")
     print(f"DB: {DB_PATH}")
-    print(f"Auth: {'enabled' if BEARER_TOKEN else 'DISABLED (no DISPATCH_BEARER_TOKEN set)'}")
+    print(f"Auth: enabled")
     uvicorn.run(app, host="127.0.0.1", port=port)
 
 
