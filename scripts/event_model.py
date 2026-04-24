@@ -68,6 +68,11 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "license_modified",
     "machine_added",
     "machine_revoked",
+    "institution_inquiry_submitted",
+    "research_program_opted_in",
+    "research_program_opt_in_changed",
+    "communications_request_submitted",
+    "terms_acknowledged",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([
