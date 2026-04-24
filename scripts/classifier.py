@@ -195,14 +195,77 @@ def _path_scope(path: str) -> str:
 # Command analysis (for Bash/shell execution)
 # ---------------------------------------------------------------------------
 
+def _split_command_chain(command: str) -> list:
+    """Split a command string on chain operators (&&, ||, ;) outside quotes.
+
+    Returns a list of individual command strings. Quoted operators are not
+    treated as separators: `echo "a && b"` returns one command.
+    Pipe operators (|) are NOT split here — they create pipelines that are
+    handled separately by _classify_command.
+    """
+    commands = []
+    current = []
+    in_single = False
+    in_double = False
+    i = 0
+    chars = command
+    n = len(chars)
+
+    while i < n:
+        c = chars[i]
+
+        # Track quote state
+        if c == "'" and not in_double:
+            in_single = not in_single
+            current.append(c)
+            i += 1
+            continue
+        if c == '"' and not in_single:
+            in_double = not in_double
+            current.append(c)
+            i += 1
+            continue
+        if c == '\\' and not in_single and i + 1 < n:
+            current.append(c)
+            current.append(chars[i + 1])
+            i += 2
+            continue
+
+        # Outside quotes: check for chain operators
+        if not in_single and not in_double:
+            # && or ||
+            if i + 1 < n and chars[i:i+2] in ("&&", "||"):
+                cmd = "".join(current).strip()
+                if cmd:
+                    commands.append(cmd)
+                current = []
+                i += 2
+                continue
+            # ; (but not inside $(...))
+            if c == ";":
+                cmd = "".join(current).strip()
+                if cmd:
+                    commands.append(cmd)
+                current = []
+                i += 1
+                continue
+
+        current.append(c)
+        i += 1
+
+    cmd = "".join(current).strip()
+    if cmd:
+        commands.append(cmd)
+
+    return commands if commands else [command.strip()]
+
+
 def _parse_command(command: str) -> dict:
     """Parse a shell command string into structured components."""
     command = command.strip()
     if not command:
         return {"program": "", "args": [], "raw": command}
 
-    # Handle command chaining — analyze the first command
-    # but note the full chain for evidence
     parts = command.split()
     program = parts[0].split("/")[-1]  # basename
     return {
@@ -228,7 +291,87 @@ def _detect_encoded_payloads(args: dict) -> bool:
 
 
 def _classify_command(command: str) -> dict:
-    """Classify a shell command into action type, scope, and tier."""
+    """Classify a shell command into action type, scope, and tier.
+
+    Handles command chaining (&&, ||, ;) by classifying each component
+    independently and returning the highest-tier, most-restrictive result.
+    """
+    # Split on chain operators (&&, ||, ;) outside quotes
+    chain = _split_command_chain(command)
+    if len(chain) > 1:
+        return _classify_command_chain(chain, command)
+
+    return _classify_single_command(command)
+
+
+# Scope severity ordering for chain classification
+_SCOPE_SEVERITY = {
+    SCOPE_LOCAL: 0,
+    SCOPE_REPOSITORY: 1,
+    SCOPE_SYSTEM: 2,
+    SCOPE_REMOTE: 3,
+    SCOPE_PRIVILEGED: 4,
+}
+
+# Action severity ordering for chain classification
+_ACTION_SEVERITY = {
+    ACTION_READ: 0,
+    ACTION_LIST: 0,
+    ACTION_AGENT_INTERNAL: 0,
+    ACTION_CREATE_DIR: 1,
+    ACTION_WRITE: 2,
+    ACTION_MOVE: 2,
+    ACTION_CONFIG: 2,
+    ACTION_EXECUTE: 3,
+    ACTION_NETWORK: 3,
+    ACTION_DELETE: 4,
+    ACTION_CREDENTIAL: 5,
+    ACTION_UNKNOWN: 5,
+}
+
+
+def _classify_command_chain(chain: list, full_command: str) -> dict:
+    """Classify a chained command by evaluating all components.
+
+    Takes the worst-case across each dimension independently:
+    - action_type: most severe action from any component
+    - scope: most severe scope from any component
+    - confidence_tier: highest (most opaque) tier from any component
+
+    This prevents a benign-but-opaque command (echo → Tier 3) from
+    masking a destructive-but-inferred command (rm → Tier 2).
+    """
+    results = [_classify_single_command(cmd) for cmd in chain]
+
+    # Find worst-case action
+    worst_action_result = max(
+        results,
+        key=lambda r: _ACTION_SEVERITY.get(r["action_type"], 5),
+    )
+    # Find worst-case scope
+    worst_scope_result = max(
+        results,
+        key=lambda r: _SCOPE_SEVERITY.get(r["scope"], 4),
+    )
+    # Find highest (most opaque) tier
+    worst_tier = max(r["confidence_tier"] for r in results)
+
+    # Merge targets from all components
+    all_targets = []
+    for r in results:
+        all_targets.extend(r.get("targets", []))
+
+    return {
+        "action_type": worst_action_result["action_type"],
+        "targets": all_targets or [full_command],
+        "scope": worst_scope_result["scope"],
+        "confidence_tier": worst_tier,
+        "evidence_source": f"command_chain({worst_action_result['evidence_source']})",
+    }
+
+
+def _classify_single_command(command: str) -> dict:
+    """Classify a single (non-chained) shell command."""
     parsed = _parse_command(command)
     program = parsed["program"]
     args = parsed["args"]
