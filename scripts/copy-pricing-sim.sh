@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # copy-pricing-sim.sh — Copy dashboard licensing files to atested.com pricing simulation.
 # Usage: ./scripts/copy-pricing-sim.sh <governance-layer-root> <atested-root>
 #

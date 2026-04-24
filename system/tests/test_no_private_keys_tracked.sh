@@ -13,7 +13,7 @@ tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
 set +e
-git ls-files -z | xargs -0 rg -l -- '-----BEGIN PRIVATE KEY-----' > "$tmp"
+git ls-files -z | xargs -0 rg -l -- '-----BEGIN PRIVATE KEY-----' | grep -v 'test_no_private_keys_tracked\.sh' > "$tmp"
 rc=$?
 set -e
 

@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 # observe-hook.sh — PostToolUse hook for reporting ungoverned operations
 # Receives JSON on stdin from Claude Code with tool_name, tool_input, etc.
 # Reads the dashboard token from gov_runtime/dashboard_token

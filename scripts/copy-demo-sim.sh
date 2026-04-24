@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # copy-demo-sim.sh — Copy dashboard rendering files to atested.com demo simulation.
 # Usage: ./scripts/copy-demo-sim.sh <governance-layer-root> <atested-root>
 #
