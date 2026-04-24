@@ -25,27 +25,34 @@ from licensing import initialize_trial
 
 
 def test_tier_recommendation_thresholds():
-    """Tier recommendation follows user-count rules."""
-    # The recommendation logic: <=1 personal, <=10 team, <=50 business, else enterprise
+    """Tier recommendation follows current user-count rules.
+
+    Current model: personal / personal_plus / crew / team / institution.
+    Boundaries: <=1 personal, <=3 personal_plus, <=12 crew, <=50 team, 51+ institution.
+    """
     thresholds = [
         (0, "personal"),
         (1, "personal"),
-        (2, "team"),
-        (10, "team"),
-        (11, "business"),
-        (50, "business"),
-        (51, "enterprise"),
-        (200, "enterprise"),
+        (2, "personal_plus"),
+        (3, "personal_plus"),
+        (4, "crew"),
+        (12, "crew"),
+        (13, "team"),
+        (50, "team"),
+        (51, "institution"),
+        (200, "institution"),
     ]
     for n_users, expected in thresholds:
         if n_users <= 1:
             tier = "personal"
-        elif n_users <= 10:
-            tier = "team"
+        elif n_users <= 3:
+            tier = "personal_plus"
+        elif n_users <= 12:
+            tier = "crew"
         elif n_users <= 50:
-            tier = "business"
+            tier = "team"
         else:
-            tier = "enterprise"
+            tier = "institution"
         assert tier == expected, f"n_users={n_users}: expected {expected}, got {tier}"
     print("PASS: tier recommendation thresholds")
 
@@ -65,7 +72,7 @@ def test_attestation_artifact_hash():
         "organization_id": "",
         "license_expiry": "2026-04-29T00:00:00Z",
         "trial_days_remaining": 30,
-        "recommended_tier": "team",
+        "recommended_tier": "personal_plus",
     }
     artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
     h = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"

@@ -1796,16 +1796,18 @@ def usage_attestation() -> Dict[str, Any]:
     posture = resolve_posture(RUNTIME, unique_user_count=len(users))
     remaining = trial_days_remaining(RUNTIME)
 
-    # Tier recommendation
+    # Tier recommendation (current model: personal/personal_plus/crew/team/institution)
     n_users = len(users)
     if n_users <= 1:
         recommended_tier = "personal"
-    elif n_users <= 10:
-        recommended_tier = "team"
+    elif n_users <= 3:
+        recommended_tier = "personal_plus"
+    elif n_users <= 12:
+        recommended_tier = "crew"
     elif n_users <= 50:
-        recommended_tier = "business"
+        recommended_tier = "team"
     else:
-        recommended_tier = "enterprise"
+        recommended_tier = "institution"
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     attestation_id = f"att_{uuid.uuid4().hex[:16]}"

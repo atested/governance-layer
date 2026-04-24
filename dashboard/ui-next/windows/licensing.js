@@ -2897,7 +2897,7 @@ const PRICING_FEATURES = {
     categories: [
       { name: 'Operations', features: [
         { name: 'Role-Based Governance', desc: 'Configurable roles with different permission levels for operators, reviewers, and administrators. Control who can approve, who can configure, and who can view.' },
-        { name: 'Organizational Structure', desc: '10\u201350 users with delegated administration. Manage your governance organization, not just individual operators.' },
+        { name: 'Organizational Structure', desc: '13\u201350 users with delegated administration. Manage your governance organization, not just individual operators.' },
       ]},
       { name: 'Oversight', features: [
         { name: 'Team Activity View', desc: 'Aggregated activity across all team members with per-user breakdown. See who is doing what and how governance decisions distribute across the organization.' },
@@ -2915,7 +2915,7 @@ const PRICING_FEATURES = {
     categories: [
       { name: 'Operations', features: [
         { name: 'Custom Deployment', desc: 'On-premises or hybrid deployment configured to your infrastructure requirements. Your data stays where you need it.' },
-        { name: 'Unlimited Scale', desc: '50+ users with enterprise-scale administration and policy management. No user ceiling.' },
+        { name: 'Unlimited Scale', desc: '51+ users with enterprise-scale administration and policy management. No user ceiling.' },
       ]},
       { name: 'Compliance', features: [
         { name: 'Third-Party Attestation', desc: 'Independent verification of your governance chain by authorized auditors. Proof that your AI governance is what you say it is.' },
@@ -2934,8 +2934,8 @@ const _TIER_SELECTOR = [
   { id: 'personal',      name: 'Personal',      spec: '1 user, 1 machine',                       price: 'Free' },
   { id: 'personal_plus', name: 'Personal Plus',  spec: '1 user, up to 3 machines',                price: '$99/yr' },
   { id: 'crew',          name: 'Crew',           spec: '2\u201312 users, unlimited machines',      price: '$2,995/yr' },
-  { id: 'team',          name: 'Team',           spec: '10\u201350 users, organizational governance', price: '$19,995/yr' },
-  { id: 'institution',   name: 'Institution',    spec: '50+ users, custom deployment',             price: 'Negotiated' },
+  { id: 'team',          name: 'Team',           spec: '13\u201350 users, organizational governance', price: '$19,995/yr' },
+  { id: 'institution',   name: 'Institution',    spec: '51+ users, custom deployment',             price: 'Negotiated' },
 ];
 
 // ---------- Pricing grandchild builder ----------

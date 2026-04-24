@@ -261,8 +261,7 @@ async function _loadLicenseState() {
     // Map status+tier to chrome display
     const TIER_NAMES = {
       personal: 'Personal', personal_plus: 'Personal Plus',
-      crew: 'Crew', team: 'Team', business: 'Business',
-      enterprise: 'Enterprise', institution: 'Institution',
+      crew: 'Crew', team: 'Team', institution: 'Institution',
     };
 
     let tierName, dotColor;
