@@ -65,19 +65,9 @@ def _get_install_fingerprint():
         val = fp_file.read_text(encoding="utf-8").strip()
         if val:
             return val
-    license_file = RUNTIME / "license.json"
-    if license_file.exists():
-        try:
-            ld = json.loads(license_file.read_text(encoding="utf-8"))
-            lk = ld.get("license_key", "")
-            if lk:
-                fp = hashlib.sha256(lk.encode()).hexdigest()[:16]
-            else:
-                fp = secrets.token_hex(8)
-        except (json.JSONDecodeError, OSError):
-            fp = secrets.token_hex(8)
-    else:
-        fp = secrets.token_hex(8)
+    # Always generate a random fingerprint — never derive from the license
+    # key, which would cause all machines sharing a key to collide.
+    fp = secrets.token_hex(8)
     fp_file.write_text(fp, encoding="utf-8")
     try:
         fp_file.chmod(0o600)
