@@ -163,7 +163,14 @@ class ChainRecorder:
                 self._release_file_lock(lockdir)
 
     def _last_hash(self) -> Optional[str]:
-        """Read the record_hash from the last line. Must be called under lock."""
+        """Read and verify the record_hash from the last line.
+
+        Must be called under lock.  Recomputes the tail record's hash
+        and compares it to the stored record_hash.  If they disagree,
+        logs a chain integrity warning (evidence of tampering or
+        corruption) but still returns the stored hash so the chain
+        can continue appending.
+        """
         if not self._chain_path.exists():
             return None
         try:
@@ -175,7 +182,17 @@ class ChainRecorder:
                         last_line = stripped
             if not last_line:
                 return None
-            return json.loads(last_line).get("record_hash")
+            tail_record = json.loads(last_line)
+            stored_hash = tail_record.get("record_hash")
+            if stored_hash:
+                recomputed = _compute_record_hash(tail_record)
+                if recomputed != stored_hash:
+                    logger.error(
+                        "[CHAIN INTEGRITY] Tail record hash mismatch: "
+                        "stored=%s recomputed=%s chain=%s",
+                        stored_hash, recomputed, self._chain_path,
+                    )
+            return stored_hash
         except (OSError, json.JSONDecodeError, KeyError):
             return None
 
