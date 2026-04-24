@@ -1715,6 +1715,8 @@ function _renderPurchaseBody(el, tier, formData, state) {
       }
 
       joinStatus.textContent = 'Waiting for approval\u2026';
+      // Operator-initiated bounded poll: auto-terminates on approved/denied/timeout.
+      // Acceptable per v4 §8 — operator explicitly triggered this flow.
       const pollId = setInterval(async () => {
         const sr = await api.getJoinStatus();
         if (!sr.ok) return;
@@ -2360,7 +2362,8 @@ async function _startSharingFlow(el, modeData, state) {
     <button class="lic-action-btn lup-stop-sharing-btn" style="margin-top:10px">Stop sharing</button>
   `;
 
-  // Poll for requests
+  // Operator-initiated bounded poll: auto-terminates when sharing stops.
+  // Acceptable per v4 §8 — operator explicitly triggered this flow.
   let pollId = setInterval(async () => {
     const sr = await api.getSharingStatus();
     if (!sr.ok || sr.data.state !== 'listening') {

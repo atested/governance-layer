@@ -9,6 +9,7 @@ import { renderChrome, updateNotificationCount, showBanner, updateIdentityZone, 
 import { renderMainPage, loadMainPageData, setLicenseMode } from './main-page.js';
 import { modalManager } from './modal-manager.js';
 import { openAlertsWindow } from './windows/alerts.js';
+import { openNotificationsWindow } from './windows/notifications.js';
 import { openIdentitySetupWindow } from './windows/identity-setup.js';
 import { openIdentitySessionWindow } from './windows/identity-session.js';
 import { openLicensingWindow } from './windows/licensing.js';
@@ -46,9 +47,9 @@ function init() {
   });
 
   const notifZone = chrome.querySelector('.chrome-notif-indicator');
-  notifZone.addEventListener('click', (e) => openAlertsWindow(e.currentTarget));
+  notifZone.addEventListener('click', (e) => openNotificationsWindow(e.currentTarget));
   notifZone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlertsWindow(e.currentTarget); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotificationsWindow(e.currentTarget); }
   });
 
   // Wire chrome breadcrumb to modal manager
@@ -56,44 +57,51 @@ function init() {
     updateBreadcrumb(depth > 0 ? title : null);
   });
 
-  // Render main page structure, then load live data
-  const mainPage = renderMainPage();
-  document.body.appendChild(mainPage);
+  // Gate on first-run disclosure before rendering main page.
+  // Disclosure must resolve before the operator can interact (v4 §4).
+  _checkDisclosure().then(() => {
+    // Render main page structure, then load live data
+    const mainPage = renderMainPage();
+    document.body.appendChild(mainPage);
 
-  // Fetch data from the data-access layer (non-blocking)
-  loadMainPageData().catch(err => {
-    console.warn('Atested: main page data load failed:', err);
+    // Fetch data from the data-access layer (non-blocking)
+    loadMainPageData().catch(err => {
+      console.warn('Atested: main page data load failed:', err);
+    });
+
+    // Load notification state into chrome
+    _loadNotifications();
+
+    // Load identity state into chrome
+    _loadIdentityState();
+
+    // Load license state into chrome and main page
+    _loadLicenseState();
   });
-
-  // Check first-run disclosure
-  _checkDisclosure();
-
-  // Load notification state into chrome
-  _loadNotifications();
-
-  // Load identity state into chrome
-  _loadIdentityState();
-
-  // Load license state into chrome and main page
-  _loadLicenseState();
 }
 
 /**
  * Check if the first-run disclosure has been acknowledged.
  * If not, show a disclosure card that gates further interaction.
+ * Returns a promise that resolves only after disclosure is acknowledged
+ * or confirmed already acknowledged. Fails closed: if the status endpoint
+ * is unavailable, the disclosure card is shown (v4 §4).
  */
 async function _checkDisclosure() {
   try {
     const res = await api.getDisclosureStatus();
     if (res.ok && res.data.acknowledged) return; // Already acknowledged
-
-    _showDisclosureCard();
   } catch {
-    // If the endpoint is not available, skip disclosure
+    // Fail closed: endpoint unavailable → show disclosure (v4 §4)
   }
+
+  // Show disclosure and wait for acknowledgment before resolving
+  return new Promise(resolve => {
+    _showDisclosureCard(resolve);
+  });
 }
 
-function _showDisclosureCard() {
+function _showDisclosureCard(onAcknowledged) {
   const overlay = document.createElement('div');
   overlay.id = 'disclosure-overlay';
   Object.assign(overlay.style, {
@@ -121,12 +129,17 @@ function _showDisclosureCard() {
   card.innerHTML = `
     <h2 style="font-size:1.25rem; font-weight:700; margin:0 0 16px; color:#e4e6eb;">Atested Governance Dashboard</h2>
     <p style="font-size:0.88rem; color:#8b919a; line-height:1.6; margin:0 0 12px;">
-      This dashboard provides visibility into the governance decisions made by
-      the Atested system. All operations are recorded in a tamper-evident chain.
+      Atested collects anonymous, aggregated telemetry (operation counts and
+      decision summaries) to improve the product. No file paths, user
+      identities, or organization names are included.
+    </p>
+    <p style="font-size:0.88rem; color:#8b919a; line-height:1.6; margin:0 0 12px;">
+      All governance operations performed in this dashboard are recorded in a
+      local, tamper-evident decision chain.
     </p>
     <p style="font-size:0.88rem; color:#8b919a; line-height:1.6; margin:0 0 24px;">
-      By proceeding, you acknowledge that your activity in this dashboard will
-      be recorded as governance events.
+      By proceeding, you acknowledge these data practices. You can opt out of
+      telemetry at any time from the Configuration window.
     </p>
   `;
 
@@ -149,6 +162,7 @@ function _showDisclosureCard() {
     const res = await api.postDisclosureAcknowledge({});
     if (res.ok) {
       overlay.remove();
+      if (onAcknowledged) onAcknowledged();
     } else {
       btn.disabled = false;
       btn.textContent = 'Acknowledge & Continue';
@@ -163,11 +177,10 @@ function _showDisclosureCard() {
 /** Cached identity state for routing chrome clicks */
 let _identitySession = null;
 
-/** Timer for refreshing identity state when unlocked */
-let _identityRefreshTimer = null;
-
 /**
  * Load identity state and update chrome identity zone.
+ * Called once at startup and on explicit operator actions — no auto-refresh
+ * polling (v4 §8: pull-based loads only, no WebSocket/SSE/auto-refresh).
  */
 async function _loadIdentityState() {
   try {
@@ -179,12 +192,6 @@ async function _loadIdentityState() {
     }
     _identitySession = res.data;
     updateIdentityZone(_identitySession);
-
-    // If unlocked, refresh every 15 seconds to keep the timer accurate
-    if (_identityRefreshTimer) { clearInterval(_identityRefreshTimer); _identityRefreshTimer = null; }
-    if (_identitySession.configured && !_identitySession.locked) {
-      _identityRefreshTimer = setInterval(() => _loadIdentityState(), 15000);
-    }
   } catch {
     _identitySession = null;
     updateIdentityZone(null);
