@@ -494,8 +494,8 @@ function _renderCell(key, entry, detail) {
 
     case 'policy_decision': {
       const d = detail.policy_decision || '';
-      if (d === 'ALLOW') return '<span class="aw-decision-allow">ALLOW</span>';
-      if (d === 'DENY') return '<span class="aw-decision-deny">DENY</span>';
+      if (d === 'ALLOW') return '<span class="aw-decision-allow">[ALLOW]</span>';
+      if (d === 'DENY') return '<span class="aw-decision-deny">[DENY]</span>';
       return '<span class="aw-decision-muted">\u2014</span>';
     }
 
@@ -726,8 +726,8 @@ awStyles.textContent = `
   }
   .aw-stat-card {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     padding: 14px 16px;
     text-align: center;
   }
@@ -760,8 +760,8 @@ awStyles.textContent = `
   }
   .aw-filter-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
   }
   .aw-fp-accent {
@@ -798,7 +798,7 @@ awStyles.textContent = `
   .aw-input, .aw-select {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
@@ -827,7 +827,7 @@ awStyles.textContent = `
   .aw-quick-btn {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
@@ -861,7 +861,7 @@ awStyles.textContent = `
   .aw-dtoggle {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -898,7 +898,7 @@ awStyles.textContent = `
   /* Buttons */
   .aw-btn {
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
     font-weight: 600;
@@ -953,7 +953,7 @@ awStyles.textContent = `
   .aw-ps-btn {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 5px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -979,7 +979,7 @@ awStyles.textContent = `
   .aw-col-preset {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
@@ -1008,7 +1008,7 @@ awStyles.textContent = `
   .aw-col-toggle {
     background: none;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 4px;
+    border-radius: 2px;
     color: #6b7280;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.65rem;
@@ -1120,7 +1120,7 @@ awStyles.textContent = `
   .aw-pag-btn {
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -1133,7 +1133,7 @@ awStyles.textContent = `
   .aw-pag-num {
     background: none;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -1172,7 +1172,7 @@ awStyles.textContent = `
     color: #f5a623;
     background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
   }
 

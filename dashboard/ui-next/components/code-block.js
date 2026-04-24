@@ -24,7 +24,7 @@ const styles = `
 .block {
   position: relative;
   background: var(--bg);
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -40,7 +40,7 @@ const styles = `
 
 .copy-btn {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;

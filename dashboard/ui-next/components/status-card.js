@@ -23,7 +23,7 @@ const styles = `
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   padding: var(--space-lg) var(--space-xl);
   font-family: var(--font-body);

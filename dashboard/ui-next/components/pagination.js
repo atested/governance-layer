@@ -28,9 +28,9 @@ button {
   font-size: var(--text-sm);
   font-weight: 500;
   padding: 4px 14px;
-  border-radius: 999px;
+  border-radius: 2px;
   cursor: pointer;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   background: transparent;
   color: var(--ink);
   transition: background 0.15s, border-color 0.15s;

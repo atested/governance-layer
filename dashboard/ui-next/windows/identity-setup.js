@@ -127,8 +127,8 @@ isStyles.textContent = `
     color: #60a5fa; margin: 0 0 10px; font-weight: 600;
   }
   .is-card {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 16px 20px; margin-bottom: 14px;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; padding: 16px 20px; margin-bottom: 14px;
   }
   .is-card-muted {
     background: rgba(96,165,250,0.06);
@@ -140,7 +140,7 @@ isStyles.textContent = `
   .is-text:last-child { margin-bottom: 0; }
   .is-text-muted { color: #8b919a; }
   .is-text code {
-    background: #1a1d23; padding: 2px 6px; border-radius: 4px;
+    background: #1a1d23; padding: 2px 6px; border-radius: 2px;
     font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #60a5fa;
   }
   .is-steps { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
@@ -156,11 +156,11 @@ isStyles.textContent = `
   .is-step-body strong { display: block; font-size: 0.82rem; color: #e4e6eb; margin-bottom: 4px; }
   .is-step-body p { font-size: 0.78rem; color: #8b919a; margin: 0; line-height: 1.5; }
   .is-step-body code {
-    background: #1a1d23; padding: 2px 6px; border-radius: 4px;
+    background: #1a1d23; padding: 2px 6px; border-radius: 2px;
     font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #60a5fa;
   }
   .is-timers {
-    background: #1a1d23; border-radius: 8px; overflow: hidden; margin-top: 8px;
+    background: #1a1d23; border-radius: 2px; overflow: hidden; margin-top: 8px;
   }
   .is-timer-row {
     display: flex; align-items: center; gap: 12px; padding: 8px 14px;

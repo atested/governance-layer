@@ -272,53 +272,53 @@ function _computeGridRows(state, paneStates) {
 
   // Tiers — line 1: state, line 2: capacity detail
   if (isLicensed) {
-    rows.tiers = { desc: `Licensed at ${_tierLabel(licensedTier)}`, detail: '5 plans available', label: 'Current' };
+    rows.tiers = { desc: `Licensed at ${_tierLabel(licensedTier)}`, detail: '5 plans available', label: '[Current]' };
   } else if (rec) {
-    rows.tiers = { desc: `${rec} recommended at ${price}`, detail: capStr || '', label: 'Recommended' };
+    rows.tiers = { desc: `${rec} recommended at ${price}`, detail: capStr || '', label: '[Recommended]' };
   } else {
-    rows.tiers = { desc: 'Five plans from Personal to Institution', detail: '', label: 'Available' };
+    rows.tiers = { desc: 'Five plans from Personal to Institution', detail: '', label: '[Available]' };
   }
 
   // Survey — line 1: state, line 2: next action
   if (isLicensed) {
-    rows.survey = { desc: 'Complete', detail: 'Retake if your situation changes', label: 'Complete' };
+    rows.survey = { desc: 'Complete', detail: 'Retake if your situation changes', label: '[Complete]' };
   } else if (!q || q.state === STATES.EMPTY) {
-    rows.survey = { desc: 'Not started', detail: '', label: 'Pending' };
+    rows.survey = { desc: 'Not started', detail: '', label: '[Pending]' };
   } else if (q.state === STATES.CAPACITY || q.state === STATES.CLIMBING) {
-    rows.survey = { desc: 'In progress', detail: '', label: 'Pending' };
+    rows.survey = { desc: 'In progress', detail: '', label: '[Pending]' };
   } else if (q.state === STATES.COMPLETE) {
-    rows.survey = { desc: `${rec} recommended`, detail: 'All questions answered', label: 'Complete' };
+    rows.survey = { desc: `${rec} recommended`, detail: 'All questions answered', label: '[Complete]' };
   } else if (rec) {
-    rows.survey = { desc: `${rec} recommended`, detail: p2Extra > 0 ? 'There is more you can add' : '', label: p2Extra > 0 ? 'Optional' : 'Complete' };
+    rows.survey = { desc: `${rec} recommended`, detail: p2Extra > 0 ? 'There is more you can add' : '', label: p2Extra > 0 ? '[Optional]' : '[Complete]' };
   } else {
-    rows.survey = { desc: 'Not started', detail: '', label: 'Pending' };
+    rows.survey = { desc: 'Not started', detail: '', label: '[Pending]' };
   }
 
   // Case document — line 1: state, line 2: evidence count
   if (doc?.generated_at) {
-    rows.case = { desc: 'Ready', detail: decStr || 'Evidence available', label: 'Ready' };
+    rows.case = { desc: 'Ready', detail: decStr || 'Evidence available', label: '[Ready]' };
   } else if (rec) {
-    rows.case = { desc: 'Ready to generate', detail: decStr || '', label: 'Available' };
+    rows.case = { desc: 'Ready to generate', detail: decStr || '', label: '[Available]' };
   } else {
-    rows.case = { desc: 'Complete the survey first', detail: '', label: 'Pending' };
+    rows.case = { desc: 'Complete the survey first', detail: '', label: '[Pending]' };
   }
 
   // License — line 1: state, line 2: recommendation or renewal
   if (isLicensed) {
-    rows.license = { desc: `Licensed: ${_tierLabel(licensedTier)}`, detail: renewalDate ? `Renewal: ${renewalDate}` : '', label: 'Active' };
+    rows.license = { desc: `Licensed: ${_tierLabel(licensedTier)}`, detail: renewalDate ? `Renewal: ${renewalDate}` : '', label: '[Active]' };
   } else if (md.registered) {
-    rows.license = { desc: 'Registered \u2014 Personal (free)', detail: '', label: 'Registered' };
+    rows.license = { desc: 'Registered \u2014 Personal (free)', detail: '', label: '[Registered]' };
   } else if (rec) {
-    rows.license = { desc: 'Not yet licensed', detail: `${rec} at ${price}`, label: 'Pending' };
+    rows.license = { desc: 'Not yet licensed', detail: `${rec} at ${price}`, label: '[Pending]' };
   } else {
-    rows.license = { desc: 'Not yet licensed', detail: '', label: 'Pending' };
+    rows.license = { desc: 'Not yet licensed', detail: '', label: '[Pending]' };
   }
 
   // Terms — line 1: state, no blue line
   if (termsAck) {
-    rows.terms = { desc: 'Reviewed', detail: '', label: 'Reviewed' };
+    rows.terms = { desc: 'Reviewed', detail: '', label: '[Reviewed]' };
   } else {
-    rows.terms = { desc: 'Not reviewed', detail: '', label: 'Pending' };
+    rows.terms = { desc: 'Not reviewed', detail: '', label: '[Pending]' };
   }
 
   return rows;
@@ -1008,7 +1008,7 @@ function _renderThreshold(el, qState, appState) {
     <div class="lq-threshold">
       <div class="lqc-rec-pane">
         <div class="lqc-accent lqc-accent-green"></div>
-        <div class="lqc-rec-badge">Verified Recommendation</div>
+        <div class="lqc-rec-badge">[Verified Recommendation]</div>
         <h3 class="lqc-rec-tier">${_esc(tierLabel)}</h3>
         <div class="lqc-rec-price">${_esc(price)}</div>
         <p class="lqc-rec-summary">Based on your answers, ${_esc(tierLabel)} is the right plan for your organization.</p>
@@ -1092,7 +1092,7 @@ function _renderPhaseTwo(el, qState, appState) {
     <div class="lq-phase-two">
       <div class="lq-phase-two-header">
         <span class="lqc-rec-badge" style="font-size:0.82rem;padding:3px 10px;">
-          Recommendation verified: ${_esc(tierLabel)}
+          [Recommendation verified: ${_esc(tierLabel)}]
         </span>
         <span class="lq-phase-two-count">
           ${qState.phaseTwoAnswered} of ${qState.phaseTwoTotal} refinement questions answered
@@ -1164,7 +1164,7 @@ function _renderComplete(el, qState, appState) {
     <div class="lq-threshold">
       <div class="lqc-rec-pane">
         <div class="lqc-accent lqc-accent-green"></div>
-        <div class="lqc-rec-badge">Verified Recommendation</div>
+        <div class="lqc-rec-badge">[Verified Recommendation]</div>
         <h3 class="lqc-rec-tier">${_esc(tierLabel)}</h3>
         <div class="lqc-rec-price">${_esc(price)}</div>
         <p class="lqc-rec-summary">Based on your answers, ${_esc(tierLabel)} is the right plan for your organization.</p>
@@ -1370,8 +1370,8 @@ function _renderUnifiedPurchase(el, state) {
     const isSelected = t.id === selectedTier;
     const belowCurrent = isLicensed && TIER_ORDER.indexOf(t.id) <= currentIdx;
     let badgeHtml = '';
-    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">CURRENT</span>';
-    else if (isRec) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-rec">RECOMMENDED</span>';
+    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">[CURRENT]</span>';
+    else if (isRec) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-rec">[RECOMMENDED]</span>';
 
     selectorHtml += `<button class="lup-sel-row${isSelected ? ' lup-sel-active' : ''}${isRec && !isCurrent ? ' lup-sel-recommended' : ''}${belowCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
       <span class="lup-sel-name">${_esc(t.name)}</span>
@@ -1980,7 +1980,7 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
     const isCurrent = t.id === currentTier;
     const isAbove = TIER_ORDER.indexOf(t.id) > currentIdx;
     let badgeHtml = '';
-    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">CURRENT</span>';
+    if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">[CURRENT]</span>';
 
     selectorHtml += `<button class="lup-sel-row${isCurrent ? ' lup-sel-active' : ''}${!isAbove && !isCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${!isAbove && !isCurrent ? 'disabled' : ''}>
       <span class="lup-sel-name">${_esc(t.name)}</span>
@@ -2643,7 +2643,7 @@ function _renderCaseForTier(el, doc, tierId, isExploring, appState) {
   }
 
   // Recommendation pane
-  const badgeText = isExploring ? `Exploring: ${tierLabel}` : (isTentative ? 'Tentative recommendation' : 'Verified recommendation');
+  const badgeText = isExploring ? `[Exploring: ${tierLabel}]` : (isTentative ? '[Tentative recommendation]' : '[Verified recommendation]');
   const badgeClass = isExploring ? 'lcd-rec-badge lcd-rec-exploring' : 'lcd-rec-badge';
   const descText = 'Your responses and trial data combined into one document. Use it to make the case internally for moving Atested into production.';
 
@@ -3116,12 +3116,12 @@ licStyles.textContent = `
     background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
   }
   .lic-action-btn {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #60a5fa;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -3159,8 +3159,8 @@ licStyles.textContent = `
     gap: 0;
     padding: 20px 24px 16px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     margin-bottom: 12px;
     width: 100%;
     max-width: 780px;
@@ -3181,11 +3181,9 @@ licStyles.textContent = `
   }
   .ll-dot-green {
     background: #22c55e;
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
   }
   .ll-dot-amber {
     background: #f5a623;
-    box-shadow: 0 0 8px rgba(245, 166, 35, 0.3);
   }
   .ll-sp-title {
     font-size: 1rem;
@@ -3237,7 +3235,6 @@ licStyles.textContent = `
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 3px 10px;
-    border-radius: 4px;
     white-space: nowrap;
   }
   .ll-sp-closing {
@@ -3252,12 +3249,10 @@ licStyles.textContent = `
   .ll-sp-row-green .ll-sp-name { color: #22c55e; }
   .ll-sp-row-green .ll-sp-state {
     color: #22c55e;
-    background: rgba(34, 197, 94, 0.15);
   }
   .ll-sp-row-amber .ll-sp-name { color: #f5a623; }
   .ll-sp-row-amber .ll-sp-state {
     color: #f5a623;
-    background: rgba(245, 166, 35, 0.15);
   }
   /* Aggregate header dot colors applied via .ll-dot-green / .ll-dot-amber */
   .ll-sp-green .ll-sp-title { color: #e4e6eb; }
@@ -3273,8 +3268,8 @@ licStyles.textContent = `
     padding: 0;
     margin-bottom: 12px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
     transition: background 0.15s, border-color 0.15s;
@@ -3339,11 +3334,11 @@ licStyles.textContent = `
     gap: 4px;
     padding: 28px 24px 20px;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
-    transition: background 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
     text-align: left;
     overflow: hidden;
     min-height: 200px;
@@ -3354,7 +3349,7 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 6px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
     background: rgba(255, 255, 255, 0.1);
     transition: background 0.2s;
   }
@@ -3365,7 +3360,6 @@ licStyles.textContent = `
     background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.14);
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   }
   .ll-box-green:hover { border-color: rgba(34, 197, 94, 0.3); }
   .ll-box-amber:hover { border-color: rgba(245, 166, 35, 0.3); }
@@ -3467,7 +3461,7 @@ licStyles.textContent = `
     color: #fff;
     background: #60a5fa;
     border: none;
-    border-radius: 8px;
+    border-radius: 2px;
     cursor: pointer;
     transition: background 0.15s;
   }
@@ -3507,7 +3501,7 @@ licStyles.textContent = `
     background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 12px;
   }
 
@@ -3525,7 +3519,7 @@ licStyles.textContent = `
   .lq-input {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 1rem;
@@ -3546,8 +3540,8 @@ licStyles.textContent = `
     gap: 8px;
     padding: 12px 16px;
     background: rgba(96, 165, 250, 0.08);
-    border: 1px solid rgba(96, 165, 250, 0.2);
-    border-radius: 8px;
+    border: 1px dashed rgba(96, 165, 250, 0.2);
+    border-radius: 2px;
     font-size: 0.9rem;
     color: #e4e6eb;
     margin-top: 8px;
@@ -3581,8 +3575,8 @@ licStyles.textContent = `
   /* Question card */
   .lq-question-card {
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     padding: 20px;
     margin-bottom: 16px;
   }
@@ -3609,7 +3603,7 @@ licStyles.textContent = `
   .lq-option-btn {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -3643,8 +3637,8 @@ licStyles.textContent = `
   .lqc-rec-pane {
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 24px 20px 20px;
     margin-bottom: 16px;
     text-align: center;
@@ -3656,18 +3650,16 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 6px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lqc-accent-green { background: #22c55e; }
   .lqc-accent-amber { background: #f5a623; }
   .lqc-rec-badge {
     display: inline-block;
-    background: rgba(34, 197, 94, 0.15);
     color: #22c55e;
     font-size: 0.82rem;
     font-weight: 600;
     padding: 3px 12px;
-    border-radius: 12px;
     margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -3705,8 +3697,8 @@ licStyles.textContent = `
     min-width: 0;
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 16px 14px;
     overflow: hidden;
   }
@@ -3729,8 +3721,8 @@ licStyles.textContent = `
   .lqc-workflow-pane {
     position: relative;
     background: #22262e;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 20px 20px 16px;
     overflow: hidden;
   }
@@ -3750,8 +3742,8 @@ licStyles.textContent = `
   .lqc-action-card {
     position: relative;
     background: #1a1d23;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 14px 14px 12px;
     overflow: hidden;
     display: flex;
@@ -3765,7 +3757,7 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 4px;
-    border-radius: 10px 10px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lqc-card-accent-green { background: #22c55e; }
   .lqc-card-accent-amber { background: #f5a623; }
@@ -3863,8 +3855,8 @@ licStyles.textContent = `
   }
   .lcd-tentative-banner {
     background: rgba(245, 166, 35, 0.10);
-    border: 1px solid rgba(245, 166, 35, 0.3);
-    border-radius: 8px;
+    border: 1px dashed rgba(245, 166, 35, 0.3);
+    border-radius: 2px;
     padding: 10px 14px;
     font-size: 0.82rem;
     color: #f5a623;
@@ -3886,7 +3878,7 @@ licStyles.textContent = `
   .lcd-plan-btn {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 6px 14px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -3916,8 +3908,8 @@ licStyles.textContent = `
     text-align: center;
     padding: 24px 20px 20px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     overflow: hidden;
   }
   .lcd-rec-accent {
@@ -3927,22 +3919,19 @@ licStyles.textContent = `
     right: 0;
     height: 6px;
     background: #22c55e;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lcd-rec-badge {
     display: inline-block;
-    background: rgba(34, 197, 94, 0.15);
     color: #22c55e;
     font-size: 0.82rem;
     font-weight: 600;
     padding: 3px 12px;
-    border-radius: 12px;
     margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .lcd-rec-exploring {
-    background: rgba(96, 165, 250, 0.15);
     color: #60a5fa;
   }
   .lcd-rec-tier {
@@ -3971,8 +3960,8 @@ licStyles.textContent = `
   .lcd-evidence-pane {
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 20px 20px 16px;
     overflow: hidden;
   }
@@ -3983,7 +3972,7 @@ licStyles.textContent = `
     right: 0;
     height: 6px;
     background: #22c55e;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lcd-evidence-heading {
     font-size: 0.9rem;
@@ -4041,8 +4030,8 @@ licStyles.textContent = `
     min-width: 0;
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 16px 14px;
     overflow: hidden;
   }
@@ -4052,7 +4041,7 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 6px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lcd-why-accent-amber {
     background: #f5a623;
@@ -4082,8 +4071,8 @@ licStyles.textContent = `
   .lcd-action-pane {
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 16px 14px;
     overflow: hidden;
     display: flex;
@@ -4097,7 +4086,7 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 6px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lcd-action-accent-green {
     background: #22c55e;
@@ -4152,7 +4141,7 @@ licStyles.textContent = `
     background: rgba(255, 255, 255, 0.03);
     border: none;
     border-left: 4px solid transparent;
-    border-radius: 6px;
+    border-radius: 2px;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
     color: #e4e6eb;
@@ -4189,8 +4178,8 @@ licStyles.textContent = `
   .lp-detail {
     position: relative;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 24px 28px;
     overflow: hidden;
   }
@@ -4200,7 +4189,7 @@ licStyles.textContent = `
     left: 0;
     right: 0;
     height: 6px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .lp-detail-title {
     font-size: 1.05rem;
@@ -4298,9 +4287,9 @@ licStyles.textContent = `
     align-items: center;
     gap: 12px;
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
     border-left: 3px solid transparent;
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -4350,16 +4339,13 @@ licStyles.textContent = `
     font-size: 0.65rem;
     font-weight: 600;
     padding: 2px 8px;
-    border-radius: 8px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .lup-sel-badge-rec {
-    background: rgba(34, 197, 94, 0.15);
     color: #22c55e;
   }
   .lup-sel-badge-current {
-    background: rgba(96, 165, 250, 0.15);
     color: #60a5fa;
   }
 
@@ -4384,8 +4370,8 @@ licStyles.textContent = `
   /* Pane containers */
   .lup-pane {
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 20px;
     position: relative;
   }
@@ -4393,7 +4379,7 @@ licStyles.textContent = `
     position: absolute;
     left: 0; top: 0; bottom: 0;
     width: 3px;
-    border-radius: 10px 0 0 10px;
+    border-radius: 2px 0 0 2px;
   }
   .lup-pane-bar-amber { background: #f5a623; }
   .lup-pane-bar-blue { background: #60a5fa; }
@@ -4440,7 +4426,7 @@ licStyles.textContent = `
   .lup-input {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.9rem;
@@ -4454,7 +4440,7 @@ licStyles.textContent = `
   .lup-textarea {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.9rem;
@@ -4476,8 +4462,8 @@ licStyles.textContent = `
   }
   .lup-card-option {
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -4516,7 +4502,7 @@ licStyles.textContent = `
   .lup-yn-btn {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -4536,8 +4522,8 @@ licStyles.textContent = `
   /* Purchase pane */
   .lup-purchase-pane {
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 20px;
     position: relative;
     margin-bottom: 16px;
@@ -4580,7 +4566,7 @@ licStyles.textContent = `
   .lup-invoice-btn {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -4601,15 +4587,15 @@ licStyles.textContent = `
     background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 12px;
   }
 
   /* Management card */
   .lup-mgmt-card {
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
@@ -4664,8 +4650,8 @@ licStyles.textContent = `
   /* Confirm dialog */
   .lup-confirm-card {
     background: rgba(245, 166, 35, 0.06);
-    border: 1px solid rgba(245, 166, 35, 0.2);
-    border-radius: 10px;
+    border: 1px dashed rgba(245, 166, 35, 0.2);
+    border-radius: 2px;
     padding: 16px 20px;
     margin-top: 12px;
   }
@@ -4684,7 +4670,7 @@ licStyles.textContent = `
     background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
   }
 
 
@@ -4714,8 +4700,8 @@ licStyles.textContent = `
   }
   .lup-activate-section {
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
     padding: 16px 20px;
     position: relative;
     margin-bottom: 16px;
@@ -4723,7 +4709,7 @@ licStyles.textContent = `
   .lup-activate-textarea {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Menlo", "Consolas", monospace;
     font-size: 0.82rem;
@@ -4741,7 +4727,7 @@ licStyles.textContent = `
     color: #22c55e;
     background: rgba(34, 197, 94, 0.06);
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 8px;
   }
   .lup-activate-error {
@@ -4749,13 +4735,13 @@ licStyles.textContent = `
     color: #f5a623;
     background: rgba(245, 166, 35, 0.10);
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 8px;
   }
   .lup-save-prompt-card {
     background: rgba(96, 165, 250, 0.06);
-    border: 1px solid rgba(96, 165, 250, 0.2);
-    border-radius: 10px;
+    border: 1px dashed rgba(96, 165, 250, 0.2);
+    border-radius: 2px;
     padding: 14px 18px;
     margin-bottom: 16px;
   }
@@ -4791,18 +4777,18 @@ licStyles.textContent = `
   .lup-machine-meta { font-size: 0.75rem; color: #8b919a; font-family: "Menlo", monospace; }
   .lup-machine-count { font-size: 0.82rem; color: #8b919a; margin-top: 8px; }
   .lup-machines-actions { margin-top: 10px; }
-  .lup-sharing-address { font-family: "Menlo", monospace; font-size: 1.1rem; color: #60a5fa; background: rgba(96,165,250,0.08); padding: 10px 14px; border-radius: 8px; margin: 8px 0; text-align: center; user-select: all; }
+  .lup-sharing-address { font-family: "Menlo", monospace; font-size: 1.1rem; color: #60a5fa; background: rgba(96,165,250,0.08); padding: 10px 14px; border-radius: 2px; margin: 8px 0; text-align: center; user-select: all; }
   .lup-sharing-waiting { font-size: 0.85rem; color: #8b919a; font-style: italic; margin: 8px 0; }
-  .lup-sharing-request { background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); border-radius: 10px; padding: 14px 18px; margin: 10px 0; }
+  .lup-sharing-request { background: rgba(245,166,35,0.06); border: 1px dashed rgba(245,166,35,0.2); border-radius: 2px; padding: 14px 18px; margin: 10px 0; }
   .lup-sharing-request-text { font-size: 0.88rem; color: #e4e6eb; margin: 0 0 10px 0; line-height: 1.5; }
   .lup-sharing-request-actions { display: flex; gap: 8px; }
   .lup-join-section { margin-top: 10px; }
   .lup-join-row { display: flex; gap: 8px; margin-bottom: 8px; }
   .lup-join-input { flex: 1; }
   .lup-join-status { font-size: 0.85rem; color: #8b919a; font-style: italic; margin: 8px 0; }
-  .lup-join-error { font-size: 0.82rem; color: #f5a623; background: rgba(245,166,35,0.10); padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+  .lup-join-error { font-size: 0.82rem; color: #f5a623; background: rgba(245,166,35,0.10); padding: 8px 12px; border-radius: 2px; margin: 8px 0; }
   .lup-join-peers { margin: 8px 0; }
-  .lup-join-peer { cursor: pointer; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); margin-bottom: 4px; font-size: 0.85rem; color: #e4e6eb; }
+  .lup-join-peer { cursor: pointer; padding: 8px 12px; border-radius: 2px; background: rgba(255,255,255,0.03); margin-bottom: 4px; font-size: 0.85rem; color: #e4e6eb; }
   .lup-join-peer:hover { background: rgba(96,165,250,0.08); }
 
   @media (max-width: 600px) {
@@ -4818,7 +4804,7 @@ licStyles.textContent = `
       padding-left: 12px;
     }
     .ll-terms-sliver {
-      border-radius: 8px;
+      border-radius: 2px;
     }
     .ll-grid {
       grid-template-columns: 1fr;

@@ -264,37 +264,37 @@ idsStyles.textContent = `
   .ids-heading { font-size: 1.25rem; font-weight: 600; color: #e4e6eb; margin-right: 12px; }
   .ids-status {
     display: inline-block; font-size: 0.72rem; font-weight: 600;
-    padding: 2px 10px; border-radius: 999px;
+    padding: 2px 10px; border-radius: 2px;
   }
-  .ids-status-locked { background: rgba(245,166,35,0.10); color: #f5a623; }
-  .ids-status-unlocked { background: rgba(34,197,94,0.10); color: #22c55e; }
-  .ids-status-unconfigured { background: rgba(139,145,154,0.10); color: #8b919a; }
+  .ids-status-locked { color: #f5a623; }
+  .ids-status-unlocked { color: #22c55e; }
+  .ids-status-unconfigured { color: #8b919a; }
   .ids-section { margin-top: 20px; }
   .ids-section-title {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
     color: #60a5fa; margin: 0 0 10px; font-weight: 600;
   }
   .ids-card {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 14px 18px; margin-bottom: 10px;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; padding: 14px 18px; margin-bottom: 10px;
   }
   .ids-text { font-size: 0.82rem; color: #e4e6eb; line-height: 1.6; margin: 0 0 8px; }
   .ids-text:last-child { margin-bottom: 0; }
   .ids-text-muted { color: #8b919a; }
   .ids-text code {
-    background: #1a1d23; padding: 2px 6px; border-radius: 4px;
+    background: #1a1d23; padding: 2px 6px; border-radius: 2px;
     font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #60a5fa;
   }
   .ids-loading { color: #8b919a; font-size: 0.82rem; text-align: center; padding: 40px 0; margin: 0; }
   .ids-error {
-    color: #f5a623; background: rgba(245,166,35,0.10);
-    padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+    color: #f5a623;
+    padding: 12px 16px; border-radius: 2px; font-size: 0.82rem;
   }
   .ids-cred-links { display: flex; flex-direction: column; gap: 12px; }
   .ids-cred-item strong { display: block; font-size: 0.82rem; color: #e4e6eb; margin-bottom: 2px; }
   .ids-cred-item p { font-size: 0.78rem; color: #8b919a; margin: 0; }
   .ids-cred-item code {
-    background: #1a1d23; padding: 2px 6px; border-radius: 4px;
+    background: #1a1d23; padding: 2px 6px; border-radius: 2px;
     font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #60a5fa;
   }
 `;

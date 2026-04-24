@@ -350,7 +350,7 @@ export function setLicenseMode(modeData) {
     card.className = 'mp-license-card';
     card.innerHTML = `
       <div class="mp-license-card-inner">
-        <span class="mp-license-dot" style="background: var(--warning, #f5a623)"></span>
+        <span class="mp-license-dot" style="color: var(--warning, #f5a623)"></span>
         <div class="mp-license-card-text">
           <strong>Personal (unlicensed)</strong>
           <span>Governance is active. Register or choose a tier to unlock full features.</span>
@@ -512,8 +512,8 @@ mpStyles.textContent = `
   /* ---- Title pane ---- */
   .mp-title-pane {
     background: #22262e;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 20px;
   }
@@ -539,8 +539,8 @@ mpStyles.textContent = `
   }
   .mp-pane {
     background: #22262e;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     position: relative;
     overflow: hidden;
   }
@@ -649,7 +649,7 @@ mpStyles.textContent = `
   .mp-feed-row:focus-visible {
     outline: 2px solid #60a5fa;
     outline-offset: -2px;
-    border-radius: 6px;
+    border-radius: 2px;
   }
   .mp-feed-time {
     font-family: "JetBrains Mono", monospace;
@@ -719,8 +719,8 @@ mpStyles.textContent = `
   }
   .mp-wf-card {
     background: #22262e;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
     position: relative;
     overflow: hidden;
     cursor: pointer;
@@ -768,14 +768,16 @@ mpStyles.textContent = `
     gap: 12px;
     padding: 14px 20px;
     background: rgba(245, 166, 35, 0.06);
-    border: 1px solid rgba(245, 166, 35, 0.3);
-    border-radius: 10px;
+    border: 1px dashed rgba(245, 166, 35, 0.3);
+    border-radius: 2px;
   }
   .mp-license-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
     flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .mp-license-dot::before {
+    content: "[!]";
   }
   .mp-license-card-text {
     flex: 1;
@@ -793,8 +795,8 @@ mpStyles.textContent = `
   }
   .mp-license-card-btn {
     background: none;
-    border: 1px solid rgba(245, 166, 35, 0.4);
-    border-radius: 8px;
+    border: 1px dashed rgba(245, 166, 35, 0.4);
+    border-radius: 2px;
     color: #f5a623;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
@@ -819,10 +821,9 @@ mpStyles.textContent = `
   }
   .mp-error {
     color: #f5a623;
-    background: rgba(245, 166, 35, 0.10);
     font-size: 0.82rem;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     margin-top: 8px;
   }
 

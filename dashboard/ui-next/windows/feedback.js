@@ -277,13 +277,13 @@ fbStyles.textContent = `
     color: #60a5fa; margin: 0 0 10px; font-weight: 600;
   }
   .fb-card {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 16px 20px; margin-bottom: 20px;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; padding: 16px 20px; margin-bottom: 20px;
   }
   .fb-form { display: flex; flex-direction: column; gap: 10px; }
   .fb-textarea {
     background: #1a1d23; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px; color: #e4e6eb; font-family: "Inter", system-ui, sans-serif;
+    border-radius: 2px; color: #e4e6eb; font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem; padding: 8px 10px; resize: vertical;
   }
   .fb-textarea:focus { outline: 2px solid #60a5fa; outline-offset: 1px; }
@@ -298,8 +298,8 @@ fbStyles.textContent = `
     color: #8b919a; font-size: 0.82rem; text-align: center; padding: 24px 0; margin: 0; font-style: italic;
   }
   .fb-error {
-    color: #f5a623; background: rgba(245,166,35,0.10);
-    padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+    color: #f5a623;
+    padding: 12px 16px; border-radius: 2px; font-size: 0.82rem;
   }
 `;
 document.head.appendChild(fbStyles);

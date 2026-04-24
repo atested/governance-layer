@@ -615,8 +615,8 @@ cfStyles.textContent = `
   }
   .cf-stat-card {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     padding: 14px 16px;
     text-align: center;
   }
@@ -641,8 +641,8 @@ cfStyles.textContent = `
   /* ---- Pane ---- */
   .cf-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 16px;
   }
@@ -652,7 +652,6 @@ cfStyles.textContent = `
   }
   .cf-pane-clickable:hover {
     border-color: rgba(96,165,250,0.3);
-    box-shadow: 0 0 0 1px rgba(96,165,250,0.15);
   }
   .cf-pane-accent { height: 6px; }
   .cf-accent-green { background: #22c55e; }
@@ -697,7 +696,7 @@ cfStyles.textContent = `
   .cf-input {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -711,7 +710,7 @@ cfStyles.textContent = `
   /* ---- Buttons ---- */
   .cf-btn {
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
     font-weight: 600;
@@ -783,10 +782,10 @@ cfStyles.textContent = `
     font-weight: 700;
     text-transform: uppercase;
     padding: 1px 8px;
-    border-radius: 999px;
+    border-radius: 2px;
   }
-  .cf-decision-allow { background: rgba(34,197,94,0.12); color: #22c55e; }
-  .cf-decision-deny { background: rgba(239,68,68,0.12); color: #ef4444; }
+  .cf-decision-allow { color: #22c55e; }
+  .cf-decision-deny { color: #ef4444; }
 
   /* Tier badges */
   .cf-tier {
@@ -795,13 +794,13 @@ cfStyles.textContent = `
     font-weight: 700;
     font-family: "JetBrains Mono", monospace;
     padding: 1px 6px;
-    border-radius: 4px;
+    border-radius: 2px;
     margin-right: 2px;
   }
-  .cf-tier-1 { background: rgba(34,197,94,0.12); color: #22c55e; }
-  .cf-tier-2 { background: rgba(96,165,250,0.12); color: #60a5fa; }
-  .cf-tier-3 { background: rgba(245,166,35,0.12); color: #f5a623; }
-  .cf-tier-4 { background: rgba(239,68,68,0.12); color: #ef4444; }
+  .cf-tier-1 { color: #22c55e; }
+  .cf-tier-2 { color: #60a5fa; }
+  .cf-tier-3 { color: #f5a623; }
+  .cf-tier-4 { color: #ef4444; }
 
   .cf-preview-note {
     font-size: 0.75rem;
@@ -815,7 +814,7 @@ cfStyles.textContent = `
   .cf-rule-json {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 10px 14px;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.72rem;
@@ -832,7 +831,7 @@ cfStyles.textContent = `
   .cf-dir-entry {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 8px 14px;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.78rem;
@@ -848,7 +847,7 @@ cfStyles.textContent = `
     justify-content: space-between;
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 10px 14px;
   }
   .cf-dir-path {
@@ -862,9 +861,8 @@ cfStyles.textContent = `
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: #60a5fa;
-    background: rgba(96,165,250,0.10);
     padding: 2px 8px;
-    border-radius: 999px;
+    border-radius: 2px;
   }
 
   /* ---- Discovered tools ---- */
@@ -875,7 +873,7 @@ cfStyles.textContent = `
     gap: 10px;
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 7px 14px;
   }
   .cf-mapping-name {
@@ -951,7 +949,7 @@ cfStyles.textContent = `
   .cf-gc-accent {
     height: 6px;
     margin: -24px -24px 0;
-    border-radius: 4px 4px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .cf-gc-header {
     font-size: 0.72rem;
@@ -984,7 +982,7 @@ cfStyles.textContent = `
     font-size: 0.75rem;
     background: rgba(255,255,255,0.04);
     padding: 1px 5px;
-    border-radius: 3px;
+    border-radius: 2px;
     color: #e4e6eb;
   }
   .cf-gc-note {
@@ -996,7 +994,7 @@ cfStyles.textContent = `
   .cf-code-block {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 10px 14px;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.75rem;
@@ -1022,9 +1020,8 @@ cfStyles.textContent = `
   }
   .cf-error {
     color: #f5a623;
-    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
   }
 

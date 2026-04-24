@@ -20,25 +20,22 @@ const styles = `
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  padding: 0;
   line-height: 1.4;
   text-transform: uppercase;
+  background: none;
 }
 
 .tag--allow {
   color: var(--ok);
-  background: var(--ok-soft);
 }
 
 .tag--deny {
   color: var(--danger);
-  background: var(--danger-soft);
 }
 
 .tag--other {
   color: var(--muted);
-  background: var(--line);
 }
 `;
 
@@ -56,7 +53,7 @@ export class AtdDecisionTag extends AtdBase {
     const variant = decision === 'ALLOW' ? 'allow' : decision === 'DENY' ? 'deny' : 'other';
     const label = decision || '--';
 
-    this.shadowRoot.innerHTML = `<span class="tag tag--${variant}">${this._esc(label)}</span>`;
+    this.shadowRoot.innerHTML = `<span class="tag tag--${variant}">[${this._esc(label)}]</span>`;
   }
 
   attributeChangedCallback() {

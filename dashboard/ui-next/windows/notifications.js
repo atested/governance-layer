@@ -255,8 +255,8 @@ nfStyles.textContent = `
   }
   .nf-heading { font-size: 1.25rem; font-weight: 600; color: #e4e6eb; }
   .nf-card {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 14px 18px; margin-bottom: 10px;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; padding: 14px 18px; margin-bottom: 10px;
   }
   .nf-severity-security { border-left: 3px solid #ef4444; }
   .nf-severity-critical { border-left: 3px solid #f5a623; }
@@ -273,8 +273,8 @@ nfStyles.textContent = `
     margin: 0; font-style: italic;
   }
   .nf-error {
-    color: #f5a623; background: rgba(245,166,35,0.10);
-    padding: 12px 16px; border-radius: 8px; font-size: 0.82rem;
+    color: #f5a623;
+    padding: 12px 16px; border-radius: 2px; font-size: 0.82rem;
   }
 `;
 document.head.appendChild(nfStyles);

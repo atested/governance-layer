@@ -43,9 +43,8 @@ const styles = `
   position: relative;
   z-index: ${Z_INDEX.CONFIRM};
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   max-width: 400px;
   width: 90%;
 }
@@ -82,9 +81,9 @@ button {
   font-size: var(--text-sm);
   font-weight: 500;
   padding: 6px 16px;
-  border-radius: 999px;
+  border-radius: 2px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px dashed transparent;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -95,7 +94,7 @@ button:focus-visible {
 
 .btn-cancel {
   background: transparent;
-  border-color: var(--line);
+  border-color: var(--muted);
   color: var(--ink);
 }
 .btn-cancel:hover {

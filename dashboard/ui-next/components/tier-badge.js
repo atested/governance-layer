@@ -23,19 +23,17 @@ const styles = `
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
+  padding: 0;
   line-height: 1.4;
+  background: none;
 }
 
 .badge--green {
   color: var(--ok);
-  background: var(--ok-soft);
 }
 
 .badge--amber {
   color: var(--warn);
-  background: var(--warn-soft);
 }
 `;
 
@@ -54,7 +52,7 @@ export class AtdTierBadge extends AtdBase {
     const variant = valid && tier <= 2 ? 'green' : 'amber';
     const label = valid ? `Tier ${tier}` : '--';
 
-    this.shadowRoot.innerHTML = `<span class="badge badge--${variant}">${label}</span>`;
+    this.shadowRoot.innerHTML = `<span class="badge badge--${variant}">[${label}]</span>`;
   }
 
   attributeChangedCallback() {

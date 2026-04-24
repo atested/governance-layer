@@ -22,9 +22,9 @@ button {
   font-size: var(--text-sm);
   font-weight: 500;
   padding: 6px 16px;
-  border-radius: 999px;
+  border-radius: 2px;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px dashed transparent;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
   line-height: 1.4;
 }
@@ -42,7 +42,7 @@ button:disabled {
 /* Outline (default) */
 button.outline {
   background: transparent;
-  border-color: var(--line);
+  border-color: var(--muted);
   color: var(--ink);
 }
 button.outline:hover:not(:disabled) {

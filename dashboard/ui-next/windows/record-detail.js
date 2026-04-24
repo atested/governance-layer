@@ -323,7 +323,7 @@ rdStyles.textContent = `
   /* ---- Top accent bar ---- */
   .rd-top-accent {
     height: 6px;
-    border-radius: 4px 4px 0 0;
+    border-radius: 2px 2px 0 0;
     margin: -24px -24px 0;
     /* Stretch to fill the content padding */
   }
@@ -345,8 +345,8 @@ rdStyles.textContent = `
   /* ---- Pane container ---- */
   .rd-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 16px;
   }
@@ -377,10 +377,9 @@ rdStyles.textContent = `
 
   /* ---- Warning banner ---- */
   .rd-warning-banner {
-    background: rgba(245, 166, 35,0.10);
     color: #f5a623;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
     margin-bottom: 12px;
   }

@@ -11,7 +11,7 @@ const tokenCSS = `
   --surface-raised: #2a2f38;
   --ink: #e4e6eb;
   --muted: #8b919a;
-  --line: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.12);
   --accent: #60a5fa;
   --accent-soft: rgba(96, 165, 250, 0.12);
   --ok: #22c55e;
@@ -20,12 +20,12 @@ const tokenCSS = `
   --warn-soft: rgba(245, 166, 35, 0.10);
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.10);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  --shadow: none;
 
-  --radius: 12px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
 
   --font-body: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;

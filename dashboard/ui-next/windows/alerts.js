@@ -358,7 +358,7 @@ function _buildAlertCard(alert, state) {
   card.innerHTML = `
     <div class="al-card-top">
       <div class="al-card-left">
-        ${isUnread ? '<span class="al-unread-dot"></span>' : ''}
+        ${isUnread ? '<span class="al-unread-chevron">&#9656;</span>' : ''}
         <span class="al-card-sev" style="color:${sevColor}">${sevLabel}</span>
         <span class="al-card-title">${_esc(alert.title || '--')}</span>
       </div>
@@ -595,7 +595,7 @@ alStyles.textContent = `
   .al-loading { color: #8b919a; }
   .al-error {
     color: #f5a623; background: rgba(245,166,35,0.10);
-    padding: 12px 16px; border-radius: 8px;
+    padding: 12px 16px; border-radius: 2px;
   }
 
   /* Title accent bar */
@@ -611,8 +611,8 @@ alStyles.textContent = `
     gap: 12px; margin-bottom: 20px;
   }
   .al-summary-card {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 14px 16px;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; padding: 14px 16px;
     display: flex; flex-direction: column; gap: 4px; text-align: center;
   }
   .al-sc-label {
@@ -627,8 +627,8 @@ alStyles.textContent = `
 
   /* Monitoring panes */
   .al-monitor-pane {
-    background: #22262e; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; margin-bottom: 12px; overflow: hidden;
+    background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px; margin-bottom: 12px; overflow: hidden;
     position: relative;
   }
   .al-pane-inactive {
@@ -647,13 +647,13 @@ alStyles.textContent = `
 
   .al-plan-badge {
     font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.04em; padding: 2px 8px; border-radius: 4px;
+    letter-spacing: 0.04em; padding: 2px 8px;
   }
   .al-badge-active {
-    background: rgba(34,197,94,0.15); color: #22c55e;
+    color: #22c55e;
   }
   .al-badge-inactive {
-    background: rgba(107,114,128,0.15); color: #6b7280;
+    color: #6b7280;
   }
 
   .al-pane-desc {
@@ -668,8 +668,8 @@ alStyles.textContent = `
   /* Alert cards */
   .al-card-list { padding: 0 12px 12px; }
   .al-alert-card {
-    background: #1a1d24; border: 1px solid rgba(255,255,255,0.06);
-    border-left: 3px solid #8b919a; border-radius: 8px;
+    background: #1a1d24; border: 1px dashed rgba(255,255,255,0.12);
+    border-left: 3px solid #8b919a; border-radius: 2px;
     padding: 12px 14px; margin-bottom: 8px;
     cursor: pointer; transition: background 0.12s;
   }
@@ -684,9 +684,8 @@ alStyles.textContent = `
     margin-bottom: 4px;
   }
   .al-card-left { display: flex; align-items: center; gap: 8px; }
-  .al-unread-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #60a5fa; flex-shrink: 0;
+  .al-unread-chevron {
+    color: #60a5fa; flex-shrink: 0; font-size: 0.72rem;
   }
   .al-card-sev {
     font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
@@ -715,13 +714,13 @@ alStyles.textContent = `
   }
   .al-gc-unread {
     font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.04em; padding: 2px 8px; border-radius: 4px;
-    background: rgba(245,166,35,0.15); color: #f5a623;
+    letter-spacing: 0.04em; padding: 2px 8px;
+    color: #f5a623;
   }
   .al-gc-acked {
     font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.04em; padding: 2px 8px; border-radius: 4px;
-    background: rgba(34,197,94,0.15); color: #22c55e;
+    letter-spacing: 0.04em; padding: 2px 8px;
+    color: #22c55e;
   }
   .al-gc-title {
     font-size: 1.1rem; font-weight: 600; color: #e4e6eb;
@@ -742,7 +741,7 @@ alStyles.textContent = `
   }
   .al-gc-btn {
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 0.82rem; font-weight: 500; border-radius: 8px;
+    font-size: 0.82rem; font-weight: 500; border-radius: 2px;
     padding: 8px 16px; cursor: pointer; border: none;
     transition: background 0.12s;
   }

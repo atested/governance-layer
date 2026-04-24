@@ -495,8 +495,8 @@ function _renderCell(key, entry, detail) {
     }
     case 'policy_decision': {
       const d = detail.policy_decision || '';
-      if (d === 'ALLOW') return '<span class="au-decision-allow">ALLOW</span>';
-      if (d === 'DENY') return '<span class="au-decision-deny">DENY</span>';
+      if (d === 'ALLOW') return '<span class="au-decision-allow">[ALLOW]</span>';
+      if (d === 'DENY') return '<span class="au-decision-deny">[DENY]</span>';
       return '<span class="au-cell-muted">\u2014</span>';
     }
     case 'event_category': {
@@ -731,8 +731,8 @@ auStyles.textContent = `
   /* ---- Pane container ---- */
   .au-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 12px;
   }
@@ -804,7 +804,7 @@ auStyles.textContent = `
   .au-input, .au-select {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
@@ -833,7 +833,7 @@ auStyles.textContent = `
   .au-quick-btn {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
@@ -864,7 +864,7 @@ auStyles.textContent = `
   .au-dtoggle {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -896,7 +896,7 @@ auStyles.textContent = `
   /* Buttons */
   .au-btn {
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
     font-weight: 600;
@@ -945,7 +945,7 @@ auStyles.textContent = `
   .au-ps-btn {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 5px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -971,7 +971,7 @@ auStyles.textContent = `
   .au-col-preset {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
@@ -1000,7 +1000,7 @@ auStyles.textContent = `
   .au-col-toggle {
     background: none;
     border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 4px;
+    border-radius: 2px;
     color: #6b7280;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.65rem;
@@ -1102,7 +1102,7 @@ auStyles.textContent = `
   .au-pag-btn {
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -1115,7 +1115,7 @@ auStyles.textContent = `
   .au-pag-num {
     background: none;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -1150,7 +1150,7 @@ auStyles.textContent = `
     color: #f5a623;
     background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
   }
 

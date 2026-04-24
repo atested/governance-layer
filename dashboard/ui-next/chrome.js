@@ -45,7 +45,7 @@ export function renderChrome() {
     height: '48px',
     zIndex: String(Z_INDEX.CHROME),
     background: '#2a2f38',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    borderBottom: '1px dashed rgba(255, 255, 255, 0.12)',
     display: 'flex',
     alignItems: 'center',
     padding: '0 20px',
@@ -149,7 +149,7 @@ export function updateLicenseZone(tierName, dotColor) {
   const tierEl = zone.querySelector('.chrome-license-tier');
   const dotEl = zone.querySelector('.chrome-license-dot');
   if (tierEl) tierEl.textContent = tierName || 'Unknown';
-  if (dotEl) dotEl.style.background = dotColor || 'var(--muted, #8b919a)';
+  if (dotEl) dotEl.style.color = dotColor || 'var(--muted, #8b919a)';
 
   // Add/remove amber state class for post-trial unlicensed
   zone.classList.toggle('chrome-license-amber', tierName === 'Personal' && dotColor && dotColor.includes('f5a623'));
@@ -185,7 +185,7 @@ chromeStyles.textContent = `
   .chrome-zone {
     cursor: pointer;
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: 2px;
     transition: background 0.15s;
   }
   .chrome-zone:hover {
@@ -254,10 +254,11 @@ chromeStyles.textContent = `
     color: #f5a623;
   }
   .chrome-license-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .chrome-license-dot::before {
+    content: "[*]";
   }
   .chrome-notif-indicator {
     font-size: 0.9rem;
@@ -277,7 +278,7 @@ chromeStyles.textContent = `
     font-weight: 700;
     min-width: 16px;
     height: 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     display: flex;
     align-items: center;
     justify-content: center;

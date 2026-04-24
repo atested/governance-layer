@@ -35,7 +35,7 @@ const styles = `
 }
 
 .table-wrap {
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-md);
   overflow-x: auto;
   overflow-y: hidden;
@@ -143,9 +143,9 @@ tbody tr.row--ungoverned:hover {
   font-size: var(--text-xs);
   font-weight: 500;
   padding: 3px 12px;
-  border-radius: 999px;
+  border-radius: 2px;
   cursor: pointer;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   background: transparent;
   color: var(--ink);
   transition: background 0.15s, border-color 0.15s;

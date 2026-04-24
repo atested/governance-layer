@@ -24,7 +24,7 @@ const styles = `
 
 .frame {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
@@ -45,8 +45,8 @@ const styles = `
   width: 90vw;
   max-width: 1300px;
   height: 85vh;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
+
 
 /* Grandchild window: 80% of child dimensions */
 :host([depth="2"]) {
@@ -57,8 +57,8 @@ const styles = `
   width: calc(90vw * 0.8);
   max-width: calc(1300px * 0.8);
   height: calc(85vh * 0.8);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
+
 :host([depth="2"]) .title-bar {
   border-bottom: 3px solid var(--grandchild-accent, var(--line));
 }
@@ -103,7 +103,7 @@ const styles = `
 
 .close-btn {
   background: none;
-  border: 1px solid var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;

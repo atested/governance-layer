@@ -231,9 +231,9 @@ function _renderTable(state) {
     // Status
     let statusHtml;
     if (approval.stale) {
-      statusHtml = '<span class="ap-status-stale">Recommend revoking</span>';
+      statusHtml = '<span class="ap-status-stale">[Recommend revoking]</span>';
     } else {
-      statusHtml = '<span class="ap-status-active">Active</span>';
+      statusHtml = '<span class="ap-status-active">[Active]</span>';
     }
 
     // Tooltip for stale rows
@@ -445,8 +445,8 @@ apStyles.textContent = `
   }
   .ap-stat-card {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     padding: 14px 16px;
     text-align: center;
   }
@@ -477,8 +477,8 @@ apStyles.textContent = `
   /* ---- Pane container ---- */
   .ap-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 16px;
   }
@@ -532,7 +532,7 @@ apStyles.textContent = `
   .ap-input {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -549,7 +549,7 @@ apStyles.textContent = `
   /* ---- Buttons ---- */
   .ap-btn {
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
     font-weight: 600;
@@ -593,7 +593,7 @@ apStyles.textContent = `
   .ap-filter-btn {
     background: #1a1d23;
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #8b919a;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.72rem;
@@ -670,7 +670,7 @@ apStyles.textContent = `
   .ap-revoke-btn {
     background: none;
     border: 1px solid rgba(239,68,68,0.4);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #ef4444;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
@@ -732,7 +732,7 @@ apStyles.textContent = `
     color: #f5a623;
     background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
   }
 

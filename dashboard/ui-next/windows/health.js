@@ -639,7 +639,7 @@ hwStyles.textContent = `
   /* ---- Title accent ---- */
   .hw-title-accent {
     height: 6px;
-    border-radius: 4px 4px 0 0;
+    border-radius: 2px 2px 0 0;
     margin: -24px -24px 0;
   }
   .hw-accent-green { background: #22c55e; }
@@ -656,29 +656,29 @@ hwStyles.textContent = `
     font-size: 0.78rem;
     font-weight: 600;
     padding: 3px 14px;
-    border-radius: 999px;
+    border-radius: 2px;
   }
-  .hw-pill-green { background: rgba(34,197,94,0.12); color: #22c55e; }
-  .hw-pill-amber { background: rgba(245,166,35,0.12); color: #f5a623; }
-  .hw-pill-red { background: rgba(239,68,68,0.12); color: #ef4444; }
+  .hw-pill-green { color: #22c55e; }
+  .hw-pill-amber { color: #f5a623; }
+  .hw-pill-red { color: #ef4444; }
 
   /* ---- Alert pane ---- */
   .hw-alert-pane {
-    border-radius: 10px;
+    border-radius: 2px;
     padding: 16px 20px;
     margin-bottom: 16px;
   }
   .hw-alert-red {
     background: rgba(239,68,68,0.06);
-    border: 1px solid rgba(239,68,68,0.25);
+    border: 1px dashed rgba(239,68,68,0.25);
   }
   .hw-alert-amber {
     background: rgba(245,166,35,0.06);
-    border: 1px solid rgba(245,166,35,0.25);
+    border: 1px dashed rgba(245,166,35,0.25);
   }
   .hw-alert-blue {
     background: rgba(96,165,250,0.06);
-    border: 1px solid rgba(96,165,250,0.25);
+    border: 1px dashed rgba(96,165,250,0.25);
   }
   .hw-alert-top {
     margin-bottom: 8px;
@@ -690,10 +690,10 @@ hwStyles.textContent = `
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 2px 10px;
-    border-radius: 999px;
+    border-radius: 2px;
   }
-  .hw-badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
-  .hw-badge-amber { background: rgba(245,166,35,0.15); color: #f5a623; }
+  .hw-badge-red { color: #ef4444; }
+  .hw-badge-amber { color: #f5a623; }
   .hw-alert-desc {
     font-size: 0.85rem;
     color: #e4e6eb;
@@ -709,7 +709,7 @@ hwStyles.textContent = `
   .hw-alert-ack {
     background: none;
     border: 1px solid rgba(239,68,68,0.4);
-    border-radius: 6px;
+    border-radius: 2px;
     color: #ef4444;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.78rem;
@@ -734,17 +734,16 @@ hwStyles.textContent = `
   /* ---- Data pane ---- */
   .hw-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
   }
   .hw-pane-clickable {
     cursor: pointer;
-    transition: border-color 0.12s, box-shadow 0.12s;
+    transition: border-color 0.12s;
   }
   .hw-pane-clickable:hover {
     border-color: rgba(96,165,250,0.3);
-    box-shadow: 0 0 0 1px rgba(96,165,250,0.15);
   }
   .hw-pane-accent {
     height: 6px;
@@ -784,8 +783,8 @@ hwStyles.textContent = `
   /* ---- Events pane ---- */
   .hw-events-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 16px;
   }
@@ -864,11 +863,11 @@ hwStyles.textContent = `
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 1px 8px;
-    border-radius: 999px;
+    border-radius: 2px;
   }
-  .hw-sev-critical { background: rgba(239,68,68,0.12); color: #ef4444; }
-  .hw-sev-warning { background: rgba(245,166,35,0.12); color: #f5a623; }
-  .hw-sev-info { background: rgba(107,114,128,0.12); color: #8b919a; }
+  .hw-sev-critical { color: #ef4444; }
+  .hw-sev-warning { color: #f5a623; }
+  .hw-sev-info { color: #8b919a; }
 
   /* View all link */
   .hw-view-all {
@@ -895,7 +894,7 @@ hwStyles.textContent = `
   .hw-gc-accent {
     height: 6px;
     margin: -24px -24px 0;
-    border-radius: 4px 4px 0 0;
+    border-radius: 2px 2px 0 0;
   }
   .hw-gc-header {
     font-size: 0.72rem;
@@ -966,9 +965,8 @@ hwStyles.textContent = `
   }
   .hw-error {
     color: #f5a623;
-    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
   }
 

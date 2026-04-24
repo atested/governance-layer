@@ -396,8 +396,8 @@ rpStyles.textContent = `
 
   .rp-filter-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
   }
   .rp-fp-accent {
@@ -432,8 +432,8 @@ rpStyles.textContent = `
   }
   .rp-input {
     background: #1a1d23;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     color: #e4e6eb;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -449,8 +449,8 @@ rpStyles.textContent = `
   }
   .rp-quick-btn {
     background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     color: #8b919a;
     font-size: 0.72rem;
     padding: 4px 10px;
@@ -480,8 +480,8 @@ rpStyles.textContent = `
   }
   .rp-gtoggle {
     background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     color: #8b919a;
     font-size: 0.78rem;
     padding: 5px 12px;
@@ -506,7 +506,7 @@ rpStyles.textContent = `
   }
   .rp-btn {
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     font-size: 0.82rem;
     padding: 7px 18px;
     cursor: pointer;
@@ -521,7 +521,7 @@ rpStyles.textContent = `
   .rp-btn-export {
     background: rgba(245,166,35,0.12);
     color: #f5a623;
-    border: 1px solid rgba(245,166,35,0.3);
+    border: 1px dashed rgba(245,166,35,0.3);
   }
   .rp-btn-export:hover {
     background: rgba(245,166,35,0.20);
@@ -536,8 +536,8 @@ rpStyles.textContent = `
   }
   .rp-stat-card {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     padding: 14px 16px;
     text-align: center;
   }
@@ -563,8 +563,8 @@ rpStyles.textContent = `
   /* ---- Grouping pane ---- */
   .rp-group-pane {
     background: #22262e;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
     overflow: hidden;
     margin-bottom: 16px;
   }
@@ -619,13 +619,13 @@ rpStyles.textContent = `
     flex: 1;
     height: 18px;
     background: rgba(255,255,255,0.04);
-    border-radius: 9px;
+    border-radius: 2px;
     overflow: hidden;
   }
   .rp-bar-fill {
     height: 100%;
     background: #60a5fa;
-    border-radius: 9px;
+    border-radius: 2px;
     transition: width 0.3s;
     min-width: 2px;
   }
@@ -655,9 +655,8 @@ rpStyles.textContent = `
   }
   .rp-error {
     color: #f5a623;
-    background: rgba(245,166,35,0.10);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 0.82rem;
     margin: 0 20px;
   }
