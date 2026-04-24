@@ -2266,6 +2266,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 except (ValueError, TypeError):
                     pass
 
+            # Enforce machine cap before activation
+            tier = decoded.get("tier", "personal")
+            cap = MACHINE_CAPS.get(tier)
+            if cap is not None:
+                count, _ = _count_active_machines_from_chain()
+                if count >= cap:
+                    _json_response(self, {
+                        "ok": False,
+                        "error": f"Machine limit reached ({count}/{cap}) for {tier} tier",
+                    }, 403)
+                    return
+
             result = activate_license(RUNTIME, license_key)
             if not result.get("ok", True):
                 _json_response(self, {
