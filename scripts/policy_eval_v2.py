@@ -43,13 +43,43 @@ _DEFAULT_POLICY_PATH = (
 
 
 def load_policy_rules(path: Optional[Path] = None) -> dict:
-    """Load policy rules from JSON file."""
+    """Load policy rules from JSON file.
+
+    Fail-closed: if the file is missing, unreadable, or malformed,
+    returns a deny-all policy (empty rules list) instead of crashing
+    the request path.  The error is logged so operators notice.
+    """
     p = path or _DEFAULT_POLICY_PATH
-    with open(p, "r", encoding="utf-8") as f:
-        rules = json.load(f)
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            rules = json.load(f)
+    except FileNotFoundError:
+        _log_policy_error(f"Policy rules file not found: {p}")
+        return _DENY_ALL_POLICY
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _log_policy_error(f"Malformed policy rules in {p}: {exc}")
+        return _DENY_ALL_POLICY
+    except OSError as exc:
+        _log_policy_error(f"Cannot read policy rules {p}: {exc}")
+        return _DENY_ALL_POLICY
+
     if not isinstance(rules, dict) or "rules" not in rules:
-        raise ValueError(f"Invalid policy rules format in {p}")
+        _log_policy_error(f"Invalid policy rules structure in {p}")
+        return _DENY_ALL_POLICY
+    if not isinstance(rules["rules"], list):
+        _log_policy_error(f"policy rules 'rules' key is not a list in {p}")
+        return _DENY_ALL_POLICY
     return rules
+
+
+# Deny-all fallback: empty rules list means default-DENY catches everything
+_DENY_ALL_POLICY = {"rules": [], "_fallback": True}
+
+
+def _log_policy_error(msg: str) -> None:
+    """Log a policy load error to stderr (import-time safe)."""
+    import logging
+    logging.getLogger("policy_eval_v2").error("[FAIL-CLOSED] %s", msg)
 
 
 # ---------------------------------------------------------------------------
