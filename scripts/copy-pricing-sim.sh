@@ -44,19 +44,15 @@ for f in "${VERBATIM[@]}"; do
   echo "  copied $f"
 done
 
-# ---------- Patched copy: windows/licensing.js ----------
-# Replace _refreshLicenseState body (dynamic import of app.js) with async no-op
-
-sed 's/async function _refreshLicenseState() {/async function _refreshLicenseState() { return; \/\/ sim no-op/' \
-  "$SRC/windows/licensing.js" | \
-  sed '/const { refreshLicenseState } = await import/d' | \
-  sed '/^  refreshLicenseState();$/d' \
-  > "$DST/windows/licensing.js"
-
-echo "  copied windows/licensing.js (patched _refreshLicenseState)"
+# ---------- windows/licensing.js is NOT copied ----------
+# The pricing sim's licensing.js contains hand-authored functions
+# (embedLicensingLauncher, refreshForPlanChange, _embeddedState) that
+# do not exist in the dashboard source. Overwriting it breaks the
+# pricing page. Style changes must be applied manually.
+echo "  SKIPPED windows/licensing.js (hand-authored, not copied)"
 
 # ---------- Done ----------
 
 echo ""
 echo "Pricing simulation files copied to $DST"
-echo "Hand-authored files (api.js, licensing-api.js, sim-entry.js, sim-bridge.css) are NOT touched."
+echo "Hand-authored files (api.js, licensing-api.js, sim-entry.js, sim-bridge.css, windows/licensing.js) are NOT touched."
