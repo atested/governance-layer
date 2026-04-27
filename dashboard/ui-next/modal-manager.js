@@ -173,6 +173,9 @@ class ModalManager {
       this._unlockMainPage();
       this._removeTrapListener();
       this._sweepOrphanedWindows();
+    } else if (this._stack.length === 1) {
+      this._unlockTopWindow();
+      this._sweepUntrackedWindows();
     }
 
     // Return focus to trigger
@@ -234,15 +237,22 @@ class ModalManager {
   }
 
   /**
-   * If a failed close path leaves a backdrop in the DOM while the manager
-   * stack is empty, clear it before the next click lands on the stale overlay.
+   * If a failed close path leaves a backdrop in the DOM, clear it before
+   * the next click lands on the stale overlay.
    */
   _onPointerMove() {
-    if (this._stack.length > 0) return;
-    if (!document.querySelector('atd-window-backdrop, atd-window-frame')) return;
-    this._unlockMainPage();
-    this._removeTrapListener();
-    this._sweepOrphanedWindows();
+    if (this._stack.length === 0) {
+      if (!document.querySelector('atd-window-backdrop, atd-window-frame')) return;
+      this._unlockMainPage();
+      this._removeTrapListener();
+      this._sweepOrphanedWindows();
+      return;
+    }
+
+    if (this._stack.length === 1) {
+      this._unlockTopWindow();
+      this._sweepUntrackedWindows();
+    }
   }
 
   /**
@@ -329,8 +339,26 @@ class ModalManager {
     mainPage.style.pointerEvents = '';
   }
 
+  _unlockTopWindow() {
+    const top = this._stack[this._stack.length - 1];
+    if (!top?.frame) return;
+    top.frame.removeAttribute('aria-hidden');
+    top.frame.style.pointerEvents = '';
+  }
+
   _sweepOrphanedWindows() {
     document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
+  }
+
+  _sweepUntrackedWindows() {
+    const tracked = new Set();
+    for (const entry of this._stack) {
+      if (entry.frame) tracked.add(entry.frame);
+      if (entry.backdrop) tracked.add(entry.backdrop);
+    }
+    document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => {
+      if (!tracked.has(el)) el.remove();
+    });
   }
 
   _getMainPage() {
