@@ -73,16 +73,14 @@ class ModalManager {
    * @returns {{ frame: HTMLElement, contentSlot: HTMLElement }} - References for the caller
    */
   open({ title, subtitle = '', trigger = null, content = null }) {
-    // Defensive: if stack should be empty, ensure main page is clean
-    // (guards against prior close that failed to fully clean up)
+    this._recoverStaleStack();
+
+    // Defensive: if stack should be empty, ensure main page is clean.
+    // This prevents an orphaned backdrop or aria-hidden state from blocking
+    // the next navigation-card click after a prior close path failed.
     if (this._stack.length === 0) {
-      const mp = document.getElementById('main-page');
-      if (mp) {
-        mp.removeAttribute('aria-hidden');
-        mp.style.pointerEvents = '';
-      }
-      // Sweep orphaned modals from any prior incomplete close
-      document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
+      this._unlockMainPage();
+      this._sweepOrphanedWindows();
     }
 
     const depth = this._stack.length + 1;
@@ -116,7 +114,7 @@ class ModalManager {
 
     // Lock parent content if opening child (depth 1)
     if (depth === 1) {
-      const mainPage = document.getElementById('main-page');
+      const mainPage = this._getMainPage();
       if (mainPage) mainPage.setAttribute('aria-hidden', 'true');
     }
     // Lock parent window if opening grandchild (depth 2)
@@ -164,24 +162,15 @@ class ModalManager {
       parentFrame.style.pointerEvents = '';
     }
     if (entry.depth === 1) {
-      const mainPage = document.getElementById('main-page');
+      const mainPage = this._getMainPage();
       if (mainPage) mainPage.removeAttribute('aria-hidden');
     }
 
     // Safety net: if stack is now empty, guarantee main page is fully unlocked
     if (this._stack.length === 0) {
-      const mainPage = document.getElementById('main-page');
-      if (mainPage) {
-        mainPage.removeAttribute('aria-hidden');
-        mainPage.style.pointerEvents = '';
-      }
-      // Clean up leaked focus trap listener
-      if (this._trapListener) {
-        document.removeEventListener('keydown', this._trapListener, true);
-        this._trapListener = null;
-      }
-      // Orphan sweep: remove any stray backdrops/frames not in the stack
-      document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
+      this._unlockMainPage();
+      this._removeTrapListener();
+      this._sweepOrphanedWindows();
     }
 
     // Return focus to trigger
@@ -297,6 +286,55 @@ class ModalManager {
     };
 
     document.addEventListener('keydown', this._trapListener, true);
+  }
+
+  _recoverStaleStack() {
+    if (!this._stack.length) return;
+    const hasStaleEntry = this._stack.some(entry =>
+      !entry.frame?.isConnected || !entry.backdrop?.isConnected
+    );
+    if (!hasStaleEntry) return;
+
+    this._stack = [];
+    this._unlockMainPage();
+    this._removeTrapListener();
+    this._sweepOrphanedWindows();
+    this._notifyChange();
+  }
+
+  _removeTrapListener() {
+    if (!this._trapListener) return;
+    document.removeEventListener('keydown', this._trapListener, true);
+    this._trapListener = null;
+  }
+
+  _unlockMainPage() {
+    const mainPage = this._getMainPage();
+    if (!mainPage) return;
+    mainPage.removeAttribute('aria-hidden');
+    mainPage.style.pointerEvents = '';
+  }
+
+  _sweepOrphanedWindows() {
+    document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
+  }
+
+  _getMainPage() {
+    const direct = document.getElementById('main-page');
+    if (direct) return direct;
+
+    // Future-proof for embedded simulations that may host the UI in Shadow DOM.
+    const walker = document.createTreeWalker(document, NodeFilter.SHOW_ELEMENT);
+    let node = walker.nextNode();
+    while (node) {
+      if (node.shadowRoot) {
+        const found = node.shadowRoot.getElementById?.('main-page')
+          || node.shadowRoot.querySelector?.('#main-page');
+        if (found) return found;
+      }
+      node = walker.nextNode();
+    }
+    return null;
   }
 
   /**

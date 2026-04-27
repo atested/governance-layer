@@ -69,15 +69,38 @@ const LAUNCHER_GROUPS = [
 
 /** Tooltip descriptions for navigation cards */
 const CARD_TOOLTIPS = {
-  activity:       'Full decision log with filtering and drill-down',
-  reports:        'Governance metrics and trends over time',
-  alerts:         'Security alerts, monitoring, and system notices',
-  approvals:      'Manage scoped approvals for policy exceptions',
-  health:         'Chain integrity, signing, and diagnostics',
-  configuration:  'Policy rules, capability registry, base directories',
-  communications: 'Telemetry, escalations, and priority requests',
-  audit:          'Searchable chain records for compliance review',
-  licensing:      'Pricing tiers, survey, case document, purchase',
+  activity:       'Full decision log with filters, exports, and record detail.',
+  reports:        'Atested metrics and trends grouped by tool, category, or decision.',
+  alerts:         'Safety alerts are always available; advanced monitoring expands on paid tiers.',
+  approvals:      'Review and revoke scoped approvals that override policy decisions.',
+  health:         'Chain integrity, signing status, deny-rate signals, and diagnostics.',
+  configuration:  'Policy rules, base directories, discovered tools, signing, and proxy settings.',
+  communications: 'Telemetry controls are available now; priority request slots require Personal Plus or higher.',
+  audit:          'Searchable chain records for compliance review and evidence export.',
+  licensing:      'Compare plans, complete the survey, build a case document, and manage purchase.',
+};
+
+const CARD_TIER_NOTES = {
+  personal: {
+    alerts: 'Personal includes safety alerts. Operational monitoring unlocks with Personal Plus; usage monitoring unlocks with Crew.',
+    communications: 'Personal includes telemetry controls. Priority request slots require Personal Plus or higher.',
+  },
+  personal_plus: {
+    alerts: 'Personal Plus includes safety and operational monitoring. Usage pattern detection unlocks with Crew.',
+    communications: 'Personal Plus includes 2 medium-priority request slots per month. High-priority slots unlock with Crew.',
+  },
+  crew: {
+    alerts: 'Crew includes usage pattern detection. Governance health monitoring unlocks with Team.',
+    communications: 'Crew includes medium and high-priority request slots for small teams.',
+  },
+  team: {
+    alerts: 'Team includes governance health monitoring. Continuous oversight is reserved for Institution.',
+    communications: 'Team includes contractual priority-request capacity and SLA-backed response.',
+  },
+  institution: {
+    alerts: 'Institution includes continuous oversight and custom monitoring thresholds.',
+    communications: 'Institution includes negotiated priority capacity and named support routing.',
+  },
 };
 
 /** Tooltip descriptions for Chain Health metrics */
@@ -102,6 +125,7 @@ let _page = null;
 /** Cached state for dynamic accent colors */
 let _healthState = 'unknown';  // 'healthy', 'degraded', 'critical', 'unknown'
 let _licenseState = 'amber';   // 'green' or 'amber'
+let _licenseTier = 'personal';
 
 export function renderMainPage() {
   // Guard: remove any existing main page to prevent duplicates
@@ -255,10 +279,7 @@ export function renderMainPage() {
   }
 
   // Apply tooltips to navigation cards
-  for (const [id, tip] of Object.entries(CARD_TOOLTIPS)) {
-    const card = _page.querySelector(`[data-window-id="${id}"]`);
-    if (card) card.dataset.tooltip = tip;
-  }
+  _applyNavigationTooltips();
 
   // Apply tooltips to Chain Health metrics
   for (const [id, tip] of Object.entries(CHAIN_HEALTH_TOOLTIPS)) {
@@ -395,7 +416,9 @@ export function setLicenseMode(modeData) {
   } else {
     _licenseState = 'amber';
   }
+  _licenseTier = modeData?.license_tier || (status === 'personal' ? 'personal' : _licenseTier);
   _updateWorkflowAccent('licensing', _licenseState === 'green' ? 'green' : 'amber');
+  _applyNavigationTooltips();
 
   if (status === 'personal' || status === 'unlicensed') {
     const card = document.createElement('div');
@@ -461,6 +484,16 @@ function _updateWorkflowAccent(id, color) {
   if (color === 'red') bar.classList.add('mp-wf-accent-red');
   else if (color === 'amber') bar.classList.add('mp-wf-accent-amber');
   else bar.classList.add('mp-wf-accent-green');
+}
+
+function _applyNavigationTooltips() {
+  if (!_page) return;
+  const tierNotes = CARD_TIER_NOTES[_licenseTier] || CARD_TIER_NOTES.personal;
+  for (const [id, tip] of Object.entries(CARD_TOOLTIPS)) {
+    const card = _page.querySelector(`[data-window-id="${id}"]`);
+    if (!card) continue;
+    card.dataset.tooltip = tierNotes[id] || tip;
+  }
 }
 
 function _renderRecentActivity(result) {
@@ -920,59 +953,97 @@ mpStyles.textContent = `
 document.head.appendChild(mpStyles);
 
 // ---------- JS Tooltip Manager ----------
-// Uses a floating element appended to body to avoid overflow:hidden clipping
-// on cards (.mp-wf-card) and panes (.mp-pane).
+// Uses a floating body-level element because launcher cards and panes hide overflow.
+// Event path inspection keeps it usable if tooltip targets later move into Shadow DOM.
 
-const _tooltipEl = document.createElement('div');
-_tooltipEl.id = 'mp-tooltip';
-_tooltipEl.style.cssText = `
-  position: fixed;
-  z-index: 50;
-  background: #1a1d23;
-  border: 1px dashed rgba(255, 255, 255, 0.20);
-  border-radius: 2px;
-  color: #c9cdd4;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.68rem;
-  line-height: 1.4;
-  padding: 6px 10px;
-  max-width: 280px;
-  width: max-content;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s;
-`;
-document.body.appendChild(_tooltipEl);
+let _tooltipEl = null;
+let _tooltipTarget = null;
+
+function _ensureTooltipEl() {
+  if (_tooltipEl) return _tooltipEl;
+  _tooltipEl = document.createElement('div');
+  _tooltipEl.id = 'mp-tooltip';
+  _tooltipEl.setAttribute('role', 'tooltip');
+  _tooltipEl.style.cssText = `
+    position: fixed;
+    z-index: 2500;
+    background: #151a20;
+    border: 1px dashed rgba(140, 180, 220, 0.50);
+    border-radius: 2px;
+    color: #d7dde6;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    line-height: 1.45;
+    padding: 7px 10px;
+    max-width: min(320px, calc(100vw - 16px));
+    width: max-content;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 0.08s ease, transform 0.08s ease;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  `;
+  const append = () => document.body.appendChild(_tooltipEl);
+  if (document.body) append();
+  else document.addEventListener('DOMContentLoaded', append, { once: true });
+  return _tooltipEl;
+}
+
+function _tooltipTargetFromEvent(e) {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  for (const node of path) {
+    if (node instanceof Element && node.matches('[data-tooltip]')) return node;
+  }
+  return e.target instanceof Element ? e.target.closest('[data-tooltip]') : null;
+}
 
 function _showTooltip(e) {
-  const target = e.target.closest('[data-tooltip]');
-  if (!target) return;
-  const text = target.dataset.tooltip;
-  if (!text) return;
+  const target = _tooltipTargetFromEvent(e);
+  if (!target || !target.dataset.tooltip) return;
+  _tooltipTarget = target;
 
-  _tooltipEl.textContent = text;
-  _tooltipEl.style.opacity = '1';
+  const tip = _ensureTooltipEl();
+  tip.textContent = target.dataset.tooltip;
+  tip.style.opacity = '1';
+  tip.style.transform = 'translateY(0)';
+  _positionTooltip(target);
+}
 
+function _positionTooltip(target) {
+  const tip = _ensureTooltipEl();
   const rect = target.getBoundingClientRect();
-  const tipRect = _tooltipEl.getBoundingClientRect();
+  const tipRect = tip.getBoundingClientRect();
+  const gap = 8;
   let left = rect.left + (rect.width - tipRect.width) / 2;
-  let top = rect.top - tipRect.height - 6;
+  let top = rect.top - tipRect.height - gap;
 
-  // Clamp to viewport
-  if (left < 4) left = 4;
-  if (left + tipRect.width > window.innerWidth - 4) left = window.innerWidth - tipRect.width - 4;
-  if (top < 4) top = rect.bottom + 6; // flip below if no room above
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+  if (top < 8) top = rect.bottom + gap;
 
-  _tooltipEl.style.left = left + 'px';
-  _tooltipEl.style.top = top + 'px';
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(top)}px`;
 }
 
 function _hideTooltip() {
+  if (!_tooltipEl) return;
+  _tooltipTarget = null;
   _tooltipEl.style.opacity = '0';
+  _tooltipEl.style.transform = 'translateY(2px)';
 }
 
-document.addEventListener('mouseover', _showTooltip);
-document.addEventListener('mouseout', (e) => {
-  if (e.target.closest('[data-tooltip]')) _hideTooltip();
+document.addEventListener('pointerover', _showTooltip);
+document.addEventListener('focusin', _showTooltip);
+document.addEventListener('pointermove', () => {
+  if (_tooltipTarget?.isConnected) _positionTooltip(_tooltipTarget);
+});
+document.addEventListener('pointerout', (e) => {
+  const target = _tooltipTargetFromEvent(e);
+  if (target === _tooltipTarget) _hideTooltip();
+});
+document.addEventListener('focusout', (e) => {
+  const target = _tooltipTargetFromEvent(e);
+  if (target === _tooltipTarget) _hideTooltip();
 });
 document.addEventListener('click', _hideTooltip);
+window.addEventListener('scroll', _hideTooltip, true);
+window.addEventListener('resize', _hideTooltip);
