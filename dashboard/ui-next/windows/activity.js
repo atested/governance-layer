@@ -59,6 +59,7 @@ export function openActivityWindow(trigger, opts = {}) {
     visibleColumns: {},
     // Options
     scrollToRecord: opts.scrollToRecord || null,
+    selectedRecordId: null,
   };
 
   // Initialize column visibility to Standard preset
@@ -391,7 +392,7 @@ async function _loadData(state) {
     if (entry) {
       setTimeout(() => {
         const id = _recordIdForEntry(entry);
-        if (id) openRecordDetail(id, state.el);
+        if (id) _showRecordDetail(state, id, state.el);
       }, 100);
     }
   }
@@ -466,11 +467,13 @@ function _renderTable(state) {
 
     // Click → Record Detail
     const recordId = _recordIdForEntry(entry);
+    tr.dataset.recordId = recordId;
+    tr.classList.toggle('aw-row-selected', recordId && recordId === state.selectedRecordId);
     tr.addEventListener('click', () => {
-      if (recordId) openRecordDetail(recordId, tr);
+      if (recordId) _showRecordDetail(state, recordId, tr);
     });
     tr.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && recordId) openRecordDetail(recordId, tr);
+      if (e.key === 'Enter' && recordId) _showRecordDetail(state, recordId, tr);
     });
 
     tbody.appendChild(tr);
@@ -669,13 +672,34 @@ function _getCellValue(key, entry, detail) {
 }
 
 function _recordIdForEntry(entry) {
-  return entry?.evidence?.request_id
-    || entry?.evidence?.event_id
-    || entry?.evidence?.record_hash
-    || entry?.request_id
-    || entry?.event_id
-    || entry?.record_hash
-    || '';
+  const evidence = entry?.evidence || {};
+  const category = entry?.event_category || '';
+  if (category === 'action_decision') {
+    return evidence.request_id || evidence.event_id || evidence.record_hash
+      || entry?.request_id || entry?.event_id || entry?.record_hash || '';
+  }
+  return evidence.event_id || evidence.record_hash || evidence.request_id
+    || entry?.event_id || entry?.record_hash || entry?.request_id || '';
+}
+
+function _showRecordDetail(state, recordId, trigger) {
+  state.selectedRecordId = recordId;
+  _applySelectedRow(state);
+  openRecordDetail(recordId, trigger, {
+    onClose: () => {
+      state.selectedRecordId = null;
+      _applySelectedRow(state);
+    },
+  });
+}
+
+function _applySelectedRow(state) {
+  state.el.querySelectorAll('.aw-row').forEach(row => {
+    const selected = !!state.selectedRecordId && row.dataset.recordId === state.selectedRecordId;
+    row.classList.toggle('aw-row-selected', selected);
+    if (selected) row.setAttribute('aria-current', 'true');
+    else row.removeAttribute('aria-current');
+  });
 }
 
 // ---------- Helpers ----------
@@ -1072,6 +1096,13 @@ awStyles.textContent = `
   .aw-row:focus-visible {
     outline: 2px solid #6699cc;
     outline-offset: -2px;
+  }
+  .aw-row-selected,
+  .aw-row-selected:hover,
+  .aw-row-deny.aw-row-selected,
+  .aw-row-deny.aw-row-selected:hover {
+    background: rgba(102,153,204,0.16);
+    box-shadow: inset 4px 0 0 #6699cc;
   }
   .aw-row-deny {
     background: rgba(210,153,34,0.04);

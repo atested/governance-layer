@@ -18,23 +18,42 @@ import '../components/tier-badge.js';
 import '../components/pill.js';
 import '../components/loading-indicator.js';
 
+let _currentDetail = null;
+let _loadToken = 0;
+
 /**
  * Open Record Detail as a grandchild window.
  * @param {string} recordId - request_id, event_id, or record_hash
  * @param {HTMLElement} trigger - element for focus return
  */
-export async function openRecordDetail(recordId, trigger) {
+export async function openRecordDetail(recordId, trigger, opts = {}) {
+  const token = ++_loadToken;
   const shortId = (recordId || '').substring(0, 8);
-  const result = modalManager.open({
-    title: `Record ${shortId}`,
-    subtitle: 'Decision detail from your chain',
-    trigger,
-    content: _loadingEl(),
+  let result = _currentDetail;
+
+  if (result?.frame?.isConnected) {
+    result.frame.setAttribute('title', `Record ${shortId}`);
+    result.frame.setAttribute('subtitle', 'Decision detail from your chain');
+    _replaceContent(result.frame, _loadingEl());
+  } else {
+    result = modalManager.open({
+      title: `Record ${shortId}`,
+      subtitle: 'Decision detail from your chain',
+      trigger,
+      content: _loadingEl(),
+      allowParentInteraction: true,
+    });
+    if (!result) return;
+    _currentDetail = result;
+  }
+
+  modalManager.setOnClose(() => {
+    _currentDetail = null;
+    if (typeof opts.onClose === 'function') opts.onClose(recordId);
   });
-  if (!result) return;
 
   const res = await api.getAuditRecord(recordId);
-  const container = result.frame.querySelector('.rd-loading')?.parentElement || result.frame;
+  if (token !== _loadToken || !result.frame.isConnected) return;
 
   if (!res.ok) {
     _replaceContent(result.frame, _errorEl(res.error));

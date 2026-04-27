@@ -38,9 +38,11 @@ class ModalManager {
     this._stack = [];
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
+    this._onPointerDown = this._onPointerDown.bind(this);
     this._changeListeners = [];
     document.addEventListener('keydown', this._onKeyDown);
     document.addEventListener('pointermove', this._onPointerMove, true);
+    document.addEventListener('pointerdown', this._onPointerDown, true);
   }
 
   /**
@@ -74,7 +76,7 @@ class ModalManager {
    * @param {HTMLElement|string|null} opts.content - Content to place in the window
    * @returns {{ frame: HTMLElement, contentSlot: HTMLElement }} - References for the caller
    */
-  open({ title, subtitle = '', trigger = null, content = null }) {
+  open({ title, subtitle = '', trigger = null, content = null, allowParentInteraction = false }) {
     this._recoverStaleStack();
 
     // Defensive: if stack should be empty, ensure main page is clean.
@@ -95,6 +97,9 @@ class ModalManager {
     const backdrop = document.createElement('atd-window-backdrop');
     backdrop.setAttribute('depth', String(depth));
     backdrop.style.setProperty('--z-index', String(depth === 1 ? Z.CHILD_BACKDROP : Z.GRANDCHILD_BACKDROP));
+    if (depth === 2 && allowParentInteraction) {
+      backdrop.style.pointerEvents = 'none';
+    }
     backdrop.addEventListener('backdrop:click', () => this.closeTopmost());
 
     // Create frame
@@ -120,7 +125,7 @@ class ModalManager {
       if (mainPage) mainPage.setAttribute('aria-hidden', 'true');
     }
     // Lock parent window if opening grandchild (depth 2)
-    if (depth === 2 && this._stack.length > 0) {
+    if (depth === 2 && this._stack.length > 0 && !allowParentInteraction) {
       const parentFrame = this._stack[this._stack.length - 1].frame;
       parentFrame.setAttribute('aria-hidden', 'true');
       parentFrame.style.pointerEvents = 'none';
@@ -131,7 +136,7 @@ class ModalManager {
     document.body.appendChild(frame);
 
     // Push to stack
-    this._stack.push({ depth, frame, backdrop, trigger, content: null, onClose: null });
+    this._stack.push({ depth, frame, backdrop, trigger, content: null, onClose: null, allowParentInteraction });
 
     // Move focus into the window
     this._trapFocus(frame);
@@ -253,6 +258,18 @@ class ModalManager {
       this._unlockTopWindow();
       this._sweepUntrackedWindows();
     }
+  }
+
+  _onPointerDown(e) {
+    if (this._stack.length < 2) return;
+    const top = this._stack[this._stack.length - 1];
+    if (!top.allowParentInteraction) return;
+
+    const parent = this._stack[this._stack.length - 2];
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (path.includes(top.frame) || path.includes(parent.frame)) return;
+
+    this.closeTopmost();
   }
 
   /**

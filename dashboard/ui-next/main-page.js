@@ -584,13 +584,14 @@ function _formatTime24(isoStr) {
 }
 
 function _recordIdForEntry(entry) {
-  return entry?.evidence?.request_id
-    || entry?.evidence?.event_id
-    || entry?.evidence?.record_hash
-    || entry?.request_id
-    || entry?.event_id
-    || entry?.record_hash
-    || '';
+  const evidence = entry?.evidence || {};
+  const category = entry?.event_category || '';
+  if (category === 'action_decision') {
+    return evidence.request_id || evidence.event_id || evidence.record_hash
+      || entry?.request_id || entry?.event_id || entry?.record_hash || '';
+  }
+  return evidence.event_id || evidence.record_hash || evidence.request_id
+    || entry?.event_id || entry?.record_hash || entry?.request_id || '';
 }
 
 function _esc(str) {
