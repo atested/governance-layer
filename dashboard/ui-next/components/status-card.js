@@ -27,6 +27,7 @@ const styles = `
   border-radius: var(--radius-lg);
   padding: var(--space-lg) var(--space-xl);
   font-family: var(--font-body);
+  position: relative;
 }
 
 :host([clickable]) .card {
@@ -57,6 +58,56 @@ const styles = `
 :host([variant="danger"]) .value { color: var(--danger); }
 :host([variant="warning"]) .value { color: var(--warn); }
 :host([variant="success"]) .value { color: var(--ok); }
+
+.card[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 4px);
+  z-index: 20;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 250px;
+  padding: 7px 10px;
+  background: #161b22;
+  border: 1px dashed #30363d;
+  border-radius: 2px;
+  color: #d7dde6;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s ease, transform 0.08s ease;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+.card[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  z-index: 21;
+  border: 6px solid transparent;
+  border-top-color: #30363d;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s ease;
+}
+.card[data-tooltip]:hover::after,
+.card[data-tooltip]:focus-visible::after,
+.card[data-tooltip]:hover::before,
+.card[data-tooltip]:focus-visible::before {
+  opacity: 1;
+}
+.card[data-tooltip]:hover::after,
+.card[data-tooltip]:focus-visible::after {
+  transform: translate(-50%, 0);
+}
 `;
 
 export class AtdStatusCard extends AtdBase {
@@ -74,7 +125,7 @@ export class AtdStatusCard extends AtdBase {
     const tooltip = this.getAttribute('tooltip') || '';
 
     this.shadowRoot.innerHTML = `
-      <div class="card"${tooltip ? ` title="${this._esc(tooltip)}"` : ''}>
+      <div class="card"${tooltip ? ` data-tooltip="${this._escAttr(tooltip)}"` : ''}>
         <div class="label">${this._esc(label)}</div>
         <div class="value">${this._esc(value)}</div>
       </div>
@@ -93,7 +144,9 @@ export class AtdStatusCard extends AtdBase {
     if (name === 'label' || name === 'value') {
       el.textContent = this.getAttribute(name) || (name === 'value' ? '--' : '');
     } else if (name === 'tooltip') {
-      el.title = this.getAttribute('tooltip') || '';
+      const tooltip = this.getAttribute('tooltip') || '';
+      if (tooltip) el.dataset.tooltip = tooltip;
+      else delete el.dataset.tooltip;
     }
   }
 
@@ -101,6 +154,14 @@ export class AtdStatusCard extends AtdBase {
     const el = document.createElement('span');
     el.textContent = str;
     return el.innerHTML;
+  }
+
+  _escAttr(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 }
 

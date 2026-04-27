@@ -465,7 +465,7 @@ function _renderTable(state) {
       tr.appendChild(td);
     }
 
-    const recordId = entry.evidence?.request_id || entry.evidence?.event_id || '';
+    const recordId = _recordIdForEntry(entry);
     tr.addEventListener('click', () => {
       if (recordId) openRecordDetail(recordId, tr);
     });
@@ -672,6 +672,16 @@ function _downloadFile(content, mime, filename) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function _recordIdForEntry(entry) {
+  return entry?.evidence?.request_id
+    || entry?.evidence?.event_id
+    || entry?.evidence?.record_hash
+    || entry?.request_id
+    || entry?.event_id
+    || entry?.record_hash
+    || '';
 }
 
 // ---------- Helpers ----------

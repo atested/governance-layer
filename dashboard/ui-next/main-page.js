@@ -552,7 +552,7 @@ function _renderRecentActivity(result) {
     if (tooltipParts.length) row.dataset.tooltip = tooltipParts.join(' · ');
 
     // Click handler — opens Activity with Record Detail for this entry
-    const recordId = entry.request_id || entry.event_id || '';
+    const recordId = _recordIdForEntry(entry);
     row.addEventListener('click', (e) => {
       e.stopPropagation();
       openActivityWindow(row, { scrollToRecord: recordId });
@@ -583,6 +583,16 @@ function _formatTime24(isoStr) {
   }
 }
 
+function _recordIdForEntry(entry) {
+  return entry?.evidence?.request_id
+    || entry?.evidence?.event_id
+    || entry?.evidence?.record_hash
+    || entry?.request_id
+    || entry?.event_id
+    || entry?.record_hash
+    || '';
+}
+
 function _esc(str) {
   const el = document.createElement('span');
   el.textContent = str || '';
@@ -601,7 +611,61 @@ mpStyles.textContent = `
     color: #e4e6eb;
   }
   #main-page[aria-hidden="true"] {
+    /* Backdrops block modal background clicks. Keeping pointer events enabled
+       prevents a stale aria-hidden state from making launchers inert. */
+  }
+
+  #main-page [data-tooltip] {
+    position: relative;
+  }
+  #main-page [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translate(-50%, 4px);
+    z-index: 2500;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: 250px;
+    padding: 7px 10px;
+    background: #161b22;
+    border: 1px dashed #30363d;
+    border-radius: 2px;
+    color: #d7dde6;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.08s ease, transform 0.08s ease;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  }
+  #main-page [data-tooltip]::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 2px);
+    transform: translateX(-50%);
+    z-index: 2501;
+    border: 6px solid transparent;
+    border-top-color: #30363d;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.08s ease;
+  }
+  #main-page [data-tooltip]:hover::after,
+  #main-page [data-tooltip]:focus-visible::after,
+  #main-page [data-tooltip]:hover::before,
+  #main-page [data-tooltip]:focus-visible::before {
+    opacity: 1;
+  }
+  #main-page [data-tooltip]:hover::after,
+  #main-page [data-tooltip]:focus-visible::after {
+    transform: translate(-50%, 0);
   }
 
   /* ---- Title pane ---- */
@@ -609,7 +673,7 @@ mpStyles.textContent = `
     background: #22262e;
     border: 1px dashed rgba(255, 255, 255, 0.12);
     border-radius: 2px;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 20px;
   }
   .mp-title-accent {
@@ -637,7 +701,7 @@ mpStyles.textContent = `
     border: 1px dashed rgba(255, 255, 255, 0.12);
     border-radius: 2px;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
   }
   .mp-pane-full {
     margin-bottom: 20px;
@@ -817,7 +881,7 @@ mpStyles.textContent = `
     border: 1px dashed rgba(255, 255, 255, 0.12);
     border-radius: 2px;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     cursor: pointer;
     transition: background 0.15s;
     padding: 0;
@@ -951,99 +1015,3 @@ mpStyles.textContent = `
   }
 `;
 document.head.appendChild(mpStyles);
-
-// ---------- JS Tooltip Manager ----------
-// Uses a floating body-level element because launcher cards and panes hide overflow.
-// Event path inspection keeps it usable if tooltip targets later move into Shadow DOM.
-
-let _tooltipEl = null;
-let _tooltipTarget = null;
-
-function _ensureTooltipEl() {
-  if (_tooltipEl) return _tooltipEl;
-  _tooltipEl = document.createElement('div');
-  _tooltipEl.id = 'mp-tooltip';
-  _tooltipEl.setAttribute('role', 'tooltip');
-  _tooltipEl.style.cssText = `
-    position: fixed;
-    z-index: 2500;
-    background: #151a20;
-    border: 1px dashed rgba(140, 180, 220, 0.50);
-    border-radius: 2px;
-    color: #d7dde6;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.68rem;
-    line-height: 1.45;
-    padding: 7px 10px;
-    max-width: min(320px, calc(100vw - 16px));
-    width: max-content;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(2px);
-    transition: opacity 0.08s ease, transform 0.08s ease;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-  `;
-  const append = () => document.body.appendChild(_tooltipEl);
-  if (document.body) append();
-  else document.addEventListener('DOMContentLoaded', append, { once: true });
-  return _tooltipEl;
-}
-
-function _tooltipTargetFromEvent(e) {
-  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-  for (const node of path) {
-    if (node instanceof Element && node.matches('[data-tooltip]')) return node;
-  }
-  return e.target instanceof Element ? e.target.closest('[data-tooltip]') : null;
-}
-
-function _showTooltip(e) {
-  const target = _tooltipTargetFromEvent(e);
-  if (!target || !target.dataset.tooltip) return;
-  _tooltipTarget = target;
-
-  const tip = _ensureTooltipEl();
-  tip.textContent = target.dataset.tooltip;
-  tip.style.opacity = '1';
-  tip.style.transform = 'translateY(0)';
-  _positionTooltip(target);
-}
-
-function _positionTooltip(target) {
-  const tip = _ensureTooltipEl();
-  const rect = target.getBoundingClientRect();
-  const tipRect = tip.getBoundingClientRect();
-  const gap = 8;
-  let left = rect.left + (rect.width - tipRect.width) / 2;
-  let top = rect.top - tipRect.height - gap;
-
-  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
-  if (top < 8) top = rect.bottom + gap;
-
-  tip.style.left = `${Math.round(left)}px`;
-  tip.style.top = `${Math.round(top)}px`;
-}
-
-function _hideTooltip() {
-  if (!_tooltipEl) return;
-  _tooltipTarget = null;
-  _tooltipEl.style.opacity = '0';
-  _tooltipEl.style.transform = 'translateY(2px)';
-}
-
-document.addEventListener('pointerover', _showTooltip);
-document.addEventListener('focusin', _showTooltip);
-document.addEventListener('pointermove', () => {
-  if (_tooltipTarget?.isConnected) _positionTooltip(_tooltipTarget);
-});
-document.addEventListener('pointerout', (e) => {
-  const target = _tooltipTargetFromEvent(e);
-  if (target === _tooltipTarget) _hideTooltip();
-});
-document.addEventListener('focusout', (e) => {
-  const target = _tooltipTargetFromEvent(e);
-  if (target === _tooltipTarget) _hideTooltip();
-});
-document.addEventListener('click', _hideTooltip);
-window.addEventListener('scroll', _hideTooltip, true);
-window.addEventListener('resize', _hideTooltip);

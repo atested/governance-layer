@@ -37,8 +37,10 @@ class ModalManager {
     /** @type {{ depth: number, frame: HTMLElement, backdrop: HTMLElement, trigger: HTMLElement|null, content: HTMLElement|null }[]} */
     this._stack = [];
     this._onKeyDown = this._onKeyDown.bind(this);
+    this._onPointerMove = this._onPointerMove.bind(this);
     this._changeListeners = [];
     document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('pointermove', this._onPointerMove, true);
   }
 
   /**
@@ -229,6 +231,18 @@ class ModalManager {
       e.stopPropagation();
       this.closeTopmost();
     }
+  }
+
+  /**
+   * If a failed close path leaves a backdrop in the DOM while the manager
+   * stack is empty, clear it before the next click lands on the stale overlay.
+   */
+  _onPointerMove() {
+    if (this._stack.length > 0) return;
+    if (!document.querySelector('atd-window-backdrop, atd-window-frame')) return;
+    this._unlockMainPage();
+    this._removeTrapListener();
+    this._sweepOrphanedWindows();
   }
 
   /**

@@ -387,12 +387,10 @@ async function _loadData(state) {
   if (state.scrollToRecord) {
     const recordId = state.scrollToRecord;
     state.scrollToRecord = null;
-    const entry = state.data.find(e =>
-      (e.evidence?.request_id === recordId) || (e.evidence?.event_id === recordId)
-    );
+    const entry = state.data.find(e => _recordIdForEntry(e) === recordId);
     if (entry) {
       setTimeout(() => {
-        const id = entry.evidence?.request_id || entry.evidence?.event_id || '';
+        const id = _recordIdForEntry(entry);
         if (id) openRecordDetail(id, state.el);
       }, 100);
     }
@@ -467,7 +465,7 @@ function _renderTable(state) {
     }
 
     // Click → Record Detail
-    const recordId = entry.evidence?.request_id || entry.evidence?.event_id || '';
+    const recordId = _recordIdForEntry(entry);
     tr.addEventListener('click', () => {
       if (recordId) openRecordDetail(recordId, tr);
     });
@@ -668,6 +666,16 @@ function _getCellValue(key, entry, detail) {
     case 'user_identity': return entry.user_identity || '';
     default: return '';
   }
+}
+
+function _recordIdForEntry(entry) {
+  return entry?.evidence?.request_id
+    || entry?.evidence?.event_id
+    || entry?.evidence?.record_hash
+    || entry?.request_id
+    || entry?.event_id
+    || entry?.record_hash
+    || '';
 }
 
 // ---------- Helpers ----------
