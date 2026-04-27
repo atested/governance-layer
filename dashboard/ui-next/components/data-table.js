@@ -108,14 +108,14 @@ tbody tr.row--deny {
   background: var(--danger-soft);
 }
 tbody tr.row--deny:hover {
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(248, 81, 73, 0.18);
 }
 
 tbody tr.row--ungoverned {
   background: var(--warn-soft);
 }
 tbody tr.row--ungoverned:hover {
-  background: rgba(245, 166, 35, 0.18);
+  background: rgba(210, 153, 34, 0.18);
 }
 
 /* Empty state */

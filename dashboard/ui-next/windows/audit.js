@@ -737,14 +737,14 @@ auStyles.textContent = `
     margin-bottom: 12px;
   }
   .au-pane-accent { height: 6px; }
-  .au-accent-green { background: #22c55e; }
-  .au-accent-red { background: #ef4444; }
+  .au-accent-green { background: #3fb950; }
+  .au-accent-red { background: #f85149; }
   .au-accent-muted { background: #6b7280; }
   .au-pane-header {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -775,8 +775,8 @@ auStyles.textContent = `
     font-family: "JetBrains Mono", monospace;
     color: #e4e6eb;
   }
-  .au-vm-green { color: #22c55e; }
-  .au-vm-red { color: #ef4444; }
+  .au-vm-green { color: #3fb950; }
+  .au-vm-red { color: #f85149; }
 
   /* ---- Filter panes ---- */
   .au-filter-row {
@@ -813,7 +813,7 @@ auStyles.textContent = `
     box-sizing: border-box;
   }
   .au-input:focus, .au-select:focus {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: 1px;
   }
   .au-select {
@@ -875,18 +875,18 @@ auStyles.textContent = `
   .au-dtoggle:hover { color: #e4e6eb; }
   .au-dtoggle-active {
     color: #e4e6eb;
-    border-color: rgba(96,165,250,0.4);
-    background: rgba(96,165,250,0.1);
+    border-color: rgba(102,153,204,0.4);
+    background: rgba(102,153,204,0.1);
   }
   .au-dtoggle-allow.au-dtoggle-active {
-    border-color: rgba(34,197,94,0.5);
-    background: rgba(34,197,94,0.08);
-    color: #22c55e;
+    border-color: rgba(63,185,80,0.5);
+    background: rgba(63,185,80,0.08);
+    color: #3fb950;
   }
   .au-dtoggle-deny.au-dtoggle-active {
-    border-color: rgba(239,68,68,0.5);
-    background: rgba(239,68,68,0.08);
-    color: #ef4444;
+    border-color: rgba(248,81,73,0.5);
+    background: rgba(248,81,73,0.08);
+    color: #f85149;
   }
   .au-fp-actions {
     display: flex;
@@ -904,16 +904,16 @@ auStyles.textContent = `
     cursor: pointer;
     transition: background 0.1s;
   }
-  .au-btn-primary { background: #60a5fa; color: #fff; }
+  .au-btn-primary { background: #6699cc; color: #fff; }
   .au-btn-primary:hover { background: #4f95ea; }
   .au-btn-muted { background: rgba(255,255,255,0.06); color: #8b919a; }
   .au-btn-muted:hover { background: rgba(255,255,255,0.10); color: #e4e6eb; }
   .au-btn-export {
-    background: rgba(245,166,35,0.12);
-    color: #f5a623;
-    border: 1px solid rgba(245,166,35,0.3);
+    background: rgba(210,153,34,0.12);
+    color: #d29922;
+    border: 1px solid rgba(210,153,34,0.3);
   }
-  .au-btn-export:hover { background: rgba(245,166,35,0.2); }
+  .au-btn-export:hover { background: rgba(210,153,34,0.2); }
 
   /* ---- Results bar ---- */
   .au-results-bar {
@@ -955,9 +955,9 @@ auStyles.textContent = `
   }
   .au-ps-btn:hover { color: #e4e6eb; }
   .au-ps-active {
-    color: #60a5fa;
-    border-color: rgba(96,165,250,0.4);
-    background: rgba(96,165,250,0.08);
+    color: #6699cc;
+    border-color: rgba(102,153,204,0.4);
+    background: rgba(102,153,204,0.08);
   }
 
   /* ---- Column bar ---- */
@@ -982,9 +982,9 @@ auStyles.textContent = `
   }
   .au-col-preset:hover { color: #e4e6eb; }
   .au-col-preset-active {
-    color: #60a5fa;
-    border-color: rgba(96,165,250,0.4);
-    background: rgba(96,165,250,0.08);
+    color: #6699cc;
+    border-color: rgba(102,153,204,0.4);
+    background: rgba(102,153,204,0.08);
   }
   .au-col-sep {
     width: 1px;
@@ -1048,13 +1048,13 @@ auStyles.textContent = `
     cursor: pointer;
     transition: background 0.1s;
   }
-  .au-row:hover { background: rgba(96,165,250,0.06); }
+  .au-row:hover { background: rgba(102,153,204,0.06); }
   .au-row:focus-visible {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: -2px;
   }
-  .au-row-deny { background: rgba(245,166,35,0.04); }
-  .au-row-deny:hover { background: rgba(245,166,35,0.10); }
+  .au-row-deny { background: rgba(210,153,34,0.04); }
+  .au-row-deny:hover { background: rgba(210,153,34,0.10); }
 
   /* Cell styles */
   .au-cell-time {
@@ -1064,7 +1064,7 @@ auStyles.textContent = `
   }
   .au-cell-tool {
     font-family: "JetBrains Mono", monospace;
-    color: #60a5fa;
+    color: #6699cc;
   }
   .au-cell-target {
     font-family: "JetBrains Mono", monospace;
@@ -1080,13 +1080,13 @@ auStyles.textContent = `
   .au-decision-allow {
     font-size: 0.68rem;
     font-weight: 600;
-    color: #22c55e;
+    color: #3fb950;
     letter-spacing: 0.03em;
   }
   .au-decision-deny {
     font-size: 0.68rem;
     font-weight: 600;
-    color: #ef4444;
+    color: #f85149;
     letter-spacing: 0.03em;
   }
 
@@ -1125,9 +1125,9 @@ auStyles.textContent = `
   }
   .au-pag-num:hover { color: #e4e6eb; }
   .au-pag-num-active {
-    color: #60a5fa;
-    border-color: rgba(96,165,250,0.3);
-    background: rgba(96,165,250,0.08);
+    color: #6699cc;
+    border-color: rgba(102,153,204,0.3);
+    background: rgba(102,153,204,0.08);
   }
   .au-pag-ellipsis { color: #6b7280; font-size: 0.72rem; padding: 0 4px; }
 
@@ -1147,8 +1147,8 @@ auStyles.textContent = `
     font-style: italic;
   }
   .au-error {
-    color: #f5a623;
-    background: rgba(245,166,35,0.10);
+    color: #d29922;
+    background: rgba(210,153,34,0.10);
     padding: 12px 16px;
     border-radius: 2px;
     font-size: 0.82rem;

@@ -124,15 +124,15 @@ isStyles.textContent = `
   .is-heading { font-size: 1.25rem; font-weight: 600; color: #e4e6eb; }
   .is-section-title {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-    color: #60a5fa; margin: 0 0 10px; font-weight: 600;
+    color: #6699cc; margin: 0 0 10px; font-weight: 600;
   }
   .is-card {
     background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
     border-radius: 2px; padding: 16px 20px; margin-bottom: 14px;
   }
   .is-card-muted {
-    background: rgba(96,165,250,0.06);
-    border-color: rgba(96,165,250,0.15);
+    background: rgba(102,153,204,0.06);
+    border-color: rgba(102,153,204,0.15);
   }
   .is-text {
     font-size: 0.82rem; color: #e4e6eb; line-height: 1.6; margin: 0 0 10px;
@@ -141,14 +141,14 @@ isStyles.textContent = `
   .is-text-muted { color: #8b919a; }
   .is-text code {
     background: #1a1d23; padding: 2px 6px; border-radius: 2px;
-    font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #60a5fa;
+    font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #6699cc;
   }
   .is-steps { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
   .is-step {
     display: flex; gap: 12px; align-items: flex-start;
   }
   .is-step-num {
-    flex: 0 0 28px; height: 28px; background: #60a5fa;
+    flex: 0 0 28px; height: 28px; background: #6699cc;
     color: #fff; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-size: 0.78rem; font-weight: 700;
   }
@@ -157,7 +157,7 @@ isStyles.textContent = `
   .is-step-body p { font-size: 0.78rem; color: #8b919a; margin: 0; line-height: 1.5; }
   .is-step-body code {
     background: #1a1d23; padding: 2px 6px; border-radius: 2px;
-    font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #60a5fa;
+    font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #6699cc;
   }
   .is-timers {
     background: #1a1d23; border-radius: 2px; overflow: hidden; margin-top: 8px;
@@ -168,7 +168,7 @@ isStyles.textContent = `
   }
   .is-timer-row:last-child { border-bottom: none; }
   .is-timer-label { flex: 0 0 100px; color: #e4e6eb; font-weight: 500; }
-  .is-timer-value { flex: 0 0 80px; color: #60a5fa; font-family: "JetBrains Mono", monospace; font-size: 0.78rem; }
+  .is-timer-value { flex: 0 0 80px; color: #6699cc; font-family: "JetBrains Mono", monospace; font-size: 0.78rem; }
   .is-timer-note { flex: 1; color: #8b919a; font-size: 0.78rem; }
 `;
 document.head.appendChild(isStyles);

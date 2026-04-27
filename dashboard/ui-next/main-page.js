@@ -350,7 +350,7 @@ export function setLicenseMode(modeData) {
     card.className = 'mp-license-card';
     card.innerHTML = `
       <div class="mp-license-card-inner">
-        <span class="mp-license-dot" style="color: var(--warning, #f5a623)"></span>
+        <span class="mp-license-dot" style="color: var(--warning, #d29922)"></span>
         <div class="mp-license-card-text">
           <strong>Personal (unlicensed)</strong>
           <span>Governance is active. Register or choose a tier to unlock full features.</span>
@@ -519,7 +519,7 @@ mpStyles.textContent = `
   }
   .mp-title-accent {
     height: 6px;
-    background: #60a5fa;
+    background: #6699cc;
   }
   .mp-page-title {
     font-size: 32px;
@@ -555,7 +555,7 @@ mpStyles.textContent = `
     background: #272b34;
   }
   .mp-pane-clickable:focus-visible {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: 2px;
   }
 
@@ -564,9 +564,9 @@ mpStyles.textContent = `
     height: 6px;
     background: #6b7280;
   }
-  .mp-accent-green { background: #22c55e; }
-  .mp-accent-amber { background: #f5a623; }
-  .mp-accent-red { background: #ef4444; }
+  .mp-accent-green { background: #3fb950; }
+  .mp-accent-amber { background: #d29922; }
+  .mp-accent-red { background: #f85149; }
 
   /* Pane header */
   .mp-pane-header {
@@ -579,7 +579,7 @@ mpStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     margin: 0;
     font-weight: 600;
   }
@@ -607,9 +607,9 @@ mpStyles.textContent = `
     color: #e4e6eb;
     font-family: "JetBrains Mono", monospace;
   }
-  .mp-metric-green { color: #22c55e; }
-  .mp-metric-amber { color: #f5a623; }
-  .mp-metric-red { color: #ef4444; }
+  .mp-metric-green { color: #3fb950; }
+  .mp-metric-amber { color: #d29922; }
+  .mp-metric-red { color: #f85149; }
 
   /* ---- Recent activity feed ---- */
   .mp-feed {
@@ -647,7 +647,7 @@ mpStyles.textContent = `
     background: rgba(96, 165, 250, 0.08);
   }
   .mp-feed-row:focus-visible {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: -2px;
     border-radius: 2px;
   }
@@ -677,13 +677,13 @@ mpStyles.textContent = `
   .mp-decision-allow {
     font-size: 0.68rem;
     font-weight: 600;
-    color: #22c55e;
+    color: #3fb950;
     letter-spacing: 0.03em;
   }
   .mp-decision-deny {
     font-size: 0.68rem;
     font-weight: 600;
-    color: #ef4444;
+    color: #f85149;
     letter-spacing: 0.03em;
   }
   .mp-decision-muted {
@@ -732,7 +732,7 @@ mpStyles.textContent = `
     background: #272b34;
   }
   .mp-wf-card:focus-visible {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: 2px;
   }
 
@@ -740,9 +740,9 @@ mpStyles.textContent = `
   .mp-wf-accent {
     height: 6px;
   }
-  .mp-wf-accent-green { background: #22c55e; }
-  .mp-wf-accent-amber { background: #f5a623; }
-  .mp-wf-accent-red { background: #ef4444; }
+  .mp-wf-accent-green { background: #3fb950; }
+  .mp-wf-accent-amber { background: #d29922; }
+  .mp-wf-accent-red { background: #f85149; }
 
   .mp-wf-title {
     font-size: 0.95rem;
@@ -787,7 +787,7 @@ mpStyles.textContent = `
     font-size: 0.82rem;
   }
   .mp-license-card-text strong {
-    color: #f5a623;
+    color: #d29922;
     font-weight: 600;
   }
   .mp-license-card-text span {
@@ -797,7 +797,7 @@ mpStyles.textContent = `
     background: none;
     border: 1px dashed rgba(245, 166, 35, 0.4);
     border-radius: 2px;
-    color: #f5a623;
+    color: #d29922;
     cursor: pointer;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.82rem;
@@ -820,7 +820,7 @@ mpStyles.textContent = `
     font-style: italic;
   }
   .mp-error {
-    color: #f5a623;
+    color: #d29922;
     font-size: 0.82rem;
     padding: 12px 16px;
     border-radius: 2px;

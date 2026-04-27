@@ -450,8 +450,8 @@ apStyles.textContent = `
     padding: 14px 16px;
     text-align: center;
   }
-  .ap-stat-green { border-color: rgba(34,197,94,0.25); }
-  .ap-stat-amber { border-color: rgba(245,166,35,0.25); }
+  .ap-stat-green { border-color: rgba(63,185,80,0.25); }
+  .ap-stat-amber { border-color: rgba(210,153,34,0.25); }
   .ap-stat-label {
     display: block;
     font-size: 0.68rem;
@@ -471,8 +471,8 @@ apStyles.textContent = `
     font-size: 1rem;
     font-family: "Inter", system-ui, sans-serif;
   }
-  .ap-val-green { color: #22c55e; }
-  .ap-val-amber { color: #f5a623; }
+  .ap-val-green { color: #3fb950; }
+  .ap-val-amber { color: #d29922; }
 
   /* ---- Pane container ---- */
   .ap-pane {
@@ -485,13 +485,13 @@ apStyles.textContent = `
   .ap-pane-accent {
     height: 6px;
   }
-  .ap-accent-amber { background: #f5a623; }
-  .ap-accent-green { background: #22c55e; }
+  .ap-accent-amber { background: #d29922; }
+  .ap-accent-green { background: #3fb950; }
   .ap-pane-header {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -540,11 +540,11 @@ apStyles.textContent = `
     box-sizing: border-box;
   }
   .ap-input:focus {
-    outline: 2px solid #60a5fa;
+    outline: 2px solid #6699cc;
     outline-offset: 1px;
   }
-  .ap-result-success { color: #22c55e; font-size: 0.82rem; margin-top: 8px; }
-  .ap-result-error { color: #f5a623; font-size: 0.82rem; margin-top: 8px; }
+  .ap-result-success { color: #3fb950; font-size: 0.82rem; margin-top: 8px; }
+  .ap-result-error { color: #d29922; font-size: 0.82rem; margin-top: 8px; }
 
   /* ---- Buttons ---- */
   .ap-btn {
@@ -559,18 +559,18 @@ apStyles.textContent = `
     white-space: nowrap;
   }
   .ap-btn-primary {
-    background: #60a5fa;
+    background: #6699cc;
     color: #fff;
   }
   .ap-btn-primary:hover { background: #4f95ea; }
   .ap-btn-export {
-    background: rgba(245,166,35,0.12);
-    color: #f5a623;
-    border: 1px solid rgba(245,166,35,0.3);
+    background: rgba(210,153,34,0.12);
+    color: #d29922;
+    border: 1px solid rgba(210,153,34,0.3);
   }
-  .ap-btn-export:hover { background: rgba(245,166,35,0.2); }
+  .ap-btn-export:hover { background: rgba(210,153,34,0.2); }
   .ap-btn-bulk {
-    background: #22c55e;
+    background: #3fb950;
     color: #fff;
   }
   .ap-btn-bulk:hover { background: #16a34a; }
@@ -603,9 +603,9 @@ apStyles.textContent = `
   }
   .ap-filter-btn:hover { color: #e4e6eb; }
   .ap-filter-active {
-    color: #60a5fa;
-    border-color: rgba(96,165,250,0.4);
-    background: rgba(96,165,250,0.08);
+    color: #6699cc;
+    border-color: rgba(102,153,204,0.4);
+    background: rgba(102,153,204,0.08);
   }
 
   /* ---- Table ---- */
@@ -637,13 +637,13 @@ apStyles.textContent = `
     transition: background 0.1s;
   }
   .ap-row:hover {
-    background: rgba(96,165,250,0.06);
+    background: rgba(102,153,204,0.06);
   }
   .ap-row-stale {
-    background: rgba(245,166,35,0.04);
+    background: rgba(210,153,34,0.04);
   }
   .ap-row-stale:hover {
-    background: rgba(245,166,35,0.10);
+    background: rgba(210,153,34,0.10);
   }
 
   /* Cell styles */
@@ -656,12 +656,12 @@ apStyles.textContent = `
     color: #6b7280;
   }
   .ap-status-active {
-    color: #22c55e;
+    color: #3fb950;
     font-size: 0.72rem;
     font-weight: 600;
   }
   .ap-status-stale {
-    color: #f5a623;
+    color: #d29922;
     font-size: 0.72rem;
     font-weight: 600;
   }
@@ -669,9 +669,9 @@ apStyles.textContent = `
   /* Revoke button */
   .ap-revoke-btn {
     background: none;
-    border: 1px solid rgba(239,68,68,0.4);
+    border: 1px solid rgba(248,81,73,0.4);
     border-radius: 2px;
-    color: #ef4444;
+    color: #f85149;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 0.7rem;
     font-weight: 600;
@@ -680,8 +680,8 @@ apStyles.textContent = `
     transition: all 0.1s;
   }
   .ap-revoke-btn:hover {
-    background: rgba(239,68,68,0.1);
-    border-color: rgba(239,68,68,0.6);
+    background: rgba(248,81,73,0.1);
+    border-color: rgba(248,81,73,0.6);
   }
 
   /* ---- Bulk section ---- */
@@ -729,8 +729,8 @@ apStyles.textContent = `
     font-style: italic;
   }
   .ap-error {
-    color: #f5a623;
-    background: rgba(245,166,35,0.10);
+    color: #d29922;
+    background: rgba(210,153,34,0.10);
     padding: 12px 16px;
     border-radius: 2px;
     font-size: 0.82rem;

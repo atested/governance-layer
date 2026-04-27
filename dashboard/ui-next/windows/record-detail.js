@@ -315,7 +315,7 @@ rdStyles.textContent = `
     text-align: center;
     padding: 40px 0;
   }
-  .rd-error { color: #f5a623; }
+  .rd-error { color: #d29922; }
   .rd-content {
     font-family: "Inter", system-ui, sans-serif;
   }
@@ -327,8 +327,8 @@ rdStyles.textContent = `
     margin: -24px -24px 0;
     /* Stretch to fill the content padding */
   }
-  .rd-accent-green { background: #22c55e; }
-  .rd-accent-red { background: #ef4444; }
+  .rd-accent-green { background: #3fb950; }
+  .rd-accent-red { background: #f85149; }
   .rd-accent-muted { background: #6b7280; }
 
   /* ---- Record ID subtitle ---- */
@@ -357,7 +357,7 @@ rdStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -377,7 +377,7 @@ rdStyles.textContent = `
 
   /* ---- Warning banner ---- */
   .rd-warning-banner {
-    color: #f5a623;
+    color: #d29922;
     padding: 10px 14px;
     border-radius: 2px;
     font-size: 0.82rem;

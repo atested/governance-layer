@@ -103,18 +103,18 @@ button:focus-visible {
 }
 
 .btn-confirm {
-  background: var(--accent);
+  background: var(--warn);
   color: #fff;
 }
 .btn-confirm:hover {
-  background: #4a7ae4;
+  background: #b8851d;
 }
 
 .btn-confirm.danger {
   background: var(--danger);
 }
 .btn-confirm.danger:hover {
-  background: #dc2626;
+  background: #d63d3d;
 }
 `;
 

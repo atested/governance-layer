@@ -7,8 +7,7 @@
  *   tier - 1, 2, 3, or 4
  *
  * Rendering:
- *   Tiers 1-2: green
- *   Tiers 3-4: amber
+ *   All tiers: amber (cognitive: qualifier / judgment needed)
  */
 
 import { AtdBase } from './base.js';
@@ -28,10 +27,6 @@ const styles = `
   background: none;
 }
 
-.badge--green {
-  color: var(--ok);
-}
-
 .badge--amber {
   color: var(--warn);
 }
@@ -49,7 +44,7 @@ export class AtdTierBadge extends AtdBase {
   _render() {
     const tier = parseInt(this.getAttribute('tier'), 10);
     const valid = tier >= 1 && tier <= 4;
-    const variant = valid && tier <= 2 ? 'green' : 'amber';
+    const variant = 'amber';
     const label = valid ? `Tier ${tier}` : '--';
 
     this.shadowRoot.innerHTML = `<span class="badge badge--${variant}">[${label}]</span>`;

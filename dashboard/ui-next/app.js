@@ -145,7 +145,7 @@ function _showDisclosureCard(onAcknowledged) {
 
   const btn = document.createElement('button');
   Object.assign(btn.style, {
-    background: '#60a5fa',
+    background: '#6699cc',
     color: '#fff',
     border: 'none',
     borderRadius: '8px',
@@ -267,19 +267,19 @@ async function _loadLicenseState() {
     let tierName, dotColor;
     if (license_status === 'trial') {
       tierName = 'Trial';
-      dotColor = 'var(--ok, #22c55e)';
+      dotColor = 'var(--ok, #3fb950)';
     } else if (license_status === 'licensed') {
       tierName = TIER_NAMES[license_tier] || license_tier;
-      dotColor = 'var(--ok, #22c55e)';
+      dotColor = 'var(--ok, #3fb950)';
     } else if (license_status === 'personal') {
       tierName = 'Personal';
-      dotColor = 'var(--warning, #f5a623)';
+      dotColor = 'var(--warning, #d29922)';
     } else if (license_status === 'unlicensed') {
       tierName = 'Unlicensed';
-      dotColor = 'var(--warning, #f5a623)';
+      dotColor = 'var(--warning, #d29922)';
     } else if (license_status === 'clock_anomaly') {
       tierName = 'Clock Issue';
-      dotColor = 'var(--danger, #ef4444)';
+      dotColor = 'var(--danger, #f85149)';
     } else {
       tierName = 'Unknown';
       dotColor = 'var(--muted, #8b919a)';

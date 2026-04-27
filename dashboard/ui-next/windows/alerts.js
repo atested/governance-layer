@@ -75,9 +75,9 @@ const MONITORING_PANES = [
 
 /** Severity display colors */
 const SEVERITY_COLORS = {
-  security: '#ef4444',
-  critical: '#ef4444',
-  routine: '#f5a623',
+  security: '#f85149',
+  critical: '#f85149',
+  routine: '#d29922',
   informational: '#8b919a',
 };
 
@@ -91,10 +91,10 @@ const SEVERITY_LABELS = {
 
 /** Map severity to card border color */
 const SEVERITY_BORDER = {
-  security: '#ef4444',
-  critical: '#ef4444',
-  routine: '#f5a623',
-  informational: '#22c55e',
+  security: '#f85149',
+  critical: '#f85149',
+  routine: '#d29922',
+  informational: '#3fb950',
 };
 
 // ---------- Window entry ----------
@@ -594,15 +594,15 @@ alStyles.textContent = `
   }
   .al-loading { color: #8b919a; }
   .al-error {
-    color: #f5a623; background: rgba(245,166,35,0.10);
+    color: #d29922; background: rgba(210,153,34,0.10);
     padding: 12px 16px; border-radius: 2px;
   }
 
   /* Title accent bar */
   .al-title-accent { height: 6px; border-radius: 3px 3px 0 0; margin: -16px -24px 16px; }
-  .al-accent-green { background: #22c55e; }
-  .al-accent-amber { background: #f5a623; }
-  .al-accent-red { background: #ef4444; }
+  .al-accent-green { background: #3fb950; }
+  .al-accent-amber { background: #d29922; }
+  .al-accent-red { background: #f85149; }
   .al-accent-gray { background: #6b7280; }
 
   /* Summary cards */
@@ -620,10 +620,10 @@ alStyles.textContent = `
     color: #6b7280; font-weight: 500;
   }
   .al-sc-value { font-size: 1.3rem; font-weight: 700; font-family: "JetBrains Mono", monospace; }
-  .al-sc-red { color: #ef4444; }
-  .al-sc-amber { color: #f5a623; }
-  .al-sc-green { color: #22c55e; }
-  .al-sc-blue { color: #60a5fa; }
+  .al-sc-red { color: #f85149; }
+  .al-sc-amber { color: #d29922; }
+  .al-sc-green { color: #3fb950; }
+  .al-sc-blue { color: #6699cc; }
 
   /* Monitoring panes */
   .al-monitor-pane {
@@ -641,7 +641,7 @@ alStyles.textContent = `
   }
   .al-pane-title {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #60a5fa; margin: 0; font-weight: 600;
+    color: #6699cc; margin: 0; font-weight: 600;
   }
   .al-pane-inactive .al-pane-title { color: #8b919a; }
 
@@ -650,7 +650,7 @@ alStyles.textContent = `
     letter-spacing: 0.04em; padding: 2px 8px;
   }
   .al-badge-active {
-    color: #22c55e;
+    color: #3fb950;
   }
   .al-badge-inactive {
     color: #6b7280;
@@ -675,7 +675,7 @@ alStyles.textContent = `
   }
   .al-alert-card:hover { background: #20232b; }
   .al-alert-card:focus-visible {
-    outline: 2px solid #60a5fa; outline-offset: 2px;
+    outline: 2px solid #6699cc; outline-offset: 2px;
   }
   .al-alert-card:last-child { margin-bottom: 0; }
 
@@ -685,7 +685,7 @@ alStyles.textContent = `
   }
   .al-card-left { display: flex; align-items: center; gap: 8px; }
   .al-unread-chevron {
-    color: #60a5fa; flex-shrink: 0; font-size: 0.72rem;
+    color: #6699cc; flex-shrink: 0; font-size: 0.72rem;
   }
   .al-card-sev {
     font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
@@ -715,12 +715,12 @@ alStyles.textContent = `
   .al-gc-unread {
     font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.04em; padding: 2px 8px;
-    color: #f5a623;
+    color: #d29922;
   }
   .al-gc-acked {
     font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.04em; padding: 2px 8px;
-    color: #22c55e;
+    color: #3fb950;
   }
   .al-gc-title {
     font-size: 1.1rem; font-weight: 600; color: #e4e6eb;
@@ -729,7 +729,7 @@ alStyles.textContent = `
   .al-gc-section { margin-bottom: 16px; }
   .al-gc-section-head {
     font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
-    color: #60a5fa; font-weight: 600; margin: 0 0 6px;
+    color: #6699cc; font-weight: 600; margin: 0 0 6px;
   }
   .al-gc-text {
     font-size: 0.82rem; color: #c4c8d0; margin: 0; line-height: 1.55;
@@ -746,19 +746,19 @@ alStyles.textContent = `
     transition: background 0.12s;
   }
   .al-gc-btn-primary {
-    background: #22c55e; color: #0a0c10;
+    background: #3fb950; color: #0a0c10;
   }
   .al-gc-btn-primary:hover { background: #16a34a; }
   .al-gc-btn-primary:disabled {
     opacity: 0.5; cursor: default;
   }
   .al-gc-btn-done {
-    background: rgba(34,197,94,0.15) !important; color: #22c55e !important;
+    background: rgba(63,185,80,0.15) !important; color: #3fb950 !important;
   }
   .al-gc-btn-link {
-    background: rgba(96,165,250,0.12); color: #60a5fa;
+    background: rgba(102,153,204,0.12); color: #6699cc;
   }
-  .al-gc-btn-link:hover { background: rgba(96,165,250,0.22); }
+  .al-gc-btn-link:hover { background: rgba(102,153,204,0.22); }
 
   /* Responsive */
   @media (max-width: 600px) {

@@ -266,13 +266,13 @@ idsStyles.textContent = `
     display: inline-block; font-size: 0.72rem; font-weight: 600;
     padding: 2px 10px; border-radius: 2px;
   }
-  .ids-status-locked { color: #f5a623; }
-  .ids-status-unlocked { color: #22c55e; }
+  .ids-status-locked { color: #d29922; }
+  .ids-status-unlocked { color: #3fb950; }
   .ids-status-unconfigured { color: #8b919a; }
   .ids-section { margin-top: 20px; }
   .ids-section-title {
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-    color: #60a5fa; margin: 0 0 10px; font-weight: 600;
+    color: #6699cc; margin: 0 0 10px; font-weight: 600;
   }
   .ids-card {
     background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
@@ -283,11 +283,11 @@ idsStyles.textContent = `
   .ids-text-muted { color: #8b919a; }
   .ids-text code {
     background: #1a1d23; padding: 2px 6px; border-radius: 2px;
-    font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #60a5fa;
+    font-family: "JetBrains Mono", monospace; font-size: 0.78rem; color: #6699cc;
   }
   .ids-loading { color: #8b919a; font-size: 0.82rem; text-align: center; padding: 40px 0; margin: 0; }
   .ids-error {
-    color: #f5a623;
+    color: #d29922;
     padding: 12px 16px; border-radius: 2px; font-size: 0.82rem;
   }
   .ids-cred-links { display: flex; flex-direction: column; gap: 12px; }
@@ -295,7 +295,7 @@ idsStyles.textContent = `
   .ids-cred-item p { font-size: 0.78rem; color: #8b919a; margin: 0; }
   .ids-cred-item code {
     background: #1a1d23; padding: 2px 6px; border-radius: 2px;
-    font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #60a5fa;
+    font-family: "JetBrains Mono", monospace; font-size: 0.72rem; color: #6699cc;
   }
 `;
 document.head.appendChild(idsStyles);

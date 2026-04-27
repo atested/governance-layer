@@ -635,8 +635,8 @@ cfStyles.textContent = `
     font-family: "JetBrains Mono", monospace;
     color: #e4e6eb;
   }
-  .cf-val-green { color: #22c55e; }
-  .cf-val-amber { color: #f5a623; }
+  .cf-val-green { color: #3fb950; }
+  .cf-val-amber { color: #d29922; }
 
   /* ---- Pane ---- */
   .cf-pane {
@@ -651,16 +651,16 @@ cfStyles.textContent = `
     transition: border-color 0.12s, box-shadow 0.12s;
   }
   .cf-pane-clickable:hover {
-    border-color: rgba(96,165,250,0.3);
+    border-color: rgba(102,153,204,0.3);
   }
   .cf-pane-accent { height: 6px; }
-  .cf-accent-green { background: #22c55e; }
-  .cf-accent-amber { background: #f5a623; }
+  .cf-accent-green { background: #3fb950; }
+  .cf-accent-amber { background: #d29922; }
   .cf-pane-header {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     padding: 12px 20px 4px;
   }
@@ -703,9 +703,9 @@ cfStyles.textContent = `
     padding: 7px 12px;
     box-sizing: border-box;
   }
-  .cf-input:focus { outline: 2px solid #60a5fa; outline-offset: 1px; }
-  .cf-result-success { color: #22c55e; font-size: 0.82rem; margin-top: 8px; }
-  .cf-result-error { color: #f5a623; font-size: 0.82rem; margin-top: 8px; }
+  .cf-input:focus { outline: 2px solid #6699cc; outline-offset: 1px; }
+  .cf-result-success { color: #3fb950; font-size: 0.82rem; margin-top: 8px; }
+  .cf-result-error { color: #d29922; font-size: 0.82rem; margin-top: 8px; }
 
   /* ---- Buttons ---- */
   .cf-btn {
@@ -719,15 +719,15 @@ cfStyles.textContent = `
     transition: background 0.1s;
     white-space: nowrap;
   }
-  .cf-btn-primary { background: #60a5fa; color: #fff; }
-  .cf-btn-primary:hover { background: #4f95ea; }
+  .cf-btn-primary { background: #6699cc; color: #fff; }
+  .cf-btn-primary:hover { background: #5580aa; }
   .cf-btn-export {
-    background: rgba(245,166,35,0.12);
-    color: #f5a623;
-    border: 1px solid rgba(245,166,35,0.3);
+    background: rgba(210,153,34,0.12);
+    color: #d29922;
+    border: 1px solid rgba(210,153,34,0.3);
     margin-bottom: 10px;
   }
-  .cf-btn-export:hover { background: rgba(245,166,35,0.20); }
+  .cf-btn-export:hover { background: rgba(210,153,34,0.20); }
 
   /* ---- Rules preview table ---- */
   .cf-rules-table {
@@ -758,7 +758,7 @@ cfStyles.textContent = `
     cursor: pointer;
     transition: background 0.1s;
   }
-  .cf-rules-full tbody tr:hover { background: rgba(96,165,250,0.06); }
+  .cf-rules-full tbody tr:hover { background: rgba(102,153,204,0.06); }
   .cf-cell-num {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.72rem;
@@ -784,8 +784,8 @@ cfStyles.textContent = `
     padding: 1px 8px;
     border-radius: 2px;
   }
-  .cf-decision-allow { color: #22c55e; }
-  .cf-decision-deny { color: #ef4444; }
+  .cf-decision-allow { color: #3fb950; }
+  .cf-decision-deny { color: #f85149; }
 
   /* Tier badges */
   .cf-tier {
@@ -797,10 +797,10 @@ cfStyles.textContent = `
     border-radius: 2px;
     margin-right: 2px;
   }
-  .cf-tier-1 { color: #22c55e; }
-  .cf-tier-2 { color: #60a5fa; }
-  .cf-tier-3 { color: #f5a623; }
-  .cf-tier-4 { color: #ef4444; }
+  .cf-tier-1 { color: #3fb950; }
+  .cf-tier-2 { color: #6699cc; }
+  .cf-tier-3 { color: #d29922; }
+  .cf-tier-4 { color: #f85149; }
 
   .cf-preview-note {
     font-size: 0.75rem;
@@ -860,7 +860,7 @@ cfStyles.textContent = `
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #60a5fa;
+    color: #6699cc;
     padding: 2px 8px;
     border-radius: 2px;
   }
@@ -886,7 +886,7 @@ cfStyles.textContent = `
   .cf-mapping-cat {
     font-family: "JetBrains Mono", monospace;
     font-size: 0.78rem;
-    color: #60a5fa;
+    color: #6699cc;
   }
   .cf-tools-table {
     width: 100%;
@@ -920,7 +920,7 @@ cfStyles.textContent = `
   .cf-kv-value { font-size: 0.82rem; color: #e4e6eb; }
   .cf-kv-mono { font-family: "JetBrains Mono", monospace; font-size: 0.75rem; }
   .cf-kv-copyable { cursor: pointer; }
-  .cf-kv-copyable:hover { color: #60a5fa; }
+  .cf-kv-copyable:hover { color: #6699cc; }
 
   /* ---- Divider ---- */
   .cf-divider {
@@ -932,7 +932,7 @@ cfStyles.textContent = `
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     margin-bottom: 6px;
   }
@@ -955,7 +955,7 @@ cfStyles.textContent = `
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #60a5fa;
+    color: #6699cc;
     font-weight: 600;
     padding: 14px 0 10px;
   }
@@ -1019,7 +1019,7 @@ cfStyles.textContent = `
     font-style: italic;
   }
   .cf-error {
-    color: #f5a623;
+    color: #d29922;
     padding: 12px 16px;
     border-radius: 2px;
     font-size: 0.82rem;

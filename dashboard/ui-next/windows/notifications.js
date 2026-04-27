@@ -19,9 +19,9 @@ const SEVERITY_ORDER = { security: 0, critical: 1, routine: 2, informational: 3 
 
 /** Severity colors */
 const SEVERITY_COLORS = {
-  security: '#ef4444',
-  critical: '#f5a623',
-  routine: '#60a5fa',
+  security: '#f85149',
+  critical: '#d29922',
+  routine: '#6699cc',
   informational: '#8b919a',
 };
 
@@ -258,9 +258,9 @@ nfStyles.textContent = `
     background: #22262e; border: 1px dashed rgba(255,255,255,0.12);
     border-radius: 2px; padding: 14px 18px; margin-bottom: 10px;
   }
-  .nf-severity-security { border-left: 3px solid #ef4444; }
-  .nf-severity-critical { border-left: 3px solid #f5a623; }
-  .nf-severity-routine { border-left: 3px solid #60a5fa; }
+  .nf-severity-security { border-left: 3px solid #f85149; }
+  .nf-severity-critical { border-left: 3px solid #d29922; }
+  .nf-severity-routine { border-left: 3px solid #6699cc; }
   .nf-severity-informational { border-left: 3px solid #8b919a; }
   .nf-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   .nf-severity-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -273,7 +273,7 @@ nfStyles.textContent = `
     margin: 0; font-style: italic;
   }
   .nf-error {
-    color: #f5a623;
+    color: #d29922;
     padding: 12px 16px; border-radius: 2px; font-size: 0.82rem;
   }
 `;

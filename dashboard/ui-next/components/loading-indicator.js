@@ -28,7 +28,7 @@ const STYLE = `
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--accent, #60a5fa);
+    background: var(--atd-infra-text, #5588bb);
     opacity: 0.3;
     animation: pulse 1.2s ease-in-out infinite;
   }

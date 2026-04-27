@@ -56,7 +56,7 @@ button.primary {
   color: #fff;
 }
 button.primary:hover:not(:disabled) {
-  background: #4a7ae4;
+  background: #5580aa;
 }
 
 /* Danger */
@@ -65,7 +65,7 @@ button.danger {
   color: #fff;
 }
 button.danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: #d63d3d;
 }
 `;
 
