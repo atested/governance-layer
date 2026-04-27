@@ -156,6 +156,20 @@ class ModalManager {
       if (mainPage) mainPage.removeAttribute('aria-hidden');
     }
 
+    // Safety net: if stack is now empty, ensure main page is fully unlocked
+    if (this._stack.length === 0) {
+      const mainPage = document.getElementById('main-page');
+      if (mainPage) {
+        mainPage.removeAttribute('aria-hidden');
+        mainPage.style.pointerEvents = '';
+      }
+      // Clean up leaked focus trap listener
+      if (this._trapListener) {
+        document.removeEventListener('keydown', this._trapListener, true);
+        this._trapListener = null;
+      }
+    }
+
     // Return focus to trigger
     if (entry.trigger && entry.trigger.isConnected) {
       entry.trigger.focus();

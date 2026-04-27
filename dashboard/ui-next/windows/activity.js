@@ -13,7 +13,7 @@ import { openRecordDetail } from './record-detail.js';
 
 const COLUMNS = [
   // Standard columns (shown by default)
-  { key: 'timestamp_utc', label: 'Time',       standard: true,  width: '90px'  },
+  { key: 'timestamp_utc', label: 'Time',       standard: true,  width: '120px' },
   { key: 'event_category', label: 'Event',     standard: true,  width: '140px' },
   { key: 'policy_decision', label: 'Decision', standard: true,  width: '80px'  },
   { key: 'tool_name',   label: 'Tool',         standard: true  },
@@ -683,10 +683,12 @@ function _formatTime24(isoStr) {
   if (!isoStr) return '\u2014';
   try {
     const d = new Date(isoStr);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mon = months[d.getMonth()];
+    const day = d.getDate();
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${hh}:${mm}:${ss}`;
+    return `${mon} ${day} ${hh}:${mm}`;
   } catch { return isoStr; }
 }
 

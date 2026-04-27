@@ -67,6 +67,35 @@ const LAUNCHER_GROUPS = [
   },
 ];
 
+/** Tooltip descriptions for navigation cards */
+const CARD_TOOLTIPS = {
+  activity:       'Full decision log with filtering and drill-down',
+  reports:        'Governance metrics and trends over time',
+  alerts:         'Security alerts, monitoring, and system notices',
+  approvals:      'Manage scoped approvals for policy exceptions',
+  health:         'Chain integrity, signing, and diagnostics',
+  configuration:  'Policy rules, capability registry, base directories',
+  communications: 'Telemetry, escalations, and priority requests',
+  audit:          'Searchable chain records for compliance review',
+  licensing:      'Pricing tiers, survey, case document, purchase',
+};
+
+/** Tooltip descriptions for Chain Health metrics */
+const CHAIN_HEALTH_TOOLTIPS = {
+  'mv-chain-events': 'Total governance events in the decision chain',
+  'mv-chain-integrity': 'Whether the cryptographic chain is intact — OK means no breaks',
+  'mv-chain-age': 'Days since the first governance event was recorded',
+  'mv-last-event': 'Timestamp of the most recent governance event',
+};
+
+/** Tooltip descriptions for Atested Activity metrics */
+const ACTIVITY_TOOLTIPS = {
+  'mv-mediated': 'Total tool calls evaluated by Atested',
+  'mv-denied': 'Operations blocked by policy rules',
+  'mv-approved': 'Active scoped approvals for specific operations',
+  'mv-users': 'Unique operator identities recorded in the chain',
+};
+
 /** DOM references populated during render */
 let _page = null;
 
@@ -223,6 +252,30 @@ export function renderMainPage() {
       row.appendChild(card);
     }
     grid.appendChild(row);
+  }
+
+  // Apply tooltips to navigation cards
+  for (const [id, tip] of Object.entries(CARD_TOOLTIPS)) {
+    const card = _page.querySelector(`[data-window-id="${id}"]`);
+    if (card) card.dataset.tooltip = tip;
+  }
+
+  // Apply tooltips to Chain Health metrics
+  for (const [id, tip] of Object.entries(CHAIN_HEALTH_TOOLTIPS)) {
+    const metricVal = _page.querySelector(`#${id}`);
+    if (metricVal) {
+      const metricDiv = metricVal.closest('.mp-metric');
+      if (metricDiv) metricDiv.dataset.tooltip = tip;
+    }
+  }
+
+  // Apply tooltips to Atested Activity metrics
+  for (const [id, tip] of Object.entries(ACTIVITY_TOOLTIPS)) {
+    const metricVal = _page.querySelector(`#${id}`);
+    if (metricVal) {
+      const metricDiv = metricVal.closest('.mp-metric');
+      if (metricDiv) metricDiv.dataset.tooltip = tip;
+    }
   }
 
   return _page;
@@ -458,6 +511,13 @@ function _renderRecentActivity(result) {
       <span class="mp-feed-decision">${decisionHtml}</span>
     `;
 
+    // Row tooltip: show rule, tier, and category when available
+    const tooltipParts = [];
+    if (detail.matched_rule) tooltipParts.push(`Rule: ${detail.matched_rule}`);
+    if (detail.confidence_tier != null) tooltipParts.push(`Tier: ${detail.confidence_tier}`);
+    if (detail.action_type) tooltipParts.push(`Category: ${detail.action_type}`);
+    if (tooltipParts.length) row.dataset.tooltip = tooltipParts.join(' · ');
+
     // Click handler — opens Activity with Record Detail for this entry
     const recordId = entry.request_id || entry.event_id || '';
     row.addEventListener('click', (e) => {
@@ -479,10 +539,12 @@ function _formatTime24(isoStr) {
   if (!isoStr) return '--';
   try {
     const d = new Date(isoStr);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mon = months[d.getMonth()];
+    const day = d.getDate();
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${hh}:${mm}:${ss}`;
+    return `${mon} ${day} ${hh}:${mm}`;
   } catch {
     return isoStr;
   }
@@ -618,7 +680,7 @@ mpStyles.textContent = `
   }
   .mp-feed-header {
     display: grid;
-    grid-template-columns: 80px 100px 1fr 70px;
+    grid-template-columns: 110px 100px 1fr 70px;
     align-items: center;
     gap: 12px;
     padding: 4px 18px 2px;
@@ -635,7 +697,7 @@ mpStyles.textContent = `
   }
   .mp-feed-row {
     display: grid;
-    grid-template-columns: 80px 100px 1fr 70px;
+    grid-template-columns: 110px 100px 1fr 70px;
     align-items: center;
     gap: 12px;
     padding: 7px 18px;
@@ -827,6 +889,40 @@ mpStyles.textContent = `
     margin-top: 8px;
   }
 
+  /* ---- Tooltips ---- */
+  [data-tooltip] {
+    position: relative;
+  }
+  [data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1d23;
+    border: 1px dashed rgba(255, 255, 255, 0.20);
+    border-radius: 2px;
+    color: #c9cdd4;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    padding: 6px 10px;
+    white-space: normal;
+    max-width: 280px;
+    width: max-content;
+    z-index: 50;
+    pointer-events: none;
+  }
+  .mp-metric[data-tooltip]:hover::after {
+    left: 0;
+    transform: none;
+  }
+  .mp-feed-row[data-tooltip]:hover::after {
+    left: 18px;
+    transform: none;
+    bottom: calc(100% + 2px);
+  }
+
   /* ---- Responsive ---- */
   @media (max-width: 900px) {
     .mp-launcher-row {
@@ -846,7 +942,7 @@ mpStyles.textContent = `
     }
     .mp-feed-header,
     .mp-feed-row {
-      grid-template-columns: 60px 80px 1fr auto;
+      grid-template-columns: 90px 80px 1fr auto;
       gap: 6px;
     }
     .mp-pane-metrics {
