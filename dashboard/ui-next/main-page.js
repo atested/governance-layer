@@ -889,40 +889,6 @@ mpStyles.textContent = `
     margin-top: 8px;
   }
 
-  /* ---- Tooltips ---- */
-  [data-tooltip] {
-    position: relative;
-  }
-  [data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1a1d23;
-    border: 1px dashed rgba(255, 255, 255, 0.20);
-    border-radius: 2px;
-    color: #c9cdd4;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.68rem;
-    line-height: 1.4;
-    padding: 6px 10px;
-    white-space: normal;
-    max-width: 280px;
-    width: max-content;
-    z-index: 50;
-    pointer-events: none;
-  }
-  .mp-metric[data-tooltip]:hover::after {
-    left: 0;
-    transform: none;
-  }
-  .mp-feed-row[data-tooltip]:hover::after {
-    left: 18px;
-    transform: none;
-    bottom: calc(100% + 2px);
-  }
-
   /* ---- Responsive ---- */
   @media (max-width: 900px) {
     .mp-launcher-row {
@@ -952,3 +918,61 @@ mpStyles.textContent = `
   }
 `;
 document.head.appendChild(mpStyles);
+
+// ---------- JS Tooltip Manager ----------
+// Uses a floating element appended to body to avoid overflow:hidden clipping
+// on cards (.mp-wf-card) and panes (.mp-pane).
+
+const _tooltipEl = document.createElement('div');
+_tooltipEl.id = 'mp-tooltip';
+_tooltipEl.style.cssText = `
+  position: fixed;
+  z-index: 50;
+  background: #1a1d23;
+  border: 1px dashed rgba(255, 255, 255, 0.20);
+  border-radius: 2px;
+  color: #c9cdd4;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+  max-width: 280px;
+  width: max-content;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+`;
+document.body.appendChild(_tooltipEl);
+
+function _showTooltip(e) {
+  const target = e.target.closest('[data-tooltip]');
+  if (!target) return;
+  const text = target.dataset.tooltip;
+  if (!text) return;
+
+  _tooltipEl.textContent = text;
+  _tooltipEl.style.opacity = '1';
+
+  const rect = target.getBoundingClientRect();
+  const tipRect = _tooltipEl.getBoundingClientRect();
+  let left = rect.left + (rect.width - tipRect.width) / 2;
+  let top = rect.top - tipRect.height - 6;
+
+  // Clamp to viewport
+  if (left < 4) left = 4;
+  if (left + tipRect.width > window.innerWidth - 4) left = window.innerWidth - tipRect.width - 4;
+  if (top < 4) top = rect.bottom + 6; // flip below if no room above
+
+  _tooltipEl.style.left = left + 'px';
+  _tooltipEl.style.top = top + 'px';
+}
+
+function _hideTooltip() {
+  _tooltipEl.style.opacity = '0';
+}
+
+document.addEventListener('mouseover', _showTooltip);
+document.addEventListener('mouseout', (e) => {
+  if (e.target.closest('[data-tooltip]')) _hideTooltip();
+});
+document.addEventListener('click', _hideTooltip);

@@ -73,6 +73,18 @@ class ModalManager {
    * @returns {{ frame: HTMLElement, contentSlot: HTMLElement }} - References for the caller
    */
   open({ title, subtitle = '', trigger = null, content = null }) {
+    // Defensive: if stack should be empty, ensure main page is clean
+    // (guards against prior close that failed to fully clean up)
+    if (this._stack.length === 0) {
+      const mp = document.getElementById('main-page');
+      if (mp) {
+        mp.removeAttribute('aria-hidden');
+        mp.style.pointerEvents = '';
+      }
+      // Sweep orphaned modals from any prior incomplete close
+      document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
+    }
+
     const depth = this._stack.length + 1;
     if (depth > 2) {
       console.error('ModalManager: maximum depth 2 exceeded');
@@ -141,9 +153,9 @@ class ModalManager {
 
     const entry = this._stack.pop();
 
-    // Remove from DOM
-    entry.frame.remove();
-    entry.backdrop.remove();
+    // Remove from DOM — wrap in try/catch to guarantee cleanup continues
+    try { entry.frame.remove(); } catch (e) { console.warn('ModalManager: frame remove failed', e); }
+    try { entry.backdrop.remove(); } catch (e) { console.warn('ModalManager: backdrop remove failed', e); }
 
     // Unlock parent
     if (entry.depth === 2 && this._stack.length > 0) {
@@ -156,7 +168,7 @@ class ModalManager {
       if (mainPage) mainPage.removeAttribute('aria-hidden');
     }
 
-    // Safety net: if stack is now empty, ensure main page is fully unlocked
+    // Safety net: if stack is now empty, guarantee main page is fully unlocked
     if (this._stack.length === 0) {
       const mainPage = document.getElementById('main-page');
       if (mainPage) {
@@ -168,6 +180,8 @@ class ModalManager {
         document.removeEventListener('keydown', this._trapListener, true);
         this._trapListener = null;
       }
+      // Orphan sweep: remove any stray backdrops/frames not in the stack
+      document.querySelectorAll('atd-window-backdrop, atd-window-frame').forEach(el => el.remove());
     }
 
     // Return focus to trigger
@@ -178,7 +192,7 @@ class ModalManager {
     }
 
     // Fire onClose callback if set
-    if (entry.onClose) entry.onClose();
+    try { if (entry.onClose) entry.onClose(); } catch (e) { console.warn('ModalManager: onClose error', e); }
 
     this._notifyChange();
 
