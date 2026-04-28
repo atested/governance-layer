@@ -70,7 +70,7 @@ function _renderAll(state) {
 
   grid.appendChild(_buildChainPane(state, h));
   grid.appendChild(_buildDenyRatePane(state, h));
-  grid.appendChild(_buildTransparencyPane(h));
+  grid.appendChild(_buildIntegrityPane(h));
   grid.appendChild(_buildStoragePane(h));
   grid.appendChild(_buildUsersPane(h));
   grid.appendChild(_buildLicensePane(h));
@@ -118,12 +118,12 @@ function _renderAlertPane(state, alerts) {
 function _buildChainPane(state, h) {
   const chain = h.chain || {};
   const chainStatus = chain.status || 'healthy';
-  const color = chainStatus === 'critical' ? 'red' : chainStatus === 'attention' ? 'amber' : 'green';
 
-  const pane = _pane(color, 'Chain integrity', true);
+  const pane = _pane('green', 'Chain integrity', true);
   const body = pane.querySelector('.hw-pane-body');
+  const statusColor = chainStatus === 'critical' ? 'red' : chainStatus === 'attention' ? 'amber' : 'green';
 
-  body.appendChild(_kvRow('Status', _statusLabel(chainStatus), color === 'red' ? 'red' : color === 'amber' ? 'amber' : 'green'));
+  body.appendChild(_kvRow('Status', _statusLabel(chainStatus), statusColor));
   body.appendChild(_kvRow('Event count', _fmtNum(chain.chain_event_count ?? 0)));
   body.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No', chain.checked ? 'green' : 'amber'));
 
@@ -134,9 +134,8 @@ function _buildChainPane(state, h) {
 
 function _buildDenyRatePane(state, h) {
   const dr = h.deny_rate || {};
-  const color = dr.anomaly ? 'amber' : 'green';
 
-  const pane = _pane(color, 'Deny rate', true);
+  const pane = _pane('blue', 'Deny rate', true);
   const body = pane.querySelector('.hw-pane-body');
 
   const recentPct = dr.deny_rate != null ? (dr.deny_rate * 100).toFixed(1) + '%' : '0%';
@@ -151,33 +150,30 @@ function _buildDenyRatePane(state, h) {
   return pane;
 }
 
-function _buildTransparencyPane(h) {
-  const obs = h.observations || {};
-  const pane = _pane('green', 'Transparency', false);
+function _buildIntegrityPane(h) {
+  const integrity = h.integrity || {};
+  const pane = _pane('purple', 'Integrity', false);
   const body = pane.querySelector('.hw-pane-body');
 
-  let hookStatus = 'N/A';
-  let hookColor;
-  if (obs.has_observations === false) {
-    hookStatus = 'No data';
-  } else if (obs.gap_detected) {
-    hookStatus = 'Gap detected';
-    hookColor = 'amber';
-  } else if (obs.has_observations) {
-    hookStatus = 'Active';
-    hookColor = 'green';
+  if (!integrity.available) {
+    body.appendChild(_kvRow('Proxy code hash', 'Not available', 'amber'));
+    body.appendChild(_kvRow('Policy rules hash', 'Not available', 'amber'));
+    body.appendChild(_kvRow('Chain file status', 'Not available', 'amber'));
+    return pane;
   }
 
-  body.appendChild(_kvRow('Hook data', hookStatus, hookColor));
-  body.appendChild(_kvRow('Hours since last', obs.hours_since_last != null ? String(Math.round(obs.hours_since_last)) : 'N/A'));
-  body.appendChild(_kvRow('Ungoverned ops', _fmtNum(obs.ungoverned_operation_count ?? obs.observation_count ?? 0)));
-
+  body.appendChild(_kvRow('Proxy code hash', _truncHash(integrity.proxy_code_hash)));
+  const policyStatus = integrity.policy_rules_status === 'changed' ? 'Changed' : 'Verified';
+  body.appendChild(_kvRow('Policy rules hash', `${_truncHash(integrity.policy_rules_hash)} (${policyStatus})`, policyStatus === 'Changed' ? 'amber' : 'green'));
+  const chainStatus = _chainFileStatusLabel(integrity.chain_file_status);
+  const chainColor = chainStatus === 'Intact' ? 'green' : chainStatus === 'Not available' ? 'amber' : 'red';
+  body.appendChild(_kvRow('Chain file status', chainStatus, chainColor));
   return pane;
 }
 
 function _buildStoragePane(h) {
   const s = h.storage || {};
-  const pane = _pane('green', 'Storage', false);
+  const pane = _pane('dark-blue', 'Storage', false);
   const body = pane.querySelector('.hw-pane-body');
 
   body.appendChild(_kvRow('Chain size', _formatBytes(s.chain_size_bytes)));
@@ -190,7 +186,7 @@ function _buildStoragePane(h) {
 
 function _buildUsersPane(h) {
   const u = h.users || {};
-  const pane = _pane('green', 'Users', false);
+  const pane = _pane('amber', 'Users', false);
   const body = pane.querySelector('.hw-pane-body');
 
   body.appendChild(_kvRow('Unique users', _fmtNum(u.unique_users ?? 0)));
@@ -207,7 +203,7 @@ function _buildLicensePane(h) {
   const label = labelMap[rawStatus.toLowerCase()] || rawStatus;
   const color = rawStatus.toLowerCase() === 'active' ? 'green' : 'amber';
 
-  const pane = _pane(color, 'License', false);
+  const pane = _pane('dark-blue', 'License', false);
   const body = pane.querySelector('.hw-pane-body');
 
   body.appendChild(_kvRow('Status', label, color));
@@ -253,7 +249,7 @@ function _paneTooltip(title) {
   const tips = {
     'Chain integrity': 'Whether the hash-linked chain is structurally valid.',
     'Deny rate': 'How often policy denies recent mediated operations.',
-    'Transparency': 'Signals from observation hooks about ungoverned activity.',
+    'Integrity': 'D-139 protection status for proxy code, policy rules, and chain file durability.',
     'Storage': 'Local storage footprint for chain, stability log, and archives.',
     'Users': 'Operator identities and activity anomalies in recent records.',
     'License': 'Current license or trial status for this installation.',
@@ -269,9 +265,9 @@ function _healthMetricTooltip(label) {
     'Recent': 'Deny rate in the recent decision window.',
     'Historical avg': 'Baseline deny rate from prior records.',
     'Anomaly': 'Whether recent deny behavior differs from historical behavior.',
-    'Hook data': 'Whether observation hooks are reporting boundary activity.',
-    'Hours since last': 'Time since the last observation hook event.',
-    'Ungoverned ops': 'Operations observed outside the mediation boundary.',
+    'Proxy code hash': 'Hash of the critical proxy source files recorded at startup.',
+    'Policy rules hash': 'Hash of the loaded policy rules and whether the runtime still verifies them.',
+    'Chain file status': 'Whether the chain file matches D-139 integrity metadata.',
     'Chain size': 'Size of the decision chain file.',
     'Stability log': 'Size of the chain health stability log.',
     'Archive size': 'Storage used by archived chain segments.',
@@ -456,13 +452,10 @@ function _renderEventsTable(state, h) {
   const events = h.recent_stability_events || [];
   if (!events.length) return;
 
-  const hasCritical = events.some(e => _eventSeverity(e) === 'critical');
-  const color = hasCritical ? 'red' : 'green';
-
   const pane = document.createElement('div');
   pane.className = 'hw-events-pane';
   pane.innerHTML = `
-    <div class="hw-pane-accent hw-accent-${color}"></div>
+    <div class="hw-pane-accent hw-accent-blue"></div>
     <div class="hw-pane-header-row">
       <span class="hw-pane-header">Recent health events</span>
       <span class="hw-pane-count">${events.length > 10 ? '10 of ' + events.length : events.length} events</span>
@@ -575,7 +568,6 @@ function _eventSource(evt) {
   if (type.includes('chain') || type.includes('integrity') || type.includes('hash')) return 'verifier';
   if (type.includes('sign')) return 'signing';
   if (type.includes('deny') || type.includes('policy')) return 'proxy';
-  if (type.includes('observ')) return 'hooks';
   return 'system';
 }
 
@@ -653,6 +645,17 @@ function _truncHash(hash) {
   return hash.length > 16 ? hash.substring(0, 8) + '\u2026' + hash.substring(hash.length - 8) : hash;
 }
 
+function _chainFileStatusLabel(status) {
+  const map = {
+    intact: 'Intact',
+    missing: 'Missing',
+    truncated: 'Truncated',
+    changed: 'Changed',
+    not_available: 'Not available',
+  };
+  return map[status] || 'Not available';
+}
+
 function _truncTarget(target) {
   if (!target || target.length <= 40) return target;
   return '\u2026' + target.substring(target.length - 37);
@@ -685,6 +688,9 @@ hwStyles.textContent = `
     margin: -24px -24px 0;
   }
   .hw-accent-green { background: #3fb950; }
+  .hw-accent-blue { background: #6699cc; }
+  .hw-accent-purple { background: #d2a8ff; }
+  .hw-accent-dark-blue { background: #2b4a7a; }
   .hw-accent-amber { background: #d29922; }
   .hw-accent-red { background: #f85149; }
   .hw-accent-muted { background: #6b7280; }

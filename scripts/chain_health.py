@@ -836,6 +836,74 @@ def _license_health(runtime_root: Path) -> Dict[str, Any]:
         return {"status": "unknown", "detail": str(e)}
 
 
+def _integrity_status(chain_path: Path) -> Dict[str, Any]:
+    """Read D-139 integrity metadata for dashboard health display.
+
+    This is intentionally read-only. IntegrityMonitor remains the authority for
+    creating and validating the sidecar metadata.
+    """
+    try:
+        from integrity_monitor import IntegrityMonitor, IntegrityViolation
+
+        monitor = IntegrityMonitor(chain_path)
+        metadata = monitor.load_metadata()
+    except IntegrityViolation as exc:
+        return {
+            "available": False,
+            "status": "metadata_invalid",
+            "message": str(exc),
+            "proxy_code_hash": None,
+            "policy_rules_hash": None,
+            "policy_rules_status": "not_available",
+            "chain_file_status": "not_available",
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "status": "not_available",
+            "message": str(exc),
+            "proxy_code_hash": None,
+            "policy_rules_hash": None,
+            "policy_rules_status": "not_available",
+            "chain_file_status": "not_available",
+        }
+
+    if not metadata:
+        return {
+            "available": False,
+            "status": "not_available",
+            "message": "Integrity metadata has not been created yet.",
+            "proxy_code_hash": None,
+            "policy_rules_hash": None,
+            "policy_rules_status": "not_available",
+            "chain_file_status": "not_available",
+        }
+
+    blocked_reason = metadata.get("blocked_reason")
+    blocked_policy_hash = metadata.get("policy_rules_blocked_hash")
+    chain_file_status = "intact"
+    if blocked_reason == "chain_file_missing":
+        chain_file_status = "missing"
+    elif blocked_reason == "chain_file_truncated":
+        chain_file_status = "truncated"
+    elif blocked_reason in {"chain_record_count_mismatch", "chain_tail_hash_mismatch"}:
+        chain_file_status = "changed"
+
+    policy_rules_status = "changed" if blocked_policy_hash else "verified"
+
+    return {
+        "available": True,
+        "status": "attention" if blocked_reason else "ok",
+        "metadata_path": str(monitor.metadata_path),
+        "last_updated_utc": metadata.get("last_updated_utc"),
+        "proxy_code_hash": metadata.get("proxy_code_hash"),
+        "policy_rules_hash": blocked_policy_hash or metadata.get("policy_rules_hash"),
+        "policy_rules_status": policy_rules_status,
+        "chain_file_status": chain_file_status,
+        "blocked_reason": blocked_reason,
+    }
+
+
 def collect_health_signals(
     chain_path: Path,
     stability_log_path: Path,
@@ -860,14 +928,14 @@ def collect_health_signals(
     # Policy / DENY rate
     deny_rate = _compute_deny_rate(chain_path)
 
-    # Observation gap
-    obs_gap = _observation_gap(chain_path)
-
     # User activity
     users = _user_activity(chain_path)
 
     # License
     license_info = _license_health(runtime_root)
+
+    # D-139 integrity metadata
+    integrity = _integrity_status(chain_path)
 
     # Stability events
     recent_events = read_stability_log(stability_log_path, limit=20)
@@ -906,16 +974,6 @@ def collect_health_signals(
             "guidance": "Check if policy was recently changed or if an agent is misconfigured.",
         })
 
-    if obs_gap.get("gap_detected"):
-        alerts.append({
-            "severity": "attention",
-            "source": "observations",
-            "message": "Observation gap: no ungoverned observations in 24+ hours despite governed activity.",
-            "guidance": "Check that observation hooks are still configured and running.",
-        })
-        if overall == HEALTH_HEALTHY or overall == HEALTH_HEALTHY_REPAIRED:
-            overall = HEALTH_ATTENTION
-
     if users.get("anomalies"):
         alerts.append({
             "severity": "info",
@@ -931,7 +989,7 @@ def collect_health_signals(
         "chain": chain_health,
         "deny_rate": deny_rate,
         "storage": storage,
-        "observations": obs_gap,
+        "integrity": integrity,
         "users": users,
         "license": license_info,
         "recent_stability_events": recent_events,
