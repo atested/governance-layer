@@ -52,7 +52,7 @@ const MONITORING_PANES = [
     id: 'usage',
     title: 'Usage Pattern Detection',
     activeTier: 'crew',
-    description: 'Cross-user DENY pattern alerts, classifier confidence distribution shifts, unusual tool usage patterns.',
+    description: 'Cross-user DENY pattern alerts, classifier confidence distribution shifts, unusual action patterns.',
     severities: ['routine'],
     categories: ['usage_pattern', 'classifier', 'tool_usage'],
   },
@@ -488,8 +488,8 @@ function _describeTrigger(alert) {
   if (cat === 'deny_rate' || msg.includes('deny rate') || msg.includes('deny count')) {
     return 'The DENY rate exceeded the historical average threshold, indicating an anomalous pattern of denied operations.';
   }
-  if (cat === 'observation_gap' || msg.includes('observation gap') || msg.includes('ungoverned')) {
-    return 'A gap in governance observations was detected. Operations may be occurring outside the governed tool boundary.';
+  if (cat === 'observation_gap' || msg.includes('observation gap')) {
+    return 'A gap in governance observations was detected. Operations may be occurring outside the governed action boundary.';
   }
   if (cat === 'security' || msg.includes('vulnerability') || msg.includes('security')) {
     return 'A security-relevant condition was detected that may require immediate attention.';
@@ -511,10 +511,10 @@ function _describeGuidance(alert) {
     return 'Open the Health window to review Chain Integrity details. If a break is confirmed, the system will record a repair event. Check that no external process is modifying the chain file.';
   }
   if (cat === 'deny_rate' || msg.includes('deny rate') || msg.includes('deny count')) {
-    return 'Review the DENY pattern in the Activity log. Frequent DENYs to the same tool or path may indicate a policy rule that needs adjustment or an agent attempting unauthorized operations.';
+    return 'Review the DENY pattern in the Activity log. Frequent DENYs to the same action or path may indicate a policy rule that needs adjustment or an agent attempting unauthorized operations.';
   }
-  if (cat === 'observation_gap' || msg.includes('observation gap') || msg.includes('ungoverned')) {
-    return 'Check that observation hooks are installed and running. Ungoverned operations reduce the Transparency metric and may indicate tooling that bypasses governance.';
+  if (cat === 'observation_gap' || msg.includes('observation gap')) {
+    return 'Check that provider proxy routing is active and all governed applications are sending requests through Atested.';
   }
   if (cat === 'security' || msg.includes('vulnerability') || msg.includes('security')) {
     return 'Review the alert details immediately. Security alerts may require changes to your policy rules or infrastructure configuration.';

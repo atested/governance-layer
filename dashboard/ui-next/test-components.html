@@ -131,7 +131,7 @@
   <atd-status-grid id="demo-grid">
     <atd-status-card label="Mediated Ops" value="892"></atd-status-card>
     <atd-status-card label="Governed" value="1,103"></atd-status-card>
-    <atd-status-card label="Ungoverned" value="144" variant="warning"></atd-status-card>
+    <atd-status-card label="Observed" value="144" variant="warning"></atd-status-card>
     <atd-status-card label="Unique Users" value="3"></atd-status-card>
     <atd-status-card label="Active Approvals" value="7" variant="success"></atd-status-card>
     <atd-status-card label="DENY Rate" value="2.6%"></atd-status-card>
@@ -165,7 +165,7 @@
 <!-- 9. Data Table -->
 <section>
   <h2>9. Data Table</h2>
-  <p class="label">Sortable columns, row click, row highlighting (DENY=red, ungoverned=amber), pagination</p>
+  <p class="label">Sortable columns, row click, row highlighting (DENY=red, observed=amber), pagination</p>
   <div class="max-width">
     <atd-data-table id="demo-table" page-size="5"></atd-data-table>
   </div>
@@ -216,7 +216,7 @@
   const kv = document.getElementById('demo-kv');
   kv.items = [
     { key: 'Decision', value: 'ALLOW' },
-    { key: 'Tool', value: 'fs_write', variant: 'code' },
+    { key: 'Action', value: 'fs_write', variant: 'code' },
     { key: 'Target', value: '/Volumes/SSD/archive/gov/governance-layer/dashboard/ui-next/components/status-card.js', variant: 'code' },
     { key: 'User', value: 'cecil' },
     { key: 'Confidence Tier', value: 'Tier 1' },
@@ -251,7 +251,7 @@
 
   table.setAttribute('columns', JSON.stringify([
     { key: 'time', label: 'Time', sortable: true, width: '140px' },
-    { key: 'tool', label: 'Tool', sortable: true },
+    { key: 'tool', label: 'Action', sortable: true },
     { key: 'target', label: 'Target', sortable: false },
     { key: 'decision', label: 'Decision', sortable: true, width: '100px' },
     { key: 'tier', label: 'Tier', sortable: true, width: '80px' },
@@ -277,12 +277,12 @@
     { time: '14:31:30', tool: 'Bash', target: 'git status', decision: 'ALLOW', tier: 2, user: 'cecil' },
     { time: '14:31:15', tool: 'fs_list', target: 'dashboard/', decision: 'ALLOW', tier: 1, user: 'cecil' },
     { time: '14:30:58', tool: 'Read', target: 'base.js', decision: 'ALLOW', tier: 3, user: 'cecil' },
-    { time: '14:30:40', tool: 'glob', target: '**/*.js', _variant: 'ungoverned', decision: 'OBSERVE', tier: 4, user: 'system' },
+    { time: '14:30:40', tool: 'glob', target: '**/*.js', _variant: 'observed', decision: 'OBSERVE', tier: 4, user: 'system' },
     { time: '14:30:22', tool: 'fs_write', target: 'config.json', decision: 'DENY', tier: 2, user: 'operator', _variant: 'deny' },
     { time: '14:30:10', tool: 'fs_read', target: 'policy-rules.json', decision: 'ALLOW', tier: 1, user: 'cecil' },
     { time: '14:29:58', tool: 'Bash', target: 'npm test', decision: 'ALLOW', tier: 2, user: 'cecil' },
     { time: '14:29:45', tool: 'fs_mkdir', target: 'components/', decision: 'ALLOW', tier: 1, user: 'cecil' },
-    { time: '14:29:30', tool: 'grep', target: 'src/**', _variant: 'ungoverned', decision: 'OBSERVE', tier: 4, user: 'system' },
+    { time: '14:29:30', tool: 'grep', target: 'src/**', _variant: 'observed', decision: 'OBSERVE', tier: 4, user: 'system' },
     { time: '14:29:15', tool: 'fs_delete', target: 'temp.js', decision: 'DENY', tier: 1, user: 'operator', _variant: 'deny' },
   ];
 
@@ -291,7 +291,7 @@
   });
 
   table.addEventListener('table:row-click', (e) => {
-    log('table-log', `table:row-click — tool=${e.detail.row.tool}, decision=${e.detail.row.decision}, index=${e.detail.index}`);
+    log('table-log', `table:row-click — action=${e.detail.row.tool}, decision=${e.detail.row.decision}, index=${e.detail.index}`);
   });
 
   table.addEventListener('table:page', (e) => {

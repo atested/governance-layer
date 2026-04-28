@@ -420,7 +420,7 @@ async function _openDenyRateDetail(state, h) {
     const table = document.createElement('table');
     table.className = 'hw-deny-table';
     table.innerHTML = `<thead><tr>
-      <th>Time</th><th>Tool</th><th>Target</th>
+      <th>Time</th><th>Action</th><th>Target</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
 

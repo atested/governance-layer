@@ -792,6 +792,8 @@ def audit_query(
     end_time: Optional[str] = None,
     user_identity: Optional[str] = None,
     tool_name: Optional[str] = None,
+    action_type: Optional[str] = None,
+    confidence_tier: Optional[str] = None,
     policy_decision: Optional[str] = None,
     event_category: Optional[str] = None,
     limit: int = 100,
@@ -799,8 +801,9 @@ def audit_query(
 ) -> dict:
     """Query the governance chain with filters for audit purposes.
 
-    Supports filtering by time range, user, tool, policy decision, and
-    event category. Returns matching entries in reverse chronological order.
+    Supports filtering by time range, user, action, action type, tier, policy
+    decision, and event category. Returns matching entries in reverse
+    chronological order.
     """
     rows = load_chain_rows(chain_path)
     sidecar_by_request_id: dict[str, dict] = {}
@@ -831,7 +834,18 @@ def audit_query(
         if tool_name:
             rec_tool = rec.get("tool", rec.get("capability_class", ""))
             rec_original = rec.get("original_tool", "")
-            if rec_tool != tool_name and rec_original != tool_name:
+            entry_tool = entry["detail"].get("tool_name", "")
+            if rec_tool != tool_name and rec_original != tool_name and entry_tool != tool_name:
+                continue
+
+        # Action type filter
+        if action_type:
+            if entry["detail"].get("action_type", "") != action_type:
+                continue
+
+        # Confidence tier filter
+        if confidence_tier:
+            if str(entry["detail"].get("confidence_tier", "")) != str(confidence_tier):
                 continue
 
         # Policy decision filter
@@ -904,6 +918,8 @@ def audit_query(
             "end_time": end_time,
             "user_identity": user_identity,
             "tool_name": tool_name,
+            "action_type": action_type,
+            "confidence_tier": confidence_tier,
             "policy_decision": policy_decision,
             "event_category": event_category,
         },

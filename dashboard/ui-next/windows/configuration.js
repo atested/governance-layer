@@ -262,7 +262,7 @@ function _buildDiscoveredToolsPane(state, mappings) {
   `;
 
   pane.addEventListener('click', () => _openDiscoveredToolsDetail(state, mappings));
-  setTooltip(pane, 'Open discovered tool mappings and classifier reasons.');
+  setTooltip(pane, 'Open discovered action mappings and classifier reasons.');
   return pane;
 }
 
@@ -472,15 +472,15 @@ function _openDiscoveredToolsDetail(state, mappings) {
     <div class="cf-gc-accent cf-accent-green"></div>
     <div class="cf-gc-header">Discovered tools</div>
     <div class="cf-gc-section">
-      <p class="cf-gc-explain">When Atested encounters a tool it hasn\u2019t seen before, it automatically classifies it to the nearest governance category. This ensures new tools are governed immediately without requiring manual configuration.</p>
-      <p class="cf-gc-explain">The classification is based on the tool\u2019s name and behavior patterns. If an auto-classification is wrong, you can override it in edit mode.</p>
+      <p class="cf-gc-explain">When Atested encounters an action it hasn\u2019t seen before, it automatically classifies it to the nearest governance category. This ensures new actions are governed immediately without requiring manual configuration.</p>
+      <p class="cf-gc-explain">The classification is based on the action\u2019s name and behavior patterns. If an auto-classification is wrong, you can override it in edit mode.</p>
     </div>
   `;
 
   if (!entries.length) {
     const empty = document.createElement('div');
     empty.className = 'cf-gc-section';
-    empty.innerHTML = '<p class="cf-gc-note">No tools have been auto-classified yet. Tools will appear here as Atested encounters them during operation.</p>';
+    empty.innerHTML = '<p class="cf-gc-note">No actions have been auto-classified yet. Actions will appear here as Atested encounters them during operation.</p>';
     content.appendChild(empty);
   } else {
     const tableSection = document.createElement('div');
@@ -489,7 +489,7 @@ function _openDiscoveredToolsDetail(state, mappings) {
     const table = document.createElement('table');
     table.className = 'cf-tools-table';
     table.innerHTML = `<thead><tr>
-      <th>Tool</th>
+      <th>Action</th>
       <th style="width:120px">Mapped to</th>
       <th style="width:100px">Reason</th>
       <th style="width:130px">First seen</th>
@@ -512,7 +512,7 @@ function _openDiscoveredToolsDetail(state, mappings) {
     content.appendChild(tableSection);
   }
 
-  modalManager.open({ title: 'Discovered Tools', subtitle: 'Auto-classified tools in your installation', trigger: state.el, content });
+  modalManager.open({ title: 'Discovered Actions', subtitle: 'Auto-classified actions in your installation', trigger: state.el, content });
 }
 
 // ---------- Signing detail ----------
@@ -585,7 +585,7 @@ function _openProxyDetail(state, proxy) {
     </div>
     <div class="cf-gc-section">
       <div class="cf-gc-sub-header">How the proxy works</div>
-      <p class="cf-gc-explain">The Atested proxy sits between your AI application and the model provider. It intercepts tool-use responses from the model, classifies each operation, evaluates it against your policy rules, and records the decision in the governance chain. Allowed operations pass through unchanged. Denied operations are replaced with a denial message that the model sees and can respond to.</p>
+      <p class="cf-gc-explain">The Atested proxy sits between your AI application and the model provider. It intercepts action requests from the model, classifies each operation, evaluates it against your policy rules, and records the decision in the governance chain. Allowed operations pass through unchanged. Denied operations are replaced with a denial message that the model sees and can respond to.</p>
     </div>
     <div class="cf-gc-section">
       <div class="cf-gc-sub-header">Setup</div>

@@ -1,8 +1,8 @@
 /**
  * Audit window — child window (depth 1).
- * D-039 redesign: chain verification summary, dual filter panes,
- * data table with column toggles (Standard/Advanced), pagination,
- * CSV + JSON export, Record Detail drill-down.
+ * D-039/D-146 redesign: chain verification summary, dual filter panes,
+ * all-field data table with column toggles, pagination, multi-format export,
+ * Record Detail drill-down.
  */
 
 import * as api from '../api.js';
@@ -13,13 +13,12 @@ import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils
 // ---------- Column definitions ----------
 
 const COLUMNS = [
-  // Standard columns
   { key: 'timestamp_utc',   label: 'Time',      standard: true,  width: '90px'  },
-  { key: 'tool_name',       label: 'Tool',      standard: true  },
+  { key: 'tool_name',       label: 'Action',    standard: true  },
+  { key: 'action_type',     label: 'Action Type', standard: true, width: '100px' },
   { key: 'target',          label: 'Target',    standard: true  },
   { key: 'policy_decision', label: 'Decision',  standard: true,  width: '80px'  },
   { key: 'event_category',  label: 'Category',  standard: true,  width: '110px' },
-  // Advanced columns
   { key: 'sequence_position', label: '#',        standard: false, width: '50px'  },
   { key: 'user_identity',   label: 'User',      standard: false, width: '120px' },
   { key: 'confidence_tier', label: 'Tier',      standard: false, width: '50px'  },
@@ -28,7 +27,8 @@ const COLUMNS = [
 
 const COLUMN_TOOLTIPS = {
   timestamp_utc: 'When this chain record was written.',
-  tool_name: 'The tool or operation recorded in the audit trail.',
+  tool_name: 'The governed action recorded in the audit trail.',
+  action_type: 'The classifier action family used for policy evaluation.',
   target: 'The target path, command, URL, or artifact recorded for this event.',
   policy_decision: 'The governance decision for mediated operations.',
   event_category: 'The normalized chain event category.',
@@ -58,6 +58,8 @@ export function openAuditWindow(trigger) {
     endTime: '',
     userFilter: '',
     toolFilter: '',
+    actionTypeFilter: '',
+    tierFilter: '',
     decisionFilter: '',
     categoryFilter: '',
     // Pagination
@@ -74,7 +76,7 @@ export function openAuditWindow(trigger) {
   };
 
   for (const col of COLUMNS) {
-    state.visibleColumns[col.key] = col.standard;
+    state.visibleColumns[col.key] = true;
   }
 
   _buildUI(state);
@@ -157,8 +159,8 @@ function _buildUI(state) {
               <input type="text" class="au-input" id="au-user" placeholder="e.g. cecil">
             </label>
             <label class="au-fp-label">
-              Tool name
-              <input type="text" class="au-input" id="au-tool" placeholder="e.g. FS_WRITE">
+              Action
+              <input type="text" class="au-input" id="au-tool" placeholder="e.g. fs_write">
             </label>
           </div>
           <div class="au-fp-fields">
@@ -170,8 +172,37 @@ function _buildUI(state) {
                 <option value="verification_transition">Verification</option>
                 <option value="opaque_approval">Approval</option>
                 <option value="opaque_revocation">Revocation</option>
-                <option value="ungoverned_observation">Ungoverned</option>
-                <option value="opaque_invocation_decision">Opaque invocation</option>
+              </select>
+            </label>
+            <label class="au-fp-label">
+              Action type
+              <select class="au-select" id="au-action-type">
+                <option value="">All action types</option>
+                <option value="read">Read</option>
+                <option value="write">Write</option>
+                <option value="delete">Delete</option>
+                <option value="execute">Execute</option>
+                <option value="network">Network</option>
+                <option value="file_read">File read</option>
+                <option value="file_write">File write</option>
+                <option value="file_delete">File delete</option>
+                <option value="command_execution">Command execution</option>
+                <option value="network_read">Network read</option>
+                <option value="search">Search</option>
+                <option value="discovery">Discovery</option>
+                <option value="delegated_action">Delegated action</option>
+                <option value="approval">Approval</option>
+                <option value="configuration">Configuration</option>
+              </select>
+            </label>
+            <label class="au-fp-label">
+              Tier
+              <select class="au-select" id="au-tier">
+                <option value="">All tiers</option>
+                <option value="1">Tier 1</option>
+                <option value="2">Tier 2</option>
+                <option value="3">Tier 3</option>
+                <option value="4">Tier 4</option>
               </select>
             </label>
           </div>
@@ -193,16 +224,19 @@ function _buildUI(state) {
           <button class="au-ps-btn" data-size="50">50</button>
           <button class="au-ps-btn" data-size="100">100</button>
         </div>
-        <button class="au-btn au-btn-export" id="au-export-csv">Export filtered</button>
-        <button class="au-btn au-btn-export" id="au-export-json">Export JSON</button>
+        <div class="au-export-control">
+          <select class="au-select au-export-format" id="au-export-format" aria-label="Export format">
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="excel">Excel</option>
+          </select>
+          <button class="au-btn au-btn-export" id="au-export">Export</button>
+        </div>
       </div>
     </div>
 
     <!-- Column toggles -->
     <div class="au-col-bar" id="au-col-bar">
-      <button class="au-col-preset au-col-preset-active" id="au-preset-standard">Standard</button>
-      <button class="au-col-preset" id="au-preset-advanced">Advanced</button>
-      <span class="au-col-sep"></span>
       <div class="au-col-toggles" id="au-col-toggles"></div>
     </div>
 
@@ -249,14 +283,14 @@ function _applyStaticTooltips(state) {
     ['#au-from', 'Start of the Audit time filter.'],
     ['#au-to', 'End of the Audit time filter.'],
     ['#au-user', 'Filter audit results by recorded operator identity.'],
-    ['#au-tool', 'Filter audit results by tool or operation name.'],
+    ['#au-tool', 'Filter audit results by governed action name.'],
     ['#au-category', 'Filter audit results by chain event category.'],
+    ['#au-action-type', 'Filter audit results by classifier action type.'],
+    ['#au-tier', 'Filter audit results by classifier confidence tier.'],
     ['#au-search', 'Apply the selected audit filters.'],
     ['#au-clear', 'Clear all audit filters.'],
-    ['#au-export-csv', 'Export matching records as CSV for spreadsheet review.'],
-    ['#au-export-json', 'Export matching records as JSON for external review.'],
-    ['#au-preset-standard', 'Show the standard audit columns.'],
-    ['#au-preset-advanced', 'Show all audit columns.'],
+    ['#au-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
+    ['#au-export', 'Export matching records in the selected format.'],
   ]);
   state.el.querySelectorAll('.au-quick-btn').forEach(btn => {
     setTooltip(btn, `Set the audit time range to ${btn.textContent.trim()}.`);
@@ -271,10 +305,6 @@ function _applyStaticTooltips(state) {
 }
 
 function _updatePresetHighlight(state) {
-  const isStandard = COLUMNS.every(c => state.visibleColumns[c.key] === c.standard);
-  const isAdvanced = COLUMNS.every(c => state.visibleColumns[c.key] === true);
-  state.el.querySelector('#au-preset-standard').classList.toggle('au-col-preset-active', isStandard);
-  state.el.querySelector('#au-preset-advanced').classList.toggle('au-col-preset-active', isAdvanced);
 }
 
 // ---------- Wire controls ----------
@@ -316,12 +346,16 @@ function _wireControls(state) {
     el.querySelector('#au-user').value = '';
     el.querySelector('#au-tool').value = '';
     el.querySelector('#au-category').value = '';
+    el.querySelector('#au-action-type').value = '';
+    el.querySelector('#au-tier').value = '';
     el.querySelectorAll('.au-dtoggle').forEach(b => b.classList.remove('au-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('au-dtoggle-active');
     state.startTime = '';
     state.endTime = '';
     state.userFilter = '';
     state.toolFilter = '';
+    state.actionTypeFilter = '';
+    state.tierFilter = '';
     state.decisionFilter = '';
     state.categoryFilter = '';
     state.currentPage = 1;
@@ -348,23 +382,8 @@ function _wireControls(state) {
     _loadData(state);
   });
 
-  // Exports
-  el.querySelector('#au-export-csv').addEventListener('click', () => _exportCSV(state));
-  el.querySelector('#au-export-json').addEventListener('click', () => _exportJSON(state));
-
-  // Column presets
-  el.querySelector('#au-preset-standard').addEventListener('click', () => {
-    for (const col of COLUMNS) state.visibleColumns[col.key] = col.standard;
-    _buildColumnToggles(state);
-    _updatePresetHighlight(state);
-    _renderTable(state);
-  });
-  el.querySelector('#au-preset-advanced').addEventListener('click', () => {
-    for (const col of COLUMNS) state.visibleColumns[col.key] = true;
-    _buildColumnToggles(state);
-    _updatePresetHighlight(state);
-    _renderTable(state);
-  });
+  // Export
+  el.querySelector('#au-export').addEventListener('click', () => _exportAudit(state));
 }
 
 function _readFilters(state) {
@@ -375,6 +394,8 @@ function _readFilters(state) {
   state.endTime = toVal ? new Date(toVal).toISOString() : '';
   state.userFilter = el.querySelector('#au-user').value.trim();
   state.toolFilter = el.querySelector('#au-tool').value.trim();
+  state.actionTypeFilter = el.querySelector('#au-action-type').value;
+  state.tierFilter = el.querySelector('#au-tier').value;
   state.categoryFilter = el.querySelector('#au-category').value;
 }
 
@@ -392,6 +413,8 @@ async function _loadData(state) {
   if (state.endTime) params.end_time = state.endTime;
   if (state.userFilter) params.user_identity = state.userFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.actionTypeFilter) params.action_type = state.actionTypeFilter;
+  if (state.tierFilter) params.confidence_tier = state.tierFilter;
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
 
@@ -535,6 +558,10 @@ function _renderCell(key, entry, detail) {
       const tool = detail.tool_name || '';
       return tool ? `<span class="au-cell-tool">${_esc(tool)}</span>` : '<span class="au-cell-muted">\u2014</span>';
     }
+    case 'action_type': {
+      const actionType = detail.action_type || '';
+      return actionType ? _esc(_labelize(actionType)) : '<span class="au-cell-muted">\u2014</span>';
+    }
     case 'target': {
       const target = detail.target || '';
       if (!target) return '<span class="au-cell-muted">\u2014</span>';
@@ -574,15 +601,13 @@ const _EVENT_LABELS = {
   verification_transition: 'Verification',
   opaque_approval: 'Approval',
   opaque_revocation: 'Revocation',
-  opaque_invocation_decision: 'Invocation',
-  ungoverned_observation: 'Ungoverned',
 };
 
 function _rowTooltip(entry, detail) {
   const parts = [];
   if (entry.timestamp_utc) parts.push(_formatHumanDate(entry.timestamp_utc));
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
-  if (detail.tool_name) parts.push(`Tool: ${detail.tool_name}`);
+  if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
   if (entry.event_category) parts.push(`Category: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
   return parts.join(' | ') || 'Open audit record detail.';
 }
@@ -650,19 +675,35 @@ function _computePageNumbers(current, total) {
 
 // ---------- Export ----------
 
-async function _exportCSV(state) {
+function _exportParams(state) {
   const params = { limit: 10000, offset: 0 };
   if (state.startTime) params.start_time = state.startTime;
   if (state.endTime) params.end_time = state.endTime;
   if (state.userFilter) params.user_identity = state.userFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.actionTypeFilter) params.action_type = state.actionTypeFilter;
+  if (state.tierFilter) params.confidence_tier = state.tierFilter;
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
+  return params;
+}
 
+async function _exportAudit(state) {
+  const format = state.el.querySelector('#au-export-format').value || 'json';
+  const params = _exportParams(state);
   const res = await api.getAuditQuery(params);
   if (!res.ok) return;
-
   const entries = res.data.entries || [];
+  if (format === 'csv') {
+    _exportCSV(entries, res.data.total_matching || entries.length);
+  } else if (format === 'excel') {
+    _exportExcel(entries, res.data.total_matching || entries.length);
+  } else {
+    _exportJSON(entries, params, res.data.total_matching || entries.length);
+  }
+}
+
+function _exportCSV(entries, totalMatching) {
   const allCols = COLUMNS;
   const header = allCols.map(c => c.label).join(',');
   const rows = entries.map(entry => {
@@ -677,39 +718,52 @@ async function _exportCSV(state) {
   });
 
   let csv = header + '\n' + rows.join('\n');
-  if (entries.length >= 10000 && (res.data.total_matching || 0) > 10000) {
-    csv += '\n# Note: Export limited to first 10,000 rows. Total matching: ' + res.data.total_matching;
+  if (entries.length >= 10000 && totalMatching > 10000) {
+    csv += '\n# Note: Export limited to first 10,000 rows. Total matching: ' + totalMatching;
   }
 
   _downloadFile(csv, 'text/csv', `atested-audit-${_dateStr()}.csv`);
 }
 
-async function _exportJSON(state) {
-  const params = { limit: 10000, offset: 0 };
-  if (state.startTime) params.start_time = state.startTime;
-  if (state.endTime) params.end_time = state.endTime;
-  if (state.userFilter) params.user_identity = state.userFilter;
-  if (state.toolFilter) params.tool_name = state.toolFilter;
-  if (state.decisionFilter) params.policy_decision = state.decisionFilter;
-  if (state.categoryFilter) params.event_category = state.categoryFilter;
-
-  const res = await api.getAuditQuery(params);
-  if (!res.ok) return;
-
+function _exportJSON(entries, params, totalMatching) {
   const envelope = {
     export_timestamp: new Date().toISOString(),
     query_parameters: params,
-    total_records: res.data.total_matching || 0,
-    records: res.data.entries || [],
+    total_records: totalMatching,
+    records: entries,
   };
 
   _downloadFile(JSON.stringify(envelope, null, 2), 'application/json', `atested-audit-${_dateStr()}.json`);
+}
+
+function _exportExcel(entries, totalMatching) {
+  const rows = [COLUMNS.map(c => c.label)];
+  for (const entry of entries) {
+    const detail = entry.detail || {};
+    rows.push(COLUMNS.map(col => _getCellValue(col.key, entry, detail)));
+  }
+  if (entries.length >= 10000 && totalMatching > 10000) {
+    rows.push([`Export limited to first 10,000 rows. Total matching: ${totalMatching}`]);
+  }
+  const sheet = rows.map(row =>
+    `<Row>${row.map(value => `<Cell><Data ss:Type="String">${_xmlEsc(value)}</Data></Cell>`).join('')}</Row>`
+  ).join('');
+  const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Audit Export"><Table>${sheet}</Table></Worksheet>
+</Workbook>`;
+  _downloadFile(xml, 'application/vnd.ms-excel', `atested-audit-${_dateStr()}.xls`);
 }
 
 function _getCellValue(key, entry, detail) {
   switch (key) {
     case 'timestamp_utc': return entry.timestamp_utc || '';
     case 'tool_name': return detail.tool_name || '';
+    case 'action_type': return detail.action_type || '';
     case 'target': return detail.target || '';
     case 'policy_decision': return detail.policy_decision || '';
     case 'event_category': return entry.event_category || '';
@@ -777,10 +831,18 @@ function _dateStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function _labelize(str) {
+  return String(str || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function _esc(str) {
   const el = document.createElement('span');
   el.textContent = str || '';
   return el.innerHTML;
+}
+
+function _xmlEsc(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function _escAttr(str) {
@@ -999,6 +1061,15 @@ auStyles.textContent = `
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  .au-export-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .au-export-format {
+    width: auto;
+    min-width: 92px;
   }
   .au-page-size {
     display: flex;

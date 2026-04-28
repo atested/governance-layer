@@ -74,7 +74,7 @@ const CARD_TOOLTIPS = {
   alerts:         'Safety alerts are always available; advanced monitoring expands on paid tiers.',
   approvals:      'Review and revoke scoped approvals that override policy decisions.',
   health:         'Chain integrity, signing status, deny-rate signals, and diagnostics.',
-  configuration:  'Policy rules, base directories, discovered tools, signing, and proxy settings.',
+  configuration:  'Policy rules, base directories, discovered actions, signing, and proxy settings.',
   communications: 'Telemetry controls are available now; priority request slots require Personal Plus or higher.',
   audit:          'Searchable chain records for compliance review and evidence export.',
   licensing:      'Compare plans, complete the survey, build a case document, and manage purchase.',
@@ -113,7 +113,7 @@ const CHAIN_HEALTH_TOOLTIPS = {
 
 /** Tooltip descriptions for Atested Activity metrics */
 const ACTIVITY_TOOLTIPS = {
-  'mv-mediated': 'Total tool calls evaluated by Atested',
+  'mv-mediated': 'Total actions evaluated by Atested',
   'mv-denied': 'Operations blocked by policy rules',
   'mv-approved': 'Active scoped approvals for specific operations',
   'mv-users': 'Unique operator identities recorded in the chain',
@@ -198,7 +198,7 @@ export function renderMainPage() {
       <div class="mp-feed" id="recent-feed">
         <div class="mp-feed-header">
           <span class="mp-feed-hcol">Time</span>
-          <span class="mp-feed-hcol">Tool</span>
+          <span class="mp-feed-hcol">Action</span>
           <span class="mp-feed-hcol">Target</span>
           <span class="mp-feed-hcol mp-feed-hcol-right">Decision</span>
         </div>
@@ -527,7 +527,7 @@ function _renderRecentActivity(result) {
     const target = detail.target || '';
     const decision = detail.policy_decision || entry.policy_decision || entry.event_category || '';
 
-    // Four columns: time, tool, target, decision
+    // Four columns: time, action, target, decision
     let decisionHtml;
     if (decision === 'ALLOW') {
       decisionHtml = '<span class="mp-decision-allow">ALLOW</span>';

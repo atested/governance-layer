@@ -135,7 +135,6 @@ function _applyStaticTooltips(state) {
   setTooltips(state.el, [
     ['#rp-from', 'Start of the reporting time range.'],
     ['#rp-to', 'End of the reporting time range.'],
-    ['#rp-generate', 'Generate the selected report for the chosen time range.'],
     ['#rp-export', 'Export the current formatted report as clean JSON.'],
     ['#rp-stat-total', 'Total records included in this report.'],
     ['#rp-stat-allow', 'Allowed operations in the report range.'],
@@ -201,7 +200,6 @@ function _buildUI(state) {
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
           </div>
           <div class="rp-fp-actions">
-            <button class="rp-btn rp-btn-primary" id="rp-generate">Generate</button>
             <button class="rp-btn rp-btn-export" id="rp-export">Export JSON</button>
           </div>
         </div>
@@ -268,15 +266,14 @@ function _wireControls(state) {
     _applyRange(state, btn.dataset.range);
   });
 
-  el.querySelector('#rp-from').addEventListener('input', () => _setActiveRange(state, 'custom'));
-  el.querySelector('#rp-to').addEventListener('input', () => _setActiveRange(state, 'custom'));
-
-  // Generate button
-  el.querySelector('#rp-generate').addEventListener('click', () => {
-    _readTimeFilters(state);
+  const onCustomRange = () => {
+    _setActiveRange(state, 'custom');
+    if (!_readTimeFilters(state)) return;
     recordUiAggregate('report_runs', state.reportId);
     _loadReport(state);
-  });
+  };
+  el.querySelector('#rp-from').addEventListener('change', onCustomRange);
+  el.querySelector('#rp-to').addEventListener('change', onCustomRange);
 
   // Export button
   el.querySelector('#rp-export').addEventListener('click', () => _exportJSON(state));
@@ -285,8 +282,33 @@ function _wireControls(state) {
 function _readTimeFilters(state) {
   const fromVal = state.el.querySelector('#rp-from').value;
   const toVal = state.el.querySelector('#rp-to').value;
-  state.startTime = fromVal ? new Date(fromVal).toISOString() : '';
-  state.endTime = toVal ? new Date(toVal).toISOString() : '';
+  if (!fromVal && !toVal) {
+    state.startTime = '';
+    state.endTime = '';
+    state.rangeError = '';
+    return true;
+  }
+  if (!fromVal || !toVal) {
+    state.rangeError = 'Enter both From and To, or use All time.';
+    _renderRangeError(state);
+    return false;
+  }
+  const start = new Date(fromVal);
+  const end = new Date(toVal);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
+    state.rangeError = 'Enter valid From and To dates.';
+    _renderRangeError(state);
+    return false;
+  }
+  if (end.getTime() < start.getTime()) {
+    state.rangeError = 'End date must be after start date.';
+    _renderRangeError(state);
+    return false;
+  }
+  state.startTime = start.toISOString();
+  state.endTime = end.toISOString();
+  state.rangeError = '';
+  return true;
 }
 
 function _applyRange(state, range, opts = {}) {
@@ -323,6 +345,10 @@ function _setActiveRange(state, range) {
 async function _loadReport(state) {
   const body = state.el.querySelector('#rp-gp-body');
   body.innerHTML = '<div class="rp-loading">Loading\u2026</div>';
+  if (state.rangeError) {
+    _renderRangeError(state);
+    return;
+  }
 
   const template = REPORT_BY_ID[state.reportId] || REPORT_TEMPLATES[0];
   const params = {};
@@ -372,6 +398,17 @@ async function _loadReport(state) {
   state.data = _composeReportData(template, grouped, base, params);
   _renderStats(state);
   _renderReportView(state);
+}
+
+function _renderRangeError(state) {
+  const body = state.el.querySelector('#rp-gp-body');
+  if (!body) return;
+  const title = state.el.querySelector('#rp-gp-title');
+  const count = state.el.querySelector('#rp-gp-count');
+  const template = REPORT_BY_ID[state.reportId] || REPORT_TEMPLATES[0];
+  if (title) title.textContent = template.title;
+  if (count) count.textContent = 'Invalid range';
+  body.innerHTML = `<div class="rp-error">${_esc(state.rangeError || 'Invalid report time range.')}</div>`;
 }
 
 function _composeReportData(template, grouped, base, params) {
@@ -956,7 +993,7 @@ function _navigateToActivity(state, groupBy, groupKey) {
 // ---------- JSON export ----------
 
 function _exportJSON(state) {
-  if (!state.data) return;
+  if (!state.data || state.rangeError) return;
 
   const exportData = {
     report_id: state.data.report_id,

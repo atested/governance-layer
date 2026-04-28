@@ -139,7 +139,7 @@ function _applyStaticTooltips(state) {
     ['#ap-stat-active', 'Currently active policy exceptions.'],
     ['#ap-stat-stale', 'Approvals that have not been used recently and should be reviewed.'],
     ['#ap-stat-latest', 'Most recent approval recorded in the chain.'],
-    ['#ap-operation', 'Enter a tool name, path, opaque artifact hash, or operation identity to approve.'],
+    ['#ap-operation', 'Enter an action name, path, opaque artifact hash, or operation identity to approve.'],
     ['#ap-approve-btn', 'Create an approval event in the chain.'],
     ['#ap-export', 'Export the active approvals table as CSV.'],
     ['.ap-revocation-guidance', 'Explains when and why to revoke approvals.'],

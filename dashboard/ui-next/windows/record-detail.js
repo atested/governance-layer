@@ -192,7 +192,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     const kv = document.createElement('atd-kv-list');
     const items = [
       { key: 'Decision', value: decision || '\u2014', tooltip: 'Policy outcome recorded for this operation.' },
-      { key: 'Tool', value: rec.tool_name || rec.tool || '\u2014', variant: 'code', tooltip: 'Tool or operation intercepted from the AI application.' },
+      { key: 'Action', value: rec.tool_name || rec.tool || '\u2014', variant: 'code', tooltip: 'Governed action intercepted from the AI application.' },
       { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Path, command, URL, or artifact the operation acted on.' },
       { key: 'User', value: rec.user_identity || '\u2014', tooltip: 'Operator identity recorded with the event.' },
       { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014', tooltip: 'Classifier evidence confidence used during policy evaluation.' },
@@ -220,7 +220,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     kv.items = [
       { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014', tooltip: 'Observed operation type outside the mediation boundary.' },
       { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Observed path, command, URL, or artifact.' },
-      { key: 'Source', value: rec.source || '\u2014', tooltip: 'Hook or tool that reported the observation.' },
+      { key: 'Source', value: rec.source || '\u2014', tooltip: 'Runtime source that reported the observation.' },
       { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
@@ -295,7 +295,7 @@ function _isMediatedDecision(type) {
 }
 
 function _isBoundaryObservation(type) {
-  return /observ|boundar|ungoverned/i.test(type);
+  return /observ|boundar/i.test(type);
 }
 
 function _isApproval(type) {

@@ -118,15 +118,15 @@ for f in "${WINDOWS[@]}"; do
 done
 
 # ---------- Patched copy: windows/activity.js ----------
-# Patch 1: Replace tool filter text input with <select> dropdown
+# Patch 1: Replace action filter text input with <select> dropdown
 # Patch 2: Add Apply button to time range pane
 # Patch 3: Wire time-range Apply button
 # Patch 4: Add _populateToolDropdown function and call from _loadData
 
 cp "$SRC/windows/activity.js" "$DST/windows/activity.js"
 
-# Patch 1: tool filter input → select
-sed -i '' 's|<input type="text" class="aw-input" id="aw-tool-filter" placeholder="All tools">|<select class="aw-select" id="aw-tool-filter"><option value="">All tools</option></select>|' \
+# Patch 1: action filter input → select
+sed -i '' 's|<input type="text" class="aw-input" id="aw-tool-filter" placeholder="All actions">|<select class="aw-select" id="aw-tool-filter"><option value="">All actions</option></select>|' \
   "$DST/windows/activity.js"
 
 # Patch 2: Add Apply button after quick-select buttons
@@ -153,7 +153,7 @@ sed -i '' 's/_updateStats(state);/_updateStats(state);\n  _populateToolDropdown(
   "$DST/windows/activity.js"
 
 sed -i '' '/^\/\/ ---------- Stats ----------/i\
-// ---------- Tool dropdown ----------\
+// ---------- Action dropdown ----------\
 \
 function _populateToolDropdown(state) {\
   const sel = state.el.querySelector('\''#aw-tool-filter'\'');\
@@ -164,7 +164,7 @@ function _populateToolDropdown(state) {\
   }\
   const current = sel.value;\
   const sorted = [...tools].sort();\
-  sel.innerHTML = '\''<option value="">All tools</option>'\'';\
+  sel.innerHTML = '\''<option value="">All actions</option>'\'';\
   for (const t of sorted) {\
     const opt = document.createElement('\''option'\'');\
     opt.value = t;\
@@ -175,7 +175,7 @@ function _populateToolDropdown(state) {\
 }\
 ' "$DST/windows/activity.js"
 
-echo "  copied windows/activity.js (patched: tool dropdown + time-range Apply)"
+echo "  copied windows/activity.js (patched: action dropdown + time-range Apply)"
 
 # ---------- Manifest ----------
 

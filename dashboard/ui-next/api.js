@@ -209,7 +209,7 @@ export function getTelemetryStatus() {
 // ---------- POST endpoints ----------
 
 /**
- * Record ungoverned operation observation.
+ * Record runtime operation observation.
  * POST /api/observe
  */
 export function postObserve({ operation_type, target, source, observed_at } = {}) {

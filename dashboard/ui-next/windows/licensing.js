@@ -650,7 +650,7 @@ function _buildTermsPanel(state) {
 
     <div class="lt-section">
       <h3 class="lt-heading">Telemetry reciprocity</h3>
-      <p class="lt-text">If you opt into telemetry, Atested receives anonymous aggregated usage counts: total decisions, deterministic vs judgment split, tool categories. No file paths, no user identities, no organization names. In return, Atested shares back anonymized benchmarks so you can compare your governance posture to similar deployments. Opting out is always available \u2014 you lose the benchmark comparison but nothing else changes.</p>
+      <p class="lt-text">If you opt into telemetry, Atested receives anonymous aggregated usage counts: total decisions, deterministic vs judgment split, action categories. No file paths, no user identities, no organization names. In return, Atested shares back anonymized benchmarks so you can compare your governance posture to similar deployments. Opting out is always available \u2014 you lose the benchmark comparison but nothing else changes.</p>
     </div>
 
     <div class="lt-section">
@@ -2702,7 +2702,7 @@ function _renderCaseForTier(el, doc, tierId, isExploring, appState) {
           </div>
           <div class="lcd-evidence-stat">
             <span class="lcd-ev-number">${(ev.tool_categories || []).length}</span>
-            <span class="lcd-ev-label">Tool Categories</span>
+            <span class="lcd-ev-label">Action Categories</span>
           </div>
         </div>
         ${ev.first_decision && ev.last_decision ? `
@@ -2784,7 +2784,7 @@ function _downloadCaseDocument(doc) {
   md += `- Total decisions: ${ev.total_decisions || 0}\n`;
   md += `- ALLOW: ${ev.allow_count || 0}\n`;
   md += `- DENY: ${ev.deny_count || 0}\n`;
-  md += `- Tool categories: ${(ev.tool_categories || []).join(', ') || 'None'}\n`;
+  md += `- Action categories: ${(ev.tool_categories || []).join(', ') || 'None'}\n`;
   if (ev.first_decision && ev.last_decision) {
     md += `- Activity period: ${ev.first_decision.slice(0, 10)} to ${ev.last_decision.slice(0, 10)}\n`;
   }
@@ -2833,7 +2833,7 @@ function _downloadCaseDocument(doc) {
 
 const _TELEMETRY_INTRO = 'Atested maintains a bidirectional channel between your installation and Atested. This channel carries data in both directions and is the transport layer we both use to communicate. Uses include escalation requests from you, security notifications, new version notifications, and operational intelligence. All traffic on this channel is recorded in your governance chain, so you can independently verify what was sent and received. The transport layer itself is encrypted end to end.';
 
-const _TELEMETRY_OUTBOUND = 'Your installation sends anonymized, summarized operational data to Atested. Aggregate decision counts, classifier confidence distributions, and policy rule hit patterns. No tool names, file paths, commands, or content is transmitted or ever retained in any way. This data helps Atested improve classification accuracy and prioritize development.';
+const _TELEMETRY_OUTBOUND = 'Your installation sends anonymized, summarized operational data to Atested. Aggregate decision counts, classifier confidence distributions, and policy rule hit patterns. No action names, file paths, commands, or content is transmitted or ever retained in any way. This data helps Atested improve classification accuracy and prioritize development.';
 
 const _TELEMETRY_OPT_OUT = 'You can opt out of telemetry during licensing. Opting out is supported but reduces our ability to deliver version updates and operational intelligence to your installation. Emergency communications are never affected by telemetry status or plan level. Atested will always act to protect every installation regardless.';
 
@@ -2849,11 +2849,11 @@ const PRICING_FEATURES = {
     categories: [
       { name: 'Governance', features: [
         { name: 'The Chain', desc: 'Cryptographically signed, hash-chained, immutable record of every AI application action. Every decision is recorded with Ed25519 signatures and can be independently verified by anyone with the public key.' },
-        { name: 'Policy Evaluation', desc: 'Declarative rules evaluated against every tool call before execution. ALLOW or DENY, decided and recorded before the action can happen.' },
+        { name: 'Policy Evaluation', desc: 'Declarative rules evaluated against every governed action before execution. ALLOW or DENY, decided and recorded before the action can happen.' },
       ]},
       { name: 'Oversight', features: [
         { name: 'Dashboard', desc: 'Real-time operational view of what your AI applications are doing. Decisions, activity, health, and configuration in one surface.' },
-        { name: 'Audit', desc: 'Searchable, filterable record of every governed operation. Query by time, user, tool, decision type, or event category. Independently verifiable against the chain.' },
+        { name: 'Audit', desc: 'Searchable, filterable record of every governed operation. Query by time, user, action, decision type, or event category. Independently verifiable against the chain.' },
       ]},
       { name: 'Operations', features: [
         { name: 'Single Operator', desc: 'Full Atested capabilities for one person. Your chain, your machine. Everything you need to trust your AI applications.' },

@@ -23,7 +23,7 @@
  *
  * Row highlighting:
  *   Rows with row._variant = "deny" get red tint.
- *   Rows with row._variant = "ungoverned" get amber tint.
+ *   Rows with row._variant = "observed" get amber tint.
  */
 
 import { AtdBase } from './base.js';
@@ -111,10 +111,10 @@ tbody tr.row--deny:hover {
   background: rgba(248, 81, 73, 0.18);
 }
 
-tbody tr.row--ungoverned {
+tbody tr.row--observed {
   background: var(--warn-soft);
 }
-tbody tr.row--ungoverned:hover {
+tbody tr.row--observed:hover {
   background: rgba(210, 153, 34, 0.18);
 }
 

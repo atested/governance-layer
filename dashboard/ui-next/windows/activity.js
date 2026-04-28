@@ -1,7 +1,7 @@
 /**
  * Activity window — child window (depth 1).
  * D-035 redesign: stat cards, dual filter panes, data-rich table with
- * column toggles (Standard/Advanced), pagination, CSV export, and
+ * column toggles, pagination, CSV export, and
  * drill-down to Record Detail.
  */
 
@@ -17,7 +17,7 @@ const COLUMNS = [
   { key: 'timestamp_utc', label: 'Time',       standard: true,  width: '120px' },
   { key: 'event_category', label: 'Event',     standard: true,  width: '140px' },
   { key: 'policy_decision', label: 'Decision', standard: true,  width: '80px'  },
-  { key: 'tool_name',   label: 'Tool',         standard: true  },
+  { key: 'tool_name',   label: 'Action',       standard: true  },
   // Advanced columns (hidden by default)
   { key: 'sequence_position', label: '#',       standard: false, width: '50px'  },
   { key: 'action_type', label: 'Category',     standard: false, width: '100px' },
@@ -30,7 +30,7 @@ const COLUMN_TOOLTIPS = {
   timestamp_utc: 'When the chain record was written.',
   event_category: 'The kind of chain event: mediated action, approval, revocation, or observation.',
   policy_decision: 'The policy outcome recorded for this operation.',
-  tool_name: 'The AI application tool or operation name observed by Atested.',
+  tool_name: 'The governed action name observed by Atested.',
   sequence_position: 'The record position in the hash-linked chain.',
   action_type: 'The evidence-based operation category assigned by the classifier.',
   confidence_tier: 'Classifier confidence tier for the operation evidence.',
@@ -131,7 +131,7 @@ function _buildUI(state) {
         <span class="aw-stat-value aw-val-amber" id="aw-stat-deny">0</span>
       </div>
       <div class="aw-stat-card">
-        <span class="aw-stat-label">Tool Categories</span>
+        <span class="aw-stat-label">Action Categories</span>
         <span class="aw-stat-value" id="aw-stat-tools">0</span>
       </div>
     </div>
@@ -182,13 +182,11 @@ function _buildUI(state) {
                 <option value="verification_transition">Verification</option>
                 <option value="opaque_approval">Approval</option>
                 <option value="opaque_revocation">Revocation</option>
-                <option value="ungoverned_observation">Ungoverned</option>
-                <option value="opaque_invocation_decision">Opaque invocation</option>
               </select>
             </label>
             <label class="aw-fp-label">
-              Tool
-              <input type="text" class="aw-input" id="aw-tool-filter" placeholder="All tools">
+              Action
+              <input type="text" class="aw-input" id="aw-tool-filter" placeholder="All actions">
             </label>
           </div>
           <div class="aw-fp-actions">
@@ -260,11 +258,11 @@ function _applyStaticTooltips(state) {
     ['#aw-stat-total', 'Total records matching the current Activity filters.'],
     ['#aw-stat-allow', 'Operations that policy allowed after classification.'],
     ['#aw-stat-deny', 'Operations denied before execution by Atested policy.'],
-    ['#aw-stat-tools', 'Distinct tool categories seen in the matching activity.'],
+    ['#aw-stat-tools', 'Distinct action categories seen in the matching activity.'],
     ['#aw-from', 'Start of the Activity time filter.'],
     ['#aw-to', 'End of the Activity time filter.'],
     ['#aw-event-type', 'Limit the list to one kind of chain event.'],
-    ['#aw-tool-filter', 'Filter by tool name or operation name.'],
+    ['#aw-tool-filter', 'Filter by governed action name.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
     ['#aw-export', 'Export matching Activity records as CSV.'],
@@ -583,14 +581,12 @@ const _EVENT_LABELS = {
   verification_transition: 'Verification',
   opaque_approval: 'Approval',
   opaque_revocation: 'Revocation',
-  opaque_invocation_decision: 'Invocation',
-  ungoverned_observation: 'Ungoverned',
 };
 
 function _rowTooltip(entry, detail) {
   const parts = [];
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
-  if (detail.tool_name) parts.push(`Tool: ${detail.tool_name}`);
+  if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
   if (detail.action_type) parts.push(`Category: ${detail.action_type}`);
   if (entry.event_category) parts.push(`Event: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
   return parts.join(' | ') || 'Open this chain record.';

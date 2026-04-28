@@ -170,7 +170,7 @@ export const TRANSLATION_TEMPLATES = {
   },
   gov_policy: {
     name: 'Policy Evaluation',
-    description: 'Declarative policy rules evaluated against every tool call before execution, with ALLOW/DENY decisions recorded.',
+    description: 'Declarative policy rules evaluated against every governed action before execution, with ALLOW/DENY decisions recorded.',
     justification: 'Ensures AI applications cannot exceed their authorized scope, reducing risk of unauthorized data access or destructive operations.',
   },
   gov_shared: {
@@ -195,7 +195,7 @@ export const TRANSLATION_TEMPLATES = {
   },
   vis_audit: {
     name: 'Audit Trail',
-    description: 'Searchable audit interface with filtering by time, user, tool, decision, and event category.',
+    description: 'Searchable audit interface with filtering by time, user, action, decision, and event category.',
     justification: 'Enables rapid investigation of specific governance events and supports internal audit requirements.',
   },
   vis_team: {
@@ -236,7 +236,7 @@ export const TRANSLATION_TEMPLATES = {
   ops_custom_int: {
     name: 'Custom Integrations',
     description: 'API access for integrating Atested governance data with existing enterprise systems (SIEM, GRC, CI/CD).',
-    justification: 'Enables AI governance to be part of existing security and compliance workflows rather than a standalone tool.',
+    justification: 'Enables AI governance to be part of existing security and compliance workflows rather than a standalone console.',
   },
   sup_docs_feedback: {
     name: 'Documentation & Feedback Support',

@@ -3571,6 +3571,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 end_time=qs("end_time") or None,
                 user_identity=qs("user_identity") or None,
                 tool_name=qs("tool_name") or None,
+                action_type=qs("action_type") or None,
+                confidence_tier=qs("confidence_tier") or None,
                 policy_decision=qs("policy_decision") or None,
                 event_category=qs("event_category") or None,
                 limit=qs_int("limit", 100),
