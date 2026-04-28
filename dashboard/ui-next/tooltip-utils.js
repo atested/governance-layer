@@ -115,6 +115,7 @@ export function applyGenericWindowTooltips(root) {
 
 function _genericButtonTip(label) {
   const lower = label.toLowerCase();
+  if (lower === 'reports') return '';
   if (lower.includes('export')) return 'Export the current view for external review.';
   if (lower.includes('apply')) return 'Apply the selected controls.';
   if (lower.includes('clear')) return 'Clear the current controls.';

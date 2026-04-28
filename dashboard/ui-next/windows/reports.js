@@ -70,6 +70,39 @@ const REPORT_TEMPLATES = [
 
 const REPORT_BY_ID = Object.fromEntries(REPORT_TEMPLATES.map(r => [r.id, r]));
 
+const TELEMETRY_PURPOSE =
+  'Atested telemetry helps Atested deliver proactive support and improve the product. The data is minimal, anonymous, and optional.';
+
+const TELEMETRY_PRIVACY_TEXT =
+  'Atested telemetry is anonymous by design. Atested counts interactions in memory and periodically writes a summary, never individual events. The summary is what gets transmitted. No click logs, no event order, no timestamps, no session IDs, no file paths, no user identities. Session reconstruction is not possible because the raw data never exists. Not on your machine, not on ours.';
+
+const TELEMETRY_CATEGORIES = [
+  {
+    key: 'ui_interactions',
+    title: 'UI Interactions',
+    accent: 'blue',
+    copy: 'Summarized counts of how you use the dashboard. Which windows you open, which reports you run. Anonymous, no session detail.',
+  },
+  {
+    key: 'governance_usage_data',
+    title: 'Governance Usage Data',
+    accent: 'green',
+    copy: 'Aggregated decision counts. Total operations, allow/deny breakdown, action categories. The same data that powers your reports, summarized for Atested.',
+  },
+  {
+    key: 'trouble_submissions',
+    title: 'Trouble Submissions',
+    accent: 'amber',
+    copy: "Support requests you've sent through the Trouble button.",
+  },
+  {
+    key: 'system_health',
+    title: 'System Health',
+    accent: 'purple',
+    copy: "Chain size, integrity status, version checks. Keeps us aware of your installation's health so we can reach out if something needs attention.",
+  },
+];
+
 /**
  * Open the Reports window.
  * @param {HTMLElement|null} trigger
@@ -303,7 +336,7 @@ async function _loadReport(state) {
       body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
       return;
     }
-    state.data = _composeTelemetryReportData(template, res.data);
+    state.data = _composeTelemetryReportData(template, res.data, params);
     _renderStats(state);
     _renderReportView(state);
     return;
@@ -361,36 +394,28 @@ function _composeReportData(template, grouped, base, params) {
   };
 }
 
-function _composeTelemetryReportData(template, payload) {
+function _composeTelemetryReportData(template, payload, params = {}) {
   const summary = payload.summary || {};
-  const lifetime = summary.lifetime || {};
+  const categories = payload.categories || summary.categories || {};
   const transmissions = summary.transmissions || [];
-  const periodCount = Object.keys(summary.periods || {}).length;
-  const windowOpenTotal = _sumNested(lifetime.window_opens);
-  const reportRunTotal = _sumNested(lifetime.report_runs);
   return {
     generated_at: new Date().toISOString(),
     report_id: template.id,
     report_title: template.title,
     report_subtitle: template.subtitle,
-    time_range: { start: null, end: null },
-    total_records: windowOpenTotal + reportRunTotal,
-    decision_summary: { ALLOW: 0, DENY: 0 },
-    deny_rate: 0,
+    time_range: { start: params.start_time || null, end: params.end_time || null },
+    total_records: 0,
+    decision_summary: {},
+    deny_rate: null,
     groups: {},
     telemetry: {
       opted_in: !!payload.opted_in,
       summary,
-      lifetime,
+      categories,
       transmissions,
-      period_count: periodCount,
+      period_count: Object.keys(summary.periods || {}).length,
     },
-    findings: [
-      { label: 'Raw events stored', value: 'No', tone: 'green', detail: 'Only aggregate counters are stored.' },
-      { label: 'Raw events sent', value: 'No', tone: 'green', detail: 'Flushes send summary counter deltas, not click events.' },
-      { label: 'Periods', value: _fmtNum(periodCount), tone: 'purple', detail: 'Daily aggregate buckets retained in the summary file.' },
-      { label: 'Transmissions', value: _fmtNum(transmissions.length), tone: 'blue', detail: 'Summary artifacts generated for the telemetry channel.' },
-    ],
+    findings: [],
   };
 }
 
@@ -436,6 +461,10 @@ function _composeTroubleReportData(template, payload, params = {}) {
 
 function _renderStats(state) {
   const d = state.data;
+  const stats = state.el.querySelector('.rp-stats');
+  if (stats) stats.style.display = d.report_id === 'telemetry-summary' ? 'none' : '';
+  if (d.report_id === 'telemetry-summary') return;
+
   const summary = d.decision_summary || {};
   const total = d.total_records || 0;
   const allow = summary.ALLOW || 0;
@@ -460,6 +489,11 @@ function _renderReportView(state) {
   title.textContent = template.title;
   count.textContent = _rangeLabel(d.time_range);
   body.innerHTML = '';
+
+  if (d.report_id === 'telemetry-summary') {
+    _renderTelemetryReport(body, d);
+    return;
+  }
 
   const summary = document.createElement('div');
   summary.className = `rp-report-summary rp-report-${template.accent}`;
@@ -498,10 +532,6 @@ function _renderReportView(state) {
     body.appendChild(_section('Evidence checklist', _auditChecklist(d)));
     body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
     body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
-  } else if (d.report_id === 'telemetry-summary') {
-    body.appendChild(_section('Privacy model', _telemetryPrivacyModel(d.telemetry.summary)));
-    body.appendChild(_section('Lifetime summary counters', _telemetryCounters(d.telemetry.lifetime)));
-    body.appendChild(_section('Transmission history', _telemetryTransmissions(d.telemetry.transmissions)));
   } else if (d.report_id === 'trouble-history') {
     body.appendChild(_section('Support request history', _troubleHistoryTable(d.trouble.reports)));
     body.appendChild(_section('Captured context', _troubleContextList(d.trouble.reports)));
@@ -655,53 +685,136 @@ function _headlineForReport(d) {
   return 'This summary shows the selected period across decisions, actions, and activity categories.';
 }
 
-function _telemetryPrivacyModel(summary) {
-  const model = summary?.privacy_model || {};
-  const list = document.createElement('div');
-  list.className = 'rp-audit-checklist';
-  const checks = [
-    ['Raw events stored', model.raw_events_stored === false ? 'No' : 'Unknown', 'The telemetry file does not contain click logs or event order.'],
-    ['Raw events transmitted', model.raw_events_transmitted === false ? 'No' : 'Unknown', 'The client sends counter summaries, not individual interactions.'],
-    ['Governance chain', 'No telemetry records', model.governance_chain || 'Telemetry is separate from the chain.'],
-    ['Session reconstruction', 'Not possible', model.session_reconstruction || 'No session identifiers or ordered events are retained.'],
-  ];
-  for (const [label, value, detail] of checks) {
-    const row = document.createElement('div');
-    row.className = 'rp-audit-row';
-    row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
-    list.appendChild(row);
+function _renderTelemetryReport(body, d) {
+  body.appendChild(_telemetryFullCard('ATESTED TELEMETRY PURPOSE', TELEMETRY_PURPOSE, 'blue'));
+  body.appendChild(_telemetryFullCard('PRIVACY MODEL', TELEMETRY_PRIVACY_TEXT, 'purple'));
+
+  const categories = document.createElement('div');
+  categories.className = 'rp-telemetry-section';
+  categories.innerHTML = '<div class="rp-telemetry-section-title">CATEGORIES OF ATESTED TELEMETRY DATA</div>';
+  const grid = document.createElement('div');
+  grid.className = 'rp-telemetry-category-grid';
+  for (const category of TELEMETRY_CATEGORIES) {
+    grid.appendChild(_telemetryCategoryCard(category));
   }
-  return list;
+  categories.appendChild(grid);
+  body.appendChild(categories);
+
+  body.appendChild(_section('Telemetry transmissions', _telemetryTransmissionsByCategory(d.telemetry, d.time_range)));
 }
 
-function _telemetryCounters(lifetime) {
-  const rows = [];
-  for (const [bucket, values] of Object.entries(lifetime || {})) {
-    if (bucket === 'flushes') {
-      rows.push(['Summary flushes', _fmtNum(values)]);
-      continue;
-    }
-    for (const [key, count] of Object.entries(values || {})) {
-      rows.push([`${_labelize(bucket)}: ${key}`, _fmtNum(count)]);
-    }
-  }
-  rows.sort((a, b) => (Number(String(b[1]).replace(/,/g, '')) || 0) - (Number(String(a[1]).replace(/,/g, '')) || 0));
-  return _simpleTable(['Counter', 'Total'], rows);
+function _telemetryFullCard(title, copy, accent) {
+  const card = document.createElement('div');
+  card.className = `rp-telemetry-full rp-telemetry-${accent}`;
+  card.innerHTML = `
+    <div class="rp-telemetry-full-title">${_esc(title)}</div>
+    <div class="rp-telemetry-full-copy">${_esc(copy)}</div>
+  `;
+  return card;
 }
 
-function _telemetryTransmissions(transmissions) {
-  const rows = (transmissions || []).map(item => [
-    item.artifact_id || 'Summary artifact',
-    item.timestamp_utc || '',
-    item.sent_to_remote ? 'Sent' : 'Stored locally',
-  ]);
+function _telemetryCategoryCard(category) {
+  const card = document.createElement('div');
+  card.className = `rp-telemetry-category rp-telemetry-${category.accent}`;
+  card.innerHTML = `
+    <div class="rp-telemetry-category-title">${_esc(category.title)}</div>
+    <div class="rp-telemetry-category-copy">${_esc(category.copy)}</div>
+  `;
+  return card;
+}
+
+function _telemetryTransmissionsByCategory(telemetry, range) {
+  const wrap = document.createElement('div');
+  wrap.className = 'rp-telemetry-transmissions';
+  const rows = _telemetryTransmissionRows(telemetry, range);
   if (!rows.length) {
-    const wrap = document.createElement('div');
-    wrap.className = 'rp-empty-note';
-    wrap.textContent = 'No telemetry summary artifacts have been submitted yet.';
+    wrap.innerHTML = '<div class="rp-empty-note">No Atested telemetry transmissions in the selected range.</div>';
     return wrap;
   }
-  return _simpleTable(['Artifact', 'Generated', 'Status'], rows);
+
+  for (const category of TELEMETRY_CATEGORIES) {
+    const categoryRows = rows.filter(row => row.category === category.key);
+    if (!categoryRows.length) continue;
+    const block = document.createElement('div');
+    block.className = 'rp-telemetry-category-block';
+    block.innerHTML = `<div class="rp-telemetry-block-title">${_esc(category.title)}</div>`;
+    block.appendChild(_simpleTable(['Period', 'Sent at', 'Artifact', 'What was sent'], categoryRows.map(row => [
+      row.period,
+      _formatShortDate(row.sent_at),
+      _truncate(row.artifact_id, 22),
+      row.summary,
+    ])));
+    wrap.appendChild(block);
+  }
+  return wrap;
+}
+
+function _telemetryTransmissionRows(telemetry, range) {
+  const transmissions = telemetry?.transmissions || [];
+  const startMs = range?.start ? new Date(range.start).getTime() : null;
+  const endMs = range?.end ? new Date(range.end).getTime() : null;
+  const rows = [];
+
+  for (const tx of transmissions) {
+    const sentMs = new Date(tx.timestamp_utc || tx.timestamp || '').getTime();
+    if (Number.isFinite(sentMs)) {
+      if (startMs && sentMs < startMs) continue;
+      if (endMs && sentMs > endMs) continue;
+    }
+    const periods = tx.periods_sent?.length
+      ? tx.periods_sent
+      : (tx.categories?.periods?.length ? tx.categories.periods : []);
+    if (!periods.length) {
+      for (const category of TELEMETRY_CATEGORIES) {
+        rows.push({
+          category: category.key,
+          period: _formatShortDate(tx.timestamp_utc || tx.timestamp || ''),
+          sent_at: tx.timestamp_utc || tx.timestamp || '',
+          artifact_id: tx.artifact_id || 'summary',
+          summary: 'Legacy summary artifact; category detail was not recorded with this transmission.',
+        });
+      }
+      continue;
+    }
+    for (const period of periods) {
+      const cats = period.categories || {};
+      for (const category of TELEMETRY_CATEGORIES) {
+        rows.push({
+          category: category.key,
+          period: period.period || 'current',
+          sent_at: tx.timestamp_utc || tx.timestamp || '',
+          artifact_id: tx.artifact_id || 'summary',
+          summary: _summarizeTelemetryCategory(category.key, cats[category.key]),
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+function _summarizeTelemetryCategory(key, data = {}) {
+  if (key === 'ui_interactions') {
+    const windows = _sumNested(data.window_opens);
+    const reports = _sumNested(data.report_runs);
+    const ranges = _sumNested(data.range_shortcuts);
+    return `${_fmtNum(windows)} window opens, ${_fmtNum(reports)} report runs, ${_fmtNum(ranges)} range shortcuts`;
+  }
+  if (key === 'governance_usage_data') {
+    return `${_fmtNum(data.total_operations || 0)} operations, ${_fmtNum(data.allow || 0)} allow, ${_fmtNum(data.deny || 0)} deny; actions: ${_topCounterSummary(data.action_categories)}`;
+  }
+  if (key === 'trouble_submissions') {
+    return `${_fmtNum(data.submitted || 0)} trouble submissions; priorities: ${_topCounterSummary(data.priorities)}`;
+  }
+  if (key === 'system_health') {
+    return `chain ${data.chain_status || 'unknown'}, integrity ${data.chain_file_status || 'unknown'}, policy ${data.policy_rules_status || 'unknown'}, size ${_fmtNum(data.chain_size_bytes || 0)} bytes`;
+  }
+  return 'Summary data';
+}
+
+function _topCounterSummary(counter) {
+  const entries = Object.entries(counter || {}).sort((a, b) => (b[1] || 0) - (a[1] || 0)).slice(0, 3);
+  if (!entries.length) return 'none';
+  return entries.map(([k, v]) => `${k} ${_fmtNum(v)}`).join(', ');
 }
 
 function _simpleTable(headers, rows) {
@@ -1253,6 +1366,69 @@ rpStyles.textContent = `
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
+  .rp-telemetry-full {
+    margin: 8px 20px 14px;
+    padding: 18px;
+    background: rgba(255,255,255,0.025);
+    border: 1px dashed rgba(255,255,255,0.14);
+    border-left: 6px solid #6699cc;
+    border-radius: 2px;
+  }
+  .rp-telemetry-full.rp-telemetry-purple { border-left-color: #d2a8ff; }
+  .rp-telemetry-full-title,
+  .rp-telemetry-section-title,
+  .rp-telemetry-block-title {
+    color: #e4e6eb;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rp-telemetry-full-copy {
+    color: #c7cdd6;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  .rp-telemetry-section {
+    margin: 4px 20px 16px;
+  }
+  .rp-telemetry-category-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .rp-telemetry-category {
+    background: rgba(255,255,255,0.025);
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-top: 4px solid #6699cc;
+    border-radius: 2px;
+    padding: 13px;
+  }
+  .rp-telemetry-category.rp-telemetry-green { border-top-color: #3fb950; }
+  .rp-telemetry-category.rp-telemetry-amber { border-top-color: #d29922; }
+  .rp-telemetry-category.rp-telemetry-purple { border-top-color: #d2a8ff; }
+  .rp-telemetry-category-title {
+    color: #e4e6eb;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .rp-telemetry-category-copy {
+    color: #8b919a;
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+  .rp-telemetry-transmissions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .rp-telemetry-category-block {
+    border: 1px dashed rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.018);
+    padding: 12px;
+  }
   .rp-finding-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1440,6 +1616,7 @@ rpStyles.textContent = `
     .rp-filter-row { grid-template-columns: 1fr; }
     .rp-stats { grid-template-columns: repeat(2, 1fr); }
     .rp-finding-grid { grid-template-columns: 1fr; }
+    .rp-telemetry-category-grid { grid-template-columns: 1fr; }
     .rp-audit-checklist { grid-template-columns: 1fr; }
     .rp-bar-label { flex: 0 0 80px; font-size: 0.72rem; }
     .rp-fp-fields { flex-direction: column; }
@@ -1447,6 +1624,7 @@ rpStyles.textContent = `
   @media (min-width: 601px) and (max-width: 900px) {
     .rp-report-picker { grid-template-columns: repeat(2, 1fr); }
     .rp-finding-grid { grid-template-columns: repeat(2, 1fr); }
+    .rp-telemetry-category-grid { grid-template-columns: repeat(2, 1fr); }
   }
 `;
 document.head.appendChild(rpStyles);

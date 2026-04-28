@@ -2904,7 +2904,7 @@ const PRICING_FEATURES = {
         { name: 'Advanced Reporting', desc: 'Scheduled and ad-hoc reports covering metrics, trends, and compliance status over configurable time periods.' },
       ]},
       { name: 'Communication', features: [
-        { name: 'Telemetry Communication', telemetry: true, inbound: 'Organizational telemetry with role-level breakdowns. Compliance-relevant aggregate metrics derived from your telemetry data and surfaced in your reporting. Industry-level benchmarking at this scale.' },
+        { name: 'Telemetry Communication', telemetry: true, inbound: 'Organizational telemetry with role-level breakdowns. Compliance-relevant aggregate metrics derived from Atested telemetry data and surfaced in your reporting. Industry-level benchmarking at this scale.' },
         { name: 'Priority Requests', priority: true, detail: '8 Medium priority slots with 3-business-day response and 4 High priority slots with 2-business-day response. Your team can see all open requests, who submitted them, and their current status. 3-business-day response commitment for Medium. 2-business-day response commitment for High.' },
         { name: 'Governance Health Monitoring', monitoring: true, desc: 'Atested monitors your governance posture for compliance-relevant drift. Policy rules that never fire, rules that fire constantly, approval backlogs building. We surface these before they become audit findings. If we send an alert and it is not acknowledged within a reasonable window, we follow up. We are actively managing your governance health, not just monitoring it.' },
       ]},

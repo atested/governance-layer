@@ -80,6 +80,8 @@ def _new_telemetry_summary():
     return {
         "schema_version": 1,
         "artifact_type": "anonymous_summary_telemetry",
+        "purpose": "Atested telemetry helps Atested deliver proactive support and improve the product. The data is minimal, anonymous, and optional.",
+        "privacy_statement": "Atested telemetry is anonymous by design. Atested counts interactions in memory and periodically writes a summary, never individual events. The summary is what gets transmitted. No click logs, no event order, no timestamps, no session IDs, no file paths, no user identities. Session reconstruction is not possible because the raw data never exists. Not on your machine, not on ours.",
         "privacy_model": {
             "raw_events_stored": False,
             "raw_events_transmitted": False,
@@ -101,6 +103,8 @@ def _load_telemetry_summary():
     template = _new_telemetry_summary()
     summary.setdefault("schema_version", 1)
     summary.setdefault("artifact_type", "anonymous_summary_telemetry")
+    summary.setdefault("purpose", template["purpose"])
+    summary.setdefault("privacy_statement", template["privacy_statement"])
     summary.setdefault("privacy_model", template["privacy_model"])
     summary.setdefault("periods", {})
     summary.setdefault("lifetime", _empty_telemetry_bucket())
@@ -145,18 +149,153 @@ def _record_telemetry_summary(increments):
     return summary
 
 
+def _period_key(timestamp):
+    try:
+        return datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        return "unknown"
+
+
+def _collect_governance_usage_by_period():
+    by_period = {}
+    try:
+        from readout import load_chain_rows
+        rows = load_chain_rows(CHAIN) if CHAIN.exists() else []
+    except Exception:
+        rows = []
+
+    for rec in rows:
+        decision = rec.get("policy_decision") or rec.get("detail", {}).get("policy_decision")
+        if decision not in ("ALLOW", "DENY"):
+            continue
+        period = _period_key(rec.get("timestamp_utc") or rec.get("timestamp"))
+        bucket = by_period.setdefault(period, {
+            "total_operations": 0,
+            "allow": 0,
+            "deny": 0,
+            "action_categories": {},
+        })
+        bucket["total_operations"] += 1
+        if decision == "ALLOW":
+            bucket["allow"] += 1
+        elif decision == "DENY":
+            bucket["deny"] += 1
+        action = (
+            rec.get("detail", {}).get("tool_name")
+            or rec.get("tool_name")
+            or rec.get("event_category")
+            or "unknown"
+        )
+        action = str(action)[:80]
+        bucket["action_categories"][action] = bucket["action_categories"].get(action, 0) + 1
+    return by_period
+
+
+def _collect_trouble_submissions_by_period():
+    by_period = {}
+    trouble_dir = RUNTIME / "LOGS" / "trouble"
+    if not trouble_dir.exists():
+        return by_period
+    for fp in trouble_dir.glob("tr_*.json"):
+        try:
+            report = json.loads(fp.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        period = _period_key(report.get("timestamp_utc") or report.get("timestamp"))
+        priority = str(report.get("priority", "normal"))[:40]
+        bucket = by_period.setdefault(period, {"submitted": 0, "priorities": {}})
+        bucket["submitted"] += 1
+        bucket["priorities"][priority] = bucket["priorities"].get(priority, 0) + 1
+    return by_period
+
+
+def _collect_system_health_snapshot():
+    try:
+        from chain_health import collect_health_signals
+        stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
+        chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
+        health = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
+    except Exception:
+        health = {}
+
+    chain = health.get("chain", {}) if isinstance(health, dict) else {}
+    integrity = health.get("integrity", {}) if isinstance(health, dict) else {}
+    storage = health.get("storage", {}) if isinstance(health, dict) else {}
+    return {
+        "chain_status": chain.get("status", "not_available"),
+        "chain_event_count": chain.get("chain_event_count", 0),
+        "chain_size_bytes": storage.get("chain_size_bytes") or storage.get("bytes") or 0,
+        "chain_file_status": integrity.get("chain_file_status", "not_available"),
+        "policy_rules_status": integrity.get("policy_rules_status", "not_available"),
+        "version": os.environ.get("ATESTED_VERSION", "unknown"),
+    }
+
+
+def _build_telemetry_category_snapshot(summary):
+    ui_periods = summary.get("periods", {}) if isinstance(summary, dict) else {}
+    governance_periods = _collect_governance_usage_by_period()
+    trouble_periods = _collect_trouble_submissions_by_period()
+    system_health = _collect_system_health_snapshot()
+    period_keys = sorted(set(ui_periods) | set(governance_periods) | set(trouble_periods))
+
+    periods = []
+    for period in period_keys:
+        ui = ui_periods.get(period, {})
+        periods.append({
+            "period": period,
+            "categories": {
+                "ui_interactions": {
+                    "window_opens": ui.get("window_opens", {}),
+                    "report_runs": ui.get("report_runs", {}),
+                    "range_shortcuts": ui.get("range_shortcuts", {}),
+                    "flushes": ui.get("flushes", 0),
+                },
+                "governance_usage_data": governance_periods.get(period, {
+                    "total_operations": 0,
+                    "allow": 0,
+                    "deny": 0,
+                    "action_categories": {},
+                }),
+                "trouble_submissions": trouble_periods.get(period, {
+                    "submitted": 0,
+                    "priorities": {},
+                }),
+                "system_health": system_health,
+            },
+        })
+
+    return {
+        "ui_interactions": summary.get("lifetime", {}),
+        "governance_usage_data": _sum_period_values(governance_periods),
+        "trouble_submissions": _sum_period_values(trouble_periods),
+        "system_health": system_health,
+        "periods": periods,
+    }
+
+
+def _sum_period_values(periods):
+    total = {}
+    for bucket in periods.values():
+        _merge_counter_bucket(total, bucket)
+    return total
+
+
 def _build_summary_telemetry_artifact():
     summary = _load_telemetry_summary()
+    categories = _build_telemetry_category_snapshot(summary)
     artifact = {
         "artifact_type": "anonymous_summary_telemetry",
         "artifact_id": f"tm_{uuid.uuid4().hex[:16]}",
         "artifact_version": "2.0",
         "timestamp": _now_utc_z(),
+        "purpose": summary.get("purpose"),
+        "privacy_statement": summary.get("privacy_statement"),
         "privacy_model": summary.get("privacy_model", {}),
         "summary": {
             "periods": summary.get("periods", {}),
             "lifetime": summary.get("lifetime", {}),
         },
+        "categories": categories,
     }
     artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
     artifact["artifact_hash"] = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
@@ -1196,6 +1335,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "artifact_id": artifact["artifact_id"],
                 "artifact_hash": artifact["artifact_hash"],
                 "sent_to_remote": bool(result.get("remote", {}).get("sent")),
+                "categories": artifact.get("categories", {}),
+                "periods_sent": artifact.get("categories", {}).get("periods", []),
             })
             summary["updated_at_utc"] = _now_utc_z()
             _write_json_file(TELEMETRY_SUMMARY, summary)
@@ -3632,9 +3773,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"artifacts": artifacts[:100], "summary": _load_telemetry_summary()})
 
         elif path == "/api/telemetry/summary":
+            summary = _load_telemetry_summary()
             _json_response(self, {
                 "opted_in": _telemetry_opted_in(),
-                "summary": _load_telemetry_summary(),
+                "summary": summary,
+                "categories": _build_telemetry_category_snapshot(summary),
             })
 
         elif path == "/api/telemetry/status":

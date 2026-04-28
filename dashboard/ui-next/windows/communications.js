@@ -36,7 +36,7 @@ export function openCommunicationsWindow(trigger) {
   const content = document.createElement('div');
   content.className = 'cm-root';
 
-  const result = _openAsChild('Communications', 'Submit requests and manage your telemetry', trigger, content);
+  const result = _openAsChild('Communications', 'Submit requests and manage Atested telemetry', trigger, content);
   if (!result) return;
 
   const state = { el: content, data: null };
