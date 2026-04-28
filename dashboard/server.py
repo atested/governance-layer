@@ -3609,6 +3609,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         continue
             _json_response(self, {"artifacts": artifacts[:100]})
 
+        elif path == "/api/trouble":
+            trouble_dir = RUNTIME / "LOGS" / "trouble"
+            reports = []
+            if trouble_dir.exists():
+                for fp in sorted(trouble_dir.glob("tr_*.json"), reverse=True):
+                    try:
+                        reports.append(json.loads(fp.read_text(encoding="utf-8")))
+                    except (json.JSONDecodeError, OSError):
+                        continue
+            _json_response(self, {"reports": reports[:200]})
+
         elif path == "/api/telemetry":
             telemetry_dir = RUNTIME / "LOGS" / "telemetry"
             artifacts = []

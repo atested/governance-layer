@@ -175,6 +175,14 @@ export function getFeedback() {
 }
 
 /**
+ * Trouble report history.
+ * GET /api/trouble
+ */
+export function getTroubleReports() {
+  return _request('GET', '/trouble');
+}
+
+/**
  * Telemetry artifacts.
  * GET /api/telemetry
  */

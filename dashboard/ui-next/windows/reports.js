@@ -58,6 +58,14 @@ const REPORT_TEMPLATES = [
     defaultRange: '30d',
     groups: [],
   },
+  {
+    id: 'trouble-history',
+    title: 'Trouble History',
+    subtitle: 'Support requests and captured page context',
+    accent: 'amber',
+    defaultRange: '30d',
+    groups: [],
+  },
 ];
 
 const REPORT_BY_ID = Object.fromEntries(REPORT_TEMPLATES.map(r => [r.id, r]));
@@ -284,6 +292,10 @@ async function _loadReport(state) {
   body.innerHTML = '<div class="rp-loading">Loading\u2026</div>';
 
   const template = REPORT_BY_ID[state.reportId] || REPORT_TEMPLATES[0];
+  const params = {};
+  if (state.startTime) params.start_time = state.startTime;
+  if (state.endTime) params.end_time = state.endTime;
+
   if (template.id === 'telemetry-summary') {
     await flushTelemetrySummary();
     const res = await api.getTelemetrySummary();
@@ -296,10 +308,17 @@ async function _loadReport(state) {
     _renderReportView(state);
     return;
   }
-
-  const params = {};
-  if (state.startTime) params.start_time = state.startTime;
-  if (state.endTime) params.end_time = state.endTime;
+  if (template.id === 'trouble-history') {
+    const res = await api.getTroubleReports();
+    if (!res.ok) {
+      body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
+      return;
+    }
+    state.data = _composeTroubleReportData(template, res.data, params);
+    _renderStats(state);
+    _renderReportView(state);
+    return;
+  }
 
   const groupKeys = Array.from(new Set(template.groups));
   const results = await Promise.all(groupKeys.map(async group => {
@@ -375,6 +394,44 @@ function _composeTelemetryReportData(template, payload) {
   };
 }
 
+function _composeTroubleReportData(template, payload, params = {}) {
+  const startMs = params.start_time ? new Date(params.start_time).getTime() : null;
+  const endMs = params.end_time ? new Date(params.end_time).getTime() : null;
+  const reports = (payload.reports || []).filter(report => {
+    const ts = new Date(report.timestamp_utc || report.timestamp || '').getTime();
+    if (!Number.isFinite(ts)) return true;
+    if (startMs && ts < startMs) return false;
+    if (endMs && ts > endMs) return false;
+    return true;
+  }).slice().sort((a, b) =>
+    String(b.timestamp_utc || b.timestamp || '').localeCompare(String(a.timestamp_utc || a.timestamp || ''))
+  );
+  const priorityCounts = {};
+  for (const report of reports) {
+    const priority = report.priority || 'normal';
+    priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+  }
+  const latest = reports[0] || null;
+  return {
+    generated_at: new Date().toISOString(),
+    report_id: template.id,
+    report_title: template.title,
+    report_subtitle: template.subtitle,
+    time_range: { start: params.start_time || null, end: params.end_time || null },
+    total_records: reports.length,
+    decision_summary: { ALLOW: 0, DENY: 0 },
+    deny_rate: 0,
+    groups: {},
+    trouble: { reports, priority_counts: priorityCounts },
+    findings: [
+      { label: 'Trouble reports', value: _fmtNum(reports.length), tone: 'amber', detail: 'Support requests stored locally for operator review.' },
+      { label: 'High or urgent', value: _fmtNum((priorityCounts.high || 0) + (priorityCounts.urgent || 0)), tone: 'red', detail: 'Reports marked high or urgent priority.' },
+      { label: 'Latest context', value: latest?.context?.current_window || 'None', tone: 'blue', detail: latest ? 'Most recent captured window context.' : 'No trouble reports submitted yet.' },
+      { label: 'Chain storage', value: 'No', tone: 'green', detail: 'Trouble reports are support artifacts, not governance chain records.' },
+    ],
+  };
+}
+
 // ---------- Render stats ----------
 
 function _renderStats(state) {
@@ -445,6 +502,9 @@ function _renderReportView(state) {
     body.appendChild(_section('Privacy model', _telemetryPrivacyModel(d.telemetry.summary)));
     body.appendChild(_section('Lifetime summary counters', _telemetryCounters(d.telemetry.lifetime)));
     body.appendChild(_section('Transmission history', _telemetryTransmissions(d.telemetry.transmissions)));
+  } else if (d.report_id === 'trouble-history') {
+    body.appendChild(_section('Support request history', _troubleHistoryTable(d.trouble.reports)));
+    body.appendChild(_section('Captured context', _troubleContextList(d.trouble.reports)));
   } else {
     body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroups(d.groups.tool), ['Signal', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
@@ -591,6 +651,7 @@ function _headlineForReport(d) {
   if (d.report_id === 'audit-evidence') return 'This view packages the selected chain records into an auditor-ready summary.';
   if (d.report_id === 'unusual-activity') return 'This view highlights high-denial and low-frequency activity that deserves review.';
   if (d.report_id === 'telemetry-summary') return 'This report shows the same aggregate telemetry summary Atested can receive, with no raw event history.';
+  if (d.report_id === 'trouble-history') return 'This view shows support reports submitted from the Trouble button and the page context captured with each report.';
   return 'This summary shows the selected period across decisions, actions, and activity categories.';
 }
 
@@ -660,6 +721,41 @@ function _simpleTable(headers, rows) {
   }
   table.appendChild(tbody);
   return table;
+}
+
+function _troubleHistoryTable(reports) {
+  const rows = (reports || []).map(report => [
+    _formatShortDate(report.timestamp_utc || report.timestamp),
+    _labelize(report.priority || 'normal'),
+    report.context?.current_window || 'Main page',
+    _truncate(report.description || '', 90),
+    _truncate(report.artifact_hash || report.artifact_id || '', 24),
+  ]);
+  return _simpleTable(['Submitted', 'Priority', 'Window', 'Description', 'Artifact'], rows);
+}
+
+function _troubleContextList(reports) {
+  const list = document.createElement('div');
+  list.className = 'rp-audit-checklist';
+  const latest = (reports || [])[0];
+  if (!latest) {
+    list.innerHTML = '<div class="rp-empty-note">No trouble report context has been captured yet.</div>';
+    return list;
+  }
+  const context = latest.context || {};
+  const checks = [
+    ['Captured at', context.captured_at_utc || latest.timestamp_utc || 'N/A', 'When the UI context snapshot was created.'],
+    ['Path', context.path || 'N/A', 'Browser path visible when the report was submitted.'],
+    ['Window stack', (context.modal_stack || []).map(w => w.title).filter(Boolean).join(' > ') || context.current_window || 'Main page', 'Open window context attached to the report.'],
+    ['License label', context.visible_state?.license || 'N/A', 'License state shown in the operator chrome at capture time.'],
+  ];
+  for (const [label, value, detail] of checks) {
+    const row = document.createElement('div');
+    row.className = 'rp-audit-row';
+    row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
+    list.appendChild(row);
+  }
+  return list;
 }
 
 function _topGroup(report) {
@@ -761,6 +857,7 @@ function _exportJSON(state) {
     },
     findings: state.data.findings,
     telemetry: state.data.telemetry || undefined,
+    trouble: state.data.trouble || undefined,
     groups: Object.fromEntries(Object.entries(state.data.groups || {}).map(([key, value]) => [
       key,
       value?.groups || [],
@@ -803,6 +900,11 @@ function _labelize(str) {
   return String(str || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function _truncate(str, len) {
+  const text = str == null ? '' : String(str);
+  return text.length > len ? text.slice(0, Math.max(0, len - 1)) + '\u2026' : text;
+}
+
 function _isoToLocal(iso) {
   if (!iso) return '';
   try {
@@ -825,7 +927,7 @@ rpStyles.textContent = `
   /* ---- Report cards ---- */
   .rp-report-picker {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
     gap: 10px;
     margin-bottom: 18px;
   }
