@@ -8,6 +8,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { installWindowTooltips, setTooltip } from '../tooltip-utils.js';
 
 // ---------- Constants ----------
 
@@ -155,6 +156,7 @@ async function _loadData(state) {
   }
 
   _renderAll(state);
+  installWindowTooltips(state.el);
 }
 
 // ---------- Render ----------
@@ -268,6 +270,8 @@ function _buildSummaryCard(label, value, color) {
     <span class="al-sc-label">${_esc(label)}</span>
     <span class="al-sc-value al-sc-${color}">${_esc(value)}</span>
   `;
+  setTooltip(card.querySelector('.al-sc-label'), `${label} in the current alert set.`);
+  setTooltip(card.querySelector('.al-sc-value'), `${value} ${label.toLowerCase()}.`);
   return card;
 }
 
@@ -306,6 +310,9 @@ function _renderMonitoringPane(el, paneDef, isActive, alerts, state) {
   const badge = document.createElement('span');
   badge.className = `al-plan-badge ${isActive ? 'al-badge-active' : 'al-badge-inactive'}`;
   badge.textContent = `Active at ${badgeTierName}`;
+  setTooltip(badge, isActive
+    ? `${paneDef.title} is active for your current plan.`
+    : `${paneDef.title} unlocks at ${badgeTierName}.`);
   header.appendChild(badge);
 
   pane.appendChild(header);
@@ -317,8 +324,7 @@ function _renderMonitoringPane(el, paneDef, isActive, alerts, state) {
     desc.textContent = paneDef.description;
     pane.appendChild(desc);
 
-    // Tooltip on hover
-    pane.title = `This monitoring level is available on ${badgeTierName} plans. Your current plan is ${state.tierName}.`;
+    setTooltip(pane, `This monitoring level is available on ${badgeTierName} plans. Your current plan is ${state.tierName}.`);
   } else {
     // Active pane — show alert cards or empty state
     if (alerts.length === 0) {
@@ -366,6 +372,8 @@ function _buildAlertCard(alert, state) {
     </div>
     <p class="al-card-desc">${_esc(alert.message || '')}</p>
   `;
+  setTooltip(card.querySelector('.al-card-sev'), _severityTooltip(alert.severity));
+  setTooltip(card, `${sevLabel}: ${alert.title || alert.message || 'Alert detail'}`);
 
   // Click opens grandchild detail
   card.addEventListener('click', () => _openAlertDetail(alert, state));
@@ -429,6 +437,7 @@ function _openAlertDetail(alert, state) {
     const ackBtn = document.createElement('button');
     ackBtn.className = 'al-gc-btn al-gc-btn-primary';
     ackBtn.textContent = 'Acknowledge';
+    setTooltip(ackBtn, 'Records that you have seen this alert.');
     ackBtn.addEventListener('click', async () => {
       const res = await api.postDismissNotification({ notification_id: alert.id });
       if (res.ok) {
@@ -447,6 +456,7 @@ function _openAlertDetail(alert, state) {
     const btn = document.createElement('button');
     btn.className = 'al-gc-btn al-gc-btn-link';
     btn.textContent = link.label;
+    setTooltip(btn, `Open the related ${link.label.replace(/^Open /, '')} view.`);
     btn.addEventListener('click', () => {
       modalManager.closeAll();
       setTimeout(() => {
@@ -460,6 +470,12 @@ function _openAlertDetail(alert, state) {
   }
 
   modalManager.open({ title: 'Alert Detail', subtitle: 'Alert context and guidance', trigger: state.el, content });
+}
+
+function _severityTooltip(severity) {
+  if (severity === 'security' || severity === 'critical') return 'Critical alert requiring prompt review.';
+  if (severity === 'routine') return 'Operational warning detected by monitoring.';
+  return 'Informational alert from Atested monitoring.';
 }
 
 function _describeTrigger(alert) {

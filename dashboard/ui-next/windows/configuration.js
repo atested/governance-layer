@@ -7,6 +7,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 
 /**
  * Open the Configuration window.
@@ -36,6 +37,8 @@ async function _loadData(state) {
 
   state.config = res.data;
   _renderAll(state);
+  installWindowTooltips(state.el);
+  _applyStaticTooltips(state);
 }
 
 // ---------- Render ----------
@@ -108,6 +111,8 @@ function _buildEditPane(state) {
       <div id="cf-unlock-result"></div>
     </div>
   `;
+  setTooltip(pane.querySelector('#cf-license-key'), 'Enter a valid license key to unlock real configuration editing.');
+  setTooltip(pane.querySelector('#cf-unlock-btn'), 'Verify the license key before enabling edit mode.');
 
   pane.querySelector('#cf-unlock-btn').addEventListener('click', () => _handleUnlock(state, pane));
   pane.querySelector('#cf-license-key').addEventListener('keydown', (e) => {
@@ -190,6 +195,7 @@ function _buildPolicyRulesPane(state, rules) {
   }
 
   pane.addEventListener('click', () => _openPolicyRulesDetail(state, rules));
+  setTooltip(pane, 'Open policy rule detail, including rule order and full JSON.');
   return pane;
 }
 
@@ -218,6 +224,7 @@ function _buildBaseDirsPane(state, baseDirs) {
   `;
 
   pane.addEventListener('click', () => _openBaseDirsDetail(state, baseDirs, displayDirs));
+  setTooltip(pane, 'Open authorized path scope details.');
   return pane;
 }
 
@@ -247,6 +254,7 @@ function _buildDiscoveredToolsPane(state, mappings) {
   `;
 
   pane.addEventListener('click', () => _openDiscoveredToolsDetail(state, mappings));
+  setTooltip(pane, 'Open discovered tool mappings and classifier reasons.');
   return pane;
 }
 
@@ -297,6 +305,17 @@ function _buildSigningProxyPane(state, signing, proxy) {
   return pane;
 }
 
+function _applyStaticTooltips(state) {
+  setTooltips(state.el, [
+    ['.cf-stat-card:nth-child(1)', 'Number of declarative policy rules currently loaded.'],
+    ['.cf-stat-card:nth-child(2)', 'Directories policy considers authorized for file operations.'],
+    ['.cf-stat-card:nth-child(3)', 'Tools Atested has learned from observed activity.'],
+    ['.cf-stat-card:nth-child(4)', 'Whether chain records are being signed.'],
+    ['.cf-pane-header', 'Configuration section. Click panes for details where available.'],
+    ['.cf-btn-export', 'Export this configuration data for external review.'],
+  ]);
+}
+
 // ================================================================
 // GRANDCHILD DRILL-DOWNS
 // ================================================================
@@ -323,6 +342,7 @@ function _openPolicyRulesDetail(state, rules) {
   const exportBtn = document.createElement('button');
   exportBtn.className = 'cf-btn cf-btn-export';
   exportBtn.textContent = 'Export ruleset';
+  setTooltip(exportBtn, 'Export the full policy rules JSON.');
   exportBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     _exportPolicyRules(state.config?.policy_rules || {});
@@ -338,6 +358,15 @@ function _openPolicyRulesDetail(state, rules) {
     <th style="width:80px">Decision</th>
     <th style="width:60px">Tier</th>
   </tr></thead>`;
+  table.querySelectorAll('th').forEach((th, idx) => {
+    setTooltip(th, [
+      'Rule evaluation order.',
+      'Stable rule identifier.',
+      'Human-readable rule description.',
+      'ALLOW or DENY result when the rule matches.',
+      'Classifier confidence tiers this rule applies to.',
+    ][idx]);
+  });
 
   const tbody = document.createElement('tbody');
   rules.forEach((r, i) => {

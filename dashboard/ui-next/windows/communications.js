@@ -6,6 +6,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { applyGenericWindowTooltips, installWindowTooltips, setTooltip } from '../tooltip-utils.js';
 
 let _pendingCompose = null;
 
@@ -58,6 +59,8 @@ async function _loadData(state) {
 
   state.data = res.data;
   _renderAll(state);
+  installWindowTooltips(state.el);
+  applyGenericWindowTooltips(state.el);
 }
 
 // ---------- Render ----------

@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
+import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -24,6 +25,18 @@ const COLUMNS = [
   { key: 'target',      label: 'Target',       standard: false },
   { key: 'user_identity', label: 'User',       standard: false, width: '120px' },
 ];
+
+const COLUMN_TOOLTIPS = {
+  timestamp_utc: 'When the chain record was written.',
+  event_category: 'The kind of chain event: mediated action, approval, revocation, or observation.',
+  policy_decision: 'The policy outcome recorded for this operation.',
+  tool_name: 'The AI application tool or operation name observed by Atested.',
+  sequence_position: 'The record position in the hash-linked chain.',
+  action_type: 'The evidence-based operation category assigned by the classifier.',
+  confidence_tier: 'Classifier confidence tier for the operation evidence.',
+  target: 'The file, command, URL, or artifact the operation acted on.',
+  user_identity: 'The operator identity recorded with the chain event.',
+};
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -68,6 +81,8 @@ export function openActivityWindow(trigger, opts = {}) {
   }
 
   _buildUI(state);
+  installWindowTooltips(content);
+  _applyStaticTooltips(state);
 
   // Apply pre-set filters to UI controls
   if (state.startTime) {
@@ -229,6 +244,7 @@ function _buildColumnToggles(state) {
     btn.className = 'aw-col-toggle' + (state.visibleColumns[col.key] ? ' aw-col-toggle-on' : '');
     btn.textContent = col.label;
     btn.dataset.col = col.key;
+    setTooltip(btn, `Show or hide the ${col.label} column.`);
     btn.addEventListener('click', () => {
       state.visibleColumns[col.key] = !state.visibleColumns[col.key];
       btn.classList.toggle('aw-col-toggle-on', state.visibleColumns[col.key]);
@@ -237,6 +253,34 @@ function _buildColumnToggles(state) {
     });
     container.appendChild(btn);
   }
+}
+
+function _applyStaticTooltips(state) {
+  setTooltips(state.el, [
+    ['#aw-stat-total', 'Total records matching the current Activity filters.'],
+    ['#aw-stat-allow', 'Operations that policy allowed after classification.'],
+    ['#aw-stat-deny', 'Operations denied before execution by Atested policy.'],
+    ['#aw-stat-tools', 'Distinct tool categories seen in the matching activity.'],
+    ['#aw-from', 'Start of the Activity time filter.'],
+    ['#aw-to', 'End of the Activity time filter.'],
+    ['#aw-event-type', 'Limit the list to one kind of chain event.'],
+    ['#aw-tool-filter', 'Filter by tool name or operation name.'],
+    ['#aw-apply', 'Apply the selected filters to the Activity list.'],
+    ['#aw-clear', 'Clear all Activity filters.'],
+    ['#aw-export', 'Export matching Activity records as CSV.'],
+    ['#aw-preset-standard', 'Show the default Activity columns.'],
+    ['#aw-preset-advanced', 'Show all Activity columns.'],
+  ]);
+  state.el.querySelectorAll('.aw-quick-btn').forEach(btn => {
+    setTooltip(btn, `Set the time range to ${btn.textContent.trim()}.`);
+  });
+  state.el.querySelectorAll('.aw-dtoggle').forEach(btn => {
+    const label = btn.textContent.trim();
+    setTooltip(btn, label === 'All' ? 'Show both allowed and denied decisions.' : `Show only ${label} decisions.`);
+  });
+  state.el.querySelectorAll('.aw-ps-btn').forEach(btn => {
+    setTooltip(btn, `Show ${btn.dataset.size} records per page.`);
+  });
 }
 
 function _updatePresetHighlight(state) {
@@ -441,6 +485,7 @@ function _renderTable(state) {
     const th = document.createElement('th');
     th.textContent = col.label;
     if (col.width) th.style.width = col.width;
+    setTooltip(th, COLUMN_TOOLTIPS[col.key]);
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
@@ -458,6 +503,7 @@ function _renderTable(state) {
 
     // DENY row tint
     if (decision === 'DENY') tr.classList.add('aw-row-deny');
+    setTooltip(tr, _rowTooltip(entry, detail));
 
     for (const col of visibleCols) {
       const td = document.createElement('td');
@@ -521,7 +567,7 @@ function _renderCell(key, entry, detail) {
       if (!target) return '<span class="aw-decision-muted">\u2014</span>';
       // Truncate long paths, full path in title
       const display = target.length > 50 ? '\u2026' + target.slice(-47) : target;
-      return `<span class="aw-cell-target" title="${_escAttr(target)}">${_esc(display)}</span>`;
+      return `<span class="aw-cell-target" data-tooltip="${_escAttr(target)}">${_esc(display)}</span>`;
     }
 
     case 'user_identity':
@@ -540,6 +586,15 @@ const _EVENT_LABELS = {
   opaque_invocation_decision: 'Invocation',
   ungoverned_observation: 'Ungoverned',
 };
+
+function _rowTooltip(entry, detail) {
+  const parts = [];
+  if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
+  if (detail.tool_name) parts.push(`Tool: ${detail.tool_name}`);
+  if (detail.action_type) parts.push(`Category: ${detail.action_type}`);
+  if (entry.event_category) parts.push(`Event: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
+  return parts.join(' | ') || 'Open this chain record.';
+}
 
 // ---------- Pagination ----------
 

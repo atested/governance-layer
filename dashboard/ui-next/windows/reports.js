@@ -6,6 +6,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 
 const GROUP_OPTIONS = [
   { key: 'tool',     label: 'Tool' },
@@ -45,8 +46,29 @@ export function openReportsWindow(trigger) {
   };
 
   _buildUI(state);
+  installWindowTooltips(content);
+  _applyStaticTooltips(state);
   _wireControls(state);
   _loadReport(state);
+}
+
+function _applyStaticTooltips(state) {
+  setTooltips(state.el, [
+    ['#rp-from', 'Start of the reporting time range.'],
+    ['#rp-to', 'End of the reporting time range.'],
+    ['#rp-generate', 'Generate the report with the selected range and grouping.'],
+    ['#rp-export', 'Export the current report groups as CSV.'],
+    ['#rp-stat-total', 'Total records included in this report.'],
+    ['#rp-stat-allow', 'Allowed operations in the report range.'],
+    ['#rp-stat-deny', 'Denied operations in the report range.'],
+    ['#rp-stat-rate', 'Denied records divided by total records.'],
+  ]);
+  state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
+    setTooltip(btn, `Set the report range to ${btn.textContent.trim()}.`);
+  });
+  state.el.querySelectorAll('.rp-gtoggle').forEach(btn => {
+    setTooltip(btn, `Group report records by ${btn.textContent.trim().toLowerCase()}.`);
+  });
 }
 
 // ---------- Build UI ----------
@@ -262,7 +284,7 @@ function _renderBars(state) {
 
     const row = document.createElement('div');
     row.className = 'rp-bar-row';
-    row.title = `Click to view in Activity`;
+    setTooltip(row, `${group.key || 'Group'}: ${_fmtNum(group.count || 0)} records. Click to view in Activity.`);
     row.innerHTML = `
       <span class="rp-bar-label">${_esc(group.key || '\u2014')}</span>
       <div class="rp-bar-track">

@@ -30,6 +30,7 @@ mkdir -p "$DST/windows" "$DST/components"
 
 VERBATIM=(
   "modal-manager.js"
+  "tooltip-utils.js"
   "tokens.js"
   "tier-definitions.js"
   "questionnaire-engine.js"

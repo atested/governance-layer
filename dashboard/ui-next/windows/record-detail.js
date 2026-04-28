@@ -11,6 +11,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { installWindowTooltips, setTooltip } from '../tooltip-utils.js';
 import '../components/kv-list.js';
 import '../components/code-block.js';
 import '../components/decision-tag.js';
@@ -73,6 +74,7 @@ export async function openRecordDetail(recordId, trigger, opts = {}) {
 function _buildContent(data, recordId) {
   const el = document.createElement('div');
   el.className = 'rd-content';
+  installWindowTooltips(el);
 
   const chain = data.chain_record || {};
   const sidecar = data.sidecar_record;
@@ -104,6 +106,7 @@ function _buildContent(data, recordId) {
   const recordHeader = document.createElement('div');
   recordHeader.className = 'rd-pane-header';
   recordHeader.textContent = 'Record';
+  setTooltip(recordHeader, 'Normalized evidence fields for this chain record.');
   recordPane.appendChild(recordHeader);
   const recordBody = document.createElement('div');
   recordBody.className = 'rd-pane-body';
@@ -118,6 +121,7 @@ function _buildContent(data, recordId) {
     const btn = document.createElement('atd-pill');
     btn.setAttribute('variant', 'primary');
     btn.textContent = 'Approve this operation';
+    setTooltip(btn, 'Open Approvals with this denied operation prefilled.');
     btn.addEventListener('click', () => {
       const operation = sidecar?.target || chain.target || sidecar?.tool_name || chain.tool || '';
       modalManager.closeAll();
@@ -140,6 +144,7 @@ function _buildContent(data, recordId) {
   const chainHeader = document.createElement('div');
   chainHeader.className = 'rd-pane-header';
   chainHeader.textContent = 'Chain record';
+  setTooltip(chainHeader, 'Raw hash-linked chain record, including record hash and signature fields.');
   chainPane.appendChild(chainHeader);
   const chainBody = document.createElement('div');
   chainBody.className = 'rd-pane-body';
@@ -160,6 +165,7 @@ function _buildContent(data, recordId) {
     const sidecarHeader = document.createElement('div');
     sidecarHeader.className = 'rd-pane-header';
     sidecarHeader.textContent = 'Sidecar record';
+    setTooltip(sidecarHeader, 'Expanded companion record used for display and audit context.');
     sidecarPane.appendChild(sidecarHeader);
     const sidecarBody = document.createElement('div');
     sidecarBody.className = 'rd-pane-body';
@@ -182,20 +188,22 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
   if (_isMediatedDecision(eventType)) {
     const kv = document.createElement('atd-kv-list');
     const items = [
-      { key: 'Decision', value: decision || '\u2014' },
-      { key: 'Tool', value: rec.tool_name || rec.tool || '\u2014', variant: 'code' },
-      { key: 'Target', value: rec.target || '\u2014', variant: 'code' },
-      { key: 'User', value: rec.user_identity || '\u2014' },
-      { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014' },
-      { key: 'Action Type', value: rec.action_type || rec.event_type || '\u2014' },
-      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014' },
-      { key: 'Matched Rule', value: rec.matched_rule || '\u2014' },
+      { key: 'Decision', value: decision || '\u2014', tooltip: 'Policy outcome recorded for this operation.' },
+      { key: 'Tool', value: rec.tool_name || rec.tool || '\u2014', variant: 'code', tooltip: 'Tool or operation intercepted from the AI application.' },
+      { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Path, command, URL, or artifact the operation acted on.' },
+      { key: 'User', value: rec.user_identity || '\u2014', tooltip: 'Operator identity recorded with the event.' },
+      { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014', tooltip: 'Classifier evidence confidence used during policy evaluation.' },
+      { key: 'Action Type', value: rec.action_type || rec.event_type || '\u2014', tooltip: 'Evidence-based operation category.' },
+      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014', tooltip: 'Governance family or policy scope for the record.' },
+      { key: 'Matched Rule', value: rec.matched_rule || '\u2014', tooltip: 'Policy rule that produced the decision.' },
     ];
     if (decision === 'DENY') {
-      items.push({ key: 'Denial Reason', value: rec.denial_reason || rec.deny_reason || 'Policy denied', variant: 'danger' });
+      items.push({ key: 'Denial Reason', value: rec.denial_reason || rec.deny_reason || 'Policy denied', variant: 'danger', tooltip: 'Evidence or policy reason Atested used to deny the operation.' });
     }
-    items.push({ key: 'Verification State', value: rec.verification_state || '\u2014', variant: rec.verification_state === 'verified' ? 'success' : undefined });
-    items.push({ key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) });
+    items.push({ key: 'Verification State', value: rec.verification_state || '\u2014', variant: rec.verification_state === 'verified' ? 'success' : undefined, tooltip: 'Whether this record has been independently verified.' });
+    items.push({ key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' });
+    items.push({ key: 'Signature Status', value: (chain.signature || rec.signature) ? 'Signed' : 'Unsigned', tooltip: 'Whether this chain record carries an Ed25519 signature.' });
+    items.push({ key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' });
     kv.items = items;
     frag.appendChild(kv);
 
@@ -207,10 +215,11 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
 
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014' },
-      { key: 'Target', value: rec.target || '\u2014', variant: 'code' },
-      { key: 'Source', value: rec.source || '\u2014' },
-      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
+      { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014', tooltip: 'Observed operation type outside the mediation boundary.' },
+      { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Observed path, command, URL, or artifact.' },
+      { key: 'Source', value: rec.source || '\u2014', tooltip: 'Hook or tool that reported the observation.' },
+      { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
+      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
     frag.appendChild(kv);
 
@@ -222,11 +231,12 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
 
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Operation', value: rec.artifact_identity || rec.operation || '\u2014', variant: 'code' },
-      { key: 'Operator', value: rec.operator_identity || rec.approving_operator || rec.operator || '\u2014' },
-      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014' },
-      { key: 'Context', value: rec.deployment_context || rec.context || '\u2014' },
-      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
+      { key: 'Operation', value: rec.artifact_identity || rec.operation || '\u2014', variant: 'code', tooltip: 'Approved or revoked operation identity.' },
+      { key: 'Operator', value: rec.operator_identity || rec.approving_operator || rec.operator || '\u2014', tooltip: 'Operator who approved or revoked the exception.' },
+      { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014', tooltip: 'Governance family the approval applies to.' },
+      { key: 'Context', value: rec.deployment_context || rec.context || '\u2014', tooltip: 'Deployment context for this approval event.' },
+      { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
+      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
     frag.appendChild(kv);
 
@@ -238,10 +248,11 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
 
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Surface', value: rec.governed_family || '\u2014' },
-      { key: 'Previous State', value: rec.previous_state || '\u2014' },
-      { key: 'New State', value: rec.new_state || rec.current_state || '\u2014' },
-      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc) },
+      { key: 'Surface', value: rec.governed_family || '\u2014', tooltip: 'Governance surface whose verification state changed.' },
+      { key: 'Previous State', value: rec.previous_state || '\u2014', tooltip: 'Verification state before this event.' },
+      { key: 'New State', value: rec.new_state || rec.current_state || '\u2014', tooltip: 'Verification state after this event.' },
+      { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
+      { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
     frag.appendChild(kv);
 
@@ -256,12 +267,22 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     const items = Object.entries(rec).slice(0, 12).map(([k, v]) => ({
       key: k,
       value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? '\u2014'),
+      tooltip: _genericFieldTooltip(k),
     }));
     kv.items = items;
     frag.appendChild(kv);
   }
 
   return frag;
+}
+
+function _genericFieldTooltip(key) {
+  if (key === 'record_hash') return 'SHA-256 chain hash for this record.';
+  if (key === 'prev_record_hash') return 'Hash pointer to the previous chain record.';
+  if (key === 'signature') return 'Ed25519 signature, when present.';
+  if (key === 'signing_key_id') return 'Identifier for the signing public key.';
+  if (key === 'timestamp_utc') return 'Timestamp written into the chain record.';
+  return `Raw chain field: ${key}.`;
 }
 
 // ---------- Type detection helpers ----------

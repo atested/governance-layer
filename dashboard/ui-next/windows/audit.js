@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
+import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -24,6 +25,18 @@ const COLUMNS = [
   { key: 'confidence_tier', label: 'Tier',      standard: false, width: '50px'  },
   { key: 'record_hash',     label: 'Record Hash', standard: false, width: '120px' },
 ];
+
+const COLUMN_TOOLTIPS = {
+  timestamp_utc: 'When this chain record was written.',
+  tool_name: 'The tool or operation recorded in the audit trail.',
+  target: 'The target path, command, URL, or artifact recorded for this event.',
+  policy_decision: 'The governance decision for mediated operations.',
+  event_category: 'The normalized chain event category.',
+  sequence_position: 'The line position in the hash-linked chain.',
+  user_identity: 'The operator identity recorded with the event.',
+  confidence_tier: 'Classifier confidence tier for mediated decisions.',
+  record_hash: 'The SHA-256 hash that links this record into the chain.',
+};
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -65,6 +78,8 @@ export function openAuditWindow(trigger) {
   }
 
   _buildUI(state);
+  installWindowTooltips(content);
+  _applyStaticTooltips(state);
   _loadData(state);
 }
 
@@ -214,6 +229,7 @@ function _buildColumnToggles(state) {
     btn.className = 'au-col-toggle' + (state.visibleColumns[col.key] ? ' au-col-toggle-on' : '');
     btn.textContent = col.label;
     btn.dataset.col = col.key;
+    setTooltip(btn, `Show or hide the ${col.label} audit column.`);
     btn.addEventListener('click', () => {
       state.visibleColumns[col.key] = !state.visibleColumns[col.key];
       btn.classList.toggle('au-col-toggle-on', state.visibleColumns[col.key]);
@@ -222,6 +238,36 @@ function _buildColumnToggles(state) {
     });
     container.appendChild(btn);
   }
+}
+
+function _applyStaticTooltips(state) {
+  setTooltips(state.el, [
+    ['#au-v-records', 'Total chain records included in the audit query.'],
+    ['#au-v-integrity', 'Whether chain verification reports intact hash linkage.'],
+    ['#au-v-breaks', 'Number of detected chain breaks.'],
+    ['#au-v-status', 'Current verification status for matching records.'],
+    ['#au-from', 'Start of the Audit time filter.'],
+    ['#au-to', 'End of the Audit time filter.'],
+    ['#au-user', 'Filter audit results by recorded operator identity.'],
+    ['#au-tool', 'Filter audit results by tool or operation name.'],
+    ['#au-category', 'Filter audit results by chain event category.'],
+    ['#au-search', 'Apply the selected audit filters.'],
+    ['#au-clear', 'Clear all audit filters.'],
+    ['#au-export-csv', 'Export matching records as CSV for spreadsheet review.'],
+    ['#au-export-json', 'Export matching records as JSON for external review.'],
+    ['#au-preset-standard', 'Show the standard audit columns.'],
+    ['#au-preset-advanced', 'Show all audit columns.'],
+  ]);
+  state.el.querySelectorAll('.au-quick-btn').forEach(btn => {
+    setTooltip(btn, `Set the audit time range to ${btn.textContent.trim()}.`);
+  });
+  state.el.querySelectorAll('.au-dtoggle').forEach(btn => {
+    const label = btn.textContent.trim();
+    setTooltip(btn, label === 'All' ? 'Show all decisions.' : `Show only ${label} decisions.`);
+  });
+  state.el.querySelectorAll('.au-ps-btn').forEach(btn => {
+    setTooltip(btn, `Show ${btn.dataset.size} audit records per page.`);
+  });
 }
 
 function _updatePresetHighlight(state) {
@@ -443,6 +489,7 @@ function _renderTable(state) {
     const th = document.createElement('th');
     th.textContent = col.label;
     if (col.width) th.style.width = col.width;
+    setTooltip(th, COLUMN_TOOLTIPS[col.key]);
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
@@ -458,6 +505,7 @@ function _renderTable(state) {
     const detail = entry.detail || {};
     const decision = detail.policy_decision || '';
     if (decision === 'DENY') tr.classList.add('au-row-deny');
+    setTooltip(tr, _rowTooltip(entry, detail));
 
     for (const col of visibleCols) {
       const td = document.createElement('td');
@@ -491,7 +539,7 @@ function _renderCell(key, entry, detail) {
       const target = detail.target || '';
       if (!target) return '<span class="au-cell-muted">\u2014</span>';
       const display = target.length > 50 ? '\u2026' + target.slice(-47) : target;
-      return `<span class="au-cell-target" title="${_escAttr(target)}">${_esc(display)}</span>`;
+      return `<span class="au-cell-target" data-tooltip="${_escAttr(target)}">${_esc(display)}</span>`;
     }
     case 'policy_decision': {
       const d = detail.policy_decision || '';
@@ -514,7 +562,7 @@ function _renderCell(key, entry, detail) {
     case 'record_hash': {
       const hash = entry.evidence?.record_hash || '';
       if (!hash) return '<span class="au-cell-muted">\u2014</span>';
-      return `<span class="au-cell-hash" title="${_escAttr(hash)}">${_esc(hash.substring(0, 12))}\u2026</span>`;
+      return `<span class="au-cell-hash" data-tooltip="${_escAttr(hash)}">${_esc(hash.substring(0, 12))}\u2026</span>`;
     }
     default:
       return '\u2014';
@@ -529,6 +577,15 @@ const _EVENT_LABELS = {
   opaque_invocation_decision: 'Invocation',
   ungoverned_observation: 'Ungoverned',
 };
+
+function _rowTooltip(entry, detail) {
+  const parts = [];
+  if (entry.timestamp_utc) parts.push(_formatHumanDate(entry.timestamp_utc));
+  if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
+  if (detail.tool_name) parts.push(`Tool: ${detail.tool_name}`);
+  if (entry.event_category) parts.push(`Category: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
+  return parts.join(' | ') || 'Open audit record detail.';
+}
 
 // ---------- Pagination ----------
 

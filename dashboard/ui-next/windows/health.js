@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
+import { installWindowTooltips, setTooltip } from '../tooltip-utils.js';
 
 /**
  * Open the Health window.
@@ -37,6 +38,7 @@ async function _loadData(state) {
 
   state.data = res.data;
   _renderAll(state);
+  installWindowTooltips(state.el);
 }
 
 // ---------- Render ----------
@@ -100,6 +102,7 @@ function _renderAlertPane(state, alerts) {
     const ackBtn = document.createElement('button');
     ackBtn.className = 'hw-alert-ack';
     ackBtn.textContent = 'Acknowledge';
+    setTooltip(ackBtn, 'Records that you have seen this health alert.');
     ackBtn.addEventListener('click', async () => {
       const res = await api.postHealthAcknowledge({ source: alert.source, message: alert.message });
       if (res.ok) _loadData(state);
@@ -125,6 +128,7 @@ function _buildChainPane(state, h) {
   body.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No', chain.checked ? 'green' : 'amber'));
 
   pane.addEventListener('click', () => _openChainDetail(state, h));
+  setTooltip(pane, 'Open chain integrity details: hash linkage, break status, and repair evidence.');
   return pane;
 }
 
@@ -143,6 +147,7 @@ function _buildDenyRatePane(state, h) {
   body.appendChild(_kvRow('Anomaly', dr.anomaly ? 'Detected' : 'None', dr.anomaly ? 'amber' : 'green'));
 
   pane.addEventListener('click', () => _openDenyRateDetail(state, h));
+  setTooltip(pane, 'Open deny-rate details and recent denied operation context.');
   return pane;
 }
 
@@ -229,6 +234,7 @@ function _pane(accentColor, title, clickable) {
     <div class="hw-pane-header">${_esc(title)}</div>
     <div class="hw-pane-body"></div>
   `;
+  setTooltip(pane.querySelector('.hw-pane-header'), _paneTooltip(title));
   return pane;
 }
 
@@ -239,7 +245,42 @@ function _kvRow(label, value, color) {
     <span class="hw-kv-label">${_esc(label)}</span>
     <span class="hw-kv-value${color ? ` hw-kv-${color}` : ''}">${_esc(value)}</span>
   `;
+  setTooltip(row.querySelector('.hw-kv-label'), _healthMetricTooltip(label));
   return row;
+}
+
+function _paneTooltip(title) {
+  const tips = {
+    'Chain integrity': 'Whether the hash-linked chain is structurally valid.',
+    'Deny rate': 'How often policy denies recent mediated operations.',
+    'Transparency': 'Signals from observation hooks about ungoverned activity.',
+    'Storage': 'Local storage footprint for chain, stability log, and archives.',
+    'Users': 'Operator identities and activity anomalies in recent records.',
+    'License': 'Current license or trial status for this installation.',
+  };
+  return tips[title] || `${title} health metric.`;
+}
+
+function _healthMetricTooltip(label) {
+  const tips = {
+    'Status': 'Current status for this health area.',
+    'Event count': 'Number of chain events currently known to the dashboard.',
+    'Verified': 'Whether chain verification has run and passed.',
+    'Recent': 'Deny rate in the recent decision window.',
+    'Historical avg': 'Baseline deny rate from prior records.',
+    'Anomaly': 'Whether recent deny behavior differs from historical behavior.',
+    'Hook data': 'Whether observation hooks are reporting boundary activity.',
+    'Hours since last': 'Time since the last observation hook event.',
+    'Ungoverned ops': 'Operations observed outside the mediation boundary.',
+    'Chain size': 'Size of the decision chain file.',
+    'Stability log': 'Size of the chain health stability log.',
+    'Archive size': 'Storage used by archived chain segments.',
+    'Archives': 'Number of retained chain archive files.',
+    'Unique users': 'Distinct operator identities in recent chain records.',
+    'Trial days left': 'Remaining trial period, when available.',
+    'Tier': 'Current commercial tier.',
+  };
+  return tips[label] || `${label} health field.`;
 }
 
 // ---------- Grandchild: Chain Integrity Detail ----------
@@ -452,6 +493,7 @@ function _renderEventsTable(state, h) {
       <td>${_esc(source)}</td>
       <td class="hw-evt-detail">${_esc(details)}</td>
     `;
+    setTooltip(tr, `${evt.event_type || 'Health event'} from ${source}: ${details || 'open for detail'}`);
 
     // Clickable — open event record as grandchild
     tr.addEventListener('click', () => {

@@ -18,6 +18,7 @@
 
 import './components/window-frame.js';
 import './components/window-backdrop.js';
+import { applyGenericWindowTooltips } from './tooltip-utils.js';
 
 const Z = {
   MAIN: 1,
@@ -116,6 +117,7 @@ class ModalManager {
         frame.innerHTML = content;
       } else {
         frame.appendChild(content);
+        applyGenericWindowTooltips(content);
       }
     }
 

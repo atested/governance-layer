@@ -7,6 +7,7 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 import '../components/pill.js';
 import '../components/confirmation-dialog.js';
 import '../components/loading-indicator.js';
@@ -34,6 +35,8 @@ export function openApprovalsWindow(trigger, prefillOperation) {
   };
 
   _buildUI(state);
+  installWindowTooltips(content);
+  _applyStaticTooltips(state);
   _loadData(state);
 }
 
@@ -106,6 +109,21 @@ function _buildUI(state) {
   }
 
   _wireControls(state);
+}
+
+function _applyStaticTooltips(state) {
+  setTooltips(state.el, [
+    ['#ap-stat-active', 'Currently active policy exceptions.'],
+    ['#ap-stat-stale', 'Approvals that have not been used recently and should be reviewed.'],
+    ['#ap-stat-latest', 'Most recent approval recorded in the chain.'],
+    ['#ap-operation', 'Enter a tool name, path, opaque artifact hash, or operation identity to approve.'],
+    ['#ap-approve-btn', 'Create an approval event in the chain.'],
+    ['#ap-export', 'Export the active approvals table as CSV.'],
+  ]);
+  state.el.querySelectorAll('.ap-filter-btn').forEach(btn => {
+    const label = btn.textContent.trim();
+    setTooltip(btn, `Show ${label.toLowerCase()} approvals.`);
+  });
 }
 
 // ---------- Wire controls ----------
@@ -216,6 +234,16 @@ function _renderTable(state) {
       <th style="width:80px">Action</th>
     </tr>
   `;
+  thead.querySelectorAll('th').forEach((th, idx) => {
+    setTooltip(th, [
+      'Approved operation, path, or artifact identity.',
+      'When the approval was recorded.',
+      'When this approval was last used.',
+      'How many times this approval has been used.',
+      'Whether the approval is active or recommended for revocation.',
+      'Revoke writes a revocation event to the chain.',
+    ][idx]);
+  });
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
@@ -236,13 +264,15 @@ function _renderTable(state) {
       statusHtml = '<span class="ap-status-active">[Active]</span>';
     }
 
-    // Tooltip for stale rows
-    const tooltipAttr = approval.stale
-      ? ` title="This approval has not been used in ${ageDays} days. Keeping unused approvals active increases your attack surface without providing operational value."`
-      : '';
+    setTooltip(
+      tr,
+      approval.stale
+        ? `This approval has not been used in ${ageDays} days. Keeping unused approvals active increases your attack surface.`
+        : `Approval for ${operation || 'this operation'} is active.`
+    );
 
     tr.innerHTML = `
-      <td${tooltipAttr}><span class="ap-cell-op" title="${_escAttr(operation)}">${_esc(truncOp)}</span></td>
+      <td><span class="ap-cell-op" data-tooltip="${_escAttr(operation)}">${_esc(truncOp)}</span></td>
       <td>${_esc(approvedDate)}</td>
       <td><span class="ap-cell-muted">\u2014</span></td>
       <td><span class="ap-cell-muted">\u2014</span></td>
@@ -255,6 +285,7 @@ function _renderTable(state) {
       e.stopPropagation();
       _confirmRevoke(state, approval);
     });
+    setTooltip(tr.querySelector('.ap-revoke-btn'), 'Revocation is recorded in the chain.');
 
     tbody.appendChild(tr);
   }

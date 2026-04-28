@@ -33,6 +33,7 @@ VERBATIM=(
   "question-catalog.js"
   "tokens.js"
   "modal-manager.js"
+  "tooltip-utils.js"
   "components/base.js"
   "components/window-frame.js"
   "components/window-backdrop.js"
