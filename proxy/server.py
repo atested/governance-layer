@@ -49,6 +49,8 @@ if str(SCRIPTS) not in sys.path:
 from classifier import classify
 from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash
 from approval_store import ApprovalStore, load_approval_store_from_chain
+from event_model import build_non_action_event
+from integrity_monitor import IntegrityMonitor, IntegrityViolation
 
 # Storage contract for chain path
 sys.path.insert(0, str(REPO / "mcp"))
@@ -115,9 +117,10 @@ class ChainRecorder:
     the same prev_record_hash (D-024 / D-026 fix).
     """
 
-    def __init__(self, chain_path: Path):
+    def __init__(self, chain_path: Path, integrity_monitor: Optional[IntegrityMonitor] = None):
         self._chain_path = chain_path
         self._lock = threading.Lock()
+        self._integrity_monitor = integrity_monitor
 
     def append_atomic(self, record: dict) -> None:
         """Atomically read prev_record_hash, set it, recompute hash, and append.
@@ -133,6 +136,8 @@ class ChainRecorder:
         with self._lock:
             lockdir = self._acquire_file_lock()
             try:
+                if self._integrity_monitor is not None:
+                    self._integrity_monitor.verify_chain_writable()
                 record["prev_record_hash"] = self._last_hash()
                 # Set signature fields to null BEFORE hashing so they're
                 # included in the canonical form (stable hash regardless
@@ -159,8 +164,16 @@ class ChainRecorder:
                     os.write(fd, (line + "\n").encode("utf-8"))
                 finally:
                     os.close(fd)
+                if self._integrity_monitor is not None:
+                    self._integrity_monitor.refresh_after_chain_write()
             finally:
                 self._release_file_lock(lockdir)
+
+    def append_integrity_event(self, event_type: str, payload: dict) -> dict:
+        """Append a non-action integrity event into the governance chain."""
+        event = build_non_action_event(event_type, payload)
+        self.append_atomic(event)
+        return event
 
     def _last_hash(self) -> Optional[str]:
         """Read and verify the record_hash from the last line.
@@ -343,6 +356,7 @@ def mediate_decision(
     session_id: str = "",
     user_identity: str = "",
     provider_name: str = "",
+    integrity_monitor: Optional[IntegrityMonitor] = None,
 ) -> dict:
     """Classify, evaluate, and record a governance decision.
 
@@ -354,6 +368,40 @@ def mediate_decision(
     to ALLOW with resolution "approved_lookup".
     """
     classification = classify(tool_name, args)
+
+    policy_change = None
+    if integrity_monitor is not None:
+        policy_change = integrity_monitor.check_policy_rules_unchanged()
+        if policy_change is not None:
+            current_hash = policy_change["current_policy_rules_hash"]
+            if chain_recorder is not None and not policy_change.get("event_already_recorded"):
+                chain_recorder.append_integrity_event(
+                    "policy_rules_changed",
+                    {
+                        "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
+                        "current_policy_rules_hash": current_hash,
+                        "policy_path": policy_change["policy_path"],
+                        "response": "deny_all_until_acknowledged",
+                    },
+                )
+                integrity_monitor.mark_policy_change_event_recorded(current_hash)
+
+            record = _build_integrity_denial_record(
+                classification,
+                reason=(
+                    "Policy rules changed during proxy runtime; all operations "
+                    "are denied until the operator acknowledges the change."
+                ),
+                matched_rule="integrity_policy_rules_changed",
+                user_identity=user_identity,
+                session_id=session_id,
+            )
+            if provider_name:
+                record["provider"] = provider_name
+                record["record_hash"] = _compute_record_hash(record)
+            if chain_recorder is not None:
+                chain_recorder.append_atomic(record)
+            return record
 
     record = evaluate(
         classification,
@@ -390,6 +438,38 @@ def mediate_decision(
     return record
 
 
+def _build_integrity_denial_record(
+    classification: dict,
+    *,
+    reason: str,
+    matched_rule: str,
+    user_identity: str,
+    session_id: str,
+) -> dict:
+    record = evaluate(
+        classification,
+        policy={
+            "rules": [],
+            "default_decision": "DENY",
+            "default_reason": reason,
+        },
+        prev_record_hash=None,
+        user_identity=user_identity,
+        session_id=session_id,
+    )
+    record["matched_rule"] = matched_rule
+    record["policy_reasons"] = [{
+        "code": "INTEGRITY_POLICY_RULES_CHANGED",
+        "detail": {
+            "reason": reason,
+            "rule_id": matched_rule,
+            "response": "deny_all_until_acknowledged",
+        },
+    }]
+    record["record_hash"] = _compute_record_hash(record)
+    return record
+
+
 # ---------------------------------------------------------------------------
 # Backward-compatible StreamingToolCollector (wraps Anthropic provider)
 # ---------------------------------------------------------------------------
@@ -404,12 +484,14 @@ class StreamingToolCollector:
 
     def __init__(self, policy: dict, chain_recorder: Optional[ChainRecorder],
                  session_id: str = "", user_identity: str = "",
-                 approval_store: Optional[ApprovalStore] = None):
+                 approval_store: Optional[ApprovalStore] = None,
+                 integrity_monitor: Optional[IntegrityMonitor] = None):
         self._policy = policy
         self._chain_recorder = chain_recorder
         self._session_id = session_id
         self._user_identity = user_identity
         self._approval_store = approval_store
+        self._integrity_monitor = integrity_monitor
 
         # Active tool_use blocks being collected, keyed by index
         self._active_blocks: dict[int, dict] = {}
@@ -472,6 +554,7 @@ class StreamingToolCollector:
                     approval_store=self._approval_store,
                     session_id=self._session_id,
                     user_identity=self._user_identity,
+                    integrity_monitor=self._integrity_monitor,
                 )
                 self._decisions[idx] = record
 
@@ -616,6 +699,7 @@ class GovernanceProxy:
         session_id: str = "",
         user_identity: str = "",
         provider_config: Optional[dict] = None,
+        integrity_monitor: Optional[IntegrityMonitor] = None,
     ):
         self._upstream_base = upstream_base.rstrip("/")
         self._policy = policy or self._load_default_policy()
@@ -626,6 +710,7 @@ class GovernanceProxy:
         self._approval_store: Optional[ApprovalStore] = None
         self._approval_store_mtime: float = 0.0
         self._approval_lock = threading.Lock()
+        self._integrity_monitor = integrity_monitor
         # Provider-specific config (upstream URLs, etc.)
         self._provider_config = provider_config or {}
         # Default: put the legacy upstream_base as the anthropic upstream
@@ -650,7 +735,8 @@ class GovernanceProxy:
 
     @staticmethod
     def _load_default_policy() -> dict:
-        policy = load_policy_rules()
+        policy_path = os.environ.get("GOV_POLICY_RULES_PATH", "").strip()
+        policy = load_policy_rules(Path(policy_path) if policy_path else None)
         runtime = runtime_root(REPO)
         policy = dict(policy)
         policy["base_dirs"] = resolve_policy_base_dirs(
@@ -768,6 +854,7 @@ class GovernanceProxy:
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
             approval_store=self._get_approval_store(),
+            integrity_monitor=self._integrity_monitor,
         )
         buffered_events: dict[int, list[bytes]] = {}
         _tool_use_count = 0
@@ -963,6 +1050,7 @@ class GovernanceProxy:
                                 session_id=self._session_id,
                                 user_identity=self._user_identity,
                                 provider_name=provider.name,
+                                integrity_monitor=self._integrity_monitor,
                             )
 
                             if record["policy_decision"] == "DENY":
@@ -1029,6 +1117,7 @@ class GovernanceProxy:
                 approval_store=approval_store,
                 session_id=self._session_id,
                 user_identity=self._user_identity,
+                integrity_monitor=self._integrity_monitor,
             )
 
             if record["policy_decision"] == "DENY":
@@ -1094,6 +1183,7 @@ class GovernanceProxy:
                 session_id=self._session_id,
                 user_identity=self._user_identity,
                 provider_name=provider.name,
+                integrity_monitor=self._integrity_monitor,
             )
 
             if record["policy_decision"] == "DENY":
@@ -1116,6 +1206,7 @@ class GovernanceProxy:
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
             approval_store=self._get_approval_store(),
+            integrity_monitor=self._integrity_monitor,
         )
 
         output_chunks: list[bytes] = []
@@ -1266,6 +1357,7 @@ class GovernanceProxy:
                                 session_id=self._session_id,
                                 user_identity=self._user_identity,
                                 provider_name=provider.name,
+                                integrity_monitor=self._integrity_monitor,
                             )
 
                             if record["policy_decision"] == "DENY":
@@ -1550,7 +1642,13 @@ def main():
     # Setup chain recorder
     runtime = runtime_root(REPO)
     chain_path = runtime / "LOGS" / "decision-chain.jsonl"
-    chain_recorder = ChainRecorder(chain_path)
+    integrity_monitor = IntegrityMonitor(chain_path)
+    try:
+        integrity_monitor.verify_startup_chain()
+    except IntegrityViolation as exc:
+        logger.error("Refusing to start: %s", exc)
+        sys.exit(1)
+    chain_recorder = ChainRecorder(chain_path, integrity_monitor=integrity_monitor)
 
     # Resolve user identity: explicit flag > env var > hostname
     user_identity = (
@@ -1575,6 +1673,22 @@ def main():
                 anthropic_upstream, args.openai_upstream, args.gemini_upstream,
                 args.litellm_upstream or "(not configured)")
 
+    try:
+        startup_hashes = record_startup_integrity_events(
+            chain_recorder,
+            integrity_monitor,
+            user_identity=user_identity,
+            session_id=args.session_id,
+        )
+        logger.info(
+            "Integrity startup hashes: proxy=%s policy=%s",
+            startup_hashes["current_proxy_code_hash"],
+            startup_hashes["current_policy_rules_hash"],
+        )
+    except IntegrityViolation as exc:
+        logger.error("Refusing to start: %s", exc)
+        sys.exit(1)
+
     proxy = GovernanceProxy(
         upstream_base=anthropic_upstream,
         chain_recorder=chain_recorder,
@@ -1582,6 +1696,7 @@ def main():
         session_id=args.session_id,
         user_identity=user_identity,
         provider_config=provider_config,
+        integrity_monitor=integrity_monitor,
     )
 
     server = ProxyServer(proxy, args.host, args.port)
@@ -1590,6 +1705,49 @@ def main():
         asyncio.run(server.start())
     except KeyboardInterrupt:
         logger.info("Proxy shutting down")
+
+
+def record_startup_integrity_events(
+    chain_recorder: ChainRecorder,
+    integrity_monitor: IntegrityMonitor,
+    *,
+    user_identity: str = "",
+    session_id: str = "",
+) -> dict:
+    """Record startup code and policy hashes, including visible code changes."""
+    hashes = integrity_monitor.startup_hashes()
+    previous_code_hash = hashes.get("previous_proxy_code_hash")
+    current_code_hash = hashes["current_proxy_code_hash"]
+    if previous_code_hash and previous_code_hash != current_code_hash:
+        chain_recorder.append_integrity_event(
+            "proxy_code_hash_changed",
+            {
+                "previous_proxy_code_hash": previous_code_hash,
+                "current_proxy_code_hash": current_code_hash,
+                "code_paths": hashes["code_paths"],
+                "user_identity": user_identity,
+                "session_id": session_id,
+            },
+        )
+    chain_recorder.append_integrity_event(
+        "proxy_startup_code_hash",
+        {
+            "current_proxy_code_hash": current_code_hash,
+            "code_paths": hashes["code_paths"],
+            "user_identity": user_identity,
+            "session_id": session_id,
+        },
+    )
+    chain_recorder.append_integrity_event(
+        "policy_rules_loaded",
+        {
+            "current_policy_rules_hash": hashes["current_policy_rules_hash"],
+            "policy_path": hashes["policy_path"],
+            "user_identity": user_identity,
+            "session_id": session_id,
+        },
+    )
+    return hashes
 
 
 if __name__ == "__main__":

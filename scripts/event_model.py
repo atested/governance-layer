@@ -73,6 +73,11 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "research_program_opt_in_changed",
     "communications_request_submitted",
     "terms_acknowledged",
+    "chain_integrity_violation",
+    "proxy_startup_code_hash",
+    "proxy_code_hash_changed",
+    "policy_rules_loaded",
+    "policy_rules_changed",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([
@@ -347,6 +352,10 @@ def _compute_event_record_hash(event: dict) -> str:
     """
     copy = dict(event)
     copy["record_hash"] = None
+    if "signature" in copy:
+        copy["signature"] = None
+    if "signing_key_id" in copy:
+        copy["signing_key_id"] = None
     preimage = canonical_json(copy)
     return "sha256:" + sha256_hex(preimage)
 
