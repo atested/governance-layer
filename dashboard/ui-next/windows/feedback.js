@@ -215,9 +215,11 @@ async function _sendTelemetry(state) {
   resultEl.textContent = 'Sending...';
 
   const res = await api.postTelemetrySubmit({ send_to_remote: true });
-  if (res.ok) {
+  if (res.ok && res.data?.submitted !== false) {
     _showResult(resultEl, 'Telemetry submitted', 'success');
     _loadData(state);
+  } else if (res.ok) {
+    _showResult(resultEl, res.data?.message || 'Telemetry is opted out', 'error');
   } else {
     _showResult(resultEl, res.error, 'error');
   }

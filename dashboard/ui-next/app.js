@@ -13,6 +13,8 @@ import { openNotificationsWindow } from './windows/notifications.js';
 import { openIdentitySetupWindow } from './windows/identity-setup.js';
 import { openIdentitySessionWindow } from './windows/identity-session.js';
 import { openLicensingWindow } from './windows/licensing.js';
+import { installTroubleButton } from './trouble.js';
+import { installSummaryTelemetry, recordUiAggregate } from './summary-telemetry.js';
 import * as api from './api.js';
 
 // Verify adoptedStyleSheets support
@@ -32,6 +34,8 @@ function init() {
   // Render chrome bar (fixed position, always visible)
   const chrome = renderChrome();
   document.body.appendChild(chrome);
+  installTroubleButton();
+  installSummaryTelemetry();
 
   // Wire chrome zone clicks and keyboard activation to window launches
   const identityZone = chrome.querySelector('.chrome-identity');
@@ -55,6 +59,7 @@ function init() {
   // Wire chrome breadcrumb to modal manager
   modalManager.onChange(({ depth, title }) => {
     updateBreadcrumb(depth > 0 ? title : null);
+    if (depth > 0 && title) recordUiAggregate('window_opens', title);
   });
 
   // Gate on first-run disclosure before rendering main page.

@@ -13,6 +13,8 @@ import os
 import secrets
 import sys
 import threading
+import uuid
+from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -30,6 +32,136 @@ from storage_contract import runtime_root
 RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
+TELEMETRY_SUMMARY = RUNTIME / "LOGS" / "telemetry" / "summary.json"
+
+
+def _now_utc_z():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read_json_file(path, fallback):
+    try:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        pass
+    return fallback
+
+
+def _write_json_file(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def _telemetry_opted_in():
+    opt_in_file = RUNTIME / "telemetry_opt_in"
+    try:
+        return opt_in_file.exists() and opt_in_file.read_text(encoding="utf-8").strip() == "1"
+    except OSError:
+        return False
+
+
+def _empty_telemetry_bucket():
+    return {
+        "window_opens": {},
+        "report_runs": {},
+        "range_shortcuts": {},
+        "trouble_reports": {},
+        "ui_actions": {},
+        "flushes": 0,
+    }
+
+
+def _new_telemetry_summary():
+    return {
+        "schema_version": 1,
+        "artifact_type": "anonymous_summary_telemetry",
+        "privacy_model": {
+            "raw_events_stored": False,
+            "raw_events_transmitted": False,
+            "storage": "aggregate counters only",
+            "session_reconstruction": "not possible; the file stores period totals and lifetime totals, not event order, click timestamps, session ids, file paths, user identities, or record ids",
+            "governance_chain": "telemetry is never written to the governance chain",
+        },
+        "updated_at_utc": None,
+        "periods": {},
+        "lifetime": _empty_telemetry_bucket(),
+        "transmissions": [],
+    }
+
+
+def _load_telemetry_summary():
+    summary = _read_json_file(TELEMETRY_SUMMARY, _new_telemetry_summary())
+    if not isinstance(summary, dict):
+        summary = _new_telemetry_summary()
+    template = _new_telemetry_summary()
+    summary.setdefault("schema_version", 1)
+    summary.setdefault("artifact_type", "anonymous_summary_telemetry")
+    summary.setdefault("privacy_model", template["privacy_model"])
+    summary.setdefault("periods", {})
+    summary.setdefault("lifetime", _empty_telemetry_bucket())
+    summary.setdefault("transmissions", [])
+    return summary
+
+
+def _merge_counter_bucket(target, incoming):
+    if not isinstance(incoming, dict):
+        return
+    for key, value in incoming.items():
+        if isinstance(value, dict):
+            target.setdefault(key, {})
+            for item_key, item_value in value.items():
+                try:
+                    amount = int(item_value)
+                except (TypeError, ValueError):
+                    continue
+                if amount <= 0:
+                    continue
+                clean_key = str(item_key)[:80]
+                target[key][clean_key] = int(target[key].get(clean_key, 0)) + amount
+        else:
+            try:
+                amount = int(value)
+            except (TypeError, ValueError):
+                continue
+            if amount > 0:
+                target[key] = int(target.get(key, 0)) + amount
+
+
+def _record_telemetry_summary(increments):
+    summary = _load_telemetry_summary()
+    period = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    period_bucket = summary["periods"].setdefault(period, _empty_telemetry_bucket())
+    _merge_counter_bucket(period_bucket, increments)
+    _merge_counter_bucket(summary["lifetime"], increments)
+    period_bucket["flushes"] = int(period_bucket.get("flushes", 0)) + 1
+    summary["lifetime"]["flushes"] = int(summary["lifetime"].get("flushes", 0)) + 1
+    summary["updated_at_utc"] = _now_utc_z()
+    _write_json_file(TELEMETRY_SUMMARY, summary)
+    return summary
+
+
+def _build_summary_telemetry_artifact():
+    summary = _load_telemetry_summary()
+    artifact = {
+        "artifact_type": "anonymous_summary_telemetry",
+        "artifact_id": f"tm_{uuid.uuid4().hex[:16]}",
+        "artifact_version": "2.0",
+        "timestamp": _now_utc_z(),
+        "privacy_model": summary.get("privacy_model", {}),
+        "summary": {
+            "periods": summary.get("periods", {}),
+            "lifetime": summary.get("lifetime", {}),
+        },
+    }
+    artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    artifact["artifact_hash"] = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
+    artifact["signed"] = False
+    return artifact
 
 # ---------------------------------------------------------------------------
 # Peer sharing + machine management helpers
@@ -475,8 +607,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_verify_license()
             elif parsed.path == "/api/feedback/submit":
                 self._handle_feedback_submit()
+            elif parsed.path == "/api/trouble/report":
+                self._handle_trouble_report()
             elif parsed.path == "/api/communications/request":
                 self._handle_communications_request()
+            elif parsed.path == "/api/telemetry/summary":
+                self._handle_telemetry_summary()
             elif parsed.path == "/api/telemetry/submit":
                 self._handle_telemetry_submit()
             elif parsed.path == "/api/telemetry/opt-in":
@@ -946,7 +1082,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": str(exc)}, 500)
 
     def _handle_telemetry_submit(self):
-        """POST /api/telemetry/submit — create and optionally send a telemetry artifact."""
+        """POST /api/telemetry/submit — create and optionally send a summary telemetry artifact."""
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length > 4096:
@@ -961,42 +1097,33 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         send_to_remote = bool(data.get("send_to_remote", False))
 
         try:
+            if not _telemetry_opted_in():
+                _json_response(self, {
+                    "opted_in": False,
+                    "submitted": False,
+                    "message": "Telemetry is opted out.",
+                })
+                return
+
             sys.path.insert(0, str(MCP_DIR))
-            from feedback_signing import build_telemetry_artifact, write_artifact, send_artifact_to_remote
+            from feedback_signing import write_artifact, send_artifact_to_remote
 
-            artifact = build_telemetry_artifact(
-                chain_path=CHAIN,
-                runtime_root=RUNTIME,
-            )
-
+            artifact = _build_summary_telemetry_artifact()
             telemetry_dir = RUNTIME / "LOGS" / "telemetry"
             out_path = write_artifact(artifact, telemetry_dir)
 
-            # Append chain event
-            from event_model import build_non_action_event
-            event = build_non_action_event(
-                "telemetry_submitted",
-                {
-                    "artifact_id": artifact["artifact_id"],
-                    "artifact_hash": artifact["artifact_hash"],
-                    "sent_to_remote": send_to_remote,
-                },
-                prev_record_hash=None,
-            )
-            _append_chain_record_atomic(event)
-
             result = {
+                "opted_in": True,
+                "submitted": True,
                 "artifact_id": artifact["artifact_id"],
                 "artifact_hash": artifact["artifact_hash"],
                 "signed": artifact.get("signed", False),
                 "stored_at": str(out_path),
-                "total_allow": artifact["total_allow"],
-                "total_deny": artifact["total_deny"],
-                "total_deterministic": artifact["total_deterministic"],
-                "total_judgment": artifact["total_judgment"],
+                "privacy_model": artifact.get("privacy_model", {}),
+                "summary": artifact.get("summary", {}),
             }
 
-            if send_to_remote and artifact.get("signed"):
+            if send_to_remote:
                 remote_result = send_artifact_to_remote(
                     artifact, "https://license.atested.com/api/telemetry"
                 )
@@ -1033,6 +1160,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             if not chain_event_type:
                                 continue
                             try:
+                                from event_model import build_non_action_event
                                 evt = build_non_action_event(
                                     chain_event_type,
                                     {"notification_id": notif_id, "notification_type": notif_type, **payload},
@@ -1062,6 +1190,117 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             save_processed_notifications(RUNTIME, list(processed_set))
                             result["notifications_processed"] = newly_processed
 
+            summary = _load_telemetry_summary()
+            summary.setdefault("transmissions", []).append({
+                "timestamp_utc": artifact["timestamp"],
+                "artifact_id": artifact["artifact_id"],
+                "artifact_hash": artifact["artifact_hash"],
+                "sent_to_remote": bool(result.get("remote", {}).get("sent")),
+            })
+            summary["updated_at_utc"] = _now_utc_z()
+            _write_json_file(TELEMETRY_SUMMARY, summary)
+
+            _json_response(self, result)
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_telemetry_summary(self):
+        """POST /api/telemetry/summary — merge anonymous aggregate counters only."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 8192:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        if "events" in data or "interactions" in data:
+            _json_response(self, {"error": "raw events are not accepted"}, 400)
+            return
+
+        if not _telemetry_opted_in():
+            _json_response(self, {"opted_in": False, "recorded": False})
+            return
+
+        increments = data.get("increments") or {}
+        if not isinstance(increments, dict):
+            _json_response(self, {"error": "increments must be an object"}, 400)
+            return
+
+        try:
+            summary = _record_telemetry_summary(increments)
+            _json_response(self, {
+                "opted_in": True,
+                "recorded": True,
+                "updated_at_utc": summary.get("updated_at_utc"),
+                "privacy_model": summary.get("privacy_model"),
+            })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_trouble_report(self):
+        """POST /api/trouble/report — store an actionable contextual support report."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 32768:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        description = str(data.get("description", "")).strip()
+        priority = str(data.get("priority", "normal")).strip().lower()
+        context = data.get("context") if isinstance(data.get("context"), dict) else {}
+
+        if not description:
+            _json_response(self, {"error": "description is required"}, 400)
+            return
+        if priority not in ("low", "normal", "high", "urgent"):
+            _json_response(self, {"error": "invalid priority"}, 400)
+            return
+
+        try:
+            artifact_id = f"tr_{uuid.uuid4().hex[:16]}"
+            artifact = {
+                "artifact_type": "trouble_report",
+                "artifact_id": artifact_id,
+                "artifact_version": "1.0",
+                "timestamp_utc": _now_utc_z(),
+                "priority": priority,
+                "description": description,
+                "context": context,
+                "privacy_note": "Trouble reports are support artifacts. They are stored separately from the governance chain and are not controlled by telemetry opt-out.",
+            }
+            payload = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            artifact["artifact_hash"] = f"sha256:{hashlib.sha256(payload).hexdigest()}"
+            out_path = RUNTIME / "LOGS" / "trouble" / f"{artifact_id}.json"
+            _write_json_file(out_path, artifact)
+
+            # Trouble reports are support artifacts, not governance records.
+            # They intentionally do not append to the decision chain.
+            _record_telemetry_summary({"trouble_reports": {"submitted": 1}}) if _telemetry_opted_in() else None
+
+            result = {
+                "submitted": True,
+                "artifact_id": artifact_id,
+                "artifact_hash": artifact["artifact_hash"],
+                "stored_at": str(out_path),
+            }
+            try:
+                sys.path.insert(0, str(MCP_DIR))
+                from feedback_signing import send_artifact_to_remote
+                result["remote"] = send_artifact_to_remote(
+                    artifact, "https://license.atested.com/api/trouble"
+                )
+            except Exception as exc:
+                result["remote"] = {"sent": False, "error": str(exc)}
+
             _json_response(self, result)
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
@@ -1085,14 +1324,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         try:
             opt_in_file.parent.mkdir(parents=True, exist_ok=True)
             opt_in_file.write_text("1" if opted_in else "0", encoding="utf-8")
-
-            from event_model import build_non_action_event
-            event = build_non_action_event(
-                "telemetry_opt_in_changed",
-                {"opted_in": opted_in},
-                prev_record_hash=None,
-            )
-            _append_chain_record_atomic(event)
 
             _json_response(self, {"opted_in": opted_in})
         except Exception as exc:
@@ -1828,6 +2059,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 json.dumps(existing, indent=2, sort_keys=True),
                 encoding="utf-8",
             )
+            opt_in_file = RUNTIME / "telemetry_opt_in"
+            opt_in_file.write_text("1" if telemetry_opted_in else "0", encoding="utf-8")
 
             # Write license_registered chain event
             event = build_non_action_event(
@@ -1846,15 +2079,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 prev_record_hash=None,
             )
             _append_chain_record_atomic(event)
-
-            # If telemetry opted in, record that too
-            if telemetry_opted_in:
-                tel_event = build_non_action_event(
-                    "telemetry_opt_in_changed",
-                    {"opted_in": True, "source": "registration"},
-                    prev_record_hash=None,
-                )
-                _append_chain_record_atomic(tel_event)
 
             # If research opted in, record separate chain event
             if research_opted_in:
@@ -3394,12 +3618,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         artifacts.append(json.loads(fp.read_text(encoding="utf-8")))
                     except (json.JSONDecodeError, OSError):
                         continue
-            _json_response(self, {"artifacts": artifacts[:100]})
+            _json_response(self, {"artifacts": artifacts[:100], "summary": _load_telemetry_summary()})
+
+        elif path == "/api/telemetry/summary":
+            _json_response(self, {
+                "opted_in": _telemetry_opted_in(),
+                "summary": _load_telemetry_summary(),
+            })
 
         elif path == "/api/telemetry/status":
-            opt_in_file = RUNTIME / "telemetry_opt_in"
-            opted_in = opt_in_file.exists() and opt_in_file.read_text(encoding="utf-8").strip() == "1"
-            _json_response(self, {"opted_in": opted_in})
+            _json_response(self, {"opted_in": _telemetry_opted_in()})
 
         elif path == "/api/notifications":
             self._handle_notifications_get()

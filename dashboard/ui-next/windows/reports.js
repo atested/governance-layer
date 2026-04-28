@@ -7,6 +7,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
 
 const REPORT_TEMPLATES = [
   {
@@ -48,6 +49,14 @@ const REPORT_TEMPLATES = [
     accent: 'red',
     defaultRange: '7d',
     groups: ['tool', 'category', 'hour', 'user'],
+  },
+  {
+    id: 'telemetry-summary',
+    title: 'Telemetry Transparency',
+    subtitle: 'Exactly what anonymous summary telemetry contains',
+    accent: 'purple',
+    defaultRange: '30d',
+    groups: [],
   },
 ];
 
@@ -206,6 +215,7 @@ function _wireControls(state) {
     const report = REPORT_BY_ID[state.reportId];
     el.querySelector('#rp-selected-title').textContent = report.title;
     el.querySelector('#rp-selected-subtitle').textContent = report.subtitle;
+    recordUiAggregate('report_runs', state.reportId);
     _applyRange(state, report.defaultRange || '7d');
   });
 
@@ -213,6 +223,7 @@ function _wireControls(state) {
   el.querySelector('#rp-quick-btns').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-range]');
     if (!btn) return;
+    recordUiAggregate('range_shortcuts', btn.dataset.range);
     _applyRange(state, btn.dataset.range);
   });
 
@@ -222,6 +233,7 @@ function _wireControls(state) {
   // Generate button
   el.querySelector('#rp-generate').addEventListener('click', () => {
     _readTimeFilters(state);
+    recordUiAggregate('report_runs', state.reportId);
     _loadReport(state);
   });
 
@@ -272,6 +284,19 @@ async function _loadReport(state) {
   body.innerHTML = '<div class="rp-loading">Loading\u2026</div>';
 
   const template = REPORT_BY_ID[state.reportId] || REPORT_TEMPLATES[0];
+  if (template.id === 'telemetry-summary') {
+    await flushTelemetrySummary();
+    const res = await api.getTelemetrySummary();
+    if (!res.ok) {
+      body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
+      return;
+    }
+    state.data = _composeTelemetryReportData(template, res.data);
+    _renderStats(state);
+    _renderReportView(state);
+    return;
+  }
+
   const params = {};
   if (state.startTime) params.start_time = state.startTime;
   if (state.endTime) params.end_time = state.endTime;
@@ -314,6 +339,39 @@ function _composeReportData(template, grouped, base, params) {
     deny_rate: denyRate,
     groups: grouped,
     findings: _buildFindings(template.id, grouped, { total, allow, deny, denyRate }),
+  };
+}
+
+function _composeTelemetryReportData(template, payload) {
+  const summary = payload.summary || {};
+  const lifetime = summary.lifetime || {};
+  const transmissions = summary.transmissions || [];
+  const periodCount = Object.keys(summary.periods || {}).length;
+  const windowOpenTotal = _sumNested(lifetime.window_opens);
+  const reportRunTotal = _sumNested(lifetime.report_runs);
+  return {
+    generated_at: new Date().toISOString(),
+    report_id: template.id,
+    report_title: template.title,
+    report_subtitle: template.subtitle,
+    time_range: { start: null, end: null },
+    total_records: windowOpenTotal + reportRunTotal,
+    decision_summary: { ALLOW: 0, DENY: 0 },
+    deny_rate: 0,
+    groups: {},
+    telemetry: {
+      opted_in: !!payload.opted_in,
+      summary,
+      lifetime,
+      transmissions,
+      period_count: periodCount,
+    },
+    findings: [
+      { label: 'Raw events stored', value: 'No', tone: 'green', detail: 'Only aggregate counters are stored.' },
+      { label: 'Raw events sent', value: 'No', tone: 'green', detail: 'Flushes send summary counter deltas, not click events.' },
+      { label: 'Periods', value: _fmtNum(periodCount), tone: 'purple', detail: 'Daily aggregate buckets retained in the summary file.' },
+      { label: 'Transmissions', value: _fmtNum(transmissions.length), tone: 'blue', detail: 'Summary artifacts generated for the telemetry channel.' },
+    ],
   };
 }
 
@@ -383,6 +441,10 @@ function _renderReportView(state) {
     body.appendChild(_section('Evidence checklist', _auditChecklist(d)));
     body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
     body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
+  } else if (d.report_id === 'telemetry-summary') {
+    body.appendChild(_section('Privacy model', _telemetryPrivacyModel(d.telemetry.summary)));
+    body.appendChild(_section('Lifetime summary counters', _telemetryCounters(d.telemetry.lifetime)));
+    body.appendChild(_section('Transmission history', _telemetryTransmissions(d.telemetry.transmissions)));
   } else {
     body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroups(d.groups.tool), ['Signal', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
@@ -528,7 +590,76 @@ function _headlineForReport(d) {
   if (d.report_id === 'operator-comparison') return 'Activity is organized by user or agent identity so outliers are easy to spot.';
   if (d.report_id === 'audit-evidence') return 'This view packages the selected chain records into an auditor-ready summary.';
   if (d.report_id === 'unusual-activity') return 'This view highlights high-denial and low-frequency activity that deserves review.';
+  if (d.report_id === 'telemetry-summary') return 'This report shows the same aggregate telemetry summary Atested can receive, with no raw event history.';
   return 'This summary shows the selected period across decisions, actions, and activity categories.';
+}
+
+function _telemetryPrivacyModel(summary) {
+  const model = summary?.privacy_model || {};
+  const list = document.createElement('div');
+  list.className = 'rp-audit-checklist';
+  const checks = [
+    ['Raw events stored', model.raw_events_stored === false ? 'No' : 'Unknown', 'The telemetry file does not contain click logs or event order.'],
+    ['Raw events transmitted', model.raw_events_transmitted === false ? 'No' : 'Unknown', 'The client sends counter summaries, not individual interactions.'],
+    ['Governance chain', 'No telemetry records', model.governance_chain || 'Telemetry is separate from the chain.'],
+    ['Session reconstruction', 'Not possible', model.session_reconstruction || 'No session identifiers or ordered events are retained.'],
+  ];
+  for (const [label, value, detail] of checks) {
+    const row = document.createElement('div');
+    row.className = 'rp-audit-row';
+    row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
+    list.appendChild(row);
+  }
+  return list;
+}
+
+function _telemetryCounters(lifetime) {
+  const rows = [];
+  for (const [bucket, values] of Object.entries(lifetime || {})) {
+    if (bucket === 'flushes') {
+      rows.push(['Summary flushes', _fmtNum(values)]);
+      continue;
+    }
+    for (const [key, count] of Object.entries(values || {})) {
+      rows.push([`${_labelize(bucket)}: ${key}`, _fmtNum(count)]);
+    }
+  }
+  rows.sort((a, b) => (Number(String(b[1]).replace(/,/g, '')) || 0) - (Number(String(a[1]).replace(/,/g, '')) || 0));
+  return _simpleTable(['Counter', 'Total'], rows);
+}
+
+function _telemetryTransmissions(transmissions) {
+  const rows = (transmissions || []).map(item => [
+    item.artifact_id || 'Summary artifact',
+    item.timestamp_utc || '',
+    item.sent_to_remote ? 'Sent' : 'Stored locally',
+  ]);
+  if (!rows.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'rp-empty-note';
+    wrap.textContent = 'No telemetry summary artifacts have been submitted yet.';
+    return wrap;
+  }
+  return _simpleTable(['Artifact', 'Generated', 'Status'], rows);
+}
+
+function _simpleTable(headers, rows) {
+  const table = document.createElement('table');
+  table.className = 'rp-report-table';
+  table.innerHTML = `<thead><tr>${headers.map(h => `<th>${_esc(h)}</th>`).join('')}</tr></thead>`;
+  const tbody = document.createElement('tbody');
+  for (const row of rows.slice(0, 12)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = row.map(c => `<td>${_esc(c)}</td>`).join('');
+    tbody.appendChild(tr);
+  }
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="${headers.length}">No summary counters collected yet.</td>`;
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
 }
 
 function _topGroup(report) {
@@ -629,6 +760,7 @@ function _exportJSON(state) {
       deny_rate: state.data.deny_rate,
     },
     findings: state.data.findings,
+    telemetry: state.data.telemetry || undefined,
     groups: Object.fromEntries(Object.entries(state.data.groups || {}).map(([key, value]) => [
       key,
       value?.groups || [],
@@ -662,6 +794,15 @@ function _fmtNum(n) {
   return typeof n === 'number' ? n.toLocaleString() : String(n);
 }
 
+function _sumNested(obj) {
+  if (!obj || typeof obj !== 'object') return 0;
+  return Object.values(obj).reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+function _labelize(str) {
+  return String(str || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function _isoToLocal(iso) {
   if (!iso) return '';
   try {
@@ -684,7 +825,7 @@ rpStyles.textContent = `
   /* ---- Report cards ---- */
   .rp-report-picker {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 18px;
   }

@@ -70,6 +70,24 @@ class ModalManager {
   }
 
   /**
+   * Snapshot of the current window stack for contextual support.
+   * Contains titles/subtitles only; no record payloads are captured here.
+   */
+  getContext() {
+    return {
+      depth: this._stack.length,
+      windows: this._stack.map(entry => ({
+        title: entry.frame.getAttribute('title') || '',
+        subtitle: entry.frame.getAttribute('subtitle') || '',
+        depth: entry.depth,
+      })),
+      top_window: this._stack.length
+        ? (this._stack[this._stack.length - 1].frame.getAttribute('title') || '')
+        : 'Main page',
+    };
+  }
+
+  /**
    * Open a window at the next depth level.
    * @param {object} opts
    * @param {string} opts.title - Window title

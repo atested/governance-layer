@@ -3858,23 +3858,6 @@ def submit_telemetry(send_to_remote: bool = False) -> Dict[str, Any]:
     telemetry_dir = RUNTIME / "LOGS" / "telemetry"
     out_path = write_artifact(artifact, telemetry_dir)
 
-    # Record in chain
-    with _CHAIN_LOCK:
-        _verify_chain()
-        event = build_non_action_event(
-            "telemetry_submitted",
-            {
-                "artifact_id": artifact["artifact_id"],
-                "artifact_hash": artifact["artifact_hash"],
-                "sent_to_remote": send_to_remote,
-                "total_allow": artifact["total_allow"],
-                "total_deny": artifact["total_deny"],
-            },
-            prev_record_hash=_chain_head_record_hash(),
-        )
-        _append_non_action_event(event)
-        _verify_chain()
-
     result = {
         "artifact_id": artifact["artifact_id"],
         "artifact_hash": artifact["artifact_hash"],

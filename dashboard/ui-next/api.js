@@ -183,6 +183,14 @@ export function getTelemetry() {
 }
 
 /**
+ * Anonymous summary telemetry state.
+ * GET /api/telemetry/summary
+ */
+export function getTelemetrySummary() {
+  return _request('GET', '/telemetry/summary');
+}
+
+/**
  * Telemetry opt-in status.
  * GET /api/telemetry/status
  */
@@ -259,11 +267,27 @@ export function postTelemetrySubmit({ send_to_remote } = {}) {
 }
 
 /**
+ * Merge anonymous summary telemetry counters.
+ * POST /api/telemetry/summary
+ */
+export function postTelemetrySummary({ increments } = {}) {
+  return _request('POST', '/telemetry/summary', { body: { increments } });
+}
+
+/**
  * Set telemetry opt-in.
  * POST /api/telemetry/opt-in
  */
 export function postTelemetryOptIn({ opted_in } = {}) {
   return _request('POST', '/telemetry/opt-in', { body: { opted_in } });
+}
+
+/**
+ * Submit contextual support report. Works regardless of telemetry opt-out.
+ * POST /api/trouble/report
+ */
+export function postTroubleReport({ description, priority, context } = {}) {
+  return _request('POST', '/trouble/report', { body: { description, priority, context } });
 }
 
 /**
