@@ -66,7 +66,10 @@ export async function openRecordDetail(recordId, trigger, opts = {}) {
     return;
   }
 
-  _replaceContent(result.frame, _buildContent(res.data, recordId));
+  const resolvedId = _resolvedRecordId(res.data, recordId);
+  result.frame.setAttribute('title', `Record ${resolvedId.substring(0, 8)}`);
+  result.frame.setAttribute('subtitle', 'Decision detail from your chain');
+  _replaceContent(result.frame, _buildContent(res.data, resolvedId));
 }
 
 // ---------- Content builders ----------
@@ -338,6 +341,20 @@ function _formatTimestamp(iso) {
     const date = d.toLocaleDateString();
     return `${date} ${hh}:${mm}:${ss}`;
   } catch { return iso; }
+}
+
+function _resolvedRecordId(data, fallback) {
+  const chain = data?.chain_record || {};
+  const sidecar = data?.sidecar_record || {};
+  return chain.request_id
+    || chain.event_id
+    || chain.record_hash
+    || sidecar.request_id
+    || sidecar.event_id
+    || sidecar.record_hash
+    || data?.record_id
+    || fallback
+    || '';
 }
 
 function _esc(str) {

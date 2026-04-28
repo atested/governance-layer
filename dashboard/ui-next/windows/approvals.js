@@ -76,6 +76,29 @@ function _buildUI(state) {
       </div>
     </div>
 
+    <!-- Revocation guidance pane -->
+    <div class="ap-pane ap-revocation-guidance">
+      <div class="ap-pane-accent ap-accent-purple"></div>
+      <div class="ap-pane-header">Revocation guidance</div>
+      <div class="ap-pane-body">
+        <p class="ap-pane-copy">Approvals should be reviewed periodically. A stale approval keeps an exception open after the operational reason may have expired, which widens the path around policy controls.</p>
+        <div class="ap-guidance-grid">
+          <div class="ap-guidance-item">
+            <span class="ap-guidance-label">Governance risk</span>
+            <span class="ap-guidance-copy">Unused approvals can become standing permissions no one intended to keep.</span>
+          </div>
+          <div class="ap-guidance-item">
+            <span class="ap-guidance-label">Chain evidence</span>
+            <span class="ap-guidance-copy">Every revocation is recorded as a governance-chain event for later review.</span>
+          </div>
+          <div class="ap-guidance-item">
+            <span class="ap-guidance-label">After revocation</span>
+            <span class="ap-guidance-copy">The operation returns to denied status until an operator approves it again.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Active approvals pane -->
     <div class="ap-pane">
       <div class="ap-pane-accent ap-accent-green"></div>
@@ -119,6 +142,7 @@ function _applyStaticTooltips(state) {
     ['#ap-operation', 'Enter a tool name, path, opaque artifact hash, or operation identity to approve.'],
     ['#ap-approve-btn', 'Create an approval event in the chain.'],
     ['#ap-export', 'Export the active approvals table as CSV.'],
+    ['.ap-revocation-guidance', 'Explains when and why to revoke approvals.'],
   ]);
   state.el.querySelectorAll('.ap-filter-btn').forEach(btn => {
     const label = btn.textContent.trim();
@@ -518,6 +542,7 @@ apStyles.textContent = `
   }
   .ap-accent-amber { background: #d29922; }
   .ap-accent-green { background: #3fb950; }
+  .ap-accent-purple { background: #d2a8ff; }
   .ap-pane-header {
     font-size: 0.72rem;
     text-transform: uppercase;
@@ -549,6 +574,33 @@ apStyles.textContent = `
     color: #8b919a;
     line-height: 1.5;
     margin: 0 0 12px;
+  }
+
+  .ap-guidance-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .ap-guidance-item {
+    background: #1a1d23;
+    border: 1px dashed rgba(210,168,255,0.22);
+    border-radius: 2px;
+    padding: 10px 12px;
+  }
+  .ap-guidance-label {
+    display: block;
+    font-size: 0.68rem;
+    color: #d2a8ff;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .ap-guidance-copy {
+    display: block;
+    color: #8b919a;
+    font-size: 0.78rem;
+    line-height: 1.45;
   }
 
   /* ---- Approve form ---- */
@@ -771,6 +823,7 @@ apStyles.textContent = `
   @media (max-width: 700px) {
     .ap-stats { grid-template-columns: 1fr; }
     .ap-approve-form { flex-direction: column; }
+    .ap-guidance-grid { grid-template-columns: 1fr; }
     .ap-filter-bar { flex-wrap: wrap; }
   }
 `;

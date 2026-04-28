@@ -123,7 +123,8 @@ function _buildEditPane(state) {
 }
 
 async function _handleUnlock(state, pane) {
-  const key = pane.querySelector('#cf-license-key').value.trim();
+  const keyInput = pane.querySelector('#cf-license-key');
+  const key = keyInput.value.trim() || (_isDemoSimulation() ? 'demo-unlock' : '');
   const resultEl = pane.querySelector('#cf-unlock-result');
 
   if (!key) {
@@ -142,6 +143,13 @@ async function _handleUnlock(state, pane) {
   state.editMode = true;
   resultEl.className = 'cf-result-success';
   resultEl.textContent = 'Edit mode active. Changes will be recorded in the chain.';
+}
+
+function _isDemoSimulation() {
+  return window.location.pathname.startsWith('/demo/')
+    || window.location.pathname === '/demo'
+    || window.location.pathname.startsWith('/pricing/')
+    || window.location.search.includes('demo=1');
 }
 
 // ---------- Policy Rules pane ----------

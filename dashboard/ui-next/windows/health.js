@@ -224,13 +224,15 @@ function _buildLicensePane(h) {
 function _pane(accentColor, title, clickable) {
   const pane = document.createElement('div');
   pane.className = 'hw-pane' + (clickable ? ' hw-pane-clickable' : '');
+  const tooltip = _paneTooltip(title);
 
   pane.innerHTML = `
     <div class="hw-pane-accent hw-accent-${accentColor}"></div>
     <div class="hw-pane-header">${_esc(title)}</div>
     <div class="hw-pane-body"></div>
   `;
-  setTooltip(pane.querySelector('.hw-pane-header'), _paneTooltip(title));
+  setTooltip(pane, tooltip);
+  setTooltip(pane.querySelector('.hw-pane-header'), tooltip);
   return pane;
 }
 
@@ -253,6 +255,7 @@ function _paneTooltip(title) {
     'Storage': 'Local storage footprint for chain, stability log, and archives.',
     'Users': 'Operator identities and activity anomalies in recent records.',
     'License': 'Current license or trial status for this installation.',
+    'Recent health events': 'Recent stability, integrity, version, and anomaly events emitted by health monitoring.',
   };
   return tips[title] || `${title} health metric.`;
 }
@@ -454,6 +457,7 @@ function _renderEventsTable(state, h) {
 
   const pane = document.createElement('div');
   pane.className = 'hw-events-pane';
+  setTooltip(pane, _paneTooltip('Recent health events'));
   pane.innerHTML = `
     <div class="hw-pane-accent hw-accent-blue"></div>
     <div class="hw-pane-header-row">
@@ -461,6 +465,7 @@ function _renderEventsTable(state, h) {
       <span class="hw-pane-count">${events.length > 10 ? '10 of ' + events.length : events.length} events</span>
     </div>
   `;
+  setTooltip(pane.querySelector('.hw-pane-header'), _paneTooltip('Recent health events'));
 
   const table = document.createElement('table');
   table.className = 'hw-events-table';
@@ -488,16 +493,8 @@ function _renderEventsTable(state, h) {
     `;
     setTooltip(tr, `${evt.event_type || 'Health event'} from ${source}: ${details || 'open for detail'}`);
 
-    // Clickable — open event record as grandchild
-    tr.addEventListener('click', () => {
-      const eventId = evt.event_id || evt.record_hash || evt.request_id;
-      if (eventId) {
-        openRecordDetail(eventId, state.el);
-      } else {
-        // If no ID, show raw event as grandchild
-        _openRawEventDetail(state, evt);
-      }
-    });
+    // Stability-log events are not governance chain records; show their native detail.
+    tr.addEventListener('click', () => _openRawEventDetail(state, evt));
 
     tbody.appendChild(tr);
   }
@@ -679,6 +676,7 @@ hwStyles.textContent = `
   .hw-root {
     font-family: "Inter", system-ui, sans-serif;
     color: #e4e6eb;
+    overflow: visible;
   }
 
   /* ---- Title accent ---- */
@@ -777,6 +775,7 @@ hwStyles.textContent = `
     grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin-bottom: 20px;
+    overflow: visible;
   }
 
   /* ---- Data pane ---- */
@@ -784,7 +783,7 @@ hwStyles.textContent = `
     background: #22262e;
     border: 1px dashed rgba(255,255,255,0.12);
     border-radius: 2px;
-    overflow: hidden;
+    overflow: visible;
   }
   .hw-pane-clickable {
     cursor: pointer;
@@ -806,6 +805,7 @@ hwStyles.textContent = `
   }
   .hw-pane-body {
     padding: 6px 20px 16px;
+    overflow: visible;
   }
 
   /* ---- KV rows ---- */
@@ -833,7 +833,7 @@ hwStyles.textContent = `
     background: #22262e;
     border: 1px dashed rgba(255,255,255,0.12);
     border-radius: 2px;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 16px;
   }
   .hw-pane-header-row {
