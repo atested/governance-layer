@@ -1,30 +1,12 @@
 /**
  * Reports window — child window (depth 1).
- * D-040 redesign: dual filter panes, toggle-based grouping, clickable
- * bar chart rows with atomic navigation to Activity, CSV export.
+ * D-141/D-142 redesign: predefined report cards, default time ranges,
+ * formatted report views, Activity drill-through, and JSON export.
  */
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-
-const GROUP_OPTIONS = [
-  { key: 'tool',     label: 'Tool' },
-  { key: 'category', label: 'Category' },
-  { key: 'decision', label: 'Decision' },
-  { key: 'user',     label: 'User' },
-  { key: 'hour',     label: 'Hour' },
-];
-
-const GROUP_LABELS = {
-  tool: 'By tool', category: 'By category', decision: 'By decision',
-  user: 'By user', hour: 'By hour',
-};
-
-const GROUP_COUNT_LABELS = {
-  tool: 'tools', category: 'categories', decision: 'decisions',
-  user: 'users', hour: 'hours',
-};
 
 const REPORT_TEMPLATES = [
   {
@@ -32,6 +14,7 @@ const REPORT_TEMPLATES = [
     title: 'Governance Summary',
     subtitle: 'What happened in the selected period',
     accent: 'green',
+    defaultRange: '7d',
     groups: ['decision', 'tool', 'category'],
   },
   {
@@ -39,6 +22,7 @@ const REPORT_TEMPLATES = [
     title: 'Denial Patterns',
     subtitle: 'Where policy is stopping risky activity',
     accent: 'amber',
+    defaultRange: '30d',
     groups: ['tool', 'category', 'user'],
   },
   {
@@ -46,6 +30,7 @@ const REPORT_TEMPLATES = [
     title: 'Operator Comparison',
     subtitle: 'Compare activity by user or agent identity',
     accent: 'blue',
+    defaultRange: '30d',
     groups: ['user', 'decision', 'tool'],
   },
   {
@@ -53,6 +38,7 @@ const REPORT_TEMPLATES = [
     title: 'Audit Evidence Pack',
     subtitle: 'Evidence summary for external review',
     accent: 'purple',
+    defaultRange: 'all',
     groups: ['decision', 'category', 'tool'],
   },
   {
@@ -60,6 +46,7 @@ const REPORT_TEMPLATES = [
     title: 'Unusual Activity Watch',
     subtitle: 'Low-frequency and high-denial signals',
     accent: 'red',
+    defaultRange: '7d',
     groups: ['tool', 'category', 'hour', 'user'],
   },
 ];
@@ -81,11 +68,13 @@ export function openReportsWindow(trigger) {
     el: content,
     startTime: '',
     endTime: '',
+    activeRange: REPORT_BY_ID['governance-summary'].defaultRange,
     reportId: 'governance-summary',
     data: null,
   };
 
   _buildUI(state);
+  _applyRange(state, state.activeRange, { load: false });
   installWindowTooltips(content);
   _applyStaticTooltips(state);
   _wireControls(state);
@@ -217,32 +206,18 @@ function _wireControls(state) {
     const report = REPORT_BY_ID[state.reportId];
     el.querySelector('#rp-selected-title').textContent = report.title;
     el.querySelector('#rp-selected-subtitle').textContent = report.subtitle;
+    _applyRange(state, report.defaultRange || '7d');
   });
 
   // Quick-select time buttons
   el.querySelector('#rp-quick-btns').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-range]');
     if (!btn) return;
-    const range = btn.dataset.range;
-    const now = new Date();
-    let from = '';
-    if (range === '1h') {
-      from = new Date(now.getTime() - 3600000).toISOString();
-    } else if (range === 'today') {
-      const d = new Date(now); d.setHours(0, 0, 0, 0);
-      from = d.toISOString();
-    } else if (range === '7d') {
-      from = new Date(now.getTime() - 7 * 86400000).toISOString();
-    } else if (range === '30d') {
-      from = new Date(now.getTime() - 30 * 86400000).toISOString();
-    } else {
-      from = '';
-    }
-    state.startTime = from;
-    state.endTime = range === 'all' ? '' : now.toISOString();
-    el.querySelector('#rp-from').value = from ? _isoToLocal(from) : '';
-    el.querySelector('#rp-to').value = state.endTime ? _isoToLocal(state.endTime) : '';
+    _applyRange(state, btn.dataset.range);
   });
+
+  el.querySelector('#rp-from').addEventListener('input', () => _setActiveRange(state, 'custom'));
+  el.querySelector('#rp-to').addEventListener('input', () => _setActiveRange(state, 'custom'));
 
   // Generate button
   el.querySelector('#rp-generate').addEventListener('click', () => {
@@ -259,6 +234,35 @@ function _readTimeFilters(state) {
   const toVal = state.el.querySelector('#rp-to').value;
   state.startTime = fromVal ? new Date(fromVal).toISOString() : '';
   state.endTime = toVal ? new Date(toVal).toISOString() : '';
+}
+
+function _applyRange(state, range, opts = {}) {
+  const now = new Date();
+  let from = '';
+  if (range === '1h') {
+    from = new Date(now.getTime() - 3600000).toISOString();
+  } else if (range === 'today') {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    from = d.toISOString();
+  } else if (range === '7d') {
+    from = new Date(now.getTime() - 7 * 86400000).toISOString();
+  } else if (range === '30d') {
+    from = new Date(now.getTime() - 30 * 86400000).toISOString();
+  }
+  state.startTime = from;
+  state.endTime = range === 'all' ? '' : now.toISOString();
+  state.el.querySelector('#rp-from').value = from ? _isoToLocal(from) : '';
+  state.el.querySelector('#rp-to').value = state.endTime ? _isoToLocal(state.endTime) : '';
+  _setActiveRange(state, range);
+  if (opts.load !== false) _loadReport(state);
+}
+
+function _setActiveRange(state, range) {
+  state.activeRange = range;
+  state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
+    btn.classList.toggle('rp-quick-active', btn.dataset.range === range);
+  });
 }
 
 // ---------- Load report ----------
@@ -365,23 +369,23 @@ function _renderReportView(state) {
 
   if (d.report_id === 'governance-summary') {
     body.appendChild(_section('Decision mix', _barList(state, d.groups.decision?.groups || [], 'decision')));
-    body.appendChild(_section('Most active tools', _barList(state, d.groups.tool?.groups || [], 'tool')));
+    body.appendChild(_section('Most active actions', _barList(state, d.groups.tool?.groups || [], 'tool')));
     body.appendChild(_section('Activity categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
   } else if (d.report_id === 'denial-patterns') {
-    body.appendChild(_section('Highest-risk tools', _compactTable(_groupsWithDenies(d.groups.tool), ['Tool', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('Highest-risk actions', _compactTable(_groupsWithDenies(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Denied categories', _barList(state, _groupsWithDenies(d.groups.category), 'category')));
     body.appendChild(_section('Operators with denials', _compactTable(_groupsWithDenies(d.groups.user), ['Operator', 'Records', 'DENY', 'Deny rate'])));
   } else if (d.report_id === 'operator-comparison') {
     body.appendChild(_section('Operator activity', _compactTable(d.groups.user?.groups || [], ['Operator', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Decision balance', _barList(state, d.groups.decision?.groups || [], 'decision')));
-    body.appendChild(_section('Tool distribution', _barList(state, d.groups.tool?.groups || [], 'tool')));
+    body.appendChild(_section('Action distribution', _barList(state, d.groups.tool?.groups || [], 'tool')));
   } else if (d.report_id === 'audit-evidence') {
     body.appendChild(_section('Evidence checklist', _auditChecklist(d)));
     body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
     body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
   } else {
     body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroups(d.groups.tool), ['Signal', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Tool', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Hourly concentration', _barList(state, d.groups.hour?.groups || [], 'hour')));
   }
 }
@@ -396,7 +400,7 @@ function _buildFindings(reportId, grouped, totals) {
   if (reportId === 'denial-patterns') {
     return [
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: 'amber', detail: `${denyPct} of selected records were denied.` },
-      { label: 'Most denied tool', value: topDeniedTool?.key || 'None', tone: topDeniedTool ? 'amber' : 'green', detail: topDeniedTool ? `${_fmtNum(topDeniedTool.deny_count || 0)} denied records.` : 'No denied tool activity in range.' },
+      { label: 'Most denied action', value: topDeniedTool?.key || 'None', tone: topDeniedTool ? 'amber' : 'green', detail: topDeniedTool ? `${_fmtNum(topDeniedTool.deny_count || 0)} denied records.` : 'No denied action activity in range.' },
       { label: 'Primary category', value: topCategory?.key || 'N/A', tone: 'blue', detail: 'Largest evidence category in the range.' },
       { label: 'Operator signal', value: topUser?.key || 'N/A', tone: 'purple', detail: 'Most active identity in this report.' },
     ];
@@ -406,7 +410,7 @@ function _buildFindings(reportId, grouped, totals) {
       { label: 'Active identities', value: _fmtNum((grouped.user?.groups || []).length), tone: 'blue', detail: 'Distinct users or agents with records.' },
       { label: 'Most active', value: topUser?.key || 'N/A', tone: 'amber', detail: topUser ? `${_fmtNum(topUser.count || 0)} records.` : 'No operator data available.' },
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
-      { label: 'Dominant tool', value: topTool?.key || 'N/A', tone: 'blue', detail: 'Most used operation path.' },
+      { label: 'Dominant action', value: topTool?.key || 'N/A', tone: 'blue', detail: 'Most used operation path.' },
     ];
   }
   if (reportId === 'audit-evidence') {
@@ -422,7 +426,7 @@ function _buildFindings(reportId, grouped, totals) {
     const lowFreq = _lowFrequencyGroups(grouped.tool)[0];
     return [
       { label: 'High-denial signal', value: highDeny?.key || 'None', tone: highDeny ? 'red' : 'green', detail: highDeny ? `${_groupDenyRate(highDeny)} deny rate.` : 'No high-denial group found.' },
-      { label: 'Low-frequency tool', value: lowFreq?.key || 'None', tone: lowFreq ? 'amber' : 'green', detail: lowFreq ? `${_fmtNum(lowFreq.count || 0)} record(s).` : 'No low-frequency group found.' },
+      { label: 'Low-frequency action', value: lowFreq?.key || 'None', tone: lowFreq ? 'amber' : 'green', detail: lowFreq ? `${_fmtNum(lowFreq.count || 0)} record(s).` : 'No low-frequency group found.' },
       { label: 'Total records', value: _fmtNum(totals.total), tone: 'blue', detail: 'Records analyzed for unusual activity.' },
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
     ];
@@ -431,7 +435,7 @@ function _buildFindings(reportId, grouped, totals) {
     { label: 'Records in scope', value: _fmtNum(totals.total), tone: 'green', detail: 'Total records in the selected timeframe.' },
     { label: 'ALLOW', value: _fmtNum(totals.allow), tone: 'green', detail: 'Operations allowed by policy.' },
     { label: 'DENY', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
-    { label: 'Top tool', value: topTool?.key || 'N/A', tone: 'blue', detail: topTool ? `${_fmtNum(topTool.count || 0)} records.` : 'No tool data available.' },
+    { label: 'Top action', value: topTool?.key || 'N/A', tone: 'blue', detail: topTool ? `${_fmtNum(topTool.count || 0)} records.` : 'No action data available.' },
   ];
 }
 
@@ -520,11 +524,11 @@ function _auditChecklist(d) {
 }
 
 function _headlineForReport(d) {
-  if (d.report_id === 'denial-patterns') return 'Policy denials are grouped by the tools, categories, and operators most useful for triage.';
+  if (d.report_id === 'denial-patterns') return 'Policy denials are grouped by the actions, categories, and operators most useful for triage.';
   if (d.report_id === 'operator-comparison') return 'Activity is organized by user or agent identity so outliers are easy to spot.';
   if (d.report_id === 'audit-evidence') return 'This view packages the selected chain records into an auditor-ready summary.';
   if (d.report_id === 'unusual-activity') return 'This view highlights high-denial and low-frequency activity that deserves review.';
-  return 'This summary shows the selected period across decisions, tools, and activity categories.';
+  return 'This summary shows the selected period across decisions, actions, and activity categories.';
 }
 
 function _topGroup(report) {
@@ -565,60 +569,6 @@ function _formatShortDate(iso) {
     return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
   } catch {
     return iso || '';
-  }
-}
-
-// ---------- Render bars ----------
-
-function _renderBars(state) {
-  const d = state.data;
-  const groups = d.groups || [];
-  const groupBy = d.group_by || state.groupBy;
-
-  // Update header
-  state.el.querySelector('#rp-gp-title').textContent = GROUP_LABELS[groupBy] || `By ${groupBy}`;
-  const countLabel = GROUP_COUNT_LABELS[groupBy] || 'groups';
-  state.el.querySelector('#rp-gp-count').textContent = `${groups.length} ${countLabel}`;
-
-  const body = state.el.querySelector('#rp-gp-body');
-  body.innerHTML = '';
-
-  if (!groups.length) {
-    body.innerHTML = '<div class="rp-empty">No data for the selected time range.</div>';
-    return;
-  }
-
-  const maxCount = Math.max(...groups.map(g => g.count || 0), 1);
-
-  // Compute average deny rate for amber-bar highlighting
-  const totalDeny = groups.reduce((sum, g) => sum + (g.deny_count || 0), 0);
-  const totalCount = groups.reduce((sum, g) => sum + (g.count || 0), 0);
-  const avgDenyRate = totalCount > 0 ? totalDeny / totalCount : 0;
-
-  for (const group of groups) {
-    const pct = ((group.count || 0) / maxCount * 100).toFixed(1);
-    const denyCount = group.deny_count || 0;
-    const denyRate = group.count > 0 ? denyCount / group.count : 0;
-    // Amber bar if this group's deny rate is >2x the average and has at least 1 deny
-    const isAmber = denyCount > 0 && avgDenyRate > 0 && denyRate > avgDenyRate * 2;
-
-    const row = document.createElement('div');
-    row.className = 'rp-bar-row';
-    setTooltip(row, `${group.key || 'Group'}: ${_fmtNum(group.count || 0)} records. Click to view in Activity.`);
-    row.innerHTML = `
-      <span class="rp-bar-label">${_esc(group.key || '\u2014')}</span>
-      <div class="rp-bar-track">
-        <div class="rp-bar-fill${isAmber ? ' rp-bar-amber' : ''}" style="width: ${pct}%"></div>
-      </div>
-      <span class="rp-bar-count">${_fmtNum(group.count || 0)}</span>
-    `;
-
-    // Click handler — atomic navigation to Activity
-    row.addEventListener('click', () => {
-      _navigateToActivity(state, groupBy, group.key);
-    });
-
-    body.appendChild(row);
   }
 }
 
@@ -875,6 +825,12 @@ rpStyles.textContent = `
     background: rgba(102,153,204,0.12);
     color: #6699cc;
     border-color: rgba(102,153,204,0.3);
+  }
+  .rp-quick-active {
+    background: rgba(102,153,204,0.18);
+    color: #e4e6eb;
+    border-color: rgba(102,153,204,0.55);
+    font-weight: 700;
   }
 
   /* Group by toggles */

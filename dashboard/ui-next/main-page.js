@@ -70,7 +70,7 @@ const LAUNCHER_GROUPS = [
 /** Tooltip descriptions for navigation cards */
 const CARD_TOOLTIPS = {
   activity:       'Full decision log with filters, exports, and record detail.',
-  reports:        'Atested metrics and trends grouped by tool, category, or decision.',
+  reports:        'Atested metrics and trends grouped by action, category, or decision.',
   alerts:         'Safety alerts are always available; advanced monitoring expands on paid tiers.',
   approvals:      'Review and revoke scoped approvals that override policy decisions.',
   health:         'Chain integrity, signing status, deny-rate signals, and diagnostics.',
