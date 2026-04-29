@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { downloadExport } from '../export-utils.js';
 import '../components/pill.js';
 import '../components/confirmation-dialog.js';
 import '../components/loading-indicator.js';
@@ -81,7 +82,7 @@ function _buildUI(state) {
       <div class="ap-pane-accent ap-accent-purple"></div>
       <div class="ap-pane-header">Revocation guidance</div>
       <div class="ap-pane-body">
-        <p class="ap-pane-copy">Approvals should be reviewed periodically. A stale approval keeps an exception open after the operational reason may have expired, which widens the path around policy controls.</p>
+        <p class="ap-pane-copy">Approvals should be reviewed periodically. A stale approval keeps an exception open after the operational reason may have expired, which widens the path around policy controls. Use the <strong>Recommended for revocation</strong> filter below to review the stale set Atested has already flagged for you.</p>
         <div class="ap-guidance-grid">
           <div class="ap-guidance-item">
             <span class="ap-guidance-label">Governance risk</span>
@@ -96,6 +97,7 @@ function _buildUI(state) {
             <span class="ap-guidance-copy">The operation returns to denied status until an operator approves it again.</span>
           </div>
         </div>
+        <button class="ap-btn ap-btn-muted ap-guidance-action" id="ap-guidance-filter">Open recommended filter</button>
       </div>
     </div>
 
@@ -122,7 +124,14 @@ function _buildUI(state) {
 
     <!-- Footer -->
     <div class="ap-footer">
-      <button class="ap-btn ap-btn-export" id="ap-export">Export approvals</button>
+      <div class="ap-export-control">
+        <select class="ap-select ap-export-format" id="ap-export-format" aria-label="Export format">
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+          <option value="excel">Excel</option>
+        </select>
+        <button class="ap-btn ap-btn-export" id="ap-export">Export</button>
+      </div>
     </div>
   `;
 
@@ -141,7 +150,8 @@ function _applyStaticTooltips(state) {
     ['#ap-stat-latest', 'Most recent approval recorded in the chain.'],
     ['#ap-operation', 'Enter an action name, path, opaque artifact hash, or operation identity to approve.'],
     ['#ap-approve-btn', 'Create an approval event in the chain.'],
-    ['#ap-export', 'Export the active approvals table as CSV.'],
+    ['#ap-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
+    ['#ap-export', 'Export the active approvals table in the selected format.'],
     ['.ap-revocation-guidance', 'Explains when and why to revoke approvals.'],
   ]);
   state.el.querySelectorAll('.ap-filter-btn').forEach(btn => {
@@ -173,8 +183,12 @@ function _wireControls(state) {
     _renderTable(state);
   });
 
+  el.querySelector('#ap-guidance-filter').addEventListener('click', () => {
+    el.querySelector('.ap-filter-btn[data-filter="stale"]')?.click();
+  });
+
   // Export
-  el.querySelector('#ap-export').addEventListener('click', () => _exportCSV(state));
+  el.querySelector('#ap-export').addEventListener('click', () => _exportApprovals(state));
 }
 
 // ---------- Data ----------
@@ -421,33 +435,33 @@ function _showFormResult(el, msg, type) {
 
 // ---------- Export ----------
 
-function _exportCSV(state) {
+function _exportApprovals(state) {
   if (!state.approvals.length) return;
 
-  const header = 'Operation,Approved,Status,Age (days),Operator';
-  const rows = state.approvals.map(a => {
-    const op = a.artifact_identity || '';
-    const approved = a.timestamp_utc || '';
-    const status = a.stale ? 'Recommend revoking' : 'Active';
-    const age = String(a.age_days || 0);
-    const operator = a.approving_operator || '';
-    return [op, approved, status, age, operator].map(v => {
-      if (v.includes(',') || v.includes('"') || v.includes('\n')) {
-        return '"' + v.replace(/"/g, '""') + '"';
-      }
-      return v;
-    }).join(',');
-  });
-
-  const csv = header + '\n' + rows.join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
   const date = new Date().toISOString().slice(0, 10);
-  a.download = `atested-approvals-${date}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const columns = [
+    { key: 'operation', label: 'Operation' },
+    { key: 'approved', label: 'Approved' },
+    { key: 'status', label: 'Status' },
+    { key: 'age_days', label: 'Age (days)' },
+    { key: 'operator', label: 'Operator' },
+  ];
+  const rows = state.approvals.map(a => ({
+    operation: a.artifact_identity || '',
+    approved: a.timestamp_utc || '',
+    status: a.stale ? 'Recommended for revocation' : 'Active',
+    age_days: String(a.age_days || 0),
+    operator: a.approving_operator || '',
+  }));
+  const format = state.el.querySelector('#ap-export-format')?.value || 'json';
+  downloadExport(format, `atested-approvals-${date}`, columns, rows, {
+    sheetName: 'Approvals Export',
+    jsonData: () => ({
+      export_timestamp: new Date().toISOString(),
+      filter: state.filter,
+      approvals: state.approvals,
+    }),
+  });
 }
 
 // ---------- Helpers ----------
@@ -622,7 +636,21 @@ apStyles.textContent = `
     padding: 7px 12px;
     box-sizing: border-box;
   }
+  .ap-select {
+    background: #1a1d23;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    padding: 7px 12px;
+    box-sizing: border-box;
+  }
   .ap-input:focus {
+    outline: 2px solid #6699cc;
+    outline-offset: 1px;
+  }
+  .ap-select:focus {
     outline: 2px solid #6699cc;
     outline-offset: 1px;
   }
@@ -652,6 +680,14 @@ apStyles.textContent = `
     border: 1px solid rgba(210,153,34,0.3);
   }
   .ap-btn-export:hover { background: rgba(210,153,34,0.2); }
+  .ap-export-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ap-export-format {
+    min-width: 90px;
+  }
   .ap-btn-bulk {
     background: #3fb950;
     color: #fff;
@@ -794,6 +830,9 @@ apStyles.textContent = `
   /* ---- Footer ---- */
   .ap-footer {
     padding: 4px 0;
+  }
+  .ap-guidance-action {
+    margin-top: 12px;
   }
 
   /* ---- Utility ---- */

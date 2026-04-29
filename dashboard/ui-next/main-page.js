@@ -7,6 +7,7 @@
 
 import { modalManager } from './modal-manager.js';
 import * as api from './api.js';
+import { installWindowTooltips } from './tooltip-utils.js';
 
 // Import Phase 2 components (registers custom elements)
 import './components/status-card.js';
@@ -298,6 +299,8 @@ export function renderMainPage() {
       if (metricDiv) metricDiv.dataset.tooltip = tip;
     }
   }
+
+  installWindowTooltips(_page);
 
   return _page;
 }
@@ -616,59 +619,6 @@ mpStyles.textContent = `
        prevents a stale aria-hidden state from making launchers inert. */
   }
 
-  #main-page [data-tooltip] {
-    position: relative;
-  }
-  #main-page [data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    transform: translate(-50%, 4px);
-    z-index: 2500;
-    box-sizing: border-box;
-    width: max-content;
-    max-width: 250px;
-    padding: 7px 10px;
-    background: #161b22;
-    border: 1px dashed #30363d;
-    border-radius: 2px;
-    color: #d7dde6;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.68rem;
-    font-weight: 400;
-    line-height: 1.45;
-    text-align: left;
-    white-space: normal;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.08s ease, transform 0.08s ease;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-  }
-  #main-page [data-tooltip]::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 2px);
-    transform: translateX(-50%);
-    z-index: 2501;
-    border: 6px solid transparent;
-    border-top-color: #30363d;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.08s ease;
-  }
-  #main-page [data-tooltip]:hover::after,
-  #main-page [data-tooltip]:focus-visible::after,
-  #main-page [data-tooltip]:hover::before,
-  #main-page [data-tooltip]:focus-visible::before {
-    opacity: 1;
-  }
-  #main-page [data-tooltip]:hover::after,
-  #main-page [data-tooltip]:focus-visible::after {
-    transform: translate(-50%, 0);
-  }
-
   /* ---- Title pane ---- */
   .mp-title-pane {
     background: #22262e;
@@ -853,7 +803,7 @@ mpStyles.textContent = `
 
   /* ---- Workflow launcher grid ---- */
   .mp-section {
-    margin-bottom: 24px;
+    margin-bottom: 12px;
   }
   .mp-launcher-grid {
     display: flex;

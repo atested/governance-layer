@@ -44,6 +44,8 @@ export function openTroubleDialog() {
       <div class="trouble-context">
         <span>Window</span><strong>${_esc(context.current_window)}</strong>
         <span>Path</span><strong>${_esc(context.path)}</strong>
+        <span>Tier</span><strong>${_esc(context.license_tier || 'Unknown')}</strong>
+        <span>Simulation</span><strong>${_esc(context.simulation_plan || 'Live operator UI')}</strong>
       </div>
       <label class="trouble-label">
         Priority
@@ -56,7 +58,7 @@ export function openTroubleDialog() {
       </label>
       <label class="trouble-label">
         What went wrong?
-        <textarea id="trouble-description" rows="6" placeholder="Describe what happened and what you expected."></textarea>
+        <textarea id="trouble-description" rows="6" placeholder="Tell us what happened. The more detail the better."></textarea>
       </label>
       <div class="trouble-actions">
         <span id="trouble-result"></span>
@@ -105,12 +107,19 @@ function _captureContext() {
   const modal = modalManager.getContext();
   const active = document.activeElement;
   const selectedReport = document.querySelector('#rp-selected-title')?.textContent || '';
-  const activeActivityRow = document.querySelector('.aw-row-active')?.textContent?.slice(0, 180) || '';
+  const activeFrame = document.querySelector('atd-window-frame[depth="2"]') || document.querySelector('atd-window-frame[depth="1"]');
+  const activeScope = activeFrame || document.getElementById('main-page') || document.body;
+  const simulationPlan = document.body.dataset.simulationPlan
+    || document.querySelector('.sim-pill-active')?.dataset.plan
+    || document.querySelector('.sim-pill-active')?.textContent?.trim()
+    || '';
   return {
     captured_at_utc: new Date().toISOString(),
     path: window.location.pathname,
     current_window: modal.top_window,
     modal_stack: modal.windows,
+    license_tier: document.querySelector('.chrome-license-tier')?.textContent || '',
+    simulation_plan: simulationPlan,
     active_element: active ? {
       tag: active.tagName,
       id: active.id || '',
@@ -121,9 +130,39 @@ function _captureContext() {
       breadcrumb: document.querySelector('.chrome-brand')?.textContent || '',
       license: document.querySelector('.chrome-license-tier')?.textContent || '',
       selected_report: selectedReport,
-      active_activity_row: activeActivityRow,
+      selected_record: _selectedRecordContext(activeScope),
+      active_filters: _collectFilters(activeScope),
+      window_title: activeFrame?.getAttribute('window-title') || '',
     },
   };
+}
+
+function _collectFilters(scope) {
+  const filters = {};
+  scope.querySelectorAll('input, select, textarea').forEach(field => {
+    const key = field.id || field.name;
+    if (!key) return;
+    const value = (field.value || '').trim();
+    if (value) filters[key] = value;
+  });
+  scope.querySelectorAll('[data-range].rp-quick-active, [data-range].aw-quick-active, [data-filter].ap-filter-active, [data-filter].au-filter-active, [data-priority].cm-pri-active, [data-size].aw-ps-active, [data-report].rp-report-active, [data-decision].aw-dtoggle-active, [data-decision].au-dtoggle-active').forEach(el => {
+    const key = el.dataset.report ? 'report'
+      : el.dataset.range ? 'range'
+      : el.dataset.filter ? 'filter'
+      : el.dataset.priority ? 'priority'
+      : el.dataset.size ? 'page_size'
+      : el.dataset.decision ? 'decision'
+      : 'selection';
+    filters[key] = el.dataset.report || el.dataset.range || el.dataset.filter || el.dataset.priority || el.dataset.size || el.dataset.decision || el.textContent.trim();
+  });
+  return filters;
+}
+
+function _selectedRecordContext(scope) {
+  const activeRow = scope.querySelector('.aw-row-active, .au-row-active');
+  if (activeRow) return activeRow.textContent?.trim().slice(0, 240) || '';
+  const detailTitle = document.querySelector('atd-window-frame[depth="2"]')?.getAttribute('window-title');
+  return detailTitle || '';
 }
 
 function _esc(str) {

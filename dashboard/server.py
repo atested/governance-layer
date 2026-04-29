@@ -3697,10 +3697,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         except json.JSONDecodeError:
                             continue
 
-                active_medium = [r for r in requests if r.get("priority") == "medium" and r.get("status") != "resolved"]
-                active_high = [r for r in requests if r.get("priority") == "high" and r.get("status") != "resolved"]
+                occupying_statuses = {"in_progress", "awaiting_response"}
+                active_medium = [r for r in requests if r.get("priority") == "medium" and r.get("status") in occupying_statuses]
+                active_high = [r for r in requests if r.get("priority") == "high" and r.get("status") in occupying_statuses]
                 resolved = [r for r in requests if r.get("status") == "resolved"]
                 standard = [r for r in requests if r.get("priority") == "standard"]
+                history = sorted(requests, key=lambda r: r.get("timestamp_utc", ""), reverse=True)[:100]
 
                 # Telemetry status
                 opt_in_path = RUNTIME / "telemetry_opt_in"
@@ -3734,6 +3736,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "active_high": active_high,
                     "resolved": resolved[:50],
                     "standard": standard[:50],
+                    "history": history,
                     "telemetry_opted_in": telemetry_opted_in,
                     "telemetry_traffic": telemetry_artifacts,
                     "last_exchange": last_exchange,

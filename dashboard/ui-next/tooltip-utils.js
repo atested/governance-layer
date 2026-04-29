@@ -1,15 +1,11 @@
 const TOOLTIP_STYLE = `
   .atd-tooltip-root [data-tooltip] {
-    position: relative;
+    cursor: help;
   }
-  .atd-tooltip-root [data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    transform: translateX(-50%) translateY(4px);
-    z-index: 10000;
-    width: max-content;
+  .atd-floating-tooltip {
+    position: fixed;
+    inset: auto auto 0 0;
+    z-index: 100000;
     max-width: 250px;
     padding: 8px 10px;
     background: #161b22;
@@ -26,67 +22,48 @@ const TOOLTIP_STYLE = `
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
+    transform: translateY(4px);
     transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
-  .atd-tooltip-root [data-tooltip]::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 3px);
-    transform: translateX(-50%) translateY(4px);
-    z-index: 10001;
-    border: 5px solid transparent;
-    border-top-color: #30363d;
-    pointer-events: none;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s ease;
-  }
-  .atd-tooltip-root [data-tooltip]:hover::after,
-  .atd-tooltip-root [data-tooltip]:focus-visible::after,
-  .atd-tooltip-root [data-tooltip]:hover::before,
-  .atd-tooltip-root [data-tooltip]:focus-visible::before {
+  .atd-floating-tooltip.atd-floating-tooltip-visible {
     opacity: 1;
     visibility: visible;
-    transform: translateX(-50%) translateY(0);
-  }
-  .atd-tooltip-root [data-tooltip].atd-tip-right::after,
-  .atd-tooltip-root [data-tooltip].atd-tip-right::before {
-    left: auto;
-    right: 0;
-    transform: translateY(4px);
-  }
-  .atd-tooltip-root [data-tooltip].atd-tip-right:hover::after,
-  .atd-tooltip-root [data-tooltip].atd-tip-right:focus-visible::after,
-  .atd-tooltip-root [data-tooltip].atd-tip-right:hover::before,
-  .atd-tooltip-root [data-tooltip].atd-tip-right:focus-visible::before {
     transform: translateY(0);
   }
 `;
 
+let _tooltipEl = null;
+let _activeTarget = null;
+let _lastMouse = { x: 0, y: 0 };
+
 export function installWindowTooltips(root) {
   if (!root) return;
   root.classList.add('atd-tooltip-root');
-  if (root.querySelector(':scope > style[data-atd-tooltip-style="true"]')) {
-    root.dataset.tooltipsInstalled = 'true';
-    return;
-  }
-  const style = document.createElement('style');
-  style.dataset.atdTooltipStyle = 'true';
-  style.textContent = TOOLTIP_STYLE;
-  root.prepend(style);
+  _ensureTooltipStyle(root.ownerDocument || document);
+  if (root.dataset.tooltipsInstalled === 'true') return;
+  root.addEventListener('mouseover', _onMouseOver, true);
+  root.addEventListener('mousemove', _onMouseMove, true);
+  root.addEventListener('mouseout', _onMouseOut, true);
+  root.addEventListener('focusin', _onFocusIn, true);
+  root.addEventListener('focusout', _onFocusOut, true);
   root.dataset.tooltipsInstalled = 'true';
 }
 
 export function setTooltip(el, text, opts = {}) {
-  if (!el || !text) return;
+  if (!el) return;
+  if (!text) {
+    delete el.dataset.tooltip;
+    el.classList.remove('atd-tip-right');
+    return;
+  }
   el.dataset.tooltip = text;
   if (!el.hasAttribute('aria-label') && opts.aria !== false) {
     const existing = el.textContent?.trim();
     if (!existing || existing.length < 80) el.setAttribute('aria-label', text);
   }
   if (opts.right) el.classList.add('atd-tip-right');
+  else el.classList.remove('atd-tip-right');
 }
 
 export function setTooltips(root, entries) {
@@ -143,4 +120,93 @@ function _fieldLabel(field) {
 
 function _selectorString(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function _ensureTooltipStyle(doc) {
+  if (doc.querySelector('style[data-atd-tooltip-style="true"]')) return;
+  const style = doc.createElement('style');
+  style.dataset.atdTooltipStyle = 'true';
+  style.textContent = TOOLTIP_STYLE;
+  (doc.head || doc.documentElement).appendChild(style);
+}
+
+function _ensureTooltipEl(doc) {
+  if (_tooltipEl?.ownerDocument === doc) return _tooltipEl;
+  _tooltipEl = doc.createElement('div');
+  _tooltipEl.className = 'atd-floating-tooltip';
+  doc.body.appendChild(_tooltipEl);
+  return _tooltipEl;
+}
+
+function _tooltipTarget(node) {
+  return node?.closest?.('[data-tooltip]') || null;
+}
+
+function _showTooltip(target, source = {}) {
+  const text = target?.dataset?.tooltip;
+  if (!text) return;
+  const doc = target.ownerDocument || document;
+  const tip = _ensureTooltipEl(doc);
+  _activeTarget = target;
+  tip.textContent = text;
+  tip.classList.add('atd-floating-tooltip-visible');
+  _positionTooltip(target, source);
+}
+
+function _hideTooltip(target = null) {
+  if (target && _activeTarget && target !== _activeTarget && !_activeTarget.contains(target)) return;
+  if (_tooltipEl) _tooltipEl.classList.remove('atd-floating-tooltip-visible');
+  _activeTarget = null;
+}
+
+function _positionTooltip(target, source = {}) {
+  if (!_tooltipEl || !target) return;
+  const rect = target.getBoundingClientRect();
+  const margin = 12;
+  const pointerX = Number.isFinite(source.clientX) ? source.clientX : Math.round(rect.left + rect.width / 2);
+  const pointerY = Number.isFinite(source.clientY) ? source.clientY : rect.top;
+  const tipRect = _tooltipEl.getBoundingClientRect();
+  const docEl = target.ownerDocument.documentElement;
+  let left = pointerX + 12;
+  let top = Math.min(pointerY - tipRect.height - 14, rect.top - tipRect.height - 10);
+  if (target.classList.contains('atd-tip-right')) {
+    left = rect.right - tipRect.width;
+    top = rect.top + Math.max(0, (rect.height - tipRect.height) / 2);
+  }
+  if (left + tipRect.width > docEl.clientWidth - margin) left = docEl.clientWidth - tipRect.width - margin;
+  if (left < margin) left = margin;
+  if (top < margin) top = Math.min(rect.bottom + 10, docEl.clientHeight - tipRect.height - margin);
+  _tooltipEl.style.left = `${Math.round(left)}px`;
+  _tooltipEl.style.top = `${Math.round(top)}px`;
+}
+
+function _onMouseOver(event) {
+  const target = _tooltipTarget(event.target);
+  if (!target || target === _activeTarget) return;
+  _showTooltip(target, event);
+}
+
+function _onMouseMove(event) {
+  _lastMouse = { x: event.clientX, y: event.clientY };
+  if (_activeTarget) _positionTooltip(_activeTarget, event);
+}
+
+function _onMouseOut(event) {
+  const target = _tooltipTarget(event.target);
+  if (!target) return;
+  const related = _tooltipTarget(event.relatedTarget);
+  if (related === target) return;
+  _hideTooltip(target);
+}
+
+function _onFocusIn(event) {
+  const target = _tooltipTarget(event.target);
+  if (!target) return;
+  _showTooltip(target, { clientX: _lastMouse.x, clientY: _lastMouse.y });
+}
+
+function _onFocusOut(event) {
+  const target = _tooltipTarget(event.target);
+  if (!target) return;
+  _hideTooltip(target);
 }

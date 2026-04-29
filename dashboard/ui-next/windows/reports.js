@@ -1,12 +1,13 @@
 /**
  * Reports window — child window (depth 1).
  * D-141/D-142 redesign: predefined report cards, default time ranges,
- * formatted report views, Activity drill-through, and JSON export.
+ * formatted report views, Activity drill-through, and structured export.
  */
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { downloadExport } from '../export-utils.js';
 import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
 
 const REPORT_TEMPLATES = [
@@ -135,7 +136,8 @@ function _applyStaticTooltips(state) {
   setTooltips(state.el, [
     ['#rp-from', 'Start of the reporting time range.'],
     ['#rp-to', 'End of the reporting time range.'],
-    ['#rp-export', 'Export the current formatted report as clean JSON.'],
+    ['#rp-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
+    ['#rp-export', 'Export the current formatted report in the selected format.'],
     ['#rp-stat-total', 'Total records included in this report.'],
     ['#rp-stat-allow', 'Allowed operations in the report range.'],
     ['#rp-stat-deny', 'Denied operations in the report range.'],
@@ -200,7 +202,12 @@ function _buildUI(state) {
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
           </div>
           <div class="rp-fp-actions">
-            <button class="rp-btn rp-btn-export" id="rp-export">Export JSON</button>
+            <select class="rp-select rp-export-format" id="rp-export-format" aria-label="Export format">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+              <option value="excel">Excel</option>
+            </select>
+            <button class="rp-btn rp-btn-export" id="rp-export">Export</button>
           </div>
         </div>
       </div>
@@ -276,7 +283,7 @@ function _wireControls(state) {
   el.querySelector('#rp-to').addEventListener('change', onCustomRange);
 
   // Export button
-  el.querySelector('#rp-export').addEventListener('click', () => _exportJSON(state));
+  el.querySelector('#rp-export').addEventListener('click', () => _exportReport(state));
 }
 
 function _readTimeFilters(state) {
@@ -701,7 +708,7 @@ function _auditChecklist(d) {
     ['Records selected', _fmtNum(d.total_records), 'The records included in this generated evidence view.'],
     ['Policy decisions summarized', 'Yes', 'ALLOW and DENY counts are included.'],
     ['Evidence categories summarized', 'Yes', 'Record categories are grouped for review.'],
-    ['Export format', 'JSON', 'Export produces structured data suitable for external review.'],
+    ['Export format', 'JSON / CSV / Excel', 'Export produces structured data suitable for external review.'],
   ];
   for (const [label, value, detail] of checks) {
     const row = document.createElement('div');
@@ -990,9 +997,9 @@ function _navigateToActivity(state, groupBy, groupKey) {
   }, 0);
 }
 
-// ---------- JSON export ----------
+// ---------- Export ----------
 
-function _exportJSON(state) {
+function _exportReport(state) {
   if (!state.data || state.rangeError) return;
 
   const exportData = {
@@ -1014,14 +1021,18 @@ function _exportJSON(state) {
     ])),
   };
 
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
   const dateStr = new Date().toISOString().slice(0, 10);
-  a.download = `atested-${state.data.report_id}-${dateStr}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const columns = [
+    { key: 'section', label: 'Section' },
+    { key: 'label', label: 'Label' },
+    { key: 'value', label: 'Value' },
+    { key: 'detail', label: 'Detail' },
+  ];
+  const format = state.el.querySelector('#rp-export-format')?.value || 'json';
+  downloadExport(format, `atested-${state.data.report_id}-${dateStr}`, columns, _reportExportRows(state.data), {
+    sheetName: 'Report Export',
+    jsonData: () => exportData,
+  });
 }
 
 // ---------- Utility ----------
@@ -1044,6 +1055,50 @@ function _fmtNum(n) {
 function _sumNested(obj) {
   if (!obj || typeof obj !== 'object') return 0;
   return Object.values(obj).reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+function _reportExportRows(data) {
+  const rows = [
+    { section: 'Summary', label: 'Report', value: data.report_title || '', detail: data.report_id || '' },
+    { section: 'Summary', label: 'Generated at', value: data.generated_at || '', detail: '' },
+    { section: 'Summary', label: 'Total records', value: data.total_records || 0, detail: '' },
+    { section: 'Summary', label: 'Deny rate', value: data.deny_rate != null ? `${data.deny_rate}%` : '0%', detail: '' },
+  ];
+  for (const finding of data.findings || []) {
+    rows.push({
+      section: 'Findings',
+      label: finding.label || '',
+      value: finding.value || '',
+      detail: finding.detail || '',
+    });
+  }
+  for (const [groupKey, groupValue] of Object.entries(data.groups || {})) {
+    for (const group of groupValue?.groups || []) {
+      rows.push({
+        section: `Group: ${groupKey}`,
+        label: group.key || 'Group',
+        value: group.count || 0,
+        detail: group.share_pct != null ? `${group.share_pct}% of records` : '',
+      });
+    }
+  }
+  for (const transmission of data.telemetry?.transmissions || []) {
+    rows.push({
+      section: 'Telemetry',
+      label: transmission.timestamp_utc || '',
+      value: transmission.artifact_id || '',
+      detail: Object.keys(transmission.categories || {}).join(', '),
+    });
+  }
+  for (const report of data.trouble?.reports || []) {
+    rows.push({
+      section: 'Trouble history',
+      label: report.timestamp_utc || '',
+      value: report.priority || 'normal',
+      detail: report.description || '',
+    });
+  }
+  return rows;
 }
 
 function _labelize(str) {
@@ -1196,7 +1251,18 @@ rpStyles.textContent = `
     font-size: 0.82rem;
     padding: 6px 10px;
   }
+  .rp-select {
+    background: #1a1d23;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 2px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    min-width: 90px;
+  }
   .rp-input:focus { outline: 2px solid #6699cc; outline-offset: 1px; }
+  .rp-select:focus { outline: 2px solid #6699cc; outline-offset: 1px; }
 
   /* Quick buttons */
   .rp-fp-quick {

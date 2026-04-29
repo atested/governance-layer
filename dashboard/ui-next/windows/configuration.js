@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { downloadExport } from '../export-utils.js';
 
 /**
  * Open the Configuration window.
@@ -347,15 +348,27 @@ function _openPolicyRulesDetail(state, rules) {
   const tableSection = document.createElement('div');
   tableSection.className = 'cf-gc-section';
 
+  const exportControl = document.createElement('div');
+  exportControl.className = 'cf-export-control';
+  const exportFormat = document.createElement('select');
+  exportFormat.className = 'cf-select cf-export-format';
+  exportFormat.innerHTML = `
+    <option value="json">JSON</option>
+    <option value="csv">CSV</option>
+    <option value="excel">Excel</option>
+  `;
+  setTooltip(exportFormat, 'Choose JSON, CSV, or Excel-compatible export format.');
   const exportBtn = document.createElement('button');
   exportBtn.className = 'cf-btn cf-btn-export';
-  exportBtn.textContent = 'Export ruleset';
-  setTooltip(exportBtn, 'Export the full policy rules JSON.');
+  exportBtn.textContent = 'Export';
+  setTooltip(exportBtn, 'Export the policy rules in the selected format.');
   exportBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    _exportPolicyRules(state.config?.policy_rules || {});
+    _exportPolicyRules(state.config?.policy_rules || {}, exportFormat.value || 'json');
   });
-  tableSection.appendChild(exportBtn);
+  exportControl.appendChild(exportFormat);
+  exportControl.appendChild(exportBtn);
+  tableSection.appendChild(exportControl);
 
   const table = document.createElement('table');
   table.className = 'cf-rules-table cf-rules-full';
@@ -420,15 +433,29 @@ function _openPolicyRulesDetail(state, rules) {
   modalManager.open({ title: 'Policy Rules', subtitle: 'Your declarative governance rules', trigger: state.el, content });
 }
 
-function _exportPolicyRules(policyRules) {
-  const json = JSON.stringify(policyRules, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `atested-policy-rules-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+function _exportPolicyRules(policyRules, format = 'json') {
+  const rules = policyRules?.rules || [];
+  const date = new Date().toISOString().slice(0, 10);
+  const columns = [
+    { key: 'order', label: '#' },
+    { key: 'id', label: 'ID' },
+    { key: 'description', label: 'Description' },
+    { key: 'decision', label: 'Decision' },
+    { key: 'tiers', label: 'Tier' },
+    { key: 'action_types', label: 'Action types' },
+  ];
+  const rows = rules.map((rule, idx) => ({
+    order: idx + 1,
+    id: rule.id || '',
+    description: rule.description || '',
+    decision: rule.decision || 'DENY',
+    tiers: (rule.match?.confidence_tier || []).join(', '),
+    action_types: Array.isArray(rule.match?.action_type) ? rule.match.action_type.join(', ') : (rule.match?.action_type || ''),
+  }));
+  downloadExport(format, `atested-policy-rules-${date}`, columns, rows, {
+    sheetName: 'Policy Rules',
+    jsonData: () => policyRules,
+  });
 }
 
 // ---------- Base Directories detail ----------
@@ -740,7 +767,18 @@ cfStyles.textContent = `
     padding: 7px 12px;
     box-sizing: border-box;
   }
+  .cf-select {
+    background: #1a1d23;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2px;
+    color: #e4e6eb;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.82rem;
+    padding: 7px 12px;
+    box-sizing: border-box;
+  }
   .cf-input:focus { outline: 2px solid #6699cc; outline-offset: 1px; }
+  .cf-select:focus { outline: 2px solid #6699cc; outline-offset: 1px; }
   .cf-result-success { color: #3fb950; font-size: 0.82rem; margin-top: 8px; }
   .cf-result-error { color: #d29922; font-size: 0.82rem; margin-top: 8px; }
 
@@ -765,6 +803,15 @@ cfStyles.textContent = `
     margin-bottom: 10px;
   }
   .cf-btn-export:hover { background: rgba(210,153,34,0.20); }
+  .cf-export-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .cf-export-format {
+    min-width: 90px;
+  }
 
   /* ---- Rules preview table ---- */
   .cf-rules-table {

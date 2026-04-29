@@ -4,7 +4,7 @@
  * Spec v2 section 9.1.
  *
  * Attributes:
- *   title  - Window title displayed in the title bar
+ *   window-title - Window title displayed in the title bar
  *   depth  - 1 (child) or 2 (grandchild), controls sizing and shadow
  *
  * Events:
@@ -39,7 +39,7 @@ const styles = `
 /* Child window: 90% viewport width, max 1300px, 85% viewport height */
 :host([depth="1"]) {
   inset: 0;
-  padding-top: calc(var(--chrome-height) + 12px);
+  padding-top: calc(var(--chrome-height) + 6px);
 }
 :host([depth="1"]) .frame {
   width: 90vw;
@@ -51,7 +51,7 @@ const styles = `
 /* Grandchild window: 80% of child dimensions */
 :host([depth="2"]) {
   inset: 0;
-  padding-top: calc(var(--chrome-height) + 12px);
+  padding-top: calc(var(--chrome-height) + 6px);
 }
 :host([depth="2"]) .frame {
   width: calc(90vw * 0.8);
@@ -129,7 +129,7 @@ const styles = `
 `;
 
 export class AtdWindowFrame extends AtdBase {
-  static get observedAttributes() { return ['title', 'subtitle', 'depth']; }
+  static get observedAttributes() { return ['window-title', 'subtitle', 'depth']; }
 
   constructor() {
     super();
@@ -138,7 +138,7 @@ export class AtdWindowFrame extends AtdBase {
   }
 
   _render() {
-    const title = this.getAttribute('title') || '';
+    const title = this.getAttribute('window-title') || '';
     const subtitle = this.getAttribute('subtitle') || '';
     const subtitleHtml = subtitle
       ? ` <span class="subtitle">\u2014 ${this._esc(subtitle)}</span>`
@@ -162,9 +162,9 @@ export class AtdWindowFrame extends AtdBase {
   }
 
   attributeChangedCallback(name) {
-    if (name === 'title') {
+    if (name === 'window-title') {
       const titleEl = this.shadowRoot.querySelector('.title');
-      if (titleEl) titleEl.textContent = this.getAttribute('title') || '';
+      if (titleEl) titleEl.textContent = this.getAttribute('window-title') || '';
     }
     if (name === 'subtitle') {
       const sub = this.getAttribute('subtitle') || '';

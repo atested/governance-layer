@@ -126,9 +126,9 @@ function _renderAll(state) {
   const slotRow = document.createElement('div');
   slotRow.className = 'cm-slot-row';
   slotRow.appendChild(_buildSlotPane(state, 'medium', 'Medium priority', activeMedium, slots.medium,
-    'Medium slots move your request ahead of standard requests. Slots are occupied until the request is resolved.'));
+    'Medium priority requests are acknowledged on receipt. Once acknowledged, the slot is available again while resolution continues in request history.'));
   slotRow.appendChild(_buildSlotPane(state, 'high', 'High priority', activeHigh, slots.high,
-    'High slots move to the front of the queue ahead of Medium. Use these for issues that are blocking your work.'));
+    'High priority requests are acknowledged on receipt. Use them when the issue is blocking work and you need direct help quickly.'));
   el.appendChild(slotRow);
 
   // Bottom row — Telemetry + Request History
@@ -148,7 +148,7 @@ function _buildSubmitPane(state, medAvail, highAvail) {
     <div class="cm-pane-accent cm-accent-amber"></div>
     <div class="cm-pane-header">Submit a request</div>
     <div class="cm-pane-body">
-      <p class="cm-pane-copy">Describe your issue, question, or suggestion. Standard requests are always available. Medium and High use your allocated slots and receive faster response. Choose the level that matches the urgency. We depend on your judgment to set it appropriately.</p>
+      <p class="cm-pane-copy">Describe your issue, question, or suggestion. For a screen-specific problem, use the Trouble button instead — it captures the current context automatically. This form is for general requests, questions, and suggestions. Priority is available to any operator when a slot is free; choose the level that matches urgency.</p>
       <textarea class="cm-textarea" id="cm-request-text" rows="4" placeholder="Describe your request\u2026"></textarea>
       <div class="cm-priority-row">
         <div class="cm-priority-toggles" id="cm-priority-toggles">
@@ -188,9 +188,11 @@ function _buildSubmitPane(state, medAvail, highAvail) {
     const res = await api.postCommunicationsRequest({ message: text, priority: selectedPriority });
     if (res.ok) {
       resultEl.className = 'cm-result-success';
-      resultEl.textContent = 'Request submitted. Recorded in the governance chain.';
+      resultEl.textContent = selectedPriority === 'standard'
+        ? 'Request submitted. Recorded in the governance chain.'
+        : 'Request received. Resolution continues in request history; the priority slot is available again.';
       pane.querySelector('#cm-request-text').value = '';
-      // Refresh to show the new request in slots
+      // Refresh to show the new request in history
       setTimeout(() => _loadData(state), 1000);
     } else {
       resultEl.className = 'cm-result-error';
@@ -212,12 +214,13 @@ function _buildSlotPane(state, level, title, activeSlots, totalSlots, tooltip) {
   pane.className = 'cm-pane';
   pane.innerHTML = `
     <div class="cm-pane-accent cm-accent-${accentColor}"></div>
-    <div class="cm-pane-header" title="${_escAttr(tooltip)}">${_esc(title)}</div>
+    <div class="cm-pane-header">${_esc(title)}</div>
     <div class="cm-pane-body">
       <div class="cm-slot-count">${inUse} of ${totalSlots} slots in use</div>
       <div class="cm-slot-cards"></div>
     </div>
   `;
+  setTooltip(pane.querySelector('.cm-pane-header'), tooltip);
 
   const cards = pane.querySelector('.cm-slot-cards');
 
@@ -232,7 +235,7 @@ function _buildSlotPane(state, level, title, activeSlots, totalSlots, tooltip) {
     card.className = 'cm-slot-card cm-slot-occupied';
 
     const status = req.status || 'received';
-    const statusLabel = status === 'in_progress' ? 'In progress' : status === 'awaiting_response' ? 'Awaiting response' : 'Received';
+    const statusLabel = _statusLabel(status);
     const statusClass = status === 'in_progress' ? 'cm-status-amber' : 'cm-status-green';
 
     const summary = (req.message || '').length > 60 ? req.message.substring(0, 57) + '\u2026' : (req.message || '');
@@ -265,7 +268,7 @@ function _buildSlotPane(state, level, title, activeSlots, totalSlots, tooltip) {
 function _buildTelemetryPane(state, d) {
   const pane = document.createElement('div');
   pane.className = 'cm-pane cm-pane-clickable';
-  const tooltip = 'Every transmission on this channel is recorded in your governance chain. You can audit what was sent and received at any time. This is our transparency commitment.';
+  const tooltip = 'Shows current telemetry participation and recent summary transmissions. Telemetry is separate from the governance chain.';
 
   const traffic = d.telemetry_traffic || [];
   const lastSent = traffic.find(t => t.direction !== 'inbound');
@@ -273,7 +276,7 @@ function _buildTelemetryPane(state, d) {
 
   pane.innerHTML = `
     <div class="cm-pane-accent cm-accent-green"></div>
-    <div class="cm-pane-header" title="${_escAttr(tooltip)}">Telemetry</div>
+    <div class="cm-pane-header">Telemetry</div>
     <div class="cm-pane-body">
       <div class="cm-kv-list">
         <div class="cm-kv"><span class="cm-kv-label">Status</span><span class="cm-kv-value ${d.telemetry_opted_in ? 'cm-val-green' : 'cm-val-amber'}">${d.telemetry_opted_in ? 'Participating' : 'Declined'}</span></div>
@@ -283,6 +286,7 @@ function _buildTelemetryPane(state, d) {
       <p class="cm-pane-note">${d.telemetry_opted_in ? 'Bidirectional channel active.' : 'Channel inactive.'} You can change your preference at any time.</p>
     </div>
   `;
+  setTooltip(pane.querySelector('.cm-pane-header'), tooltip);
 
   pane.addEventListener('click', () => _openTelemetryDetail(state, d));
   return pane;
@@ -291,9 +295,7 @@ function _buildTelemetryPane(state, d) {
 // ---------- Request history pane ----------
 
 function _buildHistoryPane(state, d) {
-  const resolved = d.resolved || [];
-  const standard = d.standard || [];
-  const allHistory = [...resolved, ...standard].sort((a, b) =>
+  const allHistory = _historyRequests(d).sort((a, b) =>
     (b.timestamp_utc || '').localeCompare(a.timestamp_utc || '')
   );
 
@@ -319,11 +321,11 @@ function _buildHistoryPane(state, d) {
       const tr = document.createElement('tr');
       const summary = (req.message || '').length > 40 ? req.message.substring(0, 37) + '\u2026' : (req.message || '');
       const status = req.status || 'submitted';
-      const statusClass = status === 'resolved' ? 'cm-status-green' : 'cm-status-muted';
+      const statusClass = status === 'resolved' ? 'cm-status-green' : status === 'in_progress' ? 'cm-status-amber' : 'cm-status-muted';
       tr.innerHTML = `
         <td class="cm-hist-date">${_esc(_formatHumanDate(req.timestamp_utc))}</td>
         <td>${_esc(summary)}</td>
-        <td><span class="${statusClass}">${_esc(_capitalize(status))}</span></td>
+        <td><span class="${statusClass}">${_esc(_statusLabel(status))}</span></td>
       `;
       tbody.appendChild(tr);
     }
@@ -366,7 +368,7 @@ function _openSlotDetail(state, req, level) {
   const leftPane = document.createElement('div');
   leftPane.className = 'cm-paired-pane';
   const status = req.status || 'received';
-  const statusLabel = status === 'in_progress' ? 'In progress' : status === 'awaiting_response' ? 'Awaiting response' : 'Received';
+  const statusLabel = _statusLabel(status);
 
   leftPane.innerHTML = `
     <div class="cm-paired-header">Your request</div>
@@ -389,7 +391,7 @@ function _openSlotDetail(state, req, level) {
     <div class="cm-paired-body">
       <div class="cm-response-entry">
         <span class="cm-response-time">${_esc(_formatHumanDate(req.timestamp_utc))}</span>
-        <span class="cm-response-text">Request received and queued.</span>
+        <span class="cm-response-text">${status === 'acknowledged' || status === 'received' ? 'Request acknowledged. Resolution will continue separately; this slot is already available for another request.' : 'Request received and queued.'}</span>
       </div>
       ${(req.responses || []).map(r => `
         <div class="cm-response-entry">
@@ -556,7 +558,7 @@ function _openHistoryDetail(state, d) {
         <td class="cm-hist-date">${_esc(_formatHumanDate(req.timestamp_utc))}</td>
         <td>${_esc(summary)}</td>
         <td><span class="cm-pri-tag ${priClass}">${_esc(_capitalize(priority))}</span></td>
-        <td><span class="${statusClass}">${_esc(_capitalize(status))}</span></td>
+        <td><span class="${statusClass}">${_esc(_statusLabel(status))}</span></td>
       `;
 
       // Click to open slot detail for priority requests
@@ -602,6 +604,23 @@ function _formatHumanDate(isoStr) {
 function _capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1).replace(/_/g, ' ');
+}
+
+function _statusLabel(status) {
+  if (status === 'in_progress') return 'In progress';
+  if (status === 'awaiting_response') return 'Awaiting response';
+  if (status === 'acknowledged') return 'Acknowledged';
+  if (status === 'resolved') return 'Resolved';
+  return 'Received';
+}
+
+function _historyRequests(data) {
+  if (Array.isArray(data.history) && data.history.length) return data.history;
+  const resolved = data.resolved || [];
+  const standard = data.standard || [];
+  const activeMedium = data.active_medium || [];
+  const activeHigh = data.active_high || [];
+  return [...activeHigh, ...activeMedium, ...resolved, ...standard];
 }
 
 function _esc(str) {

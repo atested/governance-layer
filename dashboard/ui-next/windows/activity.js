@@ -9,6 +9,7 @@ import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { downloadExport } from '../export-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -207,7 +208,14 @@ function _buildUI(state) {
           <button class="aw-ps-btn" data-size="50">50</button>
           <button class="aw-ps-btn" data-size="100">100</button>
         </div>
-        <button class="aw-btn aw-btn-export" id="aw-export">Export filtered</button>
+        <div class="aw-export-control">
+          <select class="aw-select aw-export-format" id="aw-export-format" aria-label="Export format">
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="excel">Excel</option>
+          </select>
+          <button class="aw-btn aw-btn-export" id="aw-export">Export</button>
+        </div>
       </div>
     </div>
 
@@ -265,7 +273,8 @@ function _applyStaticTooltips(state) {
     ['#aw-tool-filter', 'Filter by governed action name.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
-    ['#aw-export', 'Export matching Activity records as CSV.'],
+    ['#aw-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
+    ['#aw-export', 'Export matching Activity records in the selected format.'],
     ['#aw-preset-standard', 'Show the default Activity columns.'],
     ['#aw-preset-advanced', 'Show all Activity columns.'],
   ]);
@@ -369,7 +378,7 @@ function _wireControls(state) {
   });
 
   // Export
-  el.querySelector('#aw-export').addEventListener('click', () => _exportCSV(state));
+  el.querySelector('#aw-export').addEventListener('click', () => _exportActivity(state));
 
   // Column presets
   el.querySelector('#aw-preset-standard').addEventListener('click', () => {
@@ -663,7 +672,7 @@ function _computePageNumbers(current, total) {
 
 // ---------- Export ----------
 
-async function _exportCSV(state) {
+async function _exportActivity(state) {
   // Fetch up to 10000 rows with current filters (no pagination)
   const params = { limit: 10000, offset: 0 };
   if (state.startTime) params.start_time = state.startTime;
@@ -676,35 +685,27 @@ async function _exportCSV(state) {
   if (!res.ok) return;
 
   const entries = res.data.entries || [];
-  const allCols = COLUMNS; // export all columns regardless of visibility
-
-  // Build CSV
-  const header = allCols.map(c => c.label).join(',');
+  const date = new Date().toISOString().slice(0, 10);
   const rows = entries.map(entry => {
     const detail = entry.detail || {};
-    return allCols.map(col => {
-      const val = _getCellValue(col.key, entry, detail);
-      // Escape CSV value
-      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-        return '"' + val.replace(/"/g, '""') + '"';
-      }
-      return val;
-    }).join(',');
+    const out = {};
+    for (const col of COLUMNS) out[col.key] = _getCellValue(col.key, entry, detail);
+    return out;
   });
-
-  let csv = header + '\n' + rows.join('\n');
-  if (entries.length >= 10000 && (res.data.total_matching || 0) > 10000) {
-    csv += '\n# Note: Export limited to first 10,000 rows. Total matching: ' + res.data.total_matching;
-  }
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const date = new Date().toISOString().slice(0, 10);
-  a.download = `atested-activity-${date}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const note = entries.length >= 10000 && (res.data.total_matching || 0) > 10000
+    ? `Export limited to first 10,000 rows. Total matching: ${res.data.total_matching}`
+    : '';
+  const format = state.el.querySelector('#aw-export-format')?.value || 'json';
+  downloadExport(format, `atested-activity-${date}`, COLUMNS, rows, {
+    sheetName: 'Activity Export',
+    note,
+    jsonData: () => ({
+      export_timestamp: new Date().toISOString(),
+      filters: params,
+      total_matching: res.data.total_matching || entries.length,
+      entries,
+    }),
+  });
 }
 
 function _getCellValue(key, entry, detail) {
@@ -1007,6 +1008,14 @@ awStyles.textContent = `
     border: 1px solid rgba(210,153,34,0.3);
   }
   .aw-btn-export:hover { background: rgba(210,153,34,0.2); }
+  .aw-export-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .aw-export-format {
+    min-width: 90px;
+  }
 
   /* ---- Results bar ---- */
   .aw-results-bar {

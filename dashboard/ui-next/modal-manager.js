@@ -57,7 +57,7 @@ class ModalManager {
 
   _notifyChange() {
     const top = this._stack.length > 0 ? this._stack[this._stack.length - 1] : null;
-    const title = top ? (top.frame.getAttribute('title') || null) : null;
+    const title = top ? (top.frame.getAttribute('window-title') || null) : null;
     const info = { depth: this._stack.length, title };
     for (const fn of this._changeListeners) {
       try { fn(info); } catch (e) { console.warn('ModalManager onChange error:', e); }
@@ -77,12 +77,12 @@ class ModalManager {
     return {
       depth: this._stack.length,
       windows: this._stack.map(entry => ({
-        title: entry.frame.getAttribute('title') || '',
+        title: entry.frame.getAttribute('window-title') || '',
         subtitle: entry.frame.getAttribute('subtitle') || '',
         depth: entry.depth,
       })),
       top_window: this._stack.length
-        ? (this._stack[this._stack.length - 1].frame.getAttribute('title') || '')
+        ? (this._stack[this._stack.length - 1].frame.getAttribute('window-title') || '')
         : 'Main page',
     };
   }
@@ -123,7 +123,8 @@ class ModalManager {
 
     // Create frame
     const frame = document.createElement('atd-window-frame');
-    frame.setAttribute('title', title);
+    frame.setAttribute('window-title', title);
+    frame.removeAttribute('title');
     if (subtitle) frame.setAttribute('subtitle', subtitle);
     frame.setAttribute('depth', String(depth));
     frame.style.setProperty('--z-index', String(depth === 1 ? Z.CHILD : Z.GRANDCHILD));
