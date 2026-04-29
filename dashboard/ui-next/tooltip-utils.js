@@ -6,6 +6,7 @@ const TOOLTIP_STYLE = `
     position: fixed;
     inset: auto auto 0 0;
     z-index: 100000;
+    width: max-content;
     max-width: 250px;
     padding: 8px 10px;
     background: #161b22;
