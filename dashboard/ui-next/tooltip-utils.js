@@ -4,7 +4,7 @@ const TOOLTIP_STYLE = `
   }
   .atd-floating-tooltip {
     position: fixed;
-    inset: auto auto 0 0;
+    inset: 0 auto auto 0;
     z-index: 100000;
     width: max-content;
     max-width: 250px;
