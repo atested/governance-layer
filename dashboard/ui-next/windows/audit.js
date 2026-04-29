@@ -8,6 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
+import { authorizeExport } from '../export-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -1125,6 +1126,19 @@ function _exportParams(state) {
 async function _exportAudit(state) {
   const format = state.el.querySelector('#au-export-format').value || 'json';
   const params = _exportParams(state);
+  const { verify_before_export, export_token, ...exportFilters } = params;
+  const auth = await authorizeExport({
+    surface: 'audit',
+    format,
+    chain_source: state.walker.source || 'live',
+    archive_id: state.walker.archiveId || '',
+    archive_manifest_path: state.walker.archive?.manifest_path || '',
+    filters: exportFilters,
+    record_count: state.totalMatching || 0,
+  });
+  if (!auth.ok) return;
+  params.export_mode = '1';
+  params.export_token = auth.token;
   const res = await api.getAuditQuery(params);
   if (!res.ok) return;
   const entries = res.data.entries || [];

@@ -9,7 +9,7 @@ import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-import { downloadExport } from '../export-utils.js';
+import { authorizeExport, downloadExport } from '../export-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -681,6 +681,18 @@ async function _exportActivity(state) {
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
 
+  const format = state.el.querySelector('#aw-export-format')?.value || 'json';
+  const auth = await authorizeExport({
+    surface: 'activity',
+    format,
+    filters: { ...params },
+    record_count: state.totalMatching || 0,
+    chain_source: 'live',
+  });
+  if (!auth.ok) return;
+  params.export_mode = '1';
+  params.export_token = auth.token;
+
   const res = await api.getActivity(params);
   if (!res.ok) return;
 
@@ -695,7 +707,6 @@ async function _exportActivity(state) {
   const note = entries.length >= 10000 && (res.data.total_matching || 0) > 10000
     ? `Export limited to first 10,000 rows. Total matching: ${res.data.total_matching}`
     : '';
-  const format = state.el.querySelector('#aw-export-format')?.value || 'json';
   downloadExport(format, `atested-activity-${date}`, COLUMNS, rows, {
     sheetName: 'Activity Export',
     note,

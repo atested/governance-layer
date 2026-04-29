@@ -8,6 +8,7 @@ MCP tool; not intended for direct invocation by operators.
 """
 
 import importlib
+import hashlib
 import json
 import os
 import secrets
@@ -17,6 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 REPO = Path(__file__).resolve().parents[1]
@@ -33,6 +35,9 @@ RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 TELEMETRY_SUMMARY = RUNTIME / "LOGS" / "telemetry" / "summary.json"
+EXPORT_TOKEN_TTL_SECONDS = 10 * 60
+_export_tokens = {}
+_export_tokens_lock = threading.Lock()
 
 
 def _now_utc_z():
@@ -621,6 +626,62 @@ def _append_chain_record_atomic(event):
             _release_chain_file_lock(lockdir)
 
 
+def _license_fingerprint(license_key: str) -> str:
+    digest = hashlib.sha256(license_key.encode("utf-8")).hexdigest()
+    return f"license_sha256:{digest[:16]}"
+
+
+def _clean_export_tokens(now=None):
+    now = now or _time_mod.time()
+    with _export_tokens_lock:
+        expired = [
+            token for token, data in _export_tokens.items()
+            if float(data.get("expires_at", 0)) <= now
+        ]
+        for token in expired:
+            _export_tokens.pop(token, None)
+
+
+def _issue_export_token(scope: dict) -> dict:
+    now = _time_mod.time()
+    _clean_export_tokens(now)
+    token = secrets.token_urlsafe(32)
+    expires_at = now + EXPORT_TOKEN_TTL_SECONDS
+    data = {
+        "token": token,
+        "scope": scope,
+        "expires_at": expires_at,
+    }
+    with _export_tokens_lock:
+        _export_tokens[token] = data
+    return data
+
+
+def _validate_export_token(token: str, *, surface: str = "") -> Optional[dict]:
+    if not token:
+        return None
+    now = _time_mod.time()
+    _clean_export_tokens(now)
+    with _export_tokens_lock:
+        data = _export_tokens.get(token)
+    if not data:
+        return None
+    if float(data.get("expires_at", 0)) <= now:
+        return None
+    scope = data.get("scope") or {}
+    if surface and scope.get("surface") != surface:
+        return None
+    return data
+
+
+def _record_export_event(scope: dict) -> dict:
+    from event_model import build_non_action_event
+
+    event = build_non_action_event("chain_export_created", scope)
+    _append_chain_record_atomic(event)
+    return event
+
+
 DASHBOARD_UI_DIR = REPO / "dashboard" / "ui-next"
 DASHBOARD_UI_LEGACY_DIR = REPO / "dashboard" / "ui"
 
@@ -744,6 +805,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_update()
             elif parsed.path == "/api/config/verify-license":
                 self._handle_config_verify_license()
+            elif parsed.path == "/api/export/authorize":
+                self._handle_export_authorize()
             elif parsed.path == "/api/feedback/submit":
                 self._handle_feedback_submit()
             elif parsed.path == "/api/trouble/report":
@@ -1152,6 +1215,97 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "valid": True,
             "tier": info.get("tier"),
             "expiry": info.get("expiry_iso"),
+        })
+
+    def _handle_export_authorize(self):
+        """POST /api/export/authorize — validate operator key and record export."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 32768:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        license_key = str(data.get("license_key", "")).strip()
+        if not license_key:
+            _json_response(self, {"error": "license_key required"}, 400)
+            return
+
+        from licensing import validate_license_key
+        info = validate_license_key(license_key)
+        if info is None:
+            _json_response(self, {"error": "invalid license key"}, 403)
+            return
+
+        metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+        surface = str(metadata.get("surface") or data.get("surface") or "").strip().lower()
+        if surface not in {"audit", "activity", "approvals", "reports", "configuration"}:
+            _json_response(self, {"error": "invalid export surface"}, 400)
+            return
+        export_format = str(metadata.get("format") or data.get("format") or "json").strip().lower()
+        if export_format not in {"json", "csv", "excel", "xls"}:
+            _json_response(self, {"error": "invalid export format"}, 400)
+            return
+        if export_format == "xls":
+            export_format = "excel"
+
+        chain_source = str(metadata.get("chain_source") or "live").strip() or "live"
+        archive_id = str(metadata.get("archive_id") or "").strip()
+        archive_manifest_path = str(metadata.get("archive_manifest_path") or "").strip()
+        if chain_source == "archive" and archive_id and not archive_manifest_path:
+            try:
+                from chain_archive import get_archive_manifest
+                manifest = get_archive_manifest(CHAIN, archive_id)
+                if manifest:
+                    archive_manifest_path = manifest.get("manifest_path", "")
+            except Exception:
+                archive_manifest_path = ""
+
+        filters = metadata.get("filters") if isinstance(metadata.get("filters"), dict) else {}
+        selected_range = metadata.get("range") if isinstance(metadata.get("range"), dict) else {}
+        record_count = metadata.get("record_count", 0)
+        try:
+            record_count = int(record_count or 0)
+        except (TypeError, ValueError):
+            record_count = 0
+
+        scope = {
+            "export_level": str(metadata.get("export_level") or "raw"),
+            "surface": surface,
+            "format": export_format,
+            "operator_identity": _license_fingerprint(license_key),
+            "license_tier": info.get("tier"),
+            "license_expiry": info.get("expiry_iso"),
+            "chain_source": chain_source,
+            "archive_id": archive_id,
+            "archive_manifest_path": archive_manifest_path,
+            "range_start_sequence": selected_range.get("start_sequence"),
+            "range_end_sequence": selected_range.get("end_sequence"),
+            "record_count": record_count,
+            "filters": filters,
+            "password_recorded": False,
+        }
+        token_data = _issue_export_token(scope)
+        try:
+            event = _record_export_event(scope)
+        except Exception as exc:
+            with _export_tokens_lock:
+                _export_tokens.pop(token_data["token"], None)
+            _json_response(self, {"error": f"export event failed: {exc}"}, 500)
+            return
+
+        _json_response(self, {
+            "authorized": True,
+            "export_token": token_data["token"],
+            "expires_at": datetime.fromtimestamp(
+                token_data["expires_at"], tz=timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "event_hash": event.get("record_hash"),
+            "operator_identity": scope["operator_identity"],
         })
 
     def _handle_feedback_submit(self):
@@ -3535,6 +3689,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, data)
 
         elif path == "/api/activity":
+            if qs("export_mode") in ("1", "true", "yes"):
+                if _validate_export_token(qs("export_token"), surface="activity") is None:
+                    _json_response(self, {"error": "export authorization required"}, 403)
+                    return
             from readout import governance_activity_view
             data = governance_activity_view(
                 CHAIN,
@@ -3565,6 +3723,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         elif path == "/api/audit/query":
             if qs("verify_before_export") in ("1", "true", "yes"):
+                if _validate_export_token(qs("export_token"), surface="audit") is None:
+                    _json_response(self, {"error": "export authorization required"}, 403)
+                    return
                 from background_verifier import run_verification
                 run_verification(CHAIN, background=False)
             from readout import audit_query

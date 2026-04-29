@@ -8,7 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-import { downloadExport } from '../export-utils.js';
+import { authorizeExport, downloadExport } from '../export-utils.js';
 
 /**
  * Open the Configuration window.
@@ -433,7 +433,7 @@ function _openPolicyRulesDetail(state, rules) {
   modalManager.open({ title: 'Policy Rules', subtitle: 'Your declarative governance rules', trigger: state.el, content });
 }
 
-function _exportPolicyRules(policyRules, format = 'json') {
+async function _exportPolicyRules(policyRules, format = 'json') {
   const rules = policyRules?.rules || [];
   const date = new Date().toISOString().slice(0, 10);
   const columns = [
@@ -452,6 +452,14 @@ function _exportPolicyRules(policyRules, format = 'json') {
     tiers: (rule.match?.confidence_tier || []).join(', '),
     action_types: Array.isArray(rule.match?.action_type) ? rule.match.action_type.join(', ') : (rule.match?.action_type || ''),
   }));
+  const auth = await authorizeExport({
+    surface: 'configuration',
+    format,
+    filters: { artifact: 'policy_rules' },
+    record_count: rules.length,
+    chain_source: 'live',
+  });
+  if (!auth.ok) return;
   downloadExport(format, `atested-policy-rules-${date}`, columns, rows, {
     sheetName: 'Policy Rules',
     jsonData: () => policyRules,

@@ -274,6 +274,14 @@ export function postVerifyLicense({ license_key } = {}) {
 }
 
 /**
+ * Authorize and record an export.
+ * POST /api/export/authorize
+ */
+export function postExportAuthorize({ license_key, metadata } = {}) {
+  return _request('POST', '/export/authorize', { body: { license_key, metadata } });
+}
+
+/**
  * Submit feedback.
  * POST /api/feedback/submit
  */

@@ -7,7 +7,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-import { downloadExport } from '../export-utils.js';
+import { authorizeExport, downloadExport } from '../export-utils.js';
 import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
 
 const REPORT_TEMPLATES = [
@@ -999,7 +999,7 @@ function _navigateToActivity(state, groupBy, groupKey) {
 
 // ---------- Export ----------
 
-function _exportReport(state) {
+async function _exportReport(state) {
   if (!state.data || state.rangeError) return;
 
   const exportData = {
@@ -1029,6 +1029,19 @@ function _exportReport(state) {
     { key: 'detail', label: 'Detail' },
   ];
   const format = state.el.querySelector('#rp-export-format')?.value || 'json';
+  const auth = await authorizeExport({
+    surface: 'reports',
+    format,
+    filters: {
+      report_id: state.data.report_id,
+      start_time: state.startTime,
+      end_time: state.endTime,
+      active_range: state.activeRange,
+    },
+    record_count: state.data.total_records || 0,
+    chain_source: 'live',
+  });
+  if (!auth.ok) return;
   downloadExport(format, `atested-${state.data.report_id}-${dateStr}`, columns, _reportExportRows(state.data), {
     sheetName: 'Report Export',
     jsonData: () => exportData,

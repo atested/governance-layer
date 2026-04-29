@@ -8,7 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-import { downloadExport } from '../export-utils.js';
+import { authorizeExport, downloadExport } from '../export-utils.js';
 import '../components/pill.js';
 import '../components/confirmation-dialog.js';
 import '../components/loading-indicator.js';
@@ -435,7 +435,7 @@ function _showFormResult(el, msg, type) {
 
 // ---------- Export ----------
 
-function _exportApprovals(state) {
+async function _exportApprovals(state) {
   if (!state.approvals.length) return;
 
   const date = new Date().toISOString().slice(0, 10);
@@ -454,6 +454,14 @@ function _exportApprovals(state) {
     operator: a.approving_operator || '',
   }));
   const format = state.el.querySelector('#ap-export-format')?.value || 'json';
+  const auth = await authorizeExport({
+    surface: 'approvals',
+    format,
+    filters: { filter: state.filter },
+    record_count: state.approvals.length,
+    chain_source: 'live',
+  });
+  if (!auth.ok) return;
   downloadExport(format, `atested-approvals-${date}`, columns, rows, {
     sheetName: 'Approvals Export',
     jsonData: () => ({
