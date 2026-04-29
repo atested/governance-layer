@@ -78,6 +78,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "proxy_code_hash_changed",
     "policy_rules_loaded",
     "policy_rules_changed",
+    "chain_started_after_archive",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

@@ -3598,6 +3598,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             center_index = qs("center_index") or None
             data = walker_query(
                 CHAIN,
+                chain_source=qs("chain_source", "live"),
+                archive_id=qs("archive_id") or None,
                 start_time=qs("start_time") or None,
                 end_time=qs("end_time") or None,
                 user_identity=qs("user_identity") or None,
@@ -3612,6 +3614,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 alert_direction=qs("alert_direction") or None,
             )
             _json_response(self, data)
+
+        elif path == "/api/audit/archives":
+            from chain_archive import list_archives
+            _json_response(self, {"archives": list_archives(CHAIN)})
 
         elif path == "/api/audit/report":
             from readout import audit_report

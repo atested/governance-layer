@@ -295,6 +295,19 @@ class IntegrityMonitor:
 
     def _block_chain(self, reason: str, payload: dict) -> None:
         self.record_side_event(reason, payload)
+        try:
+            from chain_archive import archive_chain
+            archive_chain(
+                self.chain_path,
+                reason=reason,
+                payload=payload,
+                sidecar_events_path=self.events_path,
+            )
+        except Exception as exc:
+            self.record_side_event("chain_archive_failed", {
+                "reason": reason,
+                "error": str(exc),
+            })
         self.save_metadata({"blocked_reason": reason})
         raise IntegrityViolation(f"chain integrity violation: {reason}")
 

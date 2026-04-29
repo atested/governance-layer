@@ -1651,11 +1651,24 @@ def main():
     runtime = runtime_root(REPO)
     chain_path = runtime / "LOGS" / "decision-chain.jsonl"
     integrity_monitor = IntegrityMonitor(chain_path)
+    startup_archive_manifest = None
     try:
         integrity_monitor.verify_startup_chain()
     except IntegrityViolation as exc:
-        logger.error("Refusing to start: %s", exc)
-        sys.exit(1)
+        logger.error("Startup chain integrity violation; archiving and starting fresh: %s", exc)
+        try:
+            from chain_archive import archive_chain
+            startup_archive_manifest = archive_chain(
+                chain_path,
+                reason="startup_integrity_violation",
+                payload={"error": str(exc)},
+                sidecar_events_path=integrity_monitor.events_path,
+            )
+            integrity_monitor = IntegrityMonitor(chain_path)
+            integrity_monitor.save_chain_summary(integrity_monitor.summarize_chain())
+        except Exception as archive_exc:
+            logger.error("Unable to archive compromised chain: %s", archive_exc)
+            sys.exit(1)
     chain_recorder = ChainRecorder(chain_path, integrity_monitor=integrity_monitor)
 
     # Resolve user identity: explicit flag > env var > hostname
@@ -1682,6 +1695,19 @@ def main():
                 args.litellm_upstream or "(not configured)")
 
     try:
+        if startup_archive_manifest is not None:
+            chain_recorder.append_integrity_event(
+                "chain_started_after_archive",
+                {
+                    "archive_id": startup_archive_manifest.get("archive_id", ""),
+                    "archive_manifest_path": startup_archive_manifest.get("manifest_path", ""),
+                    "archive_chain_path": startup_archive_manifest.get("archive_chain_path", ""),
+                    "archive_reason": startup_archive_manifest.get("reason", ""),
+                    "archived_record_count": startup_archive_manifest.get("record_count", 0),
+                    "user_identity": user_identity,
+                    "session_id": args.session_id,
+                },
+            )
         startup_hashes = record_startup_integrity_events(
             chain_recorder,
             integrity_monitor,

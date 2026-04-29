@@ -20,6 +20,7 @@ ALERT_EVENT_TYPES = frozenset(
         "chain_file_truncated",
         "chain_integrity_violation",
         "chain_record_count_mismatch",
+        "chain_started_after_archive",
         "chain_tail_hash_mismatch",
         "license_downgraded",
         "license_expiration_warning",
@@ -41,6 +42,7 @@ INTEGRITY_EVENT_TYPES = frozenset(
         "chain_file_truncated",
         "chain_integrity_violation",
         "chain_record_count_mismatch",
+        "chain_started_after_archive",
         "chain_tail_hash_mismatch",
         "policy_rules_changed",
         "policy_rules_loaded",
@@ -304,6 +306,8 @@ def apply_walker_filters(
 def walker_query(
     chain_path: Path,
     *,
+    chain_source: str = "live",
+    archive_id: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     user_identity: Optional[str] = None,
@@ -318,9 +322,19 @@ def walker_query(
     alert_direction: Optional[str] = None,
     radius: int = 5,
 ) -> dict[str, Any]:
-    """Return a centered live-chain window for the Audit Chain Walker."""
+    """Return a centered chain window for the Audit Chain Walker."""
 
-    all_rows = load_walker_rows(chain_path)
+    source_path = chain_path
+    source_label = "live"
+    archive_manifest = None
+    if chain_source == "archive" and archive_id:
+        from chain_archive import get_archive_manifest
+        archive_manifest = get_archive_manifest(chain_path, archive_id)
+        if archive_manifest and archive_manifest.get("archive_chain_path"):
+            source_path = Path(archive_manifest["archive_chain_path"])
+            source_label = "archive"
+
+    all_rows = load_walker_rows(source_path)
     filtered = apply_walker_filters(
         all_rows,
         start_time=start_time,
@@ -337,7 +351,8 @@ def walker_query(
     if not total:
         return {
             "timestamp_utc": "",
-            "chain_source": "live",
+            "chain_source": source_label,
+            "archive": archive_manifest,
             "rows": [],
             "total_matching": 0,
             "center_index": 0,
@@ -347,6 +362,8 @@ def walker_query(
             "radius": radius,
             "has_previous": False,
             "has_next": False,
+            "has_previous_alert": False,
+            "has_next_alert": False,
             "filters": _walker_filter_echo(
                 start_time, end_time, user_identity, tool_name, action_type,
                 confidence_tier, policy_decision, event_category,
@@ -372,7 +389,8 @@ def walker_query(
     next_alert = _resolve_alert_index(filtered, idx, "next")
     return {
         "timestamp_utc": center.get("timestamp_utc", ""),
-        "chain_source": "live",
+        "chain_source": source_label,
+        "archive": archive_manifest,
         "rows": filtered[start:end],
         "total_matching": total,
         "center_index": idx,

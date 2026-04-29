@@ -90,6 +90,9 @@ export function openAuditWindow(trigger, opts = {}) {
       hasPreviousAlert: false,
       hasNextAlert: false,
       source: 'live',
+      archiveId: '',
+      archive: null,
+      archives: [],
       playing: false,
       playDirection: 1,
       speed: 'medium',
@@ -106,6 +109,7 @@ export function openAuditWindow(trigger, opts = {}) {
   _buildUI(state);
   installWindowTooltips(content);
   _applyStaticTooltips(state);
+  _loadArchives(state);
   if (opts.mode === 'walker') {
     _setMode(state, 'walker');
   }
@@ -288,6 +292,12 @@ function _buildUI(state) {
           <div class="au-walker-subtitle" id="au-walker-subtitle">Filtered chain readout</div>
         </div>
         <div class="au-walker-controls">
+          <label class="au-walker-speed-label">
+            Source
+            <select class="au-select au-walker-source" id="au-walker-source">
+              <option value="live">Live chain</option>
+            </select>
+          </label>
           <button class="au-btn au-btn-muted" id="au-walker-prev-alert">Previous alert</button>
           <button class="au-btn au-btn-muted" id="au-walker-play-rev">Play reverse</button>
           <button class="au-btn au-btn-muted" id="au-walker-prev">Step back</button>
@@ -370,6 +380,7 @@ function _applyStaticTooltips(state) {
     ['#au-walker-play-fwd', 'Play forward until paused, the end is reached, or an alert is centered.'],
     ['#au-walker-pause', 'Stop Chain Walker playback.'],
     ['#au-walker-speed', 'Select Chain Walker playback speed.'],
+    ['#au-walker-source', 'Choose the live chain or a preserved archive.'],
   ]);
   state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
     setTooltip(btn, btn.dataset.mode === 'walker'
@@ -496,6 +507,19 @@ function _wireControls(state) {
       _schedulePlayback(state);
     }
   });
+  el.querySelector('#au-walker-source').addEventListener('change', (e) => {
+    _stopPlayback(state, 'Paused.');
+    const value = e.target.value || 'live';
+    if (value === 'live') {
+      state.walker.source = 'live';
+      state.walker.archiveId = '';
+    } else {
+      state.walker.source = 'archive';
+      state.walker.archiveId = value.replace(/^archive:/, '');
+    }
+    state.walker.centerIndex = 0;
+    _loadWalker(state, { centerIndex: 0 });
+  });
 }
 
 function _readFilters(state) {
@@ -584,6 +608,8 @@ async function _loadWalker(state, opts = {}) {
   narrativeEl.innerHTML = '';
 
   const params = _walkerParams(state);
+  params.chain_source = state.walker.source || 'live';
+  if (state.walker.archiveId) params.archive_id = state.walker.archiveId;
   if (opts.centerRecordId) params.center_record_id = opts.centerRecordId;
   else if (opts.centerSequence != null) params.center_sequence = opts.centerSequence;
   else params.center_index = opts.centerIndex ?? state.walker.centerIndex ?? 0;
@@ -605,6 +631,7 @@ async function _loadWalker(state, opts = {}) {
   state.walker.hasPreviousAlert = !!d.has_previous_alert;
   state.walker.hasNextAlert = !!d.has_next_alert;
   state.walker.source = d.chain_source || 'live';
+  state.walker.archive = d.archive || null;
   _renderWalker(state);
   const centered = _centerWalkerRow(state);
   if (state.walker.playing) {
@@ -618,6 +645,27 @@ async function _loadWalker(state, opts = {}) {
     }
   }
   return d;
+}
+
+async function _loadArchives(state) {
+  const res = await api.getAuditArchives();
+  if (!res.ok) return;
+
+  state.walker.archives = res.data?.archives || [];
+  const select = state.el.querySelector('#au-walker-source');
+  if (!select) return;
+
+  select.innerHTML = '<option value="live">Live chain</option>';
+  for (const archive of state.walker.archives) {
+    const option = document.createElement('option');
+    option.value = `archive:${archive.archive_id}`;
+    const count = archive.record_count != null ? `${archive.record_count} records` : 'archived';
+    option.textContent = `${archive.archive_id} (${count})`;
+    select.appendChild(option);
+  }
+  select.value = state.walker.source === 'archive' && state.walker.archiveId
+    ? `archive:${state.walker.archiveId}`
+    : 'live';
 }
 
 function _walkerParams(state) {
@@ -850,9 +898,20 @@ function _renderWalker(state) {
 
   const total = state.walker.totalMatching;
   const center = state.walker.centerIndex;
+  const sourceSelect = state.el.querySelector('#au-walker-source');
+  if (sourceSelect) {
+    sourceSelect.value = state.walker.source === 'archive' && state.walker.archiveId
+      ? `archive:${state.walker.archiveId}`
+      : 'live';
+  }
+  const sourceLabel = state.walker.source === 'archive' && state.walker.archive
+    ? `Archived chain ${state.walker.archive.archive_id}`
+    : 'Live chain';
+  const titleEl = state.el.querySelector('.au-walker-title');
+  if (titleEl) titleEl.textContent = state.walker.source === 'archive' ? 'Archived Chain Walker' : 'Live Chain Walker';
   state.el.querySelector('#au-walker-subtitle').textContent = total
-    ? `Live chain | record ${center + 1} of ${total} matching filtered records`
-    : 'Live chain | no matching records';
+    ? `${sourceLabel} | record ${center + 1} of ${total} matching filtered records`
+    : `${sourceLabel} | no matching records`;
   state.el.querySelector('#au-walker-prev').disabled = !state.walker.hasPrevious;
   state.el.querySelector('#au-walker-next').disabled = !state.walker.hasNext;
   state.el.querySelector('#au-walker-prev-alert').disabled = !state.walker.hasPreviousAlert;
@@ -1722,6 +1781,10 @@ auStyles.textContent = `
   }
   .au-walker-speed {
     min-width: 116px;
+    width: auto;
+  }
+  .au-walker-source {
+    min-width: 210px;
     width: auto;
   }
   .au-walker-status {

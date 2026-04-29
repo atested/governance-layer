@@ -133,6 +133,14 @@ export function getAuditWalker(opts = {}) {
 }
 
 /**
+ * Audit Chain Walker archives.
+ * GET /api/audit/archives
+ */
+export function getAuditArchives() {
+  return _request('GET', '/audit/archives');
+}
+
+/**
  * Audit summary report.
  * GET /api/audit/report
  * @param {Object} opts - { start_time, end_time, group_by }
