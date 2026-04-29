@@ -3589,6 +3589,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             data = audit_record_detail(CHAIN, RECORDS_DIR, record_id=rid)
             _json_response(self, data)
 
+        elif path == "/api/audit/walker":
+            from chain_walker import walker_query
+            center_sequence = qs("center_sequence") or None
+            center_index = qs("center_index") or None
+            data = walker_query(
+                CHAIN,
+                start_time=qs("start_time") or None,
+                end_time=qs("end_time") or None,
+                user_identity=qs("user_identity") or None,
+                tool_name=qs("tool_name") or None,
+                action_type=qs("action_type") or None,
+                confidence_tier=qs("confidence_tier") or None,
+                policy_decision=qs("policy_decision") or None,
+                event_category=qs("event_category") or None,
+                center_record_id=qs("center_record_id") or None,
+                center_sequence=int(center_sequence) if center_sequence else None,
+                center_index=int(center_index) if center_index else None,
+            )
+            _json_response(self, data)
+
         elif path == "/api/audit/report":
             from readout import audit_report
             data = audit_report(

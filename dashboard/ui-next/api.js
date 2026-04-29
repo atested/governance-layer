@@ -124,6 +124,15 @@ export function getAuditRecord(recordId) {
 }
 
 /**
+ * Audit Chain Walker live-chain window.
+ * GET /api/audit/walker
+ * @param {Object} opts - audit filters plus center_record_id, center_sequence, or center_index
+ */
+export function getAuditWalker(opts = {}) {
+  return _request('GET', '/audit/walker', { params: opts });
+}
+
+/**
  * Audit summary report.
  * GET /api/audit/report
  * @param {Object} opts - { start_time, end_time, group_by }

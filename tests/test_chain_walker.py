@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -11,6 +12,7 @@ from chain_walker import (
     normalize_chain_line,
     normalize_record,
     normalize_records,
+    walker_query,
 )
 
 
@@ -216,3 +218,30 @@ def test_normalize_records_and_filters_preserve_walker_semantics():
     filtered = apply_walker_filters(rows, decision="DENY", action_type="delete", tier="4")
     assert len(filtered) == 1
     assert filtered[0]["record_id"] == "deny-1"
+
+
+def test_walker_query_centers_live_chain_window(tmp_path):
+    records = [
+        _mediated("ALLOW", request_id=f"allow-{idx}", record_hash=f"sha256:{idx:064d}")
+        for idx in range(12)
+    ]
+    records[6] = _mediated(
+        "DENY",
+        request_id="deny-center",
+        record_hash="sha256:9999999999999999999999999999999999999999999999999999999999999999",
+    )
+    chain_path = tmp_path / "decision-chain.jsonl"
+    chain_path.write_text(
+        "\n".join(json.dumps(record, sort_keys=True) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    result = walker_query(chain_path, center_record_id="deny-center")
+
+    assert result["chain_source"] == "live"
+    assert result["total_matching"] == 12
+    assert result["center_index"] == 6
+    assert result["center_sequence"] == 7
+    assert len(result["rows"]) == 11
+    assert result["rows"][5]["record_id"] == "deny-center"
+    assert result["rows"][5]["alert"] is True

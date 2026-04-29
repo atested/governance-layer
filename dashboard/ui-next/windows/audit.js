@@ -7,7 +7,6 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
-import { openRecordDetail } from './record-detail.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 
 // ---------- Column definitions ----------
@@ -73,6 +72,17 @@ export function openAuditWindow(trigger) {
     chainEventCount: 0,
     // Column visibility
     visibleColumns: {},
+    mode: 'search',
+    walker: {
+      rows: [],
+      totalMatching: 0,
+      centerIndex: 0,
+      centerSequence: null,
+      windowStartIndex: 0,
+      hasPrevious: false,
+      hasNext: false,
+      source: 'live',
+    },
   };
 
   for (const col of COLUMNS) {
@@ -114,6 +124,11 @@ function _buildUI(state) {
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="au-mode-switch" id="au-mode-switch" role="tablist" aria-label="Audit mode">
+      <button class="au-mode-btn au-mode-active" data-mode="search" role="tab" aria-selected="true">Search</button>
+      <button class="au-mode-btn" data-mode="walker" role="tab" aria-selected="false">Walker</button>
     </div>
 
     <!-- Filter panes -->
@@ -247,6 +262,30 @@ function _buildUI(state) {
 
     <!-- Pagination -->
     <div class="au-pagination" id="au-pagination"></div>
+
+    <!-- Chain Walker -->
+    <div class="au-walker au-hidden" id="au-walker">
+      <div class="au-walker-toolbar">
+        <div>
+          <div class="au-walker-title">Live Chain Walker</div>
+          <div class="au-walker-subtitle" id="au-walker-subtitle">Filtered chain readout</div>
+        </div>
+        <div class="au-walker-controls">
+          <button class="au-btn au-btn-muted" id="au-walker-prev">Step back</button>
+          <button class="au-btn au-btn-primary" id="au-walker-next">Step forward</button>
+        </div>
+      </div>
+      <div class="au-walker-grid">
+        <div class="au-walker-pane">
+          <div class="au-walker-pane-title">Chain rows</div>
+          <div class="au-walker-data" id="au-walker-data"></div>
+        </div>
+        <div class="au-walker-pane">
+          <div class="au-walker-pane-title">Narrative</div>
+          <div class="au-walker-narrative" id="au-walker-narrative"></div>
+        </div>
+      </div>
+    </div>
   `;
 
   _buildColumnToggles(state);
@@ -291,7 +330,14 @@ function _applyStaticTooltips(state) {
     ['#au-clear', 'Clear all audit filters.'],
     ['#au-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
     ['#au-export', 'Export matching records in the selected format.'],
+    ['#au-walker-prev', 'Move the Chain Walker to the previous matching record.'],
+    ['#au-walker-next', 'Move the Chain Walker to the next matching record.'],
   ]);
+  state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
+    setTooltip(btn, btn.dataset.mode === 'walker'
+      ? 'Walk the live chain as synchronized data rows and narrative lines.'
+      : 'Search, filter, and export chain records.');
+  });
   state.el.querySelectorAll('.au-quick-btn').forEach(btn => {
     setTooltip(btn, `Set the audit time range to ${btn.textContent.trim()}.`);
   });
@@ -311,6 +357,12 @@ function _updatePresetHighlight(state) {
 
 function _wireControls(state) {
   const el = state.el;
+
+  el.querySelector('#au-mode-switch').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-mode]');
+    if (!btn) return;
+    _setMode(state, btn.dataset.mode);
+  });
 
   // Quick-select time buttons
   el.querySelector('#au-quick-btns').addEventListener('click', (e) => {
@@ -384,6 +436,15 @@ function _wireControls(state) {
 
   // Export
   el.querySelector('#au-export').addEventListener('click', () => _exportAudit(state));
+
+  el.querySelector('#au-walker-prev').addEventListener('click', () => {
+    if (!state.walker.hasPrevious) return;
+    _loadWalker(state, { centerIndex: Math.max(0, state.walker.centerIndex - 1) });
+  });
+  el.querySelector('#au-walker-next').addEventListener('click', () => {
+    if (!state.walker.hasNext) return;
+    _loadWalker(state, { centerIndex: state.walker.centerIndex + 1 });
+  });
 }
 
 function _readFilters(state) {
@@ -397,6 +458,23 @@ function _readFilters(state) {
   state.actionTypeFilter = el.querySelector('#au-action-type').value;
   state.tierFilter = el.querySelector('#au-tier').value;
   state.categoryFilter = el.querySelector('#au-category').value;
+}
+
+function _setMode(state, mode) {
+  state.mode = mode === 'walker' ? 'walker' : 'search';
+  state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
+    const active = btn.dataset.mode === state.mode;
+    btn.classList.toggle('au-mode-active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const searchHidden = state.mode === 'walker';
+  state.el.querySelectorAll('.au-filter-row, .au-results-bar, .au-col-bar, .au-table-wrap, .au-pagination')
+    .forEach(node => node.classList.toggle('au-hidden', searchHidden));
+  state.el.querySelector('#au-walker').classList.toggle('au-hidden', state.mode !== 'walker');
+  if (state.mode === 'walker') {
+    _readFilters(state);
+    _loadWalker(state, { centerIndex: state.walker.centerIndex || 0 });
+  }
 }
 
 // ---------- Data loading ----------
@@ -434,6 +512,50 @@ async function _loadData(state) {
   _updateResultsBar(state);
   _renderTable(state);
   _renderPagination(state);
+  if (state.mode === 'walker') {
+    _loadWalker(state, { centerIndex: state.walker.centerIndex || 0 });
+  }
+}
+
+async function _loadWalker(state, opts = {}) {
+  const dataEl = state.el.querySelector('#au-walker-data');
+  const narrativeEl = state.el.querySelector('#au-walker-narrative');
+  dataEl.innerHTML = '<div class="au-walker-empty">Loading walker rows...</div>';
+  narrativeEl.innerHTML = '';
+
+  const params = _walkerParams(state);
+  if (opts.centerRecordId) params.center_record_id = opts.centerRecordId;
+  else if (opts.centerSequence != null) params.center_sequence = opts.centerSequence;
+  else params.center_index = opts.centerIndex ?? state.walker.centerIndex ?? 0;
+
+  const res = await api.getAuditWalker(params);
+  if (!res.ok) {
+    dataEl.innerHTML = `<div class="au-error">${_esc(res.error)}</div>`;
+    return;
+  }
+  const d = res.data || {};
+  state.walker.rows = d.rows || [];
+  state.walker.totalMatching = d.total_matching || 0;
+  state.walker.centerIndex = d.center_index || 0;
+  state.walker.centerSequence = d.center_sequence || null;
+  state.walker.windowStartIndex = d.window_start_index || 0;
+  state.walker.hasPrevious = !!d.has_previous;
+  state.walker.hasNext = !!d.has_next;
+  state.walker.source = d.chain_source || 'live';
+  _renderWalker(state);
+}
+
+function _walkerParams(state) {
+  const params = {};
+  if (state.startTime) params.start_time = state.startTime;
+  if (state.endTime) params.end_time = state.endTime;
+  if (state.userFilter) params.user_identity = state.userFilter;
+  if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.actionTypeFilter) params.action_type = state.actionTypeFilter;
+  if (state.tierFilter) params.confidence_tier = state.tierFilter;
+  if (state.decisionFilter) params.policy_decision = state.decisionFilter;
+  if (state.categoryFilter) params.event_category = state.categoryFilter;
+  return params;
 }
 
 // ---------- Verification pane ----------
@@ -538,16 +660,107 @@ function _renderTable(state) {
 
     const recordId = _recordIdForEntry(entry);
     tr.addEventListener('click', () => {
-      if (recordId) openRecordDetail(recordId, tr);
+      _openWalkerFromEntry(state, entry, recordId);
     });
     tr.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && recordId) openRecordDetail(recordId, tr);
+      if (e.key === 'Enter') _openWalkerFromEntry(state, entry, recordId);
     });
 
     tbody.appendChild(tr);
   }
   table.appendChild(tbody);
   wrap.appendChild(table);
+}
+
+function _openWalkerFromEntry(state, entry, recordId) {
+  state.walker.centerIndex = 0;
+  _setMode(state, 'walker');
+  const sequence = entry.sequence_position || null;
+  if (recordId) {
+    _loadWalker(state, { centerRecordId: recordId });
+  } else if (sequence != null) {
+    _loadWalker(state, { centerSequence: sequence });
+  }
+}
+
+function _renderWalker(state) {
+  const dataEl = state.el.querySelector('#au-walker-data');
+  const narrativeEl = state.el.querySelector('#au-walker-narrative');
+  dataEl.innerHTML = '';
+  narrativeEl.innerHTML = '';
+
+  const total = state.walker.totalMatching;
+  const center = state.walker.centerIndex;
+  state.el.querySelector('#au-walker-subtitle').textContent = total
+    ? `Live chain | record ${center + 1} of ${total} matching filtered records`
+    : 'Live chain | no matching records';
+  state.el.querySelector('#au-walker-prev').disabled = !state.walker.hasPrevious;
+  state.el.querySelector('#au-walker-next').disabled = !state.walker.hasNext;
+
+  if (!total) {
+    dataEl.innerHTML = '<div class="au-walker-empty">No matching records for the active filters.</div>';
+    narrativeEl.innerHTML = '<div class="au-walker-empty">Adjust filters or return to Search.</div>';
+    return;
+  }
+
+  const byIndex = new Map();
+  state.walker.rows.forEach((row, offset) => {
+    byIndex.set(state.walker.windowStartIndex + offset, row);
+  });
+
+  for (let slot = -5; slot <= 5; slot++) {
+    const absoluteIndex = center + slot;
+    const row = byIndex.get(absoluteIndex);
+    const isCenter = slot === 0;
+    dataEl.appendChild(_walkerDataRow(row, absoluteIndex, isCenter));
+    narrativeEl.appendChild(_walkerNarrativeRow(row, absoluteIndex, isCenter));
+  }
+}
+
+function _walkerDataRow(row, absoluteIndex, isCenter) {
+  const div = document.createElement('div');
+  div.className = 'au-walker-row' + (isCenter ? ' au-walker-row-current' : '') + (!row ? ' au-walker-row-empty' : '');
+  if (!row) {
+    div.innerHTML = '<span></span><span class="au-cell-muted">No record</span>';
+    return div;
+  }
+  if (row.alert) div.classList.add('au-walker-row-alert');
+  setTooltip(div, row.alert_reason || row.record_hash || row.record_id || 'Chain Walker row.');
+  div.innerHTML = `
+    <span class="au-wr-seq">#${_esc(String(row.sequence || absoluteIndex + 1))}</span>
+    <span class="au-wr-time">${_esc(_formatHumanDate(row.timestamp_utc))}</span>
+    <span class="au-wr-cat">${_esc(_labelize(row.category || 'record'))}</span>
+    <span class="au-wr-decision">${_walkerDecision(row.decision)}</span>
+    <span class="au-wr-action">${_esc(row.action || '\u2014')}</span>
+    <span class="au-wr-target">${_esc(_shortTarget(row.target || ''))}</span>
+    <span class="au-wr-tier">${_esc(row.tier ? `T${row.tier}` : '\u2014')}</span>
+    <span class="au-wr-hash">${_esc(row.hash || '\u2014')}</span>
+  `;
+  return div;
+}
+
+function _walkerNarrativeRow(row, absoluteIndex, isCenter) {
+  const div = document.createElement('div');
+  div.className = 'au-walker-line' + (isCenter ? ' au-walker-line-current' : '') + (!row ? ' au-walker-line-empty' : '');
+  if (!row) {
+    div.textContent = 'No record in this direction.';
+    return div;
+  }
+  if (row.alert) div.classList.add('au-walker-line-alert');
+  setTooltip(div, row.record_hash || row.record_id || 'Narrative derived from this chain row.');
+  div.textContent = row.narrative || `Record ${absoluteIndex + 1}`;
+  return div;
+}
+
+function _walkerDecision(decision) {
+  if (decision === 'ALLOW') return '<span class="au-decision-allow">ALLOW</span>';
+  if (decision === 'DENY') return '<span class="au-decision-deny">DENY</span>';
+  return '<span class="au-cell-muted">\u2014</span>';
+}
+
+function _shortTarget(target) {
+  if (!target) return '\u2014';
+  return target.length > 42 ? '\u2026' + target.slice(-39) : target;
 }
 
 function _renderCell(key, entry, detail) {
@@ -880,6 +1093,38 @@ auStyles.textContent = `
   }
   .au-pane-body {
     padding: 8px 20px 16px;
+  }
+
+  .au-hidden { display: none !important; }
+
+  /* ---- Mode switch ---- */
+  .au-mode-switch {
+    display: inline-flex;
+    gap: 4px;
+    background: #1a1d23;
+    border: 1px dashed rgba(255,255,255,0.10);
+    border-radius: 2px;
+    padding: 4px;
+    margin: 0 0 12px;
+  }
+  .au-mode-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: #8b919a;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 6px 14px;
+    text-transform: uppercase;
+  }
+  .au-mode-btn:hover { color: #e4e6eb; }
+  .au-mode-active {
+    background: rgba(102,153,204,0.10);
+    border-color: rgba(102,153,204,0.35);
+    color: #6699cc;
   }
 
   /* ---- Verification pane ---- */
@@ -1270,6 +1515,131 @@ auStyles.textContent = `
   }
   .au-pag-ellipsis { color: #6b7280; font-size: 0.72rem; padding: 0 4px; }
 
+  /* ---- Walker ---- */
+  .au-walker {
+    border: 1px dashed rgba(255,255,255,0.12);
+    background: #1a1d23;
+    border-radius: 2px;
+    padding: 14px;
+  }
+  .au-walker-toolbar {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .au-walker-title {
+    color: #d2a8ff;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .au-walker-subtitle {
+    color: #8b919a;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    margin-top: 3px;
+  }
+  .au-walker-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .au-walker-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .au-walker-pane {
+    background: #22262e;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .au-walker-pane-title {
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: #6699cc;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 8px 10px;
+    text-transform: uppercase;
+  }
+  .au-walker-data,
+  .au-walker-narrative {
+    display: grid;
+    grid-template-rows: repeat(11, minmax(34px, auto));
+  }
+  .au-walker-row,
+  .au-walker-line {
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.045);
+    color: #c9d1d9;
+    min-height: 34px;
+  }
+  .au-walker-row {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 48px 92px 86px 70px minmax(86px, 0.8fr) minmax(120px, 1fr) 42px 120px;
+    padding: 5px 8px;
+  }
+  .au-walker-line {
+    display: flex;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    padding: 5px 10px;
+  }
+  .au-walker-row-current,
+  .au-walker-line-current {
+    background: rgba(210,168,255,0.11);
+    box-shadow: inset 3px 0 0 #d2a8ff;
+    color: #f0e6ff;
+  }
+  .au-walker-row-alert:not(.au-walker-row-current),
+  .au-walker-line-alert:not(.au-walker-line-current) {
+    background: rgba(248,81,73,0.055);
+  }
+  .au-walker-row-empty,
+  .au-walker-line-empty {
+    color: #4f5661;
+    font-style: italic;
+  }
+  .au-wr-seq,
+  .au-wr-time,
+  .au-wr-tier,
+  .au-wr-hash {
+    color: #8b919a;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+  }
+  .au-wr-cat {
+    color: #d2a8ff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .au-wr-action,
+  .au-wr-target {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .au-wr-action { color: #6699cc; }
+  .au-wr-target { color: #8b919a; }
+  .au-walker-empty {
+    color: #8b919a;
+    font-size: 0.82rem;
+    padding: 18px;
+  }
+
   /* ---- Utility ---- */
   .au-loading {
     color: #8b919a;
@@ -1296,6 +1666,14 @@ auStyles.textContent = `
   /* ---- Responsive ---- */
   @media (max-width: 700px) {
     .au-filter-row { grid-template-columns: 1fr; }
+    .au-walker-grid { grid-template-columns: 1fr; }
+    .au-walker-toolbar { align-items: flex-start; flex-direction: column; }
+    .au-walker-row {
+      grid-template-columns: 44px 78px 74px 54px minmax(70px, 1fr);
+    }
+    .au-wr-target,
+    .au-wr-tier,
+    .au-wr-hash { display: none; }
     .au-results-bar { flex-direction: column; gap: 8px; align-items: flex-start; }
     .au-fp-fields { flex-direction: column; }
     .au-verify-metrics { flex-wrap: wrap; gap: 16px; }

@@ -301,6 +301,85 @@ def apply_walker_filters(
     return result
 
 
+def walker_query(
+    chain_path: Path,
+    *,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    user_identity: Optional[str] = None,
+    tool_name: Optional[str] = None,
+    action_type: Optional[str] = None,
+    confidence_tier: Optional[str] = None,
+    policy_decision: Optional[str] = None,
+    event_category: Optional[str] = None,
+    center_record_id: Optional[str] = None,
+    center_sequence: Optional[int] = None,
+    center_index: Optional[int] = None,
+    radius: int = 5,
+) -> dict[str, Any]:
+    """Return a centered live-chain window for the Audit Chain Walker."""
+
+    all_rows = load_walker_rows(chain_path)
+    filtered = apply_walker_filters(
+        all_rows,
+        start_time=start_time,
+        end_time=end_time,
+        decision=policy_decision,
+        action_type=action_type,
+        tier=confidence_tier,
+        user=user_identity,
+        target=None,
+        category=_category_filter_alias(event_category),
+        action=tool_name,
+    )
+    total = len(filtered)
+    if not total:
+        return {
+            "timestamp_utc": "",
+            "chain_source": "live",
+            "rows": [],
+            "total_matching": 0,
+            "center_index": 0,
+            "center_sequence": None,
+            "window_start_index": 0,
+            "window_end_index": -1,
+            "radius": radius,
+            "has_previous": False,
+            "has_next": False,
+            "filters": _walker_filter_echo(
+                start_time, end_time, user_identity, tool_name, action_type,
+                confidence_tier, policy_decision, event_category,
+            ),
+        }
+
+    idx = _resolve_center_index(
+        filtered,
+        center_record_id=center_record_id,
+        center_sequence=center_sequence,
+        center_index=center_index,
+    )
+    start = max(0, idx - radius)
+    end = min(total, idx + radius + 1)
+    center = filtered[idx]
+    return {
+        "timestamp_utc": center.get("timestamp_utc", ""),
+        "chain_source": "live",
+        "rows": filtered[start:end],
+        "total_matching": total,
+        "center_index": idx,
+        "center_sequence": center.get("sequence"),
+        "window_start_index": start,
+        "window_end_index": end - 1,
+        "radius": radius,
+        "has_previous": idx > 0,
+        "has_next": idx < total - 1,
+        "filters": _walker_filter_echo(
+            start_time, end_time, user_identity, tool_name, action_type,
+            confidence_tier, policy_decision, event_category,
+        ),
+    }
+
+
 def _malformed_row(sequence: int, reason: str) -> dict[str, Any]:
     row = {
         "sequence": sequence,
@@ -325,6 +404,65 @@ def _malformed_row(sequence: int, reason: str) -> dict[str, Any]:
     }
     row["narrative"] = narrative_for_row(row)
     return row
+
+
+def _resolve_center_index(
+    rows: list[dict[str, Any]],
+    *,
+    center_record_id: Optional[str],
+    center_sequence: Optional[int],
+    center_index: Optional[int],
+) -> int:
+    if center_record_id:
+        wanted = str(center_record_id)
+        for idx, row in enumerate(rows):
+            if wanted in {
+                _string(row.get("record_id")),
+                _string(row.get("record_hash")),
+                _string(row.get("hash")),
+                _string(row.get("sequence")),
+            }:
+                return idx
+    if center_sequence is not None:
+        for idx, row in enumerate(rows):
+            if row.get("sequence") == center_sequence:
+                return idx
+    if center_index is not None:
+        return max(0, min(len(rows) - 1, int(center_index)))
+    return 0
+
+
+def _category_filter_alias(category: Optional[str]) -> Optional[str]:
+    aliases = {
+        "opaque_approval": "approval",
+        "opaque_revocation": "revocation",
+        "verification_transition": "verification",
+    }
+    if category:
+        return aliases.get(category, category)
+    return None
+
+
+def _walker_filter_echo(
+    start_time: Optional[str],
+    end_time: Optional[str],
+    user_identity: Optional[str],
+    tool_name: Optional[str],
+    action_type: Optional[str],
+    confidence_tier: Optional[str],
+    policy_decision: Optional[str],
+    event_category: Optional[str],
+) -> dict[str, Optional[str]]:
+    return {
+        "start_time": start_time,
+        "end_time": end_time,
+        "user_identity": user_identity,
+        "tool_name": tool_name,
+        "action_type": action_type,
+        "confidence_tier": confidence_tier,
+        "policy_decision": policy_decision,
+        "event_category": event_category,
+    }
 
 
 def _category(record: Mapping[str, Any], event_type: str, record_type: str, decision: str) -> str:
