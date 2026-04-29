@@ -1,7 +1,7 @@
 # Chain Walker Specification
 
-**Dispatch**: 148-D-2026-0427  
-**Status**: Design specification, pre-implementation  
+**Dispatch**: 148-D-2026-0427; updated by 149-D-2026-0427  
+**Status**: Specification with D-149 decisions applied, pre-implementation  
 **Owner**: Atested  
 **Primary surface**: Operator UI, Audit window  
 **Related systems**: dashboard API, chain readout, chain verifier, integrity monitor, export authorization, external evidence viewer
@@ -161,9 +161,9 @@ When filters are active, the walker walks only the matching result set. It
 does not show non-matching records in between. The UI must clearly label this
 as a filtered walk.
 
-Open issue: for investigations, a filtered walk can hide causal context. The
-spec recommends a `show surrounding unfiltered context` option in a later
-iteration, but not in the first implementation.
+Filtered walking can hide causal context. The first implementation walks only
+the matching filtered result set. A later version may add `show surrounding
+unfiltered context`, but that is outside v1 scope.
 
 ### 3.8 Entry Points
 
@@ -221,6 +221,11 @@ Required manifest fields:
 | `archive_file_sha256` | Hash of archived JSONL bytes |
 | `public_key_fingerprint` | Verification key fingerprint used at archive time |
 | `new_chain_id` | New chain identity if a fresh chain is started |
+| `retention_policy` | `operator_managed_never_deleted_by_atested` |
+
+Atested never deletes archived chains. The operator manages their own disk and
+can move or delete archives outside Atested. The dashboard may show disk usage
+and archive count, but it must not auto-delete archived chain files.
 
 ### 4.3 Integrity Violation Preservation
 
@@ -246,14 +251,18 @@ Specification:
 - The runtime should attempt a terminal integrity event only when the chain can
   be opened, parsed through the last trusted record, and locked safely.
 - If a terminal chain event cannot be written, write an integrity sidecar event
-  and archive all available bytes.
-- A new chain must start with a `chain_started_after_archive` event that points
-  to the archive manifest hash. This preserves continuity without pretending
-  the new chain is cryptographically linked to the old one.
-
-Tier 0 decision needed: whether a new chain after archive is acceptable as a
-separate chain identity, or whether Atested must require explicit operator
-acknowledgment before any fresh chain begins.
+  and archive all available bytes. Sidecar-only terminal evidence is the
+  accepted fallback when writing to the compromised chain is impossible.
+- On proxy restart after an integrity violation, Atested starts a fresh chain
+  automatically with no operator acknowledgment gate.
+- The new chain is a clean start, not a continuation of the old chain. It must
+  not claim hash continuity with the archived chain.
+- The fresh chain must start with a `chain_started_after_archive` event that
+  points to the archive manifest hash. This preserves investigative continuity
+  without pretending the new chain is cryptographically linked to the old one.
+- The old chain's terminal record or sidecar event communicates the violation
+  to Atested through summary telemetry where telemetry is enabled. The password,
+  raw chain contents, and confidential record details are not transmitted.
 
 ## 5. Background Verification
 
@@ -331,6 +340,8 @@ Requirements:
 - not packaged for sharing
 - not encrypted by Atested
 - available from Audit Search and Walker range selection
+- available to any operator with a valid license key
+- no tier restriction in v1
 
 #### Level 2: Encrypted Evidence Package
 
@@ -354,6 +365,7 @@ Requirements:
 - export event recorded in the chain before or during package creation
 - package can be decrypted only with the password
 - package viewer verifies hashes/signatures before presenting evidence
+- package viewer is view-only and does not expose raw decrypted downloads
 
 ### 6.2 Export Authorization
 
@@ -363,8 +375,8 @@ requires implementation to gate all export controls.
 Required API shape:
 
 - UI export button opens authentication dialog.
-- Operator provides license key or operator credential.
-- Dashboard server verifies credential.
+- Operator provides license key.
+- Dashboard server verifies the license key.
 - Server creates short-lived export token scoped to:
   - export level
   - chain source
@@ -376,9 +388,9 @@ Required API shape:
 Security note: authenticating only in browser code is not sufficient. The
 server must enforce export authorization.
 
-Tier 0 decision needed: whether license key is sufficient operator
-authentication, or whether this must wait for a stronger operator identity and
-role model.
+License key verification is sufficient operator authentication for v1 export.
+Named operator identity and role-based permissions can be added later, but
+Chain Walker export must not wait on that larger identity model.
 
 ### 6.3 Export Chain Events
 
@@ -407,9 +419,9 @@ Fields:
 | `export_file_hash` | raw export only, if practical |
 | `password_recorded` | always false |
 
-Open issue: exporting from an archived chain cannot append an event to that
-archived chain if it is preserved read-only. The live chain should record the
-export event and reference the archive manifest.
+Exporting from an archived chain does not append an event to that archived
+chain because archived chains are preserved read-only. The live chain records
+the export event and references the archive manifest.
 
 ### 6.4 Removing Ungated Exports
 
@@ -422,17 +434,15 @@ Implementation must update these existing controls:
 - Configuration export
 
 Non-operator dashboard users may view records on screen but cannot export in
-any format.
-
-Tier 0 decision needed: which dashboard users are non-operators in the current
-product, since the current local dashboard does not yet expose a full user role
-system.
+any format. In v1, an operator is any dashboard user who can provide a valid
+license key to the server-enforced export authentication flow. A non-operator
+is any viewer without that export-authenticated session.
 
 ## 7. Encrypted Evidence Package
 
 ### 7.1 Cryptography
 
-Recommended browser-compatible baseline:
+Required browser-compatible baseline:
 
 - PBKDF2-HMAC-SHA-256 through WebCrypto for password key derivation
 - random 128-bit salt
@@ -441,12 +451,15 @@ Recommended browser-compatible baseline:
 - random 96-bit nonce
 - manifest authenticated as additional authenticated data where practical
 
-Argon2id would be preferable for password KDF strength, but WebCrypto does not
-provide Argon2id natively. Using Argon2id requires bundling a WASM
-implementation, which complicates the no-install viewer.
+Password rules:
 
-Tier 0 decision needed: PBKDF2-only no-dependency viewer vs Argon2id WASM for
-stronger password resistance.
+- minimum 12 characters
+- no special character requirement
+- no uppercase/lowercase/number complexity rule
+- UI should recommend a long passphrase, but enforcement is minimum length only
+
+Argon2id is out of scope for v1. The no-install viewer uses dependency-free
+WebCrypto primitives.
 
 ### 7.2 Package Layout
 
@@ -510,8 +523,8 @@ the package, enters the password, and sees verified evidence.
 Audience modes:
 
 - non-technical: plain-language summaries, verified status, clear explanations
-- technical: raw verification details and optional raw file download, subject
-  to Tier 0 decision below
+- technical: raw verification details, manifest inspection, and hash/signature
+  evidence
 
 ### 8.2 Verification Flow
 
@@ -560,25 +573,15 @@ Technical view should show:
 - algorithm names
 - schema versions
 
-Design contradiction:
-
-- The requested design says technical users can download the chain file and
-  public key as raw files.
-- It also says there is no re-export of unencrypted data.
-
-These cannot both be strictly true if the chain file is downloaded after
-decryption. The spec offers two options:
-
-1. Allow technical raw download inside the viewer, and document that this is an
-   intentional post-decryption disclosure authorized by the password.
-2. Remove raw download from the viewer and provide only encrypted package data
-   plus verification details.
-
-Tier 0 decision required before implementation.
+The external viewer is view-only. It must not expose raw download of decrypted
+chain data, decrypted JSON, decrypted CSV, decrypted Excel, or other
+unencrypted chain material. The viewer may display technical verification
+details and public key metadata, but it must not include a raw decrypted export
+button.
 
 ### 8.5 Read-Only Limits
 
-The viewer can make the UI read-only and omit export controls, but once data is
+The viewer must make the UI read-only and omit export controls, but once data is
 decrypted in a browser, a sufficiently technical recipient can copy it from
 memory or developer tools. The product copy must not promise cryptographic
 prevention of copying after decryption.
@@ -657,6 +660,9 @@ External viewer additions:
 ## 11. Security Requirements
 
 - All exports require server-enforced operator authentication.
+- V1 operator authentication is a valid license key.
+- Raw Level 1 exports are available to any operator with a valid license key,
+  with no tier restriction.
 - Export auth tokens are short-lived and scoped.
 - Raw export and package export write chain events.
 - Password is never logged, stored, included in telemetry, included in Trouble
@@ -665,39 +671,42 @@ External viewer additions:
 - Viewer verifies before rendering.
 - Archived chains are read-only through the dashboard.
 - Non-operator dashboard users can view but cannot export.
+- The external viewer is view-only and provides no raw decrypted download.
 - Export from an archive writes the export event to the live chain, referencing
   the archive manifest.
 - Export failures should not leak partial unencrypted package artifacts.
 
 ## 12. Implementation Concerns And Gaps
 
-1. Operator identity is not fully defined.
-   - The design says "operator-authenticated" and "non-operator users", but
-     current local dashboard authorization is license-oriented.
-   - Tier 0 must decide whether license key is enough for D-149 or whether a
-     user/role model is required first.
+1. Operator identity is license-key based for v1.
+   - The implementation must treat a valid license key as sufficient export
+     authentication.
+   - Named operator identity and role-based permissions are future extensions,
+     not v1 blockers.
 
 2. Existing exports are currently ungated.
    - D-147 standardized export formats.
-   - D-148 requires gating them.
+   - D-149 requires gating them with server-enforced license key
+     authentication.
    - Implementation must avoid leaving old direct client-side exports reachable.
 
 3. Terminal event on compromised chain may be impossible.
    - Missing/truncated chain cannot always receive a final record.
-   - Need best-effort terminal event plus sidecar fallback.
+   - Sidecar-only terminal evidence is the accepted fallback.
 
-4. Fresh chain after violation needs explicit semantics.
-   - Starting a new chain is operationally useful but creates a new chain
-     identity.
+4. Fresh chain after violation is automatic and clean.
+   - The proxy starts a fresh chain automatically on restart.
    - The new chain should reference the archive manifest but cannot pretend to
      be a continuous hash chain.
+   - Restart creates the fresh chain without an operator acknowledgment gate.
 
-5. External viewer re-export language conflicts with technical raw download.
-   - Tier 0 must choose the policy.
+5. External viewer has no raw decrypted download.
+   - Technical mode can show verification details, but the viewer does not
+     provide unencrypted chain exports.
 
-6. Password security depends on KDF choice and password strength.
-   - Browser-only PBKDF2 is simple but less resistant than Argon2id.
-   - Argon2id requires WASM and increases package complexity.
+6. Password security uses PBKDF2/WebCrypto.
+   - V1 uses PBKDF2-HMAC-SHA-256 and AES-256-GCM through WebCrypto.
+   - Password enforcement is minimum 12 characters only.
 
 7. Filtered walking can hide context.
    - First version can walk filtered results only.
@@ -719,6 +728,10 @@ External viewer additions:
     - Old packages should remain viewable.
     - Viewer schema compatibility must be preserved or packages must embed the
       exact viewer needed.
+
+11. Archived chain retention is operator-managed.
+    - Atested never deletes archived chains.
+    - The UI can report archive disk usage but must not auto-delete archives.
 
 ## 13. Incremental Build Plan
 
@@ -759,7 +772,7 @@ External viewer additions:
 - List archived chains.
 - Add archive picker in walker.
 - Add chain source labeling.
-- Add new-chain-after-archive event semantics after Tier 0 decision.
+- Add automatic fresh-chain-after-archive event semantics.
 
 ### Phase 6: Export authorization
 
@@ -781,33 +794,25 @@ External viewer additions:
 - Build no-install browser viewer.
 - Add non-technical and technical modes.
 - Verify package before rendering.
-- Resolve raw download policy before shipping.
+- Ensure technical mode has no raw decrypted download control.
 
-## 14. Tier 0 Input Required
+## 14. Resolved Product Decisions
 
-1. Is license key verification sufficient operator authentication for export,
-   or must export wait for named operator identity and roles?
-
-2. Are non-operator dashboard users in scope for the current local dashboard,
-   and how are they represented?
-
-3. After an integrity violation, may Atested start a new chain automatically on
-   restart, or must an operator explicitly acknowledge first?
-
-4. If a chain is missing/truncated, is a sidecar-only terminal event acceptable
-   when writing a final chain record is impossible?
-
-5. Should the external viewer allow technical users to download decrypted raw
-   chain records and public key, or should it omit all unencrypted export
-   controls?
-
-6. Should encrypted packages use dependency-free PBKDF2/WebCrypto or bundle
-   Argon2id WASM?
-
-7. Should raw Level 1 exports be allowed for all paid tiers, or only specific
-   tiers/roles?
-
-8. What retention and naming policy should archived chains follow?
+- License key verification is sufficient operator authentication for v1
+  exports.
+- Non-operator dashboard users can view records but cannot export in any
+  format.
+- After an integrity violation, the proxy starts a fresh chain automatically
+  on restart with no acknowledgment gate.
+- The new chain is a clean start, not a continuation.
+- Sidecar-only terminal evidence is accepted when writing to a compromised
+  chain is impossible.
+- The external viewer is view-only and exposes no raw decrypted downloads.
+- Encrypted packages use PBKDF2/WebCrypto.
+- Password requirements enforce minimum length only: at least 12 characters.
+- Raw Level 1 exports are available to any operator with a valid license key,
+  with no tier restriction.
+- Atested never deletes archived chains; the operator manages disk retention.
 
 ## 15. Acceptance Criteria For Future Implementation
 
