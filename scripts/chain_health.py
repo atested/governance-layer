@@ -931,11 +931,22 @@ def collect_health_signals(
     # User activity
     users = _user_activity(chain_path)
 
+    # Legacy health contract retained for CLI/tests; the v3 dashboard no longer
+    # renders this as a Transparency card.
+    observations = _observation_gap(chain_path)
+
     # License
     license_info = _license_health(runtime_root)
 
     # D-139 integrity metadata
     integrity = _integrity_status(chain_path)
+
+    # D-153 usage-triggered background verification
+    try:
+        from background_verifier import read_verification_status
+        background_verification = read_verification_status(chain_path)
+    except Exception:
+        background_verification = {"status": "not_available", "checked": False}
 
     # Stability events
     recent_events = read_stability_log(stability_log_path, limit=20)
@@ -982,6 +993,16 @@ def collect_health_signals(
             "guidance": "Review user activity for unusual patterns.",
         })
 
+    if background_verification.get("status") in {"broken", "error"}:
+        if overall == HEALTH_HEALTHY or overall == HEALTH_HEALTHY_REPAIRED:
+            overall = HEALTH_ATTENTION
+        alerts.append({
+            "severity": "attention",
+            "source": "background_verification",
+            "message": "Background chain verification found a problem.",
+            "guidance": "Open Chain Integrity details and jump to the break point in the Chain Walker.",
+        })
+
     return {
         "timestamp_utc": _now_utc_z(),
         "overall_status": overall,
@@ -990,6 +1011,8 @@ def collect_health_signals(
         "deny_rate": deny_rate,
         "storage": storage,
         "integrity": integrity,
+        "background_verification": background_verification,
+        "observations": observations,
         "users": users,
         "license": license_info,
         "recent_stability_events": recent_events,

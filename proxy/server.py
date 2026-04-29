@@ -133,6 +133,7 @@ class ChainRecorder:
                      record.get("policy_decision", "?"),
                      self._chain_path)
         self._chain_path.parent.mkdir(parents=True, exist_ok=True)
+        appended = False
         with self._lock:
             lockdir = self._acquire_file_lock()
             try:
@@ -166,8 +167,15 @@ class ChainRecorder:
                     os.close(fd)
                 if self._integrity_monitor is not None:
                     self._integrity_monitor.refresh_after_chain_write()
+                appended = True
             finally:
                 self._release_file_lock(lockdir)
+        if appended:
+            try:
+                from background_verifier import trigger_after_append
+                trigger_after_append(self._chain_path)
+            except Exception:
+                logger.exception("Background chain verifier trigger failed")
 
     def append_integrity_event(self, event_type: str, payload: dict) -> dict:
         """Append a non-action integrity event into the governance chain."""

@@ -3564,6 +3564,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, data)
 
         elif path == "/api/audit/query":
+            if qs("verify_before_export") in ("1", "true", "yes"):
+                from background_verifier import run_verification
+                run_verification(CHAIN, background=False)
             from readout import audit_query
             data = audit_query(
                 CHAIN, RECORDS_DIR,

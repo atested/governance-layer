@@ -117,6 +117,7 @@ function _renderAlertPane(state, alerts) {
 
 function _buildChainPane(state, h) {
   const chain = h.chain || {};
+  const bgv = h.background_verification || {};
   const chainStatus = chain.status || 'healthy';
 
   const pane = _pane('green', 'Chain integrity', true);
@@ -126,6 +127,7 @@ function _buildChainPane(state, h) {
   body.appendChild(_kvRow('Status', _statusLabel(chainStatus), statusColor));
   body.appendChild(_kvRow('Event count', _fmtNum(chain.chain_event_count ?? 0)));
   body.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No', chain.checked ? 'green' : 'amber'));
+  body.appendChild(_kvRow('Background verifier', _verificationLabel(bgv), _verificationColor(bgv)));
 
   pane.addEventListener('click', () => _openChainDetail(state, h));
   setTooltip(pane, 'Open chain integrity details: hash linkage, break status, and repair evidence.');
@@ -286,6 +288,7 @@ function _healthMetricTooltip(label) {
 
 async function _openChainDetail(state, h) {
   const chain = h.chain || {};
+  const bgv = h.background_verification || {};
   const chainStatus = chain.status || 'healthy';
   const color = chainStatus === 'critical' ? 'red' : chainStatus === 'attention' ? 'amber' : 'green';
 
@@ -309,6 +312,10 @@ async function _openChainDetail(state, h) {
   kvSection.appendChild(_kvRow('Status', _statusLabel(chainStatus), color));
   kvSection.appendChild(_kvRow('Event count', _fmtNum(chain.chain_event_count ?? 0)));
   kvSection.appendChild(_kvRow('Verified', chain.checked ? 'Yes' : 'No'));
+  kvSection.appendChild(_kvRow('Background verifier', _verificationLabel(bgv), _verificationColor(bgv)));
+  if (bgv.last_verified_utc) kvSection.appendChild(_kvRow('Last background check', _formatHumanDate(bgv.last_verified_utc)));
+  if (bgv.last_verified_count != null) kvSection.appendChild(_kvRow('Last verified count', _fmtNum(bgv.last_verified_count)));
+  if (bgv.next_due_count != null) kvSection.appendChild(_kvRow('Next due count', _fmtNum(bgv.next_due_count)));
 
   if (chain.break_info) {
     const bi = chain.break_info;
@@ -317,6 +324,34 @@ async function _openChainDetail(state, h) {
     if (bi.break_type) kvSection.appendChild(_kvRow('Break type', bi.break_type));
     if (bi.expected_hash) kvSection.appendChild(_kvRow('Expected hash', _truncHash(bi.expected_hash)));
     if (bi.actual_hash) kvSection.appendChild(_kvRow('Actual hash', _truncHash(bi.actual_hash)));
+  }
+
+  if (bgv.status === 'broken' || bgv.first_break_sequence != null) {
+    const jumpSection = document.createElement('div');
+    jumpSection.className = 'hw-gc-section';
+    const jumpHeader = document.createElement('div');
+    jumpHeader.className = 'hw-gc-sub-header';
+    jumpHeader.textContent = 'Background verification';
+    jumpSection.appendChild(jumpHeader);
+    jumpSection.appendChild(_kvRow('Status', _verificationLabel(bgv), _verificationColor(bgv)));
+    if (bgv.first_break_reason) jumpSection.appendChild(_kvRow('First break reason', bgv.first_break_reason, 'red'));
+    if (bgv.first_break_sequence != null) jumpSection.appendChild(_kvRow('First break sequence', String(bgv.first_break_sequence), 'red'));
+    const btn = document.createElement('button');
+    btn.className = 'hw-jump-btn';
+    btn.textContent = 'Open Chain Walker at break';
+    btn.disabled = bgv.first_break_sequence == null;
+    setTooltip(btn, 'Open Audit Walker centered on the first background verification break.');
+    btn.addEventListener('click', () => {
+      modalManager.closeAll();
+      setTimeout(() => {
+        import('./audit.js').then(mod => mod.openAuditWindow(null, {
+          mode: 'walker',
+          centerSequence: bgv.first_break_sequence,
+        }));
+      }, 0);
+    });
+    jumpSection.appendChild(btn);
+    content.appendChild(jumpSection);
   }
   content.appendChild(kvSection);
 
@@ -653,6 +688,25 @@ function _chainFileStatusLabel(status) {
   return map[status] || 'Not available';
 }
 
+function _verificationLabel(status) {
+  const value = status?.status || 'not_run';
+  const map = {
+    ok: 'Verified',
+    broken: 'Break detected',
+    error: 'Error',
+    not_run: 'Not run',
+    not_available: 'Not available',
+  };
+  return status?.running ? 'Running' : (map[value] || _capitalize(value));
+}
+
+function _verificationColor(status) {
+  const value = status?.status || 'not_run';
+  if (value === 'ok') return 'green';
+  if (value === 'broken' || value === 'error') return 'red';
+  return 'amber';
+}
+
 function _truncTarget(target) {
   if (!target || target.length <= 40) return target;
   return '\u2026' + target.substring(target.length - 37);
@@ -767,6 +821,25 @@ hwStyles.textContent = `
   .hw-alert-ack:hover {
     background: rgba(248,81,73,0.08);
     border-color: rgba(248,81,73,0.6);
+  }
+  .hw-jump-btn {
+    background: rgba(210,168,255,0.10);
+    border: 1px dashed rgba(210,168,255,0.38);
+    border-radius: 2px;
+    color: #d2a8ff;
+    cursor: pointer;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-top: 10px;
+    padding: 7px 12px;
+  }
+  .hw-jump-btn:hover:not(:disabled) {
+    background: rgba(210,168,255,0.16);
+  }
+  .hw-jump-btn:disabled {
+    cursor: default;
+    opacity: 0.45;
   }
 
   /* ---- Pane grid ---- */

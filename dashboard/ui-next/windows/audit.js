@@ -49,7 +49,7 @@ const WALKER_SPEEDS = {
  * Open the Audit window.
  * @param {HTMLElement|null} trigger
  */
-export function openAuditWindow(trigger) {
+export function openAuditWindow(trigger, opts = {}) {
   const content = document.createElement('div');
   content.className = 'au-root';
 
@@ -95,6 +95,7 @@ export function openAuditWindow(trigger) {
       speed: 'medium',
       timer: null,
       status: '',
+      pendingCenterSequence: opts.centerSequence || null,
     },
   };
 
@@ -105,6 +106,9 @@ export function openAuditWindow(trigger) {
   _buildUI(state);
   installWindowTooltips(content);
   _applyStaticTooltips(state);
+  if (opts.mode === 'walker') {
+    _setMode(state, 'walker');
+  }
   _loadData(state);
 }
 
@@ -521,7 +525,13 @@ function _setMode(state, mode) {
   state.el.querySelector('#au-walker').classList.toggle('au-hidden', state.mode !== 'walker');
   if (state.mode === 'walker') {
     _readFilters(state);
-    _loadWalker(state, { centerIndex: state.walker.centerIndex || 0 });
+    if (state.walker.pendingCenterSequence != null) {
+      const seq = state.walker.pendingCenterSequence;
+      state.walker.pendingCenterSequence = null;
+      _loadWalker(state, { centerSequence: seq });
+    } else {
+      _loadWalker(state, { centerIndex: state.walker.centerIndex || 0 });
+    }
   } else {
     _renderWalkerStatus(state);
   }
@@ -1041,7 +1051,7 @@ function _computePageNumbers(current, total) {
 // ---------- Export ----------
 
 function _exportParams(state) {
-  const params = { limit: 10000, offset: 0 };
+  const params = { limit: 10000, offset: 0, verify_before_export: '1' };
   if (state.startTime) params.start_time = state.startTime;
   if (state.endTime) params.end_time = state.endTime;
   if (state.userFilter) params.user_identity = state.userFilter;
