@@ -78,19 +78,61 @@ _SIGNING_KEY = None        # Ed25519PrivateKey or None
 _SIGNING_KEY_ID = None     # "ed25519:<sha256hex>" or None
 _SIGNING_SERIALIZATION = None  # cryptography.hazmat.primitives.serialization
 
+# Hidden signing key filename (dotfile)
+SIGNING_KEY_HIDDEN_NAME = ".atested-signing-key.pem"
+# Legacy visible key name for migration fallback
+SIGNING_KEY_LEGACY_NAME = "governance-signing.pem"
+
+
+def _resolve_signing_key_path() -> str:
+    """Resolve the signing key path with hidden-path preference and migration.
+
+    Priority:
+    1. GOV_SIGNING_KEY_PATH env var (explicit override)
+    2. Hidden dotfile in runtime directory (.atested-signing-key.pem)
+    3. Legacy visible path in keys/ directory (migration fallback with warning)
+    """
+    explicit = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    if explicit:
+        return explicit
+
+    # Check hidden path in runtime directory
+    try:
+        runtime = runtime_root(REPO)
+    except Exception:
+        runtime = None
+    if runtime:
+        hidden_path = runtime / SIGNING_KEY_HIDDEN_NAME
+        if hidden_path.exists():
+            return str(hidden_path)
+
+    # Check legacy visible path with migration warning
+    legacy_path = REPO / "keys" / SIGNING_KEY_LEGACY_NAME
+    if legacy_path.exists():
+        logger.warning(
+            "Signing key found at legacy visible path %s — "
+            "recommend moving to %s for security",
+            legacy_path,
+            (runtime / SIGNING_KEY_HIDDEN_NAME) if runtime else SIGNING_KEY_HIDDEN_NAME,
+        )
+        return str(legacy_path)
+
+    return ""
+
+
 def _load_signing_key():
-    """Load Ed25519 private key from GOV_SIGNING_KEY_PATH env var."""
+    """Load Ed25519 private key from resolved signing key path."""
     global _SIGNING_KEY, _SIGNING_KEY_ID, _SIGNING_SERIALIZATION
-    key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    key_path = _resolve_signing_key_path()
     if not key_path:
-        logger.warning("GOV_SIGNING_KEY_PATH not set — records will be unsigned")
+        logger.warning("No signing key found — records will be unsigned")
         return
     try:
         priv, serialization = _read_private_key(Path(key_path))
         _SIGNING_KEY = priv
         _SIGNING_SERIALIZATION = serialization
         _SIGNING_KEY_ID = _public_key_fingerprint(priv.public_key(), serialization)
-        logger.info("Ed25519 signing key loaded: %s", _SIGNING_KEY_ID)
+        logger.info("Ed25519 signing key loaded from %s: %s", key_path, _SIGNING_KEY_ID)
     except Exception as exc:
         logger.warning("Failed to load signing key from %s: %s — records will be unsigned", key_path, exc)
 

@@ -19,14 +19,50 @@ governed_family + deployment_context + policy_version.
 
 Scope mismatch is automatic — if any field doesn't match, the approval
 simply doesn't apply (spec §9.5).
+
+Signature verification (F-11): When require_signatures=True, approval and
+revocation events must carry a valid Ed25519 signature. Events without a
+signature or with an invalid signature are rejected (not ingested).
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
+logger = logging.getLogger("atested.approval_store")
 
 APPROVAL_STORE_VERSION = "0.1"
+
+
+def _verify_event_signature(event: dict, public_key) -> bool:
+    """Verify Ed25519 signature on an approval/revocation event.
+
+    Returns True if valid, False otherwise.
+    """
+    sig_b64 = event.get("signature")
+    if not sig_b64 or not isinstance(sig_b64, str):
+        return False
+    try:
+        import base64
+        from event_model import canonical_json
+        from cryptography.exceptions import InvalidSignature
+
+        # Reconstruct signing preimage: record_hash, signature, signing_key_id → None
+        copy = dict(event)
+        copy["record_hash"] = None
+        copy["signature"] = None
+        copy["signing_key_id"] = None
+        preimage = canonical_json(copy).encode("utf-8")
+
+        # Decode signature (URL-safe base64, no padding)
+        padding = "=" * ((4 - len(sig_b64) % 4) % 4)
+        sig_bytes = base64.urlsafe_b64decode(sig_b64 + padding)
+
+        public_key.verify(sig_bytes, preimage)
+        return True
+    except (InvalidSignature, Exception):
+        return False
 
 
 class ApprovalStore:
@@ -36,13 +72,31 @@ class ApprovalStore:
     (artifact_identity, governed_family, deployment_context, policy_version).
 
     The value is the full approval record including approving_operator.
+
+    When require_signatures=True and a public_key is provided, events must
+    carry valid Ed25519 signatures to be ingested.
     """
 
-    def __init__(self):
+    def __init__(self, *, require_signatures: bool = False, public_key=None):
         self._approvals: dict[tuple, dict] = {}
+        self._require_signatures = require_signatures
+        self._public_key = public_key
+        self._rejected_count = 0
 
-    def ingest_approval(self, event: dict) -> None:
-        """Ingest an opaque_artifact_approval event."""
+    def ingest_approval(self, event: dict) -> bool:
+        """Ingest an opaque_artifact_approval event.
+
+        Returns True if accepted, False if rejected due to signature failure.
+        """
+        if self._require_signatures and self._public_key is not None:
+            if not _verify_event_signature(event, self._public_key):
+                self._rejected_count += 1
+                logger.warning(
+                    "Rejected unsigned/invalid-signature approval: %s",
+                    event.get("event_id", "?"),
+                )
+                return False
+
         key = self._scope_key(event)
         self._approvals[key] = {
             "artifact_identity": event["artifact_identity"],
@@ -53,11 +107,30 @@ class ApprovalStore:
             "event_id": event.get("event_id"),
             "timestamp_utc": event.get("timestamp_utc"),
         }
+        return True
 
-    def ingest_revocation(self, event: dict) -> None:
-        """Ingest an opaque_artifact_revocation event, removing the approval."""
+    def ingest_revocation(self, event: dict) -> bool:
+        """Ingest an opaque_artifact_revocation event, removing the approval.
+
+        Returns True if accepted, False if rejected due to signature failure.
+        """
+        if self._require_signatures and self._public_key is not None:
+            if not _verify_event_signature(event, self._public_key):
+                self._rejected_count += 1
+                logger.warning(
+                    "Rejected unsigned/invalid-signature revocation: %s",
+                    event.get("event_id", "?"),
+                )
+                return False
+
         key = self._scope_key(event)
         self._approvals.pop(key, None)
+        return True
+
+    @property
+    def rejected_count(self) -> int:
+        """Number of events rejected due to signature verification failure."""
+        return self._rejected_count
 
     def lookup(
         self,
@@ -89,13 +162,20 @@ class ApprovalStore:
         )
 
 
-def load_approval_store_from_events(events: list[dict]) -> ApprovalStore:
+def load_approval_store_from_events(
+    events: list[dict],
+    *,
+    require_signatures: bool = False,
+    public_key=None,
+) -> ApprovalStore:
     """Build an ApprovalStore from a list of approval/revocation events.
 
     Events are processed in order. Later revocations override earlier
     approvals for the same scope.
     """
-    store = ApprovalStore()
+    store = ApprovalStore(
+        require_signatures=require_signatures, public_key=public_key,
+    )
     for event in events:
         event_type = event.get("event_type")
         if event_type == "opaque_artifact_approval":
@@ -105,7 +185,12 @@ def load_approval_store_from_events(events: list[dict]) -> ApprovalStore:
     return store
 
 
-def load_approval_store_from_chain(chain_path: str) -> ApprovalStore:
+def load_approval_store_from_chain(
+    chain_path: str,
+    *,
+    require_signatures: bool = False,
+    public_key=None,
+) -> ApprovalStore:
     """Build an ApprovalStore from a JSONL decision chain file.
 
     Scans the chain for approval and revocation events and builds
@@ -120,4 +205,6 @@ def load_approval_store_from_chain(chain_path: str) -> ApprovalStore:
             rec = json.loads(line)
             if rec.get("event_type") in ("opaque_artifact_approval", "opaque_artifact_revocation"):
                 events.append(rec)
-    return load_approval_store_from_events(events)
+    return load_approval_store_from_events(
+        events, require_signatures=require_signatures, public_key=public_key,
+    )

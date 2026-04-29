@@ -145,6 +145,8 @@ input[type=password]:focus{outline:none;border-color:var(--accent)}
 .records-table .decision-deny{color:var(--red);font-weight:700}
 .records-table .sig-signed{color:var(--green)}
 .records-table .sig-unsigned{color:var(--muted)}
+.records-table .hash-ok{color:var(--green)}
+.records-table .hash-fail{color:var(--red)}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
@@ -438,8 +440,8 @@ async function doDecrypt() {
     const payloadText = new TextDecoder().decode(plaintext);
     state.payload = JSON.parse(payloadText);
 
-    // Step 5: Verify chain linkage
-    state.verification = verifyChain(state.payload.records, state.payload.predecessor_hash);
+    // Step 5: Verify chain (hash recomputation + linkage + signatures)
+    state.verification = await verifyChain(state.payload.records, state.payload.predecessor_hash);
 
     // Render results
     renderResults();
@@ -455,16 +457,141 @@ async function doDecrypt() {
 }
 
 // ---------------------------------------------------------------------------
-// Chain verification
+// Canonical JSON (must match Python: sort_keys=True, separators=(",",":"))
 // ---------------------------------------------------------------------------
 
-function verifyChain(records, predecessorHash) {
+function canonicalJson(obj) {
+  if (obj === null || obj === undefined) return 'null';
+  if (typeof obj === 'boolean') return obj ? 'true' : 'false';
+  if (typeof obj === 'number') {
+    if (Number.isInteger(obj)) return obj.toString();
+    return JSON.stringify(obj);
+  }
+  if (typeof obj === 'string') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalJson).join(',') + ']';
+  // Object: sorted keys, compact separators
+  const keys = Object.keys(obj).sort();
+  return '{' + keys.map(k => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
+}
+
+// ---------------------------------------------------------------------------
+// Record hash recomputation
+// ---------------------------------------------------------------------------
+
+async function computeRecordHash(record) {
+  // Clone record and null out hash/signature fields
+  const copy = Object.assign({}, record);
+  copy.record_hash = null;
+  if ('signature' in copy) copy.signature = null;
+  if ('signing_key_id' in copy) copy.signing_key_id = null;
+  const preimage = canonicalJson(copy);
+  const hash = await sha256hex(new TextEncoder().encode(preimage));
+  return 'sha256:' + hash;
+}
+
+// ---------------------------------------------------------------------------
+// Ed25519 signature verification (WebCrypto)
+// ---------------------------------------------------------------------------
+
+let _ed25519Available = null;
+
+async function isEd25519Available() {
+  if (_ed25519Available !== null) return _ed25519Available;
+  try {
+    // Probe by importing a dummy Ed25519 key
+    const testKey = new Uint8Array(32);
+    testKey[0] = 1; // non-zero to be valid-ish
+    await crypto.subtle.importKey('raw', testKey, { name: 'Ed25519' }, false, ['verify']);
+    _ed25519Available = true;
+  } catch (e) {
+    _ed25519Available = false;
+  }
+  return _ed25519Available;
+}
+
+function base64urlDecode(str) {
+  // Add padding
+  let padded = str;
+  while (padded.length % 4 !== 0) padded += '=';
+  // Convert URL-safe to standard base64
+  padded = padded.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function verifyEd25519Signature(record, publicKeyRaw) {
+  if (!record.signature || !publicKeyRaw) return null; // can't verify
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw', publicKeyRaw, { name: 'Ed25519' }, false, ['verify']
+    );
+    // Build signing preimage: same as hash preimage (record_hash, signature, signing_key_id → null)
+    const copy = Object.assign({}, record);
+    copy.record_hash = null;
+    copy.signature = null;
+    copy.signing_key_id = null;
+    const preimage = new TextEncoder().encode(canonicalJson(copy));
+    const sigBytes = base64urlDecode(record.signature);
+    return await crypto.subtle.verify({ name: 'Ed25519' }, key, sigBytes, preimage);
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Extract raw public key bytes from PEM
+// ---------------------------------------------------------------------------
+
+function pemToRawEd25519(pem) {
+  if (!pem) return null;
+  try {
+    // Remove PEM header/footer and whitespace
+    const lines = pem.split('\n').filter(l => !l.startsWith('-----') && l.trim());
+    const b64 = lines.join('');
+    const der = atob(b64);
+    const derBytes = new Uint8Array(der.length);
+    for (let i = 0; i < der.length; i++) derBytes[i] = der.charCodeAt(i);
+    // Ed25519 SubjectPublicKeyInfo DER is 44 bytes: 12-byte header + 32-byte raw key
+    if (derBytes.length === 44) return derBytes.slice(12);
+    // Fallback: look for last 32 bytes
+    if (derBytes.length >= 32) return derBytes.slice(derBytes.length - 32);
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chain verification (with real hash + signature verification)
+// ---------------------------------------------------------------------------
+
+async function verifyChain(records, predecessorHash) {
   if (!records || records.length === 0) {
-    return { status: 'empty', verified: 0, breaks: 0, signed: 0, unsigned: 0, total: 0, breakDetails: [] };
+    return {
+      status: 'empty', verified: 0, breaks: 0, hashVerified: 0, hashFailed: 0,
+      sigVerified: 0, sigFailed: 0, sigUnchecked: 0, signed: 0, unsigned: 0,
+      total: 0, breakDetails: [], sigAvailable: false
+    };
   }
 
-  let verified = 0;
+  // Attempt to load public key for signature verification
+  let publicKeyRaw = null;
+  let sigAvailable = false;
+  const ed25519Ok = await isEd25519Available();
+  if (ed25519Ok && state.publicKey && state.publicKey.public_key_pem) {
+    publicKeyRaw = pemToRawEd25519(state.publicKey.public_key_pem);
+    if (publicKeyRaw) sigAvailable = true;
+  }
+
+  let verified = 0;  // linkage checks passed
   let breaks = 0;
+  let hashVerified = 0;
+  let hashFailed = 0;
+  let sigVerified = 0;
+  let sigFailed = 0;
+  let sigUnchecked = 0;
   let signed = 0;
   let unsigned = 0;
   const breakDetails = [];
@@ -472,12 +599,35 @@ function verifyChain(records, predecessorHash) {
   for (let i = 0; i < records.length; i++) {
     const rec = records[i];
 
-    // Signature status
-    if (rec.signature && rec.signing_key_id) signed++;
-    else unsigned++;
+    // 1. Recompute and verify record hash
+    const recomputedHash = await computeRecordHash(rec);
+    const storedHash = rec.record_hash;
+    if (storedHash && recomputedHash === storedHash) {
+      hashVerified++;
+    } else if (storedHash) {
+      hashFailed++;
+      breakDetails.push({ index: i, type: 'hash_mismatch', expected: storedHash, got: recomputedHash });
+    }
 
+    // 2. Verify Ed25519 signature if present
+    if (rec.signature && rec.signing_key_id) {
+      signed++;
+      if (sigAvailable) {
+        const sigOk = await verifyEd25519Signature(rec, publicKeyRaw);
+        if (sigOk) sigVerified++;
+        else {
+          sigFailed++;
+          breakDetails.push({ index: i, type: 'signature_invalid', expected: 'valid', got: 'invalid' });
+        }
+      } else {
+        sigUnchecked++;
+      }
+    } else {
+      unsigned++;
+    }
+
+    // 3. Verify chain linkage (prev_record_hash matches previous record's record_hash)
     if (i === 0) {
-      // First record: check predecessor linkage if available
       if (predecessorHash && rec.prev_record_hash) {
         if (rec.prev_record_hash === predecessorHash) {
           verified++;
@@ -505,16 +655,38 @@ function verifyChain(records, predecessorHash) {
     }
   }
 
+  // Determine status — fail closed
   let status;
-  if (breaks > 0) {
+  if (breaks > 0 || hashFailed > 0 || sigFailed > 0) {
     status = 'failed';
-  } else if (unsigned > 0 && signed > 0) {
-    status = 'verified_legacy';
+  } else if (sigAvailable && signed > 0 && sigVerified === signed && hashVerified === records.length) {
+    status = 'hash_and_sig_verified';
+  } else if (hashVerified === records.length) {
+    if (unsigned > 0 && signed > 0) {
+      status = 'hash_verified_legacy';
+    } else {
+      status = 'hash_verified';
+    }
   } else {
-    status = 'verified';
+    // Some records couldn't be hash-verified — fail closed
+    status = 'failed';
   }
 
-  return { status, verified, breaks, signed, unsigned, total: records.length, breakDetails };
+  // Store per-record hash/sig results for the records table
+  const perRecord = [];
+  // Re-derive per-record results from breakDetails
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i];
+    const hashOk = !breakDetails.some(d => d.index === i && d.type === 'hash_mismatch');
+    const sigOk = !breakDetails.some(d => d.index === i && d.type === 'signature_invalid');
+    perRecord.push({ hashOk, sigOk });
+  }
+
+  return {
+    status, verified, breaks, hashVerified, hashFailed,
+    sigVerified, sigFailed, sigUnchecked, signed, unsigned,
+    total: records.length, breakDetails, sigAvailable, perRecord
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -550,23 +722,39 @@ function renderNonTechnical() {
   const m = state.manifest;
   const el = $('view-nontechnical');
 
-  // Verification badge
+  // Verification badge — distinct levels per SEC-2026-003
   let badgeClass, badgeIcon, badgeTitle, badgeDesc;
-  if (v.status === 'verified') {
+  if (v.status === 'hash_and_sig_verified') {
     badgeClass = 'verified';
     badgeIcon = '\u2713';
-    badgeTitle = 'Verified';
-    badgeDesc = 'All records in this package have intact hash linkage. The evidence chain has not been altered.';
-  } else if (v.status === 'verified_legacy') {
+    badgeTitle = 'Hash-Verified and Signature-Verified';
+    badgeDesc = `All ${v.total} records have verified record hashes, intact chain linkage, and valid Ed25519 signatures.`;
+  } else if (v.status === 'hash_verified') {
+    badgeClass = 'verified';
+    badgeIcon = '\u2713';
+    badgeTitle = 'Hash-Verified, Signatures Not Checked';
+    badgeDesc = `All ${v.total} records have verified record hashes and intact chain linkage.${!v.sigAvailable ? ' Ed25519 signature verification is not available in this browser.' : ''}`;
+  } else if (v.status === 'hash_verified_legacy') {
     badgeClass = 'verified-legacy';
     badgeIcon = '\u2713';
-    badgeTitle = 'Verified';
-    badgeDesc = `Hash linkage is intact. ${v.unsigned} record${v.unsigned !== 1 ? 's' : ''} predate the signing key and are unsigned — this is expected for legacy records.`;
+    badgeTitle = 'Hash-Verified, Signatures Not Checked';
+    badgeDesc = `Record hashes and chain linkage are intact. ${v.unsigned} record${v.unsigned !== 1 ? 's' : ''} predate the signing key and are unsigned.`;
+  } else if (v.status === 'failed') {
+    badgeClass = 'failed';
+    badgeIcon = '\u2717';
+    badgeTitle = 'Verification Failed';
+    const parts = [];
+    if (v.hashFailed > 0) parts.push(`${v.hashFailed} record hash${v.hashFailed !== 1 ? 'es' : ''} failed recomputation`);
+    if (v.breaks > 0) parts.push(`${v.breaks} chain linkage break${v.breaks !== 1 ? 's' : ''}`);
+    if (v.sigFailed > 0) parts.push(`${v.sigFailed} invalid signature${v.sigFailed !== 1 ? 's' : ''}`);
+    badgeDesc = parts.length > 0
+      ? `${parts.join('; ')}. The evidence chain may have been altered or corrupted.`
+      : 'The evidence chain could not be verified.';
   } else {
     badgeClass = 'failed';
     badgeIcon = '\u2717';
     badgeTitle = 'Verification Failed';
-    badgeDesc = `${v.breaks} hash linkage break${v.breaks !== 1 ? 's' : ''} detected. The evidence chain may have been altered or corrupted.`;
+    badgeDesc = 'The evidence chain could not be verified.';
   }
 
   // Time range
@@ -618,7 +806,7 @@ function renderNonTechnical() {
   html += `<div class="info-box">
     <p><strong>Atested</strong> is a governance layer that records every significant operation performed by AI agents, creating an auditable chain of evidence.</p>
     <p>The <strong>governance chain</strong> is an append-only sequence of records. Each record is cryptographically linked to the previous one by including its hash, creating a tamper-evident log.</p>
-    <p><strong>Verification</strong> confirms that the records in this package have not been altered since they were created. The viewer checks that each record's back-reference matches the previous record's hash.</p>
+    <p><strong>Verification</strong> confirms that the records in this package have not been altered since they were created. The viewer independently recomputes each record's cryptographic hash and checks chain linkage. When a public key is available and the browser supports Ed25519, it also verifies digital signatures.</p>
   </div>`;
 
   // Package summary
@@ -628,7 +816,10 @@ function renderNonTechnical() {
     ${timeRange ? `<p>Time range: <strong>${esc(timeRange)}</strong></p>` : ''}
     <p>Package created: <strong>${esc(m.created_at_utc || 'unknown')}</strong></p>
     ${m.intended_recipient ? `<p>Intended recipient: <strong>${esc(m.intended_recipient)}</strong></p>` : ''}
-    <p>Verification: <strong>${v.verified} of ${v.total}</strong> records have confirmed hash linkage.${v.breaks > 0 ? ` <strong style="color:var(--red)">${v.breaks} break${v.breaks !== 1 ? 's' : ''} detected.</strong>` : ''}</p>
+    <p>Hash verification: <strong>${v.hashVerified} of ${v.total}</strong> record hashes recomputed and confirmed.${v.hashFailed > 0 ? ` <strong style="color:var(--red)">${v.hashFailed} hash failure${v.hashFailed !== 1 ? 's' : ''}.</strong>` : ''}</p>
+    <p>Chain linkage: <strong>${v.verified} of ${v.total}</strong> records have confirmed linkage.${v.breaks > 0 ? ` <strong style="color:var(--red)">${v.breaks} break${v.breaks !== 1 ? 's' : ''} detected.</strong>` : ''}</p>
+    ${v.sigAvailable && v.signed > 0 ? `<p>Signatures: <strong>${v.sigVerified} of ${v.signed}</strong> verified.${v.sigFailed > 0 ? ` <strong style="color:var(--red)">${v.sigFailed} invalid.</strong>` : ''}</p>` : ''}
+    ${!v.sigAvailable && v.signed > 0 ? `<p>Signatures: ${v.signed} signed record${v.signed !== 1 ? 's' : ''} present but Ed25519 verification not available in this browser.</p>` : ''}
     ${v.unsigned > 0 ? `<p>${v.unsigned} record${v.unsigned !== 1 ? 's are' : ' is'} unsigned (legacy records created before the signing key was active).</p>` : ''}
   </div>`;
 
@@ -707,14 +898,20 @@ function renderTechnical() {
   </table></div>`;
 
   // Verification
+  const statusLabel = v.status === 'failed'
+    ? '<span style="color:var(--red)">FAILED</span>'
+    : v.status === 'hash_and_sig_verified'
+      ? '<span style="color:var(--green)">HASH + SIGNATURE VERIFIED</span>'
+      : '<span style="color:var(--green)">HASH VERIFIED</span>';
   html += `<div class="tech-section"><h2>Chain Verification</h2>
   <table class="tech-table">
-    ${techRow('Status', v.status === 'failed' ? '<span style="color:var(--red)">FAILED</span>' : '<span style="color:var(--green)">VERIFIED</span>', false, true)}
+    ${techRow('Status', statusLabel, false, true)}
     ${techRow('Records checked', v.total)}
-    ${techRow('Verified links', v.verified)}
-    ${techRow('Broken links', v.breaks > 0 ? `<span style="color:var(--red)">${v.breaks}</span>` : '0', false, true)}
-    ${techRow('Signed records', v.signed)}
+    ${techRow('Hashes recomputed', v.hashVerified + ' of ' + v.total + (v.hashFailed > 0 ? ' (' + v.hashFailed + ' FAILED)' : ''))}
+    ${techRow('Chain linkage', v.verified + ' of ' + v.total + (v.breaks > 0 ? ' (' + v.breaks + ' BROKEN)' : ''))}
+    ${techRow('Signatures verified', v.sigAvailable ? (v.sigVerified + ' of ' + v.signed + (v.sigFailed > 0 ? ' (' + v.sigFailed + ' INVALID)' : '')) : 'not available in this browser')}
     ${techRow('Unsigned records', v.unsigned)}
+    ${techRow('Ed25519 WebCrypto', v.sigAvailable ? '<span style="color:var(--green)">available</span>' : '<span style="color:var(--muted)">not available</span>', false, true)}
     ${techRow('Predecessor hash', p.predecessor_hash || 'none', true)}
     ${techRow('First record hash', p.records?.[0]?.record_hash || 'none', true)}
     ${techRow('Last record hash', p.records?.[p.records.length - 1]?.record_hash || 'none', true)}
@@ -762,7 +959,7 @@ function renderTechnical() {
   if (records.length > 0) {
     html += `<div class="tech-section"><h2>Records (${records.length})</h2>
     <div class="records-wrap"><table class="records-table">
-      <tr><th>#</th><th>Timestamp</th><th>Type</th><th>Decision</th><th>Link</th><th>Signed</th><th>Hash</th></tr>`;
+      <tr><th>#</th><th>Timestamp</th><th>Type</th><th>Decision</th><th>Link</th><th>Hash</th><th>Sig</th><th>Record Hash</th></tr>`;
     for (let i = 0; i < records.length; i++) {
       const rec = records[i];
       const seq = (m.range_start_sequence || 1) + i;
@@ -795,9 +992,24 @@ function renderTechnical() {
         }
       }
 
+      // Per-record hash verification status
+      const pr = v.perRecord[i];
+      const hashCls = pr.hashOk ? 'hash-ok' : 'hash-fail';
+      const hashText = pr.hashOk ? '\u2713' : '\u2717';
+
+      // Per-record signature status
       const hasSig = rec.signature && rec.signing_key_id;
-      const sigCls = hasSig ? 'sig-signed' : 'sig-unsigned';
-      const sigText = hasSig ? 'signed' : 'unsigned';
+      let sigCls, sigText;
+      if (hasSig && v.sigAvailable) {
+        sigCls = pr.sigOk ? 'sig-signed' : 'hash-fail';
+        sigText = pr.sigOk ? '\u2713' : '\u2717';
+      } else if (hasSig) {
+        sigCls = 'sig-signed';
+        sigText = 'signed';
+      } else {
+        sigCls = 'sig-unsigned';
+        sigText = '\u2014';
+      }
 
       const shortHash = (rec.record_hash || '').substring(0, 19);
 
@@ -807,6 +1019,7 @@ function renderTechnical() {
         <td>${esc(et)}</td>
         <td class="${decCls}">${esc(decision || '\u2014')}</td>
         <td class="${linkCls}">${linkStatus}</td>
+        <td class="${hashCls}">${hashText}</td>
         <td class="${sigCls}">${sigText}</td>
         <td class="mono">${esc(shortHash || '\u2014')}</td>
       </tr>`;

@@ -363,16 +363,48 @@ def _compute_event_record_hash(event: dict) -> str:
     return "sha256:" + sha256_hex(preimage)
 
 
+def sign_non_action_event(event: dict, signing_key=None, signing_key_id: Optional[str] = None) -> dict:
+    """Sign a non-action event after record_hash has been computed.
+
+    Sets signature and signing_key_id fields. The record_hash must already
+    be computed with these fields set to None (the canonical form).
+    """
+    if signing_key is None:
+        return event
+    try:
+        import base64
+        # The signing preimage is the canonical JSON with record_hash, signature,
+        # signing_key_id set to None — which is how _compute_event_record_hash
+        # already computes the hash.
+        copy = dict(event)
+        copy["record_hash"] = None
+        copy["signature"] = None
+        copy["signing_key_id"] = None
+        preimage = canonical_json(copy).encode("utf-8")
+        sig_bytes = signing_key.sign(preimage)
+        pad = "=" * ((4 - (len(base64.urlsafe_b64encode(sig_bytes)) % 4)) % 4)
+        sig_b64 = base64.urlsafe_b64encode(sig_bytes).decode("ascii").rstrip("=")
+        event["signature"] = sig_b64
+        event["signing_key_id"] = signing_key_id or ""
+    except Exception:
+        pass
+    return event
+
+
 def build_non_action_event(
     event_type: str,
     payload: dict,
     prev_record_hash: Optional[str] = None,
     compound_metadata: Optional[dict] = None,
+    signing_key=None,
+    signing_key_id: Optional[str] = None,
 ) -> dict:
     """Build a non-action governance event record.
 
     payload contains the type-specific fields (e.g. governed_family,
     from_state, to_state for verification_state_transition).
+
+    If signing_key is provided, the event will be Ed25519 signed.
     """
     if event_type not in NON_ACTION_EVENT_TYPES:
         raise ValueError(f"unknown non-action event_type: {event_type}")
@@ -384,6 +416,8 @@ def build_non_action_event(
         "timestamp_utc": now_utc_z(),
         "prev_record_hash": prev_record_hash,
         "record_hash": None,
+        "signature": None,
+        "signing_key_id": None,
     }
     event.update(payload)
 
@@ -391,6 +425,10 @@ def build_non_action_event(
         event["compound_metadata"] = compound_metadata
 
     event["record_hash"] = _compute_event_record_hash(event)
+
+    if signing_key is not None:
+        sign_non_action_event(event, signing_key, signing_key_id)
+
     return event
 
 

@@ -17,6 +17,8 @@ from event_model import is_non_action_event
 
 INTEGRITY_SCHEMA_VERSION = 1
 
+INSTALL_SENTINEL_NAME = ".atested-installed"
+
 
 class IntegrityViolation(RuntimeError):
     """Raised when governance material fails integrity verification."""
@@ -110,6 +112,7 @@ class IntegrityMonitor:
             or self.repo_root / "capabilities" / "policy-rules.json"
         )
         self.code_paths = code_paths or self.default_code_paths(self.repo_root)
+        self.sentinel_path = self.chain_path.parent / INSTALL_SENTINEL_NAME
         self._metadata: Optional[dict] = None
         self._startup_policy_hash: Optional[str] = None
         self._policy_change_event_recorded_for: Optional[str] = None
@@ -211,11 +214,37 @@ class IntegrityMonitor:
         except OSError as exc:
             raise IntegrityViolation(f"chain unreadable: {self.chain_path}: {exc}") from exc
 
+    def _ensure_sentinel(self) -> None:
+        """Create the install sentinel on first run."""
+        if not self.sentinel_path.exists():
+            self.sentinel_path.parent.mkdir(parents=True, exist_ok=True)
+            self.sentinel_path.write_text(
+                json.dumps({
+                    "created_utc": now_utc_z(),
+                    "chain_path": str(self.chain_path),
+                }, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
     def verify_startup_chain(self) -> ChainSummary:
         metadata = self.load_metadata()
         summary = self.summarize_chain()
 
         if metadata is None:
+            if self.sentinel_path.exists():
+                # Sentinel exists but metadata is missing — suspicious.
+                # Do NOT re-baseline; record a violation.
+                self.record_side_event("integrity_metadata_missing", {
+                    "sentinel_exists": True,
+                    "chain_exists": summary.exists,
+                    "chain_record_count": summary.record_count,
+                })
+                raise IntegrityViolation(
+                    "integrity metadata missing but install sentinel exists — "
+                    "metadata may have been deleted to bypass integrity checks"
+                )
+            # True first run: no sentinel, no metadata.
+            self._ensure_sentinel()
             self.save_chain_summary(summary)
             return summary
 
@@ -258,6 +287,8 @@ class IntegrityMonitor:
             })
             raise IntegrityViolation("chain last record hash differs from integrity metadata")
 
+        # Ensure sentinel exists (upgrade path for pre-sentinel installs)
+        self._ensure_sentinel()
         self.save_chain_summary(summary)
         return summary
 

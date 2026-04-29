@@ -90,11 +90,44 @@ def load_raw_records_range(
       - chain_source, archive_id: echo back
     """
     source_path = chain_path
-    if chain_source == "archive" and archive_id:
+    if chain_source == "archive":
+        if not archive_id:
+            return {
+                "error": "archive_id is required when chain_source is 'archive'",
+                "records": [],
+                "predecessor_hash": None,
+                "start_sequence": start_sequence,
+                "end_sequence": end_sequence,
+                "record_count": 0,
+                "chain_source": chain_source,
+                "archive_id": "",
+            }
         from chain_archive import get_archive_manifest
         manifest = get_archive_manifest(chain_path, archive_id)
-        if manifest and manifest.get("archive_chain_path"):
-            source_path = Path(manifest["archive_chain_path"])
+        if not manifest or not manifest.get("archive_chain_path"):
+            return {
+                "error": f"archive not found: {archive_id}",
+                "records": [],
+                "predecessor_hash": None,
+                "start_sequence": start_sequence,
+                "end_sequence": end_sequence,
+                "record_count": 0,
+                "chain_source": chain_source,
+                "archive_id": archive_id,
+            }
+        archive_path = Path(manifest["archive_chain_path"])
+        if not archive_path.exists():
+            return {
+                "error": f"archive file missing: {archive_path}",
+                "records": [],
+                "predecessor_hash": None,
+                "start_sequence": start_sequence,
+                "end_sequence": end_sequence,
+                "record_count": 0,
+                "chain_source": chain_source,
+                "archive_id": archive_id,
+            }
+        source_path = archive_path
 
     records: list[dict[str, Any]] = []
     predecessor_hash: Optional[str] = None
@@ -403,12 +436,21 @@ def walker_query(
     source_path = chain_path
     source_label = "live"
     archive_manifest = None
-    if chain_source == "archive" and archive_id:
+    if chain_source == "archive":
+        if not archive_id:
+            return {"error": "archive_id is required when chain_source is 'archive'",
+                    "rows": [], "total_matching": 0}
         from chain_archive import get_archive_manifest
         archive_manifest = get_archive_manifest(chain_path, archive_id)
-        if archive_manifest and archive_manifest.get("archive_chain_path"):
-            source_path = Path(archive_manifest["archive_chain_path"])
-            source_label = "archive"
+        if not archive_manifest or not archive_manifest.get("archive_chain_path"):
+            return {"error": f"archive not found: {archive_id}",
+                    "rows": [], "total_matching": 0}
+        archive_path = Path(archive_manifest["archive_chain_path"])
+        if not archive_path.exists():
+            return {"error": f"archive file missing: {archive_path}",
+                    "rows": [], "total_matching": 0}
+        source_path = archive_path
+        source_label = "archive"
 
     all_rows = load_walker_rows(source_path)
     filtered = apply_walker_filters(

@@ -526,6 +526,106 @@ def test_package_viewer_decryption_roundtrip():
     assert payload["verification_summary"]["status"] == "verified"
 
 
+# ---------------------------------------------------------------------------
+# F-09: Hidden signing key path resolution
+# ---------------------------------------------------------------------------
+
+from evidence_package import _resolve_signing_key_path_for_package
+
+
+def test_hidden_key_path_preferred(tmp_path, monkeypatch):
+    """Hidden dotfile path is preferred over legacy visible path."""
+    monkeypatch.delenv("GOV_SIGNING_KEY_PATH", raising=False)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(tmp_path))
+    hidden = tmp_path / ".atested-signing-key.pem"
+    hidden.write_text("fake-key")
+
+    result = _resolve_signing_key_path_for_package()
+    assert result == str(hidden)
+
+
+def test_legacy_key_path_fallback(tmp_path, monkeypatch):
+    """Legacy visible path used as fallback when hidden path doesn't exist."""
+    monkeypatch.delenv("GOV_SIGNING_KEY_PATH", raising=False)
+    monkeypatch.delenv("GOV_RUNTIME_DIR", raising=False)
+
+    legacy = REPO / "keys" / "governance-signing.pem"
+    if legacy.exists():
+        result = _resolve_signing_key_path_for_package()
+        assert "governance-signing.pem" in result
+
+
+def test_explicit_env_overrides_all(tmp_path, monkeypatch):
+    """Explicit GOV_SIGNING_KEY_PATH overrides hidden and legacy paths."""
+    explicit = tmp_path / "my-key.pem"
+    explicit.write_text("fake-key")
+    monkeypatch.setenv("GOV_SIGNING_KEY_PATH", str(explicit))
+
+    result = _resolve_signing_key_path_for_package()
+    assert result == str(explicit)
+
+
+# ---------------------------------------------------------------------------
+# SEC-2026-003: Viewer real verification content tests
+# ---------------------------------------------------------------------------
+
+
+def test_viewer_has_canonical_json():
+    """Viewer must implement canonicalJson for record hash recomputation."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+    assert "canonicalJson" in viewer
+    assert "computeRecordHash" in viewer
+
+
+def test_viewer_has_ed25519_verification():
+    """Viewer must attempt Ed25519 signature verification."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+    assert "Ed25519" in viewer
+    assert "verifyEd25519Signature" in viewer or "verifySignature" in viewer
+    assert "isEd25519Available" in viewer
+
+
+def test_viewer_has_verification_levels():
+    """Viewer must distinguish verification levels (hash+sig, hash-only, failed)."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+    assert "hash_and_sig_verified" in viewer
+    assert "hash_verified" in viewer
+    assert "Signatures Not Checked" in viewer or "signatures not checked" in viewer.lower()
+
+
+def test_viewer_fails_closed():
+    """Viewer must not claim 'verified' for records with failed hash or signature."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+    # The fail-closed logic: hashFailed > 0 or sigFailed > 0 → status = 'failed'
+    assert "hashFailed" in viewer
+    assert "sigFailed" in viewer
+
+
+def test_canonical_json_consistency():
+    """Python and viewer must produce the same canonical JSON for hash computation.
+
+    Verifies that the Python canonical JSON matches the expected output format
+    that the viewer's JavaScript canonicalJson should also produce.
+    """
+    from event_model import canonical_json as py_canonical_json
+
+    # Test cases the viewer must handle identically
+    test_cases = [
+        ({"b": 1, "a": 2}, '{"a":2,"b":1}'),
+        ({"x": None, "y": "hello"}, '{"x":null,"y":"hello"}'),
+        ({"arr": [1, 2, 3]}, '{"arr":[1,2,3]}'),
+        ({"nested": {"z": 1, "a": 2}}, '{"nested":{"a":2,"z":1}}'),
+        ({"bool": True, "num": 0}, '{"bool":true,"num":0}'),
+    ]
+    for obj, expected in test_cases:
+        result = py_canonical_json(obj)
+        assert result == expected, f"canonical_json({obj}) = {result!r}, expected {expected!r}"
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))

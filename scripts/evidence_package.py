@@ -263,9 +263,33 @@ def build_manifest(
 # Public key helpers
 # ---------------------------------------------------------------------------
 
+def _resolve_signing_key_path_for_package(signing_key_path: Optional[str] = None) -> str:
+    """Resolve signing key path for evidence packages.
+
+    Checks explicit path, env var, hidden dotfile, and legacy visible path.
+    """
+    if signing_key_path:
+        return signing_key_path
+    explicit = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    if explicit:
+        return explicit
+    # Check hidden path in runtime directory
+    runtime_dir = os.environ.get("GOV_RUNTIME_DIR", "").strip()
+    if runtime_dir:
+        hidden = Path(runtime_dir) / ".atested-signing-key.pem"
+        if hidden.exists():
+            return str(hidden)
+    # Check legacy path
+    repo_root = Path(__file__).resolve().parents[1]
+    legacy = repo_root / "keys" / "governance-signing.pem"
+    if legacy.exists():
+        return str(legacy)
+    return ""
+
+
 def load_public_key_info(signing_key_path: Optional[str] = None) -> dict[str, Any]:
     """Load the public key from the signing key and return PEM + fingerprint."""
-    key_path = signing_key_path or os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    key_path = _resolve_signing_key_path_for_package(signing_key_path)
     if not key_path or not Path(key_path).exists():
         return {
             "public_key_pem": "",

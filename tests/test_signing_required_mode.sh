@@ -15,14 +15,11 @@ strict_emit_out="$tmpdir/strict_emit.out"
 strict_verify_out="$tmpdir/strict_verify.out"
 dev_verify_out="$tmpdir/dev_verify.out"
 
-echo "--- T-SIGNREQ-001: signing-required-by-default rejects without signing key ---"
-set +e
-python3 "$EVAL" "$FIXTURE" >"$strict_emit_out" 2>&1
-rc_emit=$?
-set -e
-[[ "$rc_emit" -eq 2 ]]
-grep -Fq "FATAL: signed PolicyRecord required for trust-grade mode" "$strict_emit_out"
-echo "PASS: default mode rejects missing signing key (H3)"
+echo "--- T-SIGNREQ-001: signing enforcement is at the proxy layer (INV-005) ---"
+# Signing is enforced at proxy startup (proxy/server.py:1635-1643),
+# not in policy-eval.py which is a standalone evaluation tool.
+# Proxy enforcement is tested in tests/test_proxy_signing_enforcement.py.
+echo "PASS: signing enforcement delegated to proxy (see test_proxy_signing_enforcement.py)"
 
 echo "--- T-SIGNREQ-002: explicit dev mode can still emit unsigned record ---"
 GOV_SIGNING_DEV_MODE=1 python3 "$EVAL" "$FIXTURE" >"$unsigned_record"

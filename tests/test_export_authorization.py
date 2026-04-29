@@ -59,3 +59,76 @@ def test_export_event_records_archive_reference_in_live_chain(tmp_path, monkeypa
     assert stored["archive_id"] == "chain-archive-test"
     assert stored["archive_manifest_path"].endswith("chain-archive-test.manifest.json")
     assert stored["record_count"] == 3
+
+
+# ---------------------------------------------------------------------------
+# SEC-2026-002: Export token scope binding
+# ---------------------------------------------------------------------------
+
+
+def test_token_scope_rejects_wider_range(monkeypatch):
+    """A token authorized for range 1-10 cannot export range 1-100."""
+    now = 1000.0
+    monkeypatch.setattr(dashboard_server._time_mod, "time", lambda: now)
+    token_data = dashboard_server._issue_export_token({
+        "surface": "audit",
+        "chain_source": "live",
+        "range_start_sequence": 1,
+        "range_end_sequence": 10,
+    })
+    token = token_data["token"]
+
+    # Exact scope match succeeds
+    assert dashboard_server._validate_export_token(
+        token, surface="audit", chain_source="live",
+        start_sequence=1, end_sequence=10,
+    ) is not None
+
+    # Wider range fails
+    assert dashboard_server._validate_export_token(
+        token, surface="audit", chain_source="live",
+        start_sequence=1, end_sequence=100,
+    ) is None
+
+    # Earlier start fails
+    assert dashboard_server._validate_export_token(
+        token, surface="audit", chain_source="live",
+        start_sequence=0, end_sequence=10,
+    ) is None
+
+
+def test_token_scope_rejects_different_chain_source(monkeypatch):
+    """A token authorized for live chain cannot export an archive."""
+    now = 1000.0
+    monkeypatch.setattr(dashboard_server._time_mod, "time", lambda: now)
+    token_data = dashboard_server._issue_export_token({
+        "surface": "audit",
+        "chain_source": "live",
+        "archive_id": "",
+        "range_start_sequence": 1,
+        "range_end_sequence": 10,
+    })
+    token = token_data["token"]
+
+    assert dashboard_server._validate_export_token(
+        token, surface="audit", chain_source="archive",
+        archive_id="arch-123",
+    ) is None
+
+
+def test_token_scope_allows_subset_range(monkeypatch):
+    """A token authorized for range 1-100 allows a subset range 5-50."""
+    now = 1000.0
+    monkeypatch.setattr(dashboard_server._time_mod, "time", lambda: now)
+    token_data = dashboard_server._issue_export_token({
+        "surface": "audit",
+        "chain_source": "live",
+        "range_start_sequence": 1,
+        "range_end_sequence": 100,
+    })
+    token = token_data["token"]
+
+    assert dashboard_server._validate_export_token(
+        token, surface="audit", chain_source="live",
+        start_sequence=5, end_sequence=50,
+    ) is not None

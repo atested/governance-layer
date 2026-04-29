@@ -39,6 +39,33 @@ EXPORT_TOKEN_TTL_SECONDS = 10 * 60
 _export_tokens = {}
 _export_tokens_lock = threading.Lock()
 
+# ---------------------------------------------------------------------------
+# Ed25519 signing key (loaded once at startup for chain event signing)
+# ---------------------------------------------------------------------------
+
+_DASHBOARD_SIGNING_KEY = None       # Ed25519PrivateKey or None
+_DASHBOARD_SIGNING_KEY_ID = None    # "ed25519:<sha256hex>" or None
+
+
+def _load_dashboard_signing_key():
+    """Load signing key for dashboard chain event signing."""
+    global _DASHBOARD_SIGNING_KEY, _DASHBOARD_SIGNING_KEY_ID
+    from evidence_package import _resolve_signing_key_path_for_package
+    key_path = _resolve_signing_key_path_for_package()
+    if not key_path or not Path(key_path).exists():
+        return
+    try:
+        from receipt_signing import _read_private_key, _public_key_fingerprint
+        from cryptography.hazmat.primitives import serialization as _ser
+        priv, _ = _read_private_key(Path(key_path))
+        _DASHBOARD_SIGNING_KEY = priv
+        _DASHBOARD_SIGNING_KEY_ID = _public_key_fingerprint(priv.public_key(), _ser)
+    except Exception:
+        pass
+
+
+_load_dashboard_signing_key()
+
 
 def _now_utc_z():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -604,8 +631,10 @@ def _append_chain_record_atomic(event):
 
     Uses both a threading lock (intra-process) and a cross-process mkdir
     lock to ensure no two writers read the same prev_record_hash.
+
+    Signs the event with Ed25519 if a signing key is loaded.
     """
-    from event_model import _compute_event_record_hash
+    from event_model import _compute_event_record_hash, sign_non_action_event
     import stat as _stat
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
@@ -614,7 +643,17 @@ def _append_chain_record_atomic(event):
         try:
             # Read head hash INSIDE the lock
             event["prev_record_hash"] = _get_chain_head_hash()
+            # Ensure signature fields exist before hash computation
+            if "signature" not in event:
+                event["signature"] = None
+            if "signing_key_id" not in event:
+                event["signing_key_id"] = None
             event["record_hash"] = _compute_event_record_hash(event)
+            # Sign event if signing key is available
+            if _DASHBOARD_SIGNING_KEY is not None:
+                sign_non_action_event(
+                    event, _DASHBOARD_SIGNING_KEY, _DASHBOARD_SIGNING_KEY_ID,
+                )
             line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
             fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
                           _stat.S_IRUSR | _stat.S_IWUSR)
@@ -657,7 +696,15 @@ def _issue_export_token(scope: dict) -> dict:
     return data
 
 
-def _validate_export_token(token: str, *, surface: str = "") -> Optional[dict]:
+def _validate_export_token(
+    token: str,
+    *,
+    surface: str = "",
+    chain_source: str = "",
+    archive_id: str = "",
+    start_sequence: Optional[int] = None,
+    end_sequence: Optional[int] = None,
+) -> Optional[dict]:
     if not token:
         return None
     now = _time_mod.time()
@@ -671,6 +718,19 @@ def _validate_export_token(token: str, *, surface: str = "") -> Optional[dict]:
     scope = data.get("scope") or {}
     if surface and scope.get("surface") != surface:
         return None
+    # Enforce scope binding: chain_source, archive_id, and range
+    if chain_source:
+        if scope.get("chain_source") and scope["chain_source"] != chain_source:
+            return None
+    if archive_id:
+        if scope.get("archive_id") and scope["archive_id"] != archive_id:
+            return None
+    if start_sequence is not None and scope.get("range_start_sequence") is not None:
+        if start_sequence < int(scope["range_start_sequence"]):
+            return None
+    if end_sequence is not None and scope.get("range_end_sequence") is not None:
+        if end_sequence > int(scope["range_end_sequence"]):
+            return None
     return data
 
 
@@ -1323,17 +1383,37 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": "invalid JSON"}, 400)
             return
 
-        # Validate export token
-        export_token = str(data.get("export_token", "")).strip()
-        token_data = _validate_export_token(export_token, surface="audit")
-        if not token_data:
-            _json_response(self, {"error": "invalid or expired export token"}, 403)
-            return
-
-        # Extract parameters
+        # Extract parameters early so we can validate token scope
         password = data.get("password", "")
         if not isinstance(password, str):
             _json_response(self, {"error": "password must be a string"}, 400)
+            return
+
+        start_seq = data.get("start_sequence")
+        end_seq = data.get("end_sequence")
+        req_chain_source = str(data.get("chain_source") or "live")
+        req_archive_id = str(data.get("archive_id") or "")
+
+        # Parse sequence numbers before token validation
+        try:
+            start_seq_int = int(start_seq) if start_seq is not None else None
+            end_seq_int = int(end_seq) if end_seq is not None else None
+        except (TypeError, ValueError):
+            start_seq_int = None
+            end_seq_int = None
+
+        # Validate export token with scope binding
+        export_token = str(data.get("export_token", "")).strip()
+        token_data = _validate_export_token(
+            export_token,
+            surface="audit",
+            chain_source=req_chain_source,
+            archive_id=req_archive_id,
+            start_sequence=start_seq_int,
+            end_sequence=end_seq_int,
+        )
+        if not token_data:
+            _json_response(self, {"error": "invalid or expired export token, or request exceeds authorized scope"}, 403)
             return
 
         from evidence_package import validate_password, build_package
@@ -1343,10 +1423,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         scope = token_data.get("scope") or {}
-        chain_source = str(data.get("chain_source") or scope.get("chain_source") or "live")
-        archive_id = str(data.get("archive_id") or scope.get("archive_id") or "")
-        start_seq = data.get("start_sequence")
-        end_seq = data.get("end_sequence")
+        chain_source = req_chain_source
+        archive_id = req_archive_id
 
         if start_seq is None or end_seq is None:
             _json_response(self, {"error": "start_sequence and end_sequence required"}, 400)
@@ -1406,7 +1484,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         # Build the encrypted package — password used only in memory
         try:
-            key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip() or None
+            from evidence_package import _resolve_signing_key_path_for_package
+            key_path = _resolve_signing_key_path_for_package() or None
             result = build_package(
                 records=records,
                 password=password,

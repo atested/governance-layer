@@ -58,8 +58,8 @@ def test_mediated_allow_normalizes_and_renders_deterministically():
     assert row["signature_status"] == "signed"
     assert row["alert"] is False
     assert row["narrative"] == (
-        "ALLOW: cecil@example.com ran FS_READ on /repo/README.md at tier 1. "
-        "Hash sha256:aaaaaaaaaaaa."
+        "ALLOW: cecil@example.com ran FS_READ on /repo/README.md "
+        "under rule allow_project_reads. Hash sha256:aaaaaaaaaaaa."
     )
     assert normalize_record(_mediated(), sequence=7)["narrative"] == row["narrative"]
 
@@ -84,7 +84,7 @@ def test_mediated_deny_is_an_alert_event():
     assert alert_reason(row) == "Policy denial"
     assert row["narrative"] == (
         "DENY: cecil@example.com attempted FS_DELETE on /prod/secrets.env. "
-        "Policy denied before execution at tier 4. Hash sha256:aaaaaaaaaaaa."
+        "Policy denied before execution by rule allow_project_reads. Hash sha256:aaaaaaaaaaaa."
     )
 
 
@@ -185,8 +185,8 @@ def test_legacy_unsigned_records_are_supported_without_web_coupling():
     assert row["action"] == "FS_WRITE"
     assert row["alert"] is False
     assert row["narrative"] == (
-        "ALLOW: cecil@example.com ran FS_WRITE on /repo/README.md at tier 1. "
-        "Hash sha256:aaaaaaaaaaaa."
+        "ALLOW: cecil@example.com ran FS_WRITE on /repo/README.md "
+        "under rule allow_project_reads. Hash sha256:aaaaaaaaaaaa."
     )
 
 
@@ -271,3 +271,59 @@ def test_walker_query_jumps_to_next_and_previous_alert(tmp_path):
     assert previous_alert["center_index"] == 2
     assert previous_alert["center_sequence"] == 3
     assert next(row for row in previous_alert["rows"] if row["sequence"] == 3)["record_id"] == "deny-earlier"
+
+
+# ---------------------------------------------------------------------------
+# SEC-2026-007: Invalid archive IDs must fail, not fall back to live chain
+# ---------------------------------------------------------------------------
+
+from chain_walker import load_raw_records_range
+
+
+def test_invalid_archive_id_returns_error(tmp_path):
+    """An invalid archive_id must return an error, not live chain data."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    chain_path.write_text(
+        json.dumps(_mediated("ALLOW", request_id="live-1"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    result = load_raw_records_range(
+        chain_path,
+        start_sequence=1,
+        end_sequence=1,
+        chain_source="archive",
+        archive_id="nonexistent-archive",
+    )
+    assert "error" in result
+    assert "nonexistent-archive" in result["error"]
+    assert result["record_count"] == 0
+
+
+def test_missing_archive_id_returns_error(tmp_path):
+    """chain_source='archive' without archive_id must return an error."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    chain_path.write_text(
+        json.dumps(_mediated("ALLOW", request_id="live-1"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    result = load_raw_records_range(
+        chain_path,
+        start_sequence=1,
+        end_sequence=1,
+        chain_source="archive",
+        archive_id="",
+    )
+    assert "error" in result
+    assert result["record_count"] == 0
+
+
+def test_walker_query_invalid_archive_returns_error(tmp_path):
+    """walker_query with invalid archive returns error, not live chain."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    chain_path.write_text(
+        json.dumps(_mediated("ALLOW", request_id="live-1"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    result = walker_query(chain_path, chain_source="archive", archive_id="bad-id")
+    assert "error" in result
+    assert result["total_matching"] == 0

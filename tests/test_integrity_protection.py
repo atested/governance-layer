@@ -192,3 +192,79 @@ def test_proxy_code_hash_change_recorded_on_restart(tmp_path):
     assert len(changed) == 1
     assert changed[0]["previous_proxy_code_hash"] == first["current_proxy_code_hash"]
     assert changed[0]["current_proxy_code_hash"] == second["current_proxy_code_hash"]
+
+
+# ---------------------------------------------------------------------------
+# SEC-2026-001: Install sentinel tests
+# ---------------------------------------------------------------------------
+
+def test_first_run_creates_sentinel(tmp_path):
+    """First run with no sentinel creates the sentinel and baselines normally."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    monitor = _monitor(tmp_path, chain_path)
+    assert not monitor.sentinel_path.exists()
+    monitor.verify_startup_chain()
+    assert monitor.sentinel_path.exists()
+
+
+def test_missing_metadata_with_sentinel_raises_violation(tmp_path):
+    """Missing metadata WITH sentinel triggers violation, not re-baseline."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    monitor = _monitor(tmp_path, chain_path)
+    monitor.verify_startup_chain()
+    recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+    recorder.append_atomic(_record("one"))
+
+    # Delete metadata but leave sentinel
+    monitor.metadata_path.unlink()
+    assert monitor.sentinel_path.exists()
+
+    restarted = _monitor(tmp_path, chain_path)
+    # Sentinel was created by first monitor; copy it to the new monitor's expected location
+    restarted.sentinel_path = monitor.sentinel_path
+    with pytest.raises(IntegrityViolation, match="integrity metadata missing"):
+        restarted.verify_startup_chain()
+
+    # Verify side event was recorded
+    events_path = restarted.metadata_path.with_suffix(".events.jsonl")
+    if events_path.exists():
+        side_events = events_path.read_text(encoding="utf-8")
+        assert "integrity_metadata_missing" in side_events
+
+
+def test_deleting_both_sentinel_and_metadata_allows_fresh_install(tmp_path):
+    """Deleting both sentinel and metadata allows a true fresh install."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    monitor = _monitor(tmp_path, chain_path)
+    monitor.verify_startup_chain()
+    recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+    recorder.append_atomic(_record("one"))
+
+    # Delete both metadata and sentinel
+    monitor.metadata_path.unlink()
+    monitor.sentinel_path.unlink()
+
+    # Also delete the chain to simulate a full wipe
+    chain_path.unlink()
+
+    restarted = _monitor(tmp_path, chain_path)
+    restarted.sentinel_path = monitor.sentinel_path
+    # Should succeed as a fresh install
+    summary = restarted.verify_startup_chain()
+    assert restarted.sentinel_path.exists()
+    assert summary.record_count == 0
+
+
+def test_sentinel_created_on_upgrade_path(tmp_path):
+    """Existing install with metadata but no sentinel creates sentinel."""
+    chain_path = tmp_path / "decision-chain.jsonl"
+    monitor = _monitor(tmp_path, chain_path)
+
+    # Manually create metadata without going through verify_startup_chain
+    # to simulate a pre-sentinel install
+    monitor.save_chain_summary(monitor.summarize_chain())
+    assert not monitor.sentinel_path.exists()
+
+    # Now verify startup — should create sentinel
+    monitor.verify_startup_chain()
+    assert monitor.sentinel_path.exists()
