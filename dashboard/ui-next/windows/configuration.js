@@ -158,7 +158,7 @@ function _isDemoSimulation() {
 function _buildPolicyRulesPane(state, rules) {
   const pane = document.createElement('div');
   pane.className = 'cf-pane cf-pane-clickable';
-  const previewCount = Math.min(rules.length, 6);
+  const previewCount = Math.min(rules.length, 4);
 
   pane.innerHTML = `
     <div class="cf-pane-accent cf-accent-green"></div>
@@ -167,45 +167,48 @@ function _buildPolicyRulesPane(state, rules) {
       <span class="cf-pane-meta">${rules.length} rules \u00b7 first-match evaluation</span>
     </div>
     <div class="cf-pane-body">
-      <table class="cf-rules-table">
-        <thead><tr>
-          <th style="width:30px">#</th>
-          <th>Action pattern</th>
-          <th style="width:120px">Target class</th>
-          <th style="width:80px">Decision</th>
-          <th style="width:60px">Tier</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-      ${rules.length > previewCount ? `<div class="cf-preview-note">Showing ${previewCount} of ${rules.length} rules. First match wins.</div>` : ''}
+      <div class="cf-rule-cards" id="cf-rule-cards-preview"></div>
+      ${rules.length > previewCount ? `<div class="cf-preview-note">Showing ${previewCount} of ${rules.length} rules. Click for all rules.</div>` : ''}
     </div>
   `;
 
-  const tbody = pane.querySelector('tbody');
+  const container = pane.querySelector('#cf-rule-cards-preview');
   for (let i = 0; i < previewCount; i++) {
-    const r = rules[i];
-    const match = r.match || {};
-    const actionTypes = match.action_type ? match.action_type.join(', ') : match.scope ? match.scope.join(', ') : 'any';
-    const targetClass = match.target_within_base_dirs === true ? 'within base dirs'
-      : match.target_within_base_dirs === false ? 'outside base dirs'
-      : match.scope ? match.scope.join(', ') : 'any';
-    const decision = r.decision || 'DENY';
-    const tiers = match.confidence_tier || [];
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="cf-cell-num">${i + 1}</td>
-      <td title="${_escAttr(r.description || '')}">${_esc(actionTypes)}</td>
-      <td>${_esc(targetClass)}</td>
-      <td><span class="cf-decision cf-decision-${decision.toLowerCase()}">${_esc(decision)}</span></td>
-      <td>${tiers.length ? tiers.map(t => `<span class="cf-tier cf-tier-${t}">T${t}</span>`).join(' ') : '\u2014'}</td>
-    `;
-    tbody.appendChild(tr);
+    container.appendChild(_buildRuleCard(rules[i], i));
   }
 
   pane.addEventListener('click', () => _openPolicyRulesDetail(state, rules));
-  setTooltip(pane, 'Open policy rule detail, including rule order and full JSON.');
+  setTooltip(pane, 'Open the full policy ruleset with details and export.');
   return pane;
+}
+
+function _buildRuleCard(rule, index) {
+  const card = document.createElement('div');
+  const match = rule.match || {};
+  const decision = rule.decision || 'DENY';
+  const decClass = decision === 'ALLOW' ? 'cf-rc-allow' : 'cf-rc-deny';
+  card.className = `cf-rule-card ${decClass}`;
+
+  // Conditions
+  const conditions = [];
+  if (match.action_type) conditions.push(`Action: ${match.action_type.join(', ')}`);
+  if (match.confidence_tier) conditions.push(`Tier: ${match.confidence_tier.map(t => `T${t}`).join(', ')}`);
+  if (match.scope) conditions.push(`Scope: ${match.scope.join(', ')}`);
+  if (match.target_within_base_dirs === true) conditions.push('Target: within base dirs');
+  if (match.target_within_base_dirs === false) conditions.push('Target: outside base dirs');
+  if (match.no_hidden_paths) conditions.push('No hidden paths');
+  if (match.no_executable_output) conditions.push('No executable output');
+
+  card.innerHTML = `
+    <div class="cf-rc-header">
+      <span class="cf-rc-order">${index + 1}</span>
+      <span class="cf-rc-id">${_esc(rule.id || '')}</span>
+      <span class="cf-decision cf-decision-${decision.toLowerCase()}">${_esc(decision)}</span>
+    </div>
+    <div class="cf-rc-desc">${_esc(rule.description || '')}</div>
+    ${conditions.length ? `<div class="cf-rc-conditions">${conditions.map(c => `<span class="cf-rc-cond">${_esc(c)}</span>`).join('')}</div>` : ''}
+  `;
+  return card;
 }
 
 // ---------- Base Directories pane ----------
@@ -213,6 +216,9 @@ function _buildPolicyRulesPane(state, rules) {
 function _buildBaseDirsPane(state, baseDirs) {
   const pane = document.createElement('div');
   pane.className = 'cf-pane cf-pane-clickable';
+  const policyRules = state.config?.policy_rules || {};
+  const denyHidden = policyRules.deny_hidden_paths !== false;
+  const denyExec = policyRules.deny_executable_outputs !== false;
 
   const displayDirs = baseDirs.map(d =>
     d === '__GOV_CANONICAL_REPO_PATH__' ? '(repository root)' :
@@ -228,6 +234,10 @@ function _buildBaseDirsPane(state, baseDirs) {
     <div class="cf-pane-body">
       <div class="cf-dirs-list">
         ${displayDirs.map(d => `<div class="cf-dir-entry">${_esc(d)}</div>`).join('')}
+      </div>
+      <div class="cf-constraints">
+        <span class="cf-constraint ${denyHidden ? 'cf-constraint-on' : 'cf-constraint-off'}">${denyHidden ? 'Deny hidden paths' : 'Hidden paths allowed'}</span>
+        <span class="cf-constraint ${denyExec ? 'cf-constraint-on' : 'cf-constraint-off'}">${denyExec ? 'Deny executable outputs' : 'Executable outputs allowed'}</span>
       </div>
     </div>
   `;
@@ -344,10 +354,9 @@ function _openPolicyRulesDetail(state, rules) {
     </div>
   `;
 
-  // Full rules table
-  const tableSection = document.createElement('div');
-  tableSection.className = 'cf-gc-section';
-
+  // Export control
+  const exportSection = document.createElement('div');
+  exportSection.className = 'cf-gc-section';
   const exportControl = document.createElement('div');
   exportControl.className = 'cf-export-control';
   const exportFormat = document.createElement('select');
@@ -368,60 +377,17 @@ function _openPolicyRulesDetail(state, rules) {
   });
   exportControl.appendChild(exportFormat);
   exportControl.appendChild(exportBtn);
-  tableSection.appendChild(exportControl);
+  exportSection.appendChild(exportControl);
+  content.appendChild(exportSection);
 
-  const table = document.createElement('table');
-  table.className = 'cf-rules-table cf-rules-full';
-  table.innerHTML = `<thead><tr>
-    <th style="width:30px">#</th>
-    <th style="width:120px">ID</th>
-    <th>Description</th>
-    <th style="width:80px">Decision</th>
-    <th style="width:60px">Tier</th>
-  </tr></thead>`;
-  table.querySelectorAll('th').forEach((th, idx) => {
-    setTooltip(th, [
-      'Rule evaluation order.',
-      'Stable rule identifier.',
-      'Human-readable rule description.',
-      'ALLOW or DENY result when the rule matches.',
-      'Classifier confidence tiers this rule applies to.',
-    ][idx]);
-  });
-
-  const tbody = document.createElement('tbody');
-  rules.forEach((r, i) => {
-    const match = r.match || {};
-    const decision = r.decision || 'DENY';
-    const tiers = match.confidence_tier || [];
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="cf-cell-num">${i + 1}</td>
-      <td class="cf-cell-id">${_esc(r.id || '')}</td>
-      <td>${_esc(r.description || '')}</td>
-      <td><span class="cf-decision cf-decision-${decision.toLowerCase()}">${_esc(decision)}</span></td>
-      <td>${tiers.length ? tiers.map(t => `<span class="cf-tier cf-tier-${t}">T${t}</span>`).join(' ') : '\u2014'}</td>
-    `;
-
-    // Click row to expand rule JSON
-    tr.addEventListener('click', () => {
-      const existing = tr.nextElementSibling;
-      if (existing && existing.classList.contains('cf-rule-expand')) {
-        existing.remove();
-        return;
-      }
-      const expandRow = document.createElement('tr');
-      expandRow.className = 'cf-rule-expand';
-      expandRow.innerHTML = `<td colspan="5"><pre class="cf-rule-json">${_esc(JSON.stringify(r, null, 2))}</pre></td>`;
-      tr.after(expandRow);
-    });
-
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  tableSection.appendChild(table);
-  content.appendChild(tableSection);
+  // Full rule cards
+  const cardsSection = document.createElement('div');
+  cardsSection.className = 'cf-gc-section';
+  const cards = document.createElement('div');
+  cards.className = 'cf-rule-cards';
+  rules.forEach((r, i) => cards.appendChild(_buildRuleCard(r, i)));
+  cardsSection.appendChild(cards);
+  content.appendChild(cardsSection);
 
   // Default decision note
   const defaultNote = document.createElement('div');
@@ -900,6 +866,77 @@ cfStyles.textContent = `
     padding: 8px 0 0;
     font-style: italic;
   }
+
+  /* ---- Rule cards ---- */
+  .cf-rule-cards { display: flex; flex-direction: column; gap: 8px; }
+  .cf-rule-card {
+    background: #1a1d23;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 2px;
+    padding: 10px 14px;
+    border-left: 3px solid #6b7280;
+  }
+  .cf-rc-allow { border-left-color: #3fb950; }
+  .cf-rc-deny { border-left-color: #f85149; }
+  .cf-rc-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .cf-rc-order {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    color: #6b7280;
+    min-width: 18px;
+  }
+  .cf-rc-id {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    color: #e4e6eb;
+    flex: 1;
+  }
+  .cf-rc-desc {
+    font-size: 0.78rem;
+    color: #8b919a;
+    line-height: 1.4;
+    margin-bottom: 6px;
+    padding-left: 26px;
+  }
+  .cf-rc-conditions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-left: 26px;
+  }
+  .cf-rc-cond {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.65rem;
+    color: #8b919a;
+    background: rgba(255,255,255,0.04);
+    padding: 2px 7px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* ---- Constraints ---- */
+  .cf-constraints {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .cf-constraint {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .cf-constraint-on { color: #3fb950; border-color: rgba(63,185,80,0.25); }
+  .cf-constraint-off { color: #8b919a; }
 
   /* ---- Rule JSON expand ---- */
   .cf-rule-expand td { padding: 0 8px 8px; }

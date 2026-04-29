@@ -23,6 +23,7 @@ const COLUMNS = [
   { key: 'user_identity',   label: 'User',      standard: false, width: '120px' },
   { key: 'confidence_tier', label: 'Tier',      standard: false, width: '50px'  },
   { key: 'record_hash',     label: 'Record Hash', standard: false, width: '120px' },
+  { key: 'matched_rule',    label: 'Rule',        standard: false, width: '140px' },
 ];
 
 const COLUMN_TOOLTIPS = {
@@ -36,6 +37,7 @@ const COLUMN_TOOLTIPS = {
   user_identity: 'The operator identity recorded with the event.',
   confidence_tier: 'Classifier confidence tier for mediated decisions.',
   record_hash: 'The SHA-256 hash that links this record into the chain.',
+  matched_rule: 'The policy rule that produced the decision for this operation.',
 };
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -986,6 +988,7 @@ function _walkerDataRow(row, absoluteIndex, isCenter, inRange) {
     <span class="au-wr-action">${_esc(row.action || '\u2014')}</span>
     <span class="au-wr-target">${_esc(_shortTarget(row.target || ''))}</span>
     <span class="au-wr-tier">${_esc(row.tier ? `T${row.tier}` : '\u2014')}</span>
+    <span class="au-wr-rule">${_esc(row.matched_rule || '\u2014')}</span>
     <span class="au-wr-hash">${_esc(row.hash || '\u2014')}</span>
   `;
   return div;
@@ -1057,6 +1060,10 @@ function _renderCell(key, entry, detail) {
       if (!hash) return '<span class="au-cell-muted">\u2014</span>';
       return `<span class="au-cell-hash" data-tooltip="${_escAttr(hash)}">${_esc(hash.substring(0, 12))}\u2026</span>`;
     }
+    case 'matched_rule': {
+      const rule = detail.matched_rule || '';
+      return rule ? `<span class="au-cell-tool">${_esc(rule)}</span>` : '<span class="au-cell-muted">\u2014</span>';
+    }
     default:
       return '\u2014';
   }
@@ -1074,6 +1081,7 @@ function _rowTooltip(entry, detail) {
   if (entry.timestamp_utc) parts.push(_formatHumanDate(entry.timestamp_utc));
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
   if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
+  if (detail.matched_rule) parts.push(`Rule: ${detail.matched_rule}`);
   if (entry.event_category) parts.push(`Category: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
   return parts.join(' | ') || 'Open audit record detail.';
 }
@@ -1385,6 +1393,7 @@ function _getCellValue(key, entry, detail) {
     case 'user_identity': return entry.user_identity || '';
     case 'confidence_tier': return detail.confidence_tier != null ? String(detail.confidence_tier) : '';
     case 'record_hash': return entry.evidence?.record_hash || '';
+    case 'matched_rule': return detail.matched_rule || '';
     default: return '';
   }
 }
@@ -2016,7 +2025,7 @@ auStyles.textContent = `
   .au-walker-row {
     display: grid;
     gap: 8px;
-    grid-template-columns: 48px 92px 86px 70px minmax(86px, 0.8fr) minmax(120px, 1fr) 42px 120px;
+    grid-template-columns: 48px 92px 86px 70px minmax(86px, 0.8fr) minmax(120px, 1fr) 42px 110px 120px;
     padding: 5px 8px;
   }
   .au-walker-line {
@@ -2044,6 +2053,7 @@ auStyles.textContent = `
   .au-wr-seq,
   .au-wr-time,
   .au-wr-tier,
+  .au-wr-rule,
   .au-wr-hash {
     color: #8b919a;
     font-family: "JetBrains Mono", monospace;
@@ -2149,6 +2159,7 @@ auStyles.textContent = `
     }
     .au-wr-target,
     .au-wr-tier,
+    .au-wr-rule,
     .au-wr-hash { display: none; }
     .au-results-bar { flex-direction: column; gap: 8px; align-items: flex-start; }
     .au-fp-fields { flex-direction: column; }

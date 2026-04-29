@@ -25,6 +25,7 @@ const COLUMNS = [
   { key: 'confidence_tier', label: 'Tier',     standard: false, width: '50px'  },
   { key: 'target',      label: 'Target',       standard: false },
   { key: 'user_identity', label: 'User',       standard: false, width: '120px' },
+  { key: 'matched_rule', label: 'Rule',       standard: false, width: '140px' },
 ];
 
 const COLUMN_TOOLTIPS = {
@@ -37,6 +38,7 @@ const COLUMN_TOOLTIPS = {
   confidence_tier: 'Classifier confidence tier for the operation evidence.',
   target: 'The file, command, URL, or artifact the operation acted on.',
   user_identity: 'The operator identity recorded with the chain event.',
+  matched_rule: 'The policy rule that produced the decision for this operation.',
 };
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -580,6 +582,11 @@ function _renderCell(key, entry, detail) {
     case 'user_identity':
       return _esc(entry.user_identity || '\u2014');
 
+    case 'matched_rule': {
+      const rule = detail.matched_rule || '';
+      return rule ? `<span class="aw-cell-tool">${_esc(rule)}</span>` : '<span class="aw-decision-muted">\u2014</span>';
+    }
+
     default:
       return '\u2014';
   }
@@ -597,6 +604,7 @@ function _rowTooltip(entry, detail) {
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
   if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
   if (detail.action_type) parts.push(`Category: ${detail.action_type}`);
+  if (detail.matched_rule) parts.push(`Rule: ${detail.matched_rule}`);
   if (entry.event_category) parts.push(`Event: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
   return parts.join(' | ') || 'Open this chain record.';
 }
@@ -730,6 +738,7 @@ function _getCellValue(key, entry, detail) {
     case 'confidence_tier': return detail.confidence_tier != null ? String(detail.confidence_tier) : '';
     case 'target': return detail.target || '';
     case 'user_identity': return entry.user_identity || '';
+    case 'matched_rule': return detail.matched_rule || '';
     default: return '';
   }
 }

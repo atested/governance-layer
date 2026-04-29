@@ -192,13 +192,13 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     const kv = document.createElement('atd-kv-list');
     const items = [
       { key: 'Decision', value: decision || '\u2014', tooltip: 'Policy outcome recorded for this operation.' },
+      { key: 'Matched Rule', value: rec.matched_rule || '\u2014', variant: 'code', tooltip: 'Policy rule that produced the decision.' },
       { key: 'Action', value: rec.tool_name || rec.tool || '\u2014', variant: 'code', tooltip: 'Governed action intercepted from the AI application.' },
       { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Path, command, URL, or artifact the operation acted on.' },
       { key: 'User', value: rec.user_identity || '\u2014', tooltip: 'Operator identity recorded with the event.' },
       { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014', tooltip: 'Classifier evidence confidence used during policy evaluation.' },
       { key: 'Action Type', value: rec.action_type || rec.event_type || '\u2014', tooltip: 'Evidence-based operation category.' },
       { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014', tooltip: 'Governance family or policy scope for the record.' },
-      { key: 'Matched Rule', value: rec.matched_rule || '\u2014', tooltip: 'Policy rule that produced the decision.' },
     ];
     if (decision === 'DENY') {
       items.push({ key: 'Denial Reason', value: rec.denial_reason || rec.deny_reason || 'Policy denied', variant: 'danger', tooltip: 'Evidence or policy reason Atested used to deny the operation.' });

@@ -173,6 +173,7 @@ def normalize_record(record: Any, *, sequence: int) -> dict[str, Any]:
     target = _target(record)
     tier = _tier(record)
     user = _user(record)
+    matched_rule = _string(record.get("matched_rule"))
     row = {
         "sequence": sequence,
         "timestamp_utc": _string(record.get("timestamp_utc")),
@@ -183,6 +184,7 @@ def normalize_record(record: Any, *, sequence: int) -> dict[str, Any]:
         "target": target,
         "tier": tier,
         "user": user,
+        "matched_rule": matched_rule,
         "hash": _short_hash(_string(record.get("record_hash"))),
         "record_hash": _string(record.get("record_hash")),
         "record_id": _record_id(record),
@@ -265,7 +267,10 @@ def narrative_for_row(row: Mapping[str, Any]) -> str:
         text = f"ALLOW: {user} ran {action}"
         if target:
             text += f" on {target}"
-        if tier:
+        rule = _string(row.get("matched_rule"))
+        if rule:
+            text += f" under rule {rule}"
+        elif tier:
             text += f" at tier {tier}"
         return _append_hash(text, hash_value)
 
@@ -274,7 +279,10 @@ def narrative_for_row(row: Mapping[str, Any]) -> str:
         if target:
             text += f" on {target}"
         text += ". Policy denied before execution"
-        if tier:
+        rule = _string(row.get("matched_rule"))
+        if rule:
+            text += f" by rule {rule}"
+        elif tier:
             text += f" at tier {tier}"
         return _append_hash(text, hash_value)
 
@@ -489,6 +497,7 @@ def _malformed_row(sequence: int, reason: str) -> dict[str, Any]:
         "target": "",
         "tier": "",
         "user": "",
+        "matched_rule": "",
         "hash": "",
         "record_hash": "",
         "record_id": f"malformed-{sequence}",
