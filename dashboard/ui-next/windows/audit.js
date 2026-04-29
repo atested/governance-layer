@@ -8,7 +8,7 @@
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
-import { authorizeExport } from '../export-utils.js';
+import { authorizeExport, showPackagePasswordDialog } from '../export-utils.js';
 
 // ---------- Column definitions ----------
 
@@ -100,6 +100,9 @@ export function openAuditWindow(trigger, opts = {}) {
       timer: null,
       status: '',
       pendingCenterSequence: opts.centerSequence || null,
+      rangeSelecting: false,
+      rangeStart: null,
+      rangeEnd: null,
     },
   };
 
@@ -328,6 +331,18 @@ function _buildUI(state) {
           <div class="au-walker-narrative" id="au-walker-narrative"></div>
         </div>
       </div>
+      <div class="au-walker-range-bar" id="au-walker-range-bar">
+        <div class="au-walker-range-info">
+          <button class="au-btn au-btn-muted au-btn-range" id="au-walker-range-toggle">Select Range</button>
+          <span class="au-walker-range-label" id="au-walker-range-label"></span>
+        </div>
+        <div class="au-walker-range-actions au-hidden" id="au-walker-range-actions">
+          <button class="au-btn au-btn-muted" id="au-walker-range-set-start">Set Start</button>
+          <button class="au-btn au-btn-muted" id="au-walker-range-set-end">Set End</button>
+          <button class="au-btn au-btn-muted" id="au-walker-range-clear">Clear</button>
+          <button class="au-btn au-btn-export" id="au-walker-create-package">Create Evidence Package</button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -382,6 +397,11 @@ function _applyStaticTooltips(state) {
     ['#au-walker-pause', 'Stop Chain Walker playback.'],
     ['#au-walker-speed', 'Select Chain Walker playback speed.'],
     ['#au-walker-source', 'Choose the live chain or a preserved archive.'],
+    ['#au-walker-range-toggle', 'Enter range selection mode to mark records for an encrypted evidence package.'],
+    ['#au-walker-range-set-start', 'Mark the currently centered record as the start of the export range.'],
+    ['#au-walker-range-set-end', 'Mark the currently centered record as the end of the export range.'],
+    ['#au-walker-range-clear', 'Clear the selected range.'],
+    ['#au-walker-create-package', 'Create an encrypted evidence package for the selected range.'],
   ]);
   state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
     setTooltip(btn, btn.dataset.mode === 'walker'
@@ -521,6 +541,13 @@ function _wireControls(state) {
     state.walker.centerIndex = 0;
     _loadWalker(state, { centerIndex: 0 });
   });
+
+  // Range selection
+  el.querySelector('#au-walker-range-toggle').addEventListener('click', () => _toggleRangeMode(state));
+  el.querySelector('#au-walker-range-set-start').addEventListener('click', () => _setRangeStart(state));
+  el.querySelector('#au-walker-range-set-end').addEventListener('click', () => _setRangeEnd(state));
+  el.querySelector('#au-walker-range-clear').addEventListener('click', () => _clearRange(state));
+  el.querySelector('#au-walker-create-package').addEventListener('click', () => _createEvidencePackage(state));
 }
 
 function _readFilters(state) {
@@ -934,12 +961,14 @@ function _renderWalker(state) {
     const absoluteIndex = center + slot;
     const row = byIndex.get(absoluteIndex);
     const isCenter = slot === 0;
-    dataEl.appendChild(_walkerDataRow(row, absoluteIndex, isCenter));
-    narrativeEl.appendChild(_walkerNarrativeRow(row, absoluteIndex, isCenter));
+    const inRange = _isInRange(row?.sequence, state);
+    dataEl.appendChild(_walkerDataRow(row, absoluteIndex, isCenter, inRange));
+    narrativeEl.appendChild(_walkerNarrativeRow(row, absoluteIndex, isCenter, inRange));
   }
+  _renderRangeBar(state);
 }
 
-function _walkerDataRow(row, absoluteIndex, isCenter) {
+function _walkerDataRow(row, absoluteIndex, isCenter, inRange) {
   const div = document.createElement('div');
   div.className = 'au-walker-row' + (isCenter ? ' au-walker-row-current' : '') + (!row ? ' au-walker-row-empty' : '');
   if (!row) {
@@ -947,6 +976,7 @@ function _walkerDataRow(row, absoluteIndex, isCenter) {
     return div;
   }
   if (row.alert) div.classList.add('au-walker-row-alert');
+  if (inRange) div.classList.add('au-walker-row-in-range');
   setTooltip(div, row.alert_reason || row.record_hash || row.record_id || 'Chain Walker row.');
   div.innerHTML = `
     <span class="au-wr-seq">#${_esc(String(row.sequence || absoluteIndex + 1))}</span>
@@ -961,7 +991,7 @@ function _walkerDataRow(row, absoluteIndex, isCenter) {
   return div;
 }
 
-function _walkerNarrativeRow(row, absoluteIndex, isCenter) {
+function _walkerNarrativeRow(row, absoluteIndex, isCenter, inRange) {
   const div = document.createElement('div');
   div.className = 'au-walker-line' + (isCenter ? ' au-walker-line-current' : '') + (!row ? ' au-walker-line-empty' : '');
   if (!row) {
@@ -969,6 +999,7 @@ function _walkerNarrativeRow(row, absoluteIndex, isCenter) {
     return div;
   }
   if (row.alert) div.classList.add('au-walker-line-alert');
+  if (inRange) div.classList.add('au-walker-line-in-range');
   setTooltip(div, row.record_hash || row.record_id || 'Narrative derived from this chain row.');
   div.textContent = row.narrative || `Record ${absoluteIndex + 1}`;
   return div;
@@ -1106,6 +1137,141 @@ function _computePageNumbers(current, total) {
   if (current < total - 2) pages.push('...');
   pages.push(total);
   return pages;
+}
+
+// ---------- Range selection ----------
+
+function _toggleRangeMode(state) {
+  state.walker.rangeSelecting = !state.walker.rangeSelecting;
+  if (!state.walker.rangeSelecting) {
+    _clearRange(state);
+  }
+  _renderRangeBar(state);
+}
+
+function _setRangeStart(state) {
+  const seq = state.walker.centerSequence;
+  if (seq == null) return;
+  state.walker.rangeStart = seq;
+  if (state.walker.rangeEnd != null && state.walker.rangeEnd < seq) {
+    state.walker.rangeEnd = null;
+  }
+  _renderRangeBar(state);
+  _renderWalker(state);
+}
+
+function _setRangeEnd(state) {
+  const seq = state.walker.centerSequence;
+  if (seq == null) return;
+  state.walker.rangeEnd = seq;
+  if (state.walker.rangeStart != null && state.walker.rangeStart > seq) {
+    state.walker.rangeStart = null;
+  }
+  _renderRangeBar(state);
+  _renderWalker(state);
+}
+
+function _clearRange(state) {
+  state.walker.rangeStart = null;
+  state.walker.rangeEnd = null;
+  _renderRangeBar(state);
+  _renderWalker(state);
+}
+
+function _renderRangeBar(state) {
+  const el = state.el;
+  const actionsEl = el.querySelector('#au-walker-range-actions');
+  const labelEl = el.querySelector('#au-walker-range-label');
+  const toggleBtn = el.querySelector('#au-walker-range-toggle');
+  const pkgBtn = el.querySelector('#au-walker-create-package');
+
+  if (state.walker.rangeSelecting) {
+    actionsEl.classList.remove('au-hidden');
+    toggleBtn.textContent = 'Cancel Range';
+    toggleBtn.classList.add('au-btn-range-active');
+  } else {
+    actionsEl.classList.add('au-hidden');
+    toggleBtn.textContent = 'Select Range';
+    toggleBtn.classList.remove('au-btn-range-active');
+  }
+
+  const start = state.walker.rangeStart;
+  const end = state.walker.rangeEnd;
+  if (start != null && end != null) {
+    labelEl.textContent = `Range: #${start} \u2013 #${end} (${end - start + 1} records)`;
+    pkgBtn.disabled = false;
+  } else if (start != null) {
+    labelEl.textContent = `Start: #${start} | Navigate to end and click "Set End"`;
+    pkgBtn.disabled = true;
+  } else if (end != null) {
+    labelEl.textContent = `End: #${end} | Navigate to start and click "Set Start"`;
+    pkgBtn.disabled = true;
+  } else {
+    labelEl.textContent = state.walker.rangeSelecting ? 'Navigate to range boundaries and set start/end.' : '';
+    pkgBtn.disabled = true;
+  }
+}
+
+function _isInRange(sequence, state) {
+  const start = state.walker.rangeStart;
+  const end = state.walker.rangeEnd;
+  if (start == null || end == null || sequence == null) return false;
+  return sequence >= start && sequence <= end;
+}
+
+async function _createEvidencePackage(state) {
+  const start = state.walker.rangeStart;
+  const end = state.walker.rangeEnd;
+  if (start == null || end == null) return;
+
+  _stopPlayback(state, 'Paused.');
+
+  // Step 1: Authorize export
+  const auth = await authorizeExport({
+    surface: 'audit',
+    format: 'encrypted_package',
+    export_level: 'encrypted_package',
+    chain_source: state.walker.source || 'live',
+    archive_id: state.walker.archiveId || '',
+    range: { start_sequence: start, end_sequence: end },
+    record_count: end - start + 1,
+  });
+  if (!auth.ok) return;
+
+  // Step 2: Get password
+  const pwResult = await showPackagePasswordDialog();
+  if (!pwResult) return;
+
+  // Step 3: Create the encrypted package
+  state.walker.status = 'Creating encrypted evidence package...';
+  _renderWalkerStatus(state);
+
+  const res = await api.postExportPackage({
+    export_token: auth.token,
+    password: pwResult.password,
+    start_sequence: start,
+    end_sequence: end,
+    chain_source: state.walker.source || 'live',
+    archive_id: state.walker.archiveId || '',
+    intended_recipient: pwResult.intended_recipient || '',
+  });
+
+  if (!res.ok) {
+    state.walker.status = `Package creation failed: ${res.error}`;
+    _renderWalkerStatus(state);
+    return;
+  }
+
+  // Step 4: Download the ZIP
+  const url = URL.createObjectURL(res.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${res.packageId || 'atested-evidence-package'}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  state.walker.status = `Evidence package created: ${res.packageId}. Recorded in chain.`;
+  _renderWalkerStatus(state);
 }
 
 // ---------- Export ----------
@@ -1905,6 +2071,49 @@ auStyles.textContent = `
     color: #8b919a;
     font-size: 0.82rem;
     padding: 18px;
+  }
+
+  /* ---- Walker range selection ---- */
+  .au-walker-range-bar {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .au-walker-range-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .au-walker-range-label {
+    color: #d2a8ff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+  }
+  .au-walker-range-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .au-btn-range {
+    font-size: 0.72rem;
+    padding: 5px 12px;
+  }
+  .au-btn-range-active {
+    background: rgba(210,168,255,0.12) !important;
+    border: 1px solid rgba(210,168,255,0.35) !important;
+    color: #d2a8ff !important;
+  }
+  .au-walker-row-in-range:not(.au-walker-row-current) {
+    box-shadow: inset 3px 0 0 rgba(210,153,34,0.6);
+    background: rgba(210,153,34,0.06);
+  }
+  .au-walker-line-in-range:not(.au-walker-line-current) {
+    box-shadow: inset 3px 0 0 rgba(210,153,34,0.6);
+    background: rgba(210,153,34,0.06);
   }
 
   /* ---- Utility ---- */

@@ -251,6 +251,79 @@ function _ensureExportAuthStyles() {
   document.head.appendChild(style);
 }
 
+export function showPackagePasswordDialog() {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'atd-export-auth-overlay';
+    const MIN_LEN = 12;
+    overlay.innerHTML = `
+      <div class="atd-export-auth-dialog" role="dialog" aria-modal="true" aria-label="Encrypt evidence package">
+        <div class="atd-export-auth-title">Encrypt Evidence Package</div>
+        <div class="atd-export-auth-copy">
+          Set a password to encrypt this evidence package. The recipient will need this password to decrypt and view the evidence. Atested does not store or log the password.
+        </div>
+        <label class="atd-export-auth-label">
+          Password (minimum ${MIN_LEN} characters)
+          <input class="atd-export-auth-input atd-pkg-pw" type="password" autocomplete="off" placeholder="Enter a strong passphrase">
+        </label>
+        <label class="atd-export-auth-label" style="margin-top:10px">
+          Confirm password
+          <input class="atd-export-auth-input atd-pkg-pw-confirm" type="password" autocomplete="off" placeholder="Re-enter the passphrase">
+        </label>
+        <label class="atd-export-auth-label" style="margin-top:10px">
+          Intended recipient (optional)
+          <input class="atd-export-auth-input atd-pkg-recipient" type="text" autocomplete="off" placeholder="e.g. auditor@example.com">
+        </label>
+        <div class="atd-pkg-pw-hint" style="color:#8b919a;font-size:0.72rem;margin-top:8px;line-height:1.4">
+          Use a long passphrase you can share securely with the recipient. No complexity rules — length is what matters.
+        </div>
+        <div class="atd-pkg-pw-error" style="color:#f85149;font-size:0.72rem;margin-top:6px;display:none"></div>
+        <div class="atd-export-auth-actions">
+          <button class="atd-export-auth-cancel" type="button">Cancel</button>
+          <button class="atd-export-auth-submit" type="button">Create Package</button>
+        </div>
+      </div>
+    `;
+    _ensureExportAuthStyles();
+    document.body.appendChild(overlay);
+    const pwInput = overlay.querySelector('.atd-pkg-pw');
+    const confirmInput = overlay.querySelector('.atd-pkg-pw-confirm');
+    const recipientInput = overlay.querySelector('.atd-pkg-recipient');
+    const errorEl = overlay.querySelector('.atd-pkg-pw-error');
+    const cleanup = value => { overlay.remove(); resolve(value); };
+
+    overlay.querySelector('.atd-export-auth-cancel').addEventListener('click', () => cleanup(null));
+    overlay.addEventListener('click', e => { if (e.target === overlay) cleanup(null); });
+
+    const submit = () => {
+      const pw = pwInput.value;
+      const confirm = confirmInput.value;
+      errorEl.style.display = 'none';
+      if (pw.length < MIN_LEN) {
+        errorEl.textContent = `Password must be at least ${MIN_LEN} characters.`;
+        errorEl.style.display = 'block';
+        pwInput.focus();
+        return;
+      }
+      if (pw !== confirm) {
+        errorEl.textContent = 'Passwords do not match.';
+        errorEl.style.display = 'block';
+        confirmInput.focus();
+        return;
+      }
+      cleanup({ password: pw, intended_recipient: recipientInput.value.trim() });
+    };
+
+    overlay.querySelector('.atd-export-auth-submit').addEventListener('click', submit);
+    confirmInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') cleanup(null);
+    });
+    pwInput.addEventListener('keydown', e => { if (e.key === 'Escape') cleanup(null); });
+    setTimeout(() => pwInput.focus(), 0);
+  });
+}
+
 function _label(value) {
   return String(value || '').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }

@@ -807,6 +807,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_verify_license()
             elif parsed.path == "/api/export/authorize":
                 self._handle_export_authorize()
+            elif parsed.path == "/api/export/package":
+                self._handle_export_package()
             elif parsed.path == "/api/feedback/submit":
                 self._handle_feedback_submit()
             elif parsed.path == "/api/trouble/report":
@@ -1307,6 +1309,139 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "event_hash": event.get("record_hash"),
             "operator_identity": scope["operator_identity"],
         })
+
+    def _handle_export_package(self):
+        """POST /api/export/package — build encrypted evidence package."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 65536:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        # Validate export token
+        export_token = str(data.get("export_token", "")).strip()
+        token_data = _validate_export_token(export_token, surface="audit")
+        if not token_data:
+            _json_response(self, {"error": "invalid or expired export token"}, 403)
+            return
+
+        # Extract parameters
+        password = data.get("password", "")
+        if not isinstance(password, str):
+            _json_response(self, {"error": "password must be a string"}, 400)
+            return
+
+        from evidence_package import validate_password, build_package
+        ok, err = validate_password(password)
+        if not ok:
+            _json_response(self, {"error": err}, 400)
+            return
+
+        scope = token_data.get("scope") or {}
+        chain_source = str(data.get("chain_source") or scope.get("chain_source") or "live")
+        archive_id = str(data.get("archive_id") or scope.get("archive_id") or "")
+        start_seq = data.get("start_sequence")
+        end_seq = data.get("end_sequence")
+
+        if start_seq is None or end_seq is None:
+            _json_response(self, {"error": "start_sequence and end_sequence required"}, 400)
+            return
+        try:
+            start_seq = int(start_seq)
+            end_seq = int(end_seq)
+        except (TypeError, ValueError):
+            _json_response(self, {"error": "start_sequence and end_sequence must be integers"}, 400)
+            return
+        if start_seq < 1 or end_seq < start_seq:
+            _json_response(self, {"error": "invalid sequence range"}, 400)
+            return
+
+        intended_recipient = str(data.get("intended_recipient") or "").strip()
+
+        # Load raw records for the range
+        from chain_walker import load_raw_records_range
+        range_data = load_raw_records_range(
+            CHAIN,
+            start_sequence=start_seq,
+            end_sequence=end_seq,
+            chain_source=chain_source,
+            archive_id=archive_id,
+        )
+        records = range_data.get("records") or []
+        if not records:
+            _json_response(self, {"error": "no records found in the specified range"}, 404)
+            return
+
+        predecessor_hash = range_data.get("predecessor_hash")
+        operator_identity = scope.get("operator_identity", "")
+
+        # Record the encrypted package event BEFORE building the package
+        from event_model import build_non_action_event
+        pkg_event_payload = {
+            "export_level": "encrypted_package",
+            "surface": "audit",
+            "format": "encrypted_package",
+            "operator_identity": operator_identity,
+            "chain_source": chain_source,
+            "archive_id": archive_id,
+            "range_start_sequence": start_seq,
+            "range_end_sequence": end_seq,
+            "record_count": len(records),
+            "intended_recipient": intended_recipient or "",
+            "password_recorded": False,
+        }
+        try:
+            pkg_event = build_non_action_event("encrypted_evidence_package_created", pkg_event_payload)
+            _append_chain_record_atomic(pkg_event)
+        except Exception as exc:
+            _json_response(self, {"error": f"failed to record package event: {exc}"}, 500)
+            return
+
+        export_event_hash = pkg_event.get("record_hash")
+
+        # Build the encrypted package — password used only in memory
+        try:
+            key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip() or None
+            result = build_package(
+                records=records,
+                password=password,
+                operator_identity=operator_identity,
+                chain_source=chain_source,
+                archive_id=archive_id,
+                predecessor_hash=predecessor_hash,
+                start_sequence=start_seq,
+                end_sequence=end_seq,
+                intended_recipient=intended_recipient,
+                export_event_hash=export_event_hash,
+                signing_key_path=key_path,
+            )
+        except Exception as exc:
+            _json_response(self, {"error": f"package build failed: {exc}"}, 500)
+            return
+
+        # password is now out of scope — never logged, stored, or returned
+
+        # Invalidate the export token after use
+        with _export_tokens_lock:
+            _export_tokens.pop(export_token, None)
+
+        # Return the ZIP as a download
+        zip_bytes = result["zip_bytes"]
+        package_id = result["package_id"]
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{package_id}.zip"')
+        self.send_header("Content-Length", str(len(zip_bytes)))
+        self.send_header("X-Package-Id", package_id)
+        self.send_header("X-Package-Manifest-Hash", result.get("manifest_hash", ""))
+        self.send_header("X-Package-Event-Hash", export_event_hash or "")
+        self.end_headers()
+        self.wfile.write(zip_bytes)
 
     def _handle_feedback_submit(self):
         """POST /api/feedback/submit — create and optionally send a feedback artifact."""

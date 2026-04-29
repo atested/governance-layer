@@ -71,6 +71,74 @@ def load_walker_rows(chain_path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def load_raw_records_range(
+    chain_path: Path,
+    *,
+    start_sequence: int,
+    end_sequence: int,
+    chain_source: str = "live",
+    archive_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Extract raw chain records for a sequence range.
+
+    Returns a dict with:
+      - records: list of raw parsed JSON records in the range
+      - predecessor_hash: record_hash of the record just before start_sequence
+        (for verifying linkage at the boundary)
+      - start_sequence, end_sequence: actual range covered
+      - record_count: number of records returned
+      - chain_source, archive_id: echo back
+    """
+    source_path = chain_path
+    if chain_source == "archive" and archive_id:
+        from chain_archive import get_archive_manifest
+        manifest = get_archive_manifest(chain_path, archive_id)
+        if manifest and manifest.get("archive_chain_path"):
+            source_path = Path(manifest["archive_chain_path"])
+
+    records: list[dict[str, Any]] = []
+    predecessor_hash: Optional[str] = None
+    if not source_path.exists():
+        return {
+            "records": [],
+            "predecessor_hash": None,
+            "start_sequence": start_sequence,
+            "end_sequence": end_sequence,
+            "record_count": 0,
+            "chain_source": chain_source,
+            "archive_id": archive_id or "",
+        }
+
+    with source_path.open("r", encoding="utf-8") as handle:
+        for index, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if index == start_sequence - 1:
+                try:
+                    prev = json.loads(stripped)
+                    predecessor_hash = prev.get("record_hash")
+                except json.JSONDecodeError:
+                    predecessor_hash = None
+            if start_sequence <= index <= end_sequence:
+                try:
+                    records.append(json.loads(stripped))
+                except json.JSONDecodeError:
+                    records.append({"_malformed": True, "sequence": index, "raw": stripped[:500]})
+            if index > end_sequence:
+                break
+
+    return {
+        "records": records,
+        "predecessor_hash": predecessor_hash,
+        "start_sequence": start_sequence,
+        "end_sequence": end_sequence,
+        "record_count": len(records),
+        "chain_source": chain_source,
+        "archive_id": archive_id or "",
+    }
+
+
 def normalize_chain_line(line: str, *, sequence: int) -> dict[str, Any]:
     """Parse one JSONL chain line into a normalized walker row."""
 

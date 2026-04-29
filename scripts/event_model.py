@@ -80,6 +80,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "policy_rules_changed",
     "chain_started_after_archive",
     "chain_export_created",
+    "encrypted_evidence_package_created",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([

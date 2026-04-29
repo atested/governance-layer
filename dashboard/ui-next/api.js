@@ -517,6 +517,34 @@ export function postActivateWithKey({ license_key } = {}) {
   return _request('POST', '/licensing/activate-with-key', { body: { license_key } });
 }
 
+/**
+ * Create an encrypted evidence package.
+ * POST /api/export/package
+ * Returns the raw response (binary ZIP).
+ */
+export async function postExportPackage(opts = {}) {
+  const url = '/api/export/package';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${_getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let error = `${res.status}: ${text || res.statusText}`;
+    try { const j = JSON.parse(text); error = j.error || error; } catch {}
+    return { ok: false, error };
+  }
+  const blob = await res.blob();
+  const packageId = res.headers.get('X-Package-Id') || '';
+  const manifestHash = res.headers.get('X-Package-Manifest-Hash') || '';
+  const eventHash = res.headers.get('X-Package-Event-Hash') || '';
+  return { ok: true, blob, packageId, manifestHash, eventHash };
+}
+
 // ---------- Sharing & Machine Management ----------
 export function postStartSharing() { return _request('POST', '/sharing/start', { body: {} }); }
 export function postStopSharing() { return _request('POST', '/sharing/stop', { body: {} }); }
