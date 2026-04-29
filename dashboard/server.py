@@ -3606,6 +3606,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 center_record_id=qs("center_record_id") or None,
                 center_sequence=int(center_sequence) if center_sequence else None,
                 center_index=int(center_index) if center_index else None,
+                alert_direction=qs("alert_direction") or None,
             )
             _json_response(self, data)
 

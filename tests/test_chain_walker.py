@@ -245,3 +245,29 @@ def test_walker_query_centers_live_chain_window(tmp_path):
     assert len(result["rows"]) == 11
     assert result["rows"][5]["record_id"] == "deny-center"
     assert result["rows"][5]["alert"] is True
+
+
+def test_walker_query_jumps_to_next_and_previous_alert(tmp_path):
+    records = [
+        _mediated("ALLOW", request_id=f"allow-{idx}", record_hash=f"sha256:{idx:064d}")
+        for idx in range(9)
+    ]
+    records[2] = _mediated("DENY", request_id="deny-earlier", record_hash="sha256:" + "2" * 64)
+    records[7] = _mediated("DENY", request_id="deny-later", record_hash="sha256:" + "7" * 64)
+    chain_path = tmp_path / "decision-chain.jsonl"
+    chain_path.write_text(
+        "\n".join(json.dumps(record, sort_keys=True) for record in records) + "\n",
+        encoding="utf-8",
+    )
+
+    next_alert = walker_query(chain_path, center_index=3, alert_direction="next")
+    previous_alert = walker_query(chain_path, center_index=6, alert_direction="previous")
+
+    assert next_alert["alert_jump_found"] is True
+    assert next_alert["center_index"] == 7
+    assert next_alert["center_sequence"] == 8
+    assert next(row for row in next_alert["rows"] if row["sequence"] == 8)["record_id"] == "deny-later"
+    assert previous_alert["alert_jump_found"] is True
+    assert previous_alert["center_index"] == 2
+    assert previous_alert["center_sequence"] == 3
+    assert next(row for row in previous_alert["rows"] if row["sequence"] == 3)["record_id"] == "deny-earlier"

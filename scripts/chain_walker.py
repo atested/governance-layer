@@ -315,6 +315,7 @@ def walker_query(
     center_record_id: Optional[str] = None,
     center_sequence: Optional[int] = None,
     center_index: Optional[int] = None,
+    alert_direction: Optional[str] = None,
     radius: int = 5,
 ) -> dict[str, Any]:
     """Return a centered live-chain window for the Audit Chain Walker."""
@@ -358,9 +359,17 @@ def walker_query(
         center_sequence=center_sequence,
         center_index=center_index,
     )
+    alert_jump_found = False
+    if alert_direction in {"next", "previous"}:
+        jumped = _resolve_alert_index(filtered, idx, alert_direction)
+        alert_jump_found = jumped is not None
+        if jumped is not None:
+            idx = jumped
     start = max(0, idx - radius)
     end = min(total, idx + radius + 1)
     center = filtered[idx]
+    previous_alert = _resolve_alert_index(filtered, idx, "previous")
+    next_alert = _resolve_alert_index(filtered, idx, "next")
     return {
         "timestamp_utc": center.get("timestamp_utc", ""),
         "chain_source": "live",
@@ -373,6 +382,9 @@ def walker_query(
         "radius": radius,
         "has_previous": idx > 0,
         "has_next": idx < total - 1,
+        "has_previous_alert": previous_alert is not None,
+        "has_next_alert": next_alert is not None,
+        "alert_jump_found": alert_jump_found,
         "filters": _walker_filter_echo(
             start_time, end_time, user_identity, tool_name, action_type,
             confidence_tier, policy_decision, event_category,
@@ -430,6 +442,21 @@ def _resolve_center_index(
     if center_index is not None:
         return max(0, min(len(rows) - 1, int(center_index)))
     return 0
+
+
+def _resolve_alert_index(
+    rows: list[dict[str, Any]],
+    current_index: int,
+    direction: str,
+) -> Optional[int]:
+    if direction == "next":
+        search = range(current_index + 1, len(rows))
+    else:
+        search = range(current_index - 1, -1, -1)
+    for idx in search:
+        if rows[idx].get("alert"):
+            return idx
+    return None
 
 
 def _category_filter_alias(category: Optional[str]) -> Optional[str]:

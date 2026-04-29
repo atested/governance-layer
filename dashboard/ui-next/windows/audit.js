@@ -38,6 +38,12 @@ const COLUMN_TOOLTIPS = {
 };
 
 const DEFAULT_PAGE_SIZE = 20;
+const WALKER_SPEEDS = {
+  slow: 1200,
+  medium: 650,
+  fast: 250,
+  extra: 80,
+};
 
 /**
  * Open the Audit window.
@@ -81,7 +87,14 @@ export function openAuditWindow(trigger) {
       windowStartIndex: 0,
       hasPrevious: false,
       hasNext: false,
+      hasPreviousAlert: false,
+      hasNextAlert: false,
       source: 'live',
+      playing: false,
+      playDirection: 1,
+      speed: 'medium',
+      timer: null,
+      status: '',
     },
   };
 
@@ -271,10 +284,25 @@ function _buildUI(state) {
           <div class="au-walker-subtitle" id="au-walker-subtitle">Filtered chain readout</div>
         </div>
         <div class="au-walker-controls">
+          <button class="au-btn au-btn-muted" id="au-walker-prev-alert">Previous alert</button>
+          <button class="au-btn au-btn-muted" id="au-walker-play-rev">Play reverse</button>
           <button class="au-btn au-btn-muted" id="au-walker-prev">Step back</button>
+          <button class="au-btn au-btn-muted" id="au-walker-pause">Pause</button>
           <button class="au-btn au-btn-primary" id="au-walker-next">Step forward</button>
+          <button class="au-btn au-btn-primary" id="au-walker-play-fwd">Play forward</button>
+          <button class="au-btn au-btn-muted" id="au-walker-next-alert">Next alert</button>
+          <label class="au-walker-speed-label">
+            Speed
+            <select class="au-select au-walker-speed" id="au-walker-speed">
+              <option value="slow">Slow</option>
+              <option value="medium" selected>Medium</option>
+              <option value="fast">Fast</option>
+              <option value="extra">Extra-fast</option>
+            </select>
+          </label>
         </div>
       </div>
+      <div class="au-walker-status" id="au-walker-status">Paused.</div>
       <div class="au-walker-grid">
         <div class="au-walker-pane">
           <div class="au-walker-pane-title">Chain rows</div>
@@ -332,6 +360,12 @@ function _applyStaticTooltips(state) {
     ['#au-export', 'Export matching records in the selected format.'],
     ['#au-walker-prev', 'Move the Chain Walker to the previous matching record.'],
     ['#au-walker-next', 'Move the Chain Walker to the next matching record.'],
+    ['#au-walker-prev-alert', 'Jump to the previous alert record in the filtered chain.'],
+    ['#au-walker-next-alert', 'Jump to the next alert record in the filtered chain.'],
+    ['#au-walker-play-rev', 'Play backward until paused, the beginning is reached, or an alert is centered.'],
+    ['#au-walker-play-fwd', 'Play forward until paused, the end is reached, or an alert is centered.'],
+    ['#au-walker-pause', 'Stop Chain Walker playback.'],
+    ['#au-walker-speed', 'Select Chain Walker playback speed.'],
   ]);
   state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
     setTooltip(btn, btn.dataset.mode === 'walker'
@@ -438,12 +472,25 @@ function _wireControls(state) {
   el.querySelector('#au-export').addEventListener('click', () => _exportAudit(state));
 
   el.querySelector('#au-walker-prev').addEventListener('click', () => {
+    _stopPlayback(state, 'Paused.');
     if (!state.walker.hasPrevious) return;
     _loadWalker(state, { centerIndex: Math.max(0, state.walker.centerIndex - 1) });
   });
   el.querySelector('#au-walker-next').addEventListener('click', () => {
+    _stopPlayback(state, 'Paused.');
     if (!state.walker.hasNext) return;
     _loadWalker(state, { centerIndex: state.walker.centerIndex + 1 });
+  });
+  el.querySelector('#au-walker-prev-alert').addEventListener('click', () => _jumpAlert(state, 'previous'));
+  el.querySelector('#au-walker-next-alert').addEventListener('click', () => _jumpAlert(state, 'next'));
+  el.querySelector('#au-walker-play-rev').addEventListener('click', () => _startPlayback(state, -1));
+  el.querySelector('#au-walker-play-fwd').addEventListener('click', () => _startPlayback(state, 1));
+  el.querySelector('#au-walker-pause').addEventListener('click', () => _stopPlayback(state, 'Paused by operator.'));
+  el.querySelector('#au-walker-speed').addEventListener('change', (e) => {
+    state.walker.speed = e.target.value;
+    if (state.walker.playing) {
+      _schedulePlayback(state);
+    }
   });
 }
 
@@ -461,6 +508,7 @@ function _readFilters(state) {
 }
 
 function _setMode(state, mode) {
+  if (mode !== 'walker') _stopPlayback(state, 'Paused.');
   state.mode = mode === 'walker' ? 'walker' : 'search';
   state.el.querySelectorAll('.au-mode-btn').forEach(btn => {
     const active = btn.dataset.mode === state.mode;
@@ -474,6 +522,8 @@ function _setMode(state, mode) {
   if (state.mode === 'walker') {
     _readFilters(state);
     _loadWalker(state, { centerIndex: state.walker.centerIndex || 0 });
+  } else {
+    _renderWalkerStatus(state);
   }
 }
 
@@ -527,6 +577,7 @@ async function _loadWalker(state, opts = {}) {
   if (opts.centerRecordId) params.center_record_id = opts.centerRecordId;
   else if (opts.centerSequence != null) params.center_sequence = opts.centerSequence;
   else params.center_index = opts.centerIndex ?? state.walker.centerIndex ?? 0;
+  if (opts.alertDirection) params.alert_direction = opts.alertDirection;
 
   const res = await api.getAuditWalker(params);
   if (!res.ok) {
@@ -541,8 +592,22 @@ async function _loadWalker(state, opts = {}) {
   state.walker.windowStartIndex = d.window_start_index || 0;
   state.walker.hasPrevious = !!d.has_previous;
   state.walker.hasNext = !!d.has_next;
+  state.walker.hasPreviousAlert = !!d.has_previous_alert;
+  state.walker.hasNextAlert = !!d.has_next_alert;
   state.walker.source = d.chain_source || 'live';
   _renderWalker(state);
+  const centered = _centerWalkerRow(state);
+  if (state.walker.playing) {
+    if (centered?.alert) {
+      _stopPlayback(state, `Paused on alert: ${centered.alert_reason || 'Alert event'}.`);
+    } else if ((state.walker.playDirection > 0 && !state.walker.hasNext) ||
+               (state.walker.playDirection < 0 && !state.walker.hasPrevious)) {
+      _stopPlayback(state, 'Paused at end of filtered chain.');
+    } else {
+      _schedulePlayback(state);
+    }
+  }
+  return d;
 }
 
 function _walkerParams(state) {
@@ -556,6 +621,90 @@ function _walkerParams(state) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
   return params;
+}
+
+function _startPlayback(state, direction) {
+  if (!state.walker.totalMatching) return;
+  _clearPlaybackTimer(state);
+  state.walker.playing = true;
+  state.walker.playDirection = direction;
+  state.walker.status = direction > 0 ? 'Playing forward.' : 'Playing reverse.';
+  _renderWalkerStatus(state);
+  _playbackTick(state);
+}
+
+function _playbackTick(state) {
+  if (!state.walker.playing) return;
+  const direction = state.walker.playDirection;
+  if (direction > 0) {
+    if (!state.walker.hasNext) {
+      _stopPlayback(state, 'Paused at end of filtered chain.');
+      return;
+    }
+    _loadWalker(state, { centerIndex: state.walker.centerIndex + 1 });
+  } else {
+    if (!state.walker.hasPrevious) {
+      _stopPlayback(state, 'Paused at beginning of filtered chain.');
+      return;
+    }
+    _loadWalker(state, { centerIndex: Math.max(0, state.walker.centerIndex - 1) });
+  }
+}
+
+function _schedulePlayback(state) {
+  _clearPlaybackTimer(state);
+  if (!state.walker.playing) return;
+  state.walker.timer = window.setTimeout(() => _playbackTick(state), WALKER_SPEEDS[state.walker.speed] || WALKER_SPEEDS.medium);
+}
+
+function _stopPlayback(state, message = 'Paused.') {
+  _clearPlaybackTimer(state);
+  state.walker.playing = false;
+  state.walker.status = message;
+  _renderWalkerStatus(state);
+}
+
+function _clearPlaybackTimer(state) {
+  if (state.walker.timer) {
+    window.clearTimeout(state.walker.timer);
+    state.walker.timer = null;
+  }
+}
+
+async function _jumpAlert(state, direction) {
+  _stopPlayback(state, 'Paused.');
+  const d = await _loadWalker(state, {
+    centerIndex: state.walker.centerIndex,
+    alertDirection: direction,
+  });
+  if (!d?.alert_jump_found) {
+    state.walker.status = direction === 'next'
+      ? 'No next alert in the filtered chain.'
+      : 'No previous alert in the filtered chain.';
+    _renderWalkerStatus(state);
+  } else {
+    const centered = _centerWalkerRow(state);
+    state.walker.status = `Centered alert: ${centered?.alert_reason || 'Alert event'}.`;
+    _renderWalkerStatus(state);
+  }
+}
+
+function _centerWalkerRow(state) {
+  return state.walker.rows.find(row => row.sequence === state.walker.centerSequence) || null;
+}
+
+function _renderWalkerStatus(state) {
+  const statusEl = state.el.querySelector('#au-walker-status');
+  if (statusEl) {
+    statusEl.textContent = state.walker.status || 'Paused.';
+    statusEl.classList.toggle('au-walker-status-playing', !!state.walker.playing);
+  }
+  const pause = state.el.querySelector('#au-walker-pause');
+  if (pause) pause.disabled = !state.walker.playing;
+  const playRev = state.el.querySelector('#au-walker-play-rev');
+  const playFwd = state.el.querySelector('#au-walker-play-fwd');
+  if (playRev) playRev.disabled = state.walker.playing || !state.walker.hasPrevious;
+  if (playFwd) playFwd.disabled = state.walker.playing || !state.walker.hasNext;
 }
 
 // ---------- Verification pane ----------
@@ -696,6 +845,9 @@ function _renderWalker(state) {
     : 'Live chain | no matching records';
   state.el.querySelector('#au-walker-prev').disabled = !state.walker.hasPrevious;
   state.el.querySelector('#au-walker-next').disabled = !state.walker.hasNext;
+  state.el.querySelector('#au-walker-prev-alert').disabled = !state.walker.hasPreviousAlert;
+  state.el.querySelector('#au-walker-next-alert').disabled = !state.walker.hasNextAlert;
+  _renderWalkerStatus(state);
 
   if (!total) {
     dataEl.innerHTML = '<div class="au-walker-empty">No matching records for the active filters.</div>';
@@ -1547,6 +1699,34 @@ auStyles.textContent = `
     gap: 8px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+  .au-walker-speed-label {
+    align-items: center;
+    color: #8b919a;
+    display: flex;
+    font-size: 0.66rem;
+    font-weight: 700;
+    gap: 6px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .au-walker-speed {
+    min-width: 116px;
+    width: auto;
+  }
+  .au-walker-status {
+    background: rgba(210,168,255,0.08);
+    border: 1px dashed rgba(210,168,255,0.25);
+    color: #d2a8ff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    margin-bottom: 12px;
+    padding: 7px 10px;
+  }
+  .au-walker-status-playing {
+    background: rgba(63,185,80,0.08);
+    border-color: rgba(63,185,80,0.25);
+    color: #3fb950;
   }
   .au-walker-grid {
     display: grid;
