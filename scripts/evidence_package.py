@@ -300,32 +300,30 @@ def load_public_key_info(signing_key_path: Optional[str] = None) -> dict[str, An
 # ZIP package builder
 # ---------------------------------------------------------------------------
 
-VIEWER_PLACEHOLDER_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Atested Evidence Package</title>
-<style>
-  body { font-family: system-ui, sans-serif; background: #0d1117; color: #e4e6eb;
-         display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-  .box { background: #161b22; border: 1px dashed #30363d; padding: 32px; max-width: 520px; text-align: center; }
-  h1 { color: #d2a8ff; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.08em; }
-  p { color: #8b919a; line-height: 1.6; }
-  code { background: #1a1d23; padding: 2px 6px; border-radius: 2px; font-size: 0.88em; }
-</style>
-</head>
-<body>
-<div class="box">
-  <h1>Atested Evidence Package</h1>
-  <p>This package contains encrypted governance chain evidence.</p>
-  <p>The interactive viewer will be included in a future release (Phase 8).
-     Until then, use the <code>manifest.json</code> and <code>public-key.json</code>
-     alongside the Atested CLI or API to verify and inspect the encrypted payload.</p>
-  <p>Package schema version: <code>1</code></p>
-</div>
-</body>
-</html>
-"""
+# ---------------------------------------------------------------------------
+# Viewer HTML loading
+# ---------------------------------------------------------------------------
+
+_VIEWER_DIR = Path(__file__).resolve().parent.parent / "dashboard" / "external-viewer"
+_VIEWER_PATH = _VIEWER_DIR / "viewer.html"
+
+
+def _load_viewer_html() -> str:
+    """Load the external evidence viewer HTML.
+
+    Returns the self-contained viewer.html content from
+    dashboard/external-viewer/viewer.html. Falls back to a minimal
+    placeholder if the file is not found (development/CI only).
+    """
+    if _VIEWER_PATH.exists():
+        return _VIEWER_PATH.read_text(encoding="utf-8")
+    # Fallback placeholder — should only appear if viewer.html is missing
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        "<title>Atested Evidence Package</title></head><body>"
+        "<p>Viewer not available. Open the package files with the Atested CLI.</p>"
+        "</body></html>"
+    )
 
 
 def build_package(
@@ -424,7 +422,7 @@ def build_package(
         zf.writestr(f"{prefix}encrypted-chain.sha256", ciphertext_sha256)
         zf.writestr(f"{prefix}public-key.json", public_key_json)
         zf.writestr(f"{prefix}verification-summary.json", verification_json)
-        zf.writestr(f"{prefix}viewer.html", VIEWER_PLACEHOLDER_HTML)
+        zf.writestr(f"{prefix}viewer.html", _load_viewer_html())
 
     zip_bytes = zip_buffer.getvalue()
 

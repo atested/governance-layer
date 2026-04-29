@@ -383,6 +383,149 @@ def test_password_never_in_package():
         assert password.encode("utf-8") not in content, f"Password found in {name}"
 
 
+# ---------------------------------------------------------------------------
+# Viewer integration (Phase 8)
+# ---------------------------------------------------------------------------
+
+def test_viewer_html_is_real_not_placeholder():
+    """Verify the package contains the real viewer, not the Phase 7 placeholder."""
+    records = _chain(2)
+    result = build_package(
+        records=records,
+        password="minimum12chars!",
+        operator_identity="sha256:test",
+        start_sequence=1,
+        end_sequence=2,
+    )
+
+    zf = zipfile.ZipFile(io.BytesIO(result["zip_bytes"]))
+    viewer = zf.read("atested-evidence-package/viewer.html").decode("utf-8")
+
+    # Must not contain the Phase 7 placeholder text
+    assert "Phase 8" not in viewer
+    assert "future release" not in viewer
+
+    # Must contain real viewer markers
+    assert "Evidence Package Viewer" in viewer or "Evidence Viewer" in viewer
+    assert "crypto.subtle" in viewer
+    assert "AES-GCM" in viewer
+    assert "PBKDF2" in viewer
+
+
+def test_viewer_contains_nontechnical_content():
+    """Verify the viewer includes non-technical explanations."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+
+    assert "governance chain" in viewer.lower() or "governance layer" in viewer.lower()
+    assert "verification" in viewer.lower()
+    assert "does not provide an unencrypted re-export" in viewer.lower() or \
+           "does not provide an unencrypted re-export function" in viewer.lower()
+
+
+def test_viewer_contains_technical_view():
+    """Verify the viewer includes technical view elements."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+
+    assert "view-technical" in viewer
+    assert "view-nontechnical" in viewer or "view-nontechnical" in viewer
+    assert "manifest" in viewer.lower()
+    assert "fingerprint" in viewer.lower()
+
+
+def test_viewer_has_password_input():
+    """Verify the viewer has a password entry mechanism."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+
+    assert 'type="password"' in viewer
+    assert "password" in viewer.lower()
+
+
+def test_viewer_no_download_controls():
+    """Verify the viewer does not expose decrypted data download."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+
+    # Should not have download buttons for decrypted data
+    assert "download-decrypted" not in viewer.lower()
+    assert "export-decrypted" not in viewer.lower()
+
+
+def test_viewer_is_self_contained():
+    """Verify the viewer has no external script/style/link references."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+
+    # No external script src
+    import re
+    external_scripts = re.findall(r'<script\s+[^>]*src\s*=', viewer)
+    assert len(external_scripts) == 0, f"Found external scripts: {external_scripts}"
+
+    # No external link stylesheet (excluding self-referencing)
+    external_links = re.findall(r'<link\s+[^>]*href\s*=\s*["\']https?://', viewer)
+    assert len(external_links) == 0, f"Found external links: {external_links}"
+
+
+def test_package_viewer_decryption_roundtrip():
+    """Verify that the viewer's expected crypto flow matches the package format.
+
+    The viewer expects:
+    - manifest.json with encryption.salt_hex, encryption.nonce_hex, encryption.iterations
+    - encrypted-chain.bin as ciphertext+tag (WebCrypto expects this format)
+    - ciphertext_sha256 for integrity check before decrypt
+
+    This test verifies the package produces all these in the correct format.
+    """
+    records = _chain(3)
+    password = "viewer-test-password"
+
+    result = build_package(
+        records=records,
+        password=password,
+        operator_identity="sha256:viewer-test",
+        start_sequence=1,
+        end_sequence=3,
+    )
+
+    zf = zipfile.ZipFile(io.BytesIO(result["zip_bytes"]))
+    prefix = "atested-evidence-package/"
+
+    manifest = json.loads(zf.read(f"{prefix}manifest.json"))
+    encrypted_blob = zf.read(f"{prefix}encrypted-chain.bin")
+    sha256_file = zf.read(f"{prefix}encrypted-chain.sha256").decode("utf-8").strip()
+
+    enc = manifest["encryption"]
+
+    # Viewer expects hex-encoded salt and nonce
+    salt = bytes.fromhex(enc["salt_hex"])
+    nonce = bytes.fromhex(enc["nonce_hex"])
+    assert len(salt) == 16  # 128-bit
+    assert len(nonce) == 12  # 96-bit
+
+    # Viewer computes SHA-256 of entire blob (ciphertext+tag)
+    import hashlib as _hl
+    computed_hash = "sha256:" + _hl.sha256(encrypted_blob).hexdigest()
+    assert computed_hash == manifest["ciphertext_sha256"]
+    assert computed_hash == sha256_file
+
+    # WebCrypto AES-GCM decrypt expects ciphertext+tag concatenated
+    # Our format matches: encrypted_blob = ciphertext + 16-byte tag
+    assert len(encrypted_blob) > 16
+
+    # Verify decrypt works with the concatenated format
+    ciphertext = encrypted_blob[:-16]
+    tag = encrypted_blob[-16:]
+    plaintext = decrypt_payload(ciphertext, tag, nonce, salt, password, enc["iterations"])
+    assert plaintext is not None
+
+    payload = json.loads(plaintext)
+    assert payload["schema_version"] == 1
+    assert len(payload["records"]) == 3
+    assert payload["verification_summary"]["status"] == "verified"
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-v"]))

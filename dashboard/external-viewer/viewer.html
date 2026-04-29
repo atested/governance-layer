@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atested Evidence Viewer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1a1f27;--border:#30363d;
+  --text:#e4e6eb;--muted:#8b919a;--accent:#d2a8ff;--accent-bg:rgba(210,168,255,0.10);
+  --green:#3fb950;--green-bg:rgba(63,185,80,0.10);
+  --red:#f85149;--red-bg:rgba(248,81,73,0.10);
+  --amber:#d29922;--amber-bg:rgba(210,153,34,0.10);
+  --mono:"JetBrains Mono","Cascadia Code","Fira Code",monospace;
+  --sans:Inter,system-ui,-apple-system,sans-serif;
+}
+html{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.step{display:none;width:100%}
+.step.active{display:block}
+.panel{background:var(--surface);border:1px dashed var(--border);max-width:640px;margin:0 auto;padding:28px 32px}
+.panel.wide{max-width:860px}
+.logo{color:var(--accent);font-family:var(--mono);font-size:0.68rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px}
+h1{font-size:1.08rem;font-weight:700;margin-bottom:14px;letter-spacing:-0.01em}
+h2{font-size:0.88rem;font-weight:700;margin:20px 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em}
+h3{font-size:0.82rem;font-weight:600;margin:14px 0 6px;color:var(--text)}
+p{color:var(--muted);font-size:0.86rem;margin-bottom:10px}
+.intro{line-height:1.65}
+.hint{color:var(--muted);font-size:0.72rem;margin-top:6px}
+
+/* Dropzone */
+.dropzone{border:2px dashed var(--border);padding:28px;text-align:center;cursor:pointer;transition:border-color 0.15s}
+.dropzone.drag-over{border-color:var(--accent)}
+.dropzone input[type=file]{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+
+/* Buttons */
+.btn,.btn-secondary{display:inline-block;font-family:var(--mono);font-size:0.72rem;font-weight:600;
+  letter-spacing:0.06em;text-transform:uppercase;padding:9px 16px;cursor:pointer;border:1px solid;transition:all 0.12s}
+.btn{background:var(--accent-bg);border-color:rgba(210,168,255,0.36);color:var(--accent)}
+.btn:hover{background:rgba(210,168,255,0.18)}
+.btn:disabled{opacity:0.4;cursor:default}
+.btn-secondary{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--muted)}
+.btn-secondary:hover{background:rgba(255,255,255,0.08)}
+
+/* Inputs */
+label{display:grid;gap:5px;font-size:0.72rem;font-weight:700;color:var(--muted);letter-spacing:0.05em;text-transform:uppercase;margin-top:14px}
+input[type=password]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:0.86rem;padding:10px 12px}
+input[type=password]:focus{outline:none;border-color:var(--accent)}
+
+/* Actions */
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+/* File status */
+.file-list{margin-top:14px;font-size:0.78rem}
+.file-item{display:flex;align-items:center;gap:6px;padding:4px 0;color:var(--muted)}
+.file-item .check{color:var(--green)}
+.file-item .missing{color:var(--red)}
+
+/* Package info */
+.pkg-info{background:var(--bg);border:1px solid var(--border);padding:12px 14px;margin:14px 0;font-size:0.8rem}
+.pkg-row{display:flex;justify-content:space-between;padding:3px 0}
+.pkg-label{color:var(--muted)}
+.pkg-value{color:var(--text);font-family:var(--mono);font-size:0.76rem}
+
+/* Error */
+.error{color:var(--red);font-size:0.8rem;padding:8px 10px;background:var(--red-bg);border:1px solid rgba(248,81,73,0.2);margin-top:10px}
+
+/* Progress */
+.progress{display:flex;align-items:center;gap:10px;margin-top:14px;color:var(--muted);font-size:0.8rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+
+/* Results header */
+.results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.logo-sm{color:var(--accent);font-family:var(--mono);font-size:0.62rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase}
+.view-toggle{display:flex;gap:0}
+.toggle{font-family:var(--mono);font-size:0.68rem;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;
+  padding:6px 12px;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer}
+.toggle:first-child{border-right:none}
+.toggle.active{background:var(--accent-bg);border-color:rgba(210,168,255,0.36);color:var(--accent)}
+
+/* Verification badge */
+.badge{display:flex;align-items:center;gap:12px;padding:16px 18px;margin-bottom:18px}
+.badge.verified{background:var(--green-bg);border:1px solid rgba(63,185,80,0.25)}
+.badge.verified-legacy{background:var(--green-bg);border:1px solid rgba(63,185,80,0.25)}
+.badge.failed{background:var(--red-bg);border:1px solid rgba(248,81,73,0.25)}
+.badge-icon{font-size:1.6rem;line-height:1}
+.badge-text h3{margin:0 0 2px;font-size:0.92rem}
+.badge-text p{margin:0;font-size:0.8rem}
+.badge.verified .badge-text h3{color:var(--green)}
+.badge.verified-legacy .badge-text h3{color:var(--green)}
+.badge.failed .badge-text h3{color:var(--red)}
+
+/* Info sections */
+.info-box{background:var(--bg);border:1px solid var(--border);padding:14px 16px;margin-bottom:14px;font-size:0.82rem;line-height:1.65}
+.info-box p{color:var(--muted);margin-bottom:6px}
+.info-box p:last-child{margin-bottom:0}
+.info-box strong{color:var(--text)}
+
+/* Findings */
+.finding{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:6px;font-size:0.8rem}
+.finding.deny{background:var(--red-bg);border:1px solid rgba(248,81,73,0.15)}
+.finding.alert{background:var(--amber-bg);border:1px solid rgba(210,153,34,0.15)}
+.finding-icon{flex-shrink:0;margin-top:1px}
+.finding.deny .finding-icon{color:var(--red)}
+.finding.alert .finding-icon{color:var(--amber)}
+.finding-text{color:var(--muted)}
+
+/* Narratives */
+.narrative-list{max-height:420px;overflow-y:auto;border:1px solid var(--border);background:var(--bg)}
+.narrative-item{padding:8px 12px;border-bottom:1px solid var(--border);font-size:0.78rem;display:flex;gap:10px}
+.narrative-item:last-child{border-bottom:none}
+.narrative-seq{color:var(--accent);font-family:var(--mono);font-size:0.72rem;min-width:28px;text-align:right;flex-shrink:0}
+.narrative-text{color:var(--muted)}
+.narrative-item.is-deny{background:var(--red-bg)}
+.narrative-item.is-deny .narrative-text{color:var(--red)}
+.narrative-item.is-alert{background:var(--amber-bg)}
+.narrative-item.is-alert .narrative-text{color:var(--amber)}
+
+/* Disclaimer */
+.disclaimer{background:var(--surface2);border:1px solid var(--border);padding:14px 16px;margin-top:18px;font-size:0.78rem;line-height:1.6}
+.disclaimer p{color:var(--muted);margin-bottom:4px}
+.disclaimer p:last-child{margin-bottom:0}
+
+/* Technical view */
+.tech-section{margin-bottom:16px}
+.tech-table{width:100%;border-collapse:collapse;font-size:0.78rem;border:1px solid var(--border)}
+.tech-table th,.tech-table td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--border)}
+.tech-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-transform:uppercase;font-size:0.68rem;letter-spacing:0.05em}
+.tech-table td{color:var(--text)}
+.tech-table .label{color:var(--muted);width:200px}
+.tech-table .mono{font-family:var(--mono);font-size:0.72rem;word-break:break-all}
+
+/* Records table */
+.records-wrap{max-height:480px;overflow-y:auto;border:1px solid var(--border)}
+.records-table{width:100%;border-collapse:collapse;font-size:0.74rem}
+.records-table th,.records-table td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.records-table th{background:var(--surface2);color:var(--muted);font-weight:700;text-transform:uppercase;font-size:0.66rem;letter-spacing:0.04em;position:sticky;top:0;z-index:1}
+.records-table td{color:var(--muted);font-family:var(--mono);font-size:0.7rem}
+.records-table .link-ok{color:var(--green)}
+.records-table .link-break{color:var(--red)}
+.records-table .link-first{color:var(--muted)}
+.records-table .decision-allow{color:var(--green)}
+.records-table .decision-deny{color:var(--red);font-weight:700}
+.records-table .sig-signed{color:var(--green)}
+.records-table .sig-unsigned{color:var(--muted)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Step 1: Load files -->
+<section id="step-load" class="step active">
+<div class="panel">
+  <div class="logo">Atested</div>
+  <h1>Evidence Package Viewer</h1>
+  <p class="intro">
+    This viewer decrypts and verifies an Atested governance evidence package.
+    Select the companion files from the extracted package directory.
+  </p>
+  <div class="dropzone" id="dropzone">
+    <p style="color:var(--muted);font-size:0.86rem;margin-bottom:8px">Drop package files here</p>
+    <p class="hint" style="margin-bottom:10px">or</p>
+    <input type="file" id="file-input" multiple>
+    <label for="file-input" class="btn" style="margin:0">Select Files</label>
+    <p class="hint">Required: manifest.json, encrypted-chain.bin</p>
+  </div>
+  <div id="file-status" class="file-list"></div>
+  <div class="actions" id="load-actions" style="display:none">
+    <button id="btn-proceed" class="btn">Continue</button>
+  </div>
+</div>
+</section>
+
+<!-- Step 2: Password -->
+<section id="step-password" class="step">
+<div class="panel">
+  <div class="logo">Atested</div>
+  <h1>Enter Password</h1>
+  <p>Enter the password provided by the package creator to decrypt and verify the evidence.</p>
+  <div id="package-info" class="pkg-info"></div>
+  <label>
+    Password
+    <input type="password" id="password-input" autocomplete="off" placeholder="Enter the package password">
+  </label>
+  <div id="decrypt-error" class="error" hidden></div>
+  <div class="actions">
+    <button id="btn-back" class="btn-secondary">Back</button>
+    <button id="btn-decrypt" class="btn">Decrypt &amp; Verify</button>
+  </div>
+  <div id="decrypt-progress" class="progress" hidden>
+    <div class="spinner"></div>
+    <span>Deriving key and decrypting...</span>
+  </div>
+</div>
+</section>
+
+<!-- Step 3: Results -->
+<section id="step-results" class="step">
+<div class="panel wide">
+  <div class="results-header">
+    <div class="logo-sm">Atested Evidence Viewer</div>
+    <div class="view-toggle">
+      <button id="btn-nontechnical" class="toggle active">Summary</button>
+      <button id="btn-technical" class="toggle">Technical</button>
+    </div>
+  </div>
+  <div id="view-nontechnical"></div>
+  <div id="view-technical" hidden></div>
+</div>
+</section>
+
+</div>
+
+<script>
+/* =========================================================================
+   Atested Evidence Viewer — self-contained, no external dependencies
+   ========================================================================= */
+
+(function() {
+'use strict';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+const state = {
+  files: {},       // name -> ArrayBuffer
+  manifest: null,
+  publicKey: null,
+  verificationSummaryFile: null,
+  encryptedBlob: null,
+  sha256File: null,
+  payload: null,   // decrypted plaintext payload
+  verification: null,
+};
+
+// ---------------------------------------------------------------------------
+// DOM helpers
+// ---------------------------------------------------------------------------
+
+const $ = id => document.getElementById(id);
+const show = (el, visible = true) => { el.hidden = !visible; };
+const showStep = name => {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  $('step-' + name).classList.add('active');
+};
+
+// ---------------------------------------------------------------------------
+// Hex helpers
+// ---------------------------------------------------------------------------
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  return bytes;
+}
+
+function bytesToHex(bytes) {
+  return Array.from(new Uint8Array(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sha256hex(data) {
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return bytesToHex(hash);
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: File loading
+// ---------------------------------------------------------------------------
+
+const EXPECTED_FILES = {
+  'manifest.json': { required: true, label: 'Package manifest' },
+  'encrypted-chain.bin': { required: true, label: 'Encrypted chain data' },
+  'encrypted-chain.sha256': { required: false, label: 'Ciphertext hash' },
+  'public-key.json': { required: false, label: 'Public key' },
+  'verification-summary.json': { required: false, label: 'Verification summary' },
+};
+
+function handleFiles(fileList) {
+  for (const file of fileList) {
+    // Match by basename (strip any directory prefix from ZIP extraction)
+    const name = file.name;
+    if (name in EXPECTED_FILES) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        state.files[name] = reader.result;
+        renderFileStatus();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  }
+}
+
+function renderFileStatus() {
+  const el = $('file-status');
+  const items = Object.entries(EXPECTED_FILES).map(([name, info]) => {
+    const loaded = name in state.files;
+    const icon = loaded ? '<span class="check">&#10003;</span>' : (info.required ? '<span class="missing">&#10007;</span>' : '<span style="color:var(--muted)">&#8212;</span>');
+    return `<div class="file-item">${icon} <span>${info.label} (${name})</span></div>`;
+  });
+  el.innerHTML = items.join('');
+
+  const hasRequired = EXPECTED_FILES['manifest.json'].required && 'manifest.json' in state.files
+    && EXPECTED_FILES['encrypted-chain.bin'].required && 'encrypted-chain.bin' in state.files;
+  $('load-actions').style.display = hasRequired ? 'flex' : 'none';
+}
+
+// Dropzone
+const dropzone = $('dropzone');
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+$('file-input').addEventListener('change', e => handleFiles(e.target.files));
+
+$('btn-proceed').addEventListener('click', () => {
+  try {
+    const manifestBytes = new Uint8Array(state.files['manifest.json']);
+    state.manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+    state.encryptedBlob = state.files['encrypted-chain.bin'];
+
+    if (state.files['public-key.json']) {
+      const pkBytes = new Uint8Array(state.files['public-key.json']);
+      state.publicKey = JSON.parse(new TextDecoder().decode(pkBytes));
+    }
+    if (state.files['verification-summary.json']) {
+      const vsBytes = new Uint8Array(state.files['verification-summary.json']);
+      state.verificationSummaryFile = JSON.parse(new TextDecoder().decode(vsBytes));
+    }
+    if (state.files['encrypted-chain.sha256']) {
+      const shaBytes = new Uint8Array(state.files['encrypted-chain.sha256']);
+      state.sha256File = new TextDecoder().decode(shaBytes).trim();
+    }
+
+    renderPackageInfo();
+    showStep('password');
+    $('password-input').focus();
+  } catch (e) {
+    alert('Failed to parse manifest.json: ' + e.message);
+  }
+});
+
+function renderPackageInfo() {
+  const m = state.manifest;
+  const rows = [
+    ['Package ID', m.package_id || 'unknown'],
+    ['Created', m.created_at_utc || 'unknown'],
+    ['Records', m.record_count || 0],
+    ['Range', `#${m.range_start_sequence || '?'} \u2013 #${m.range_end_sequence || '?'}`],
+    ['Chain source', m.chain_source || 'unknown'],
+  ];
+  if (m.intended_recipient) rows.push(['Intended recipient', m.intended_recipient]);
+  $('package-info').innerHTML = rows.map(([l, v]) =>
+    `<div class="pkg-row"><span class="pkg-label">${esc(l)}</span><span class="pkg-value">${esc(String(v))}</span></div>`
+  ).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Decryption
+// ---------------------------------------------------------------------------
+
+$('btn-back').addEventListener('click', () => {
+  show($('decrypt-error'), false);
+  showStep('load');
+});
+
+$('btn-decrypt').addEventListener('click', doDecrypt);
+$('password-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doDecrypt();
+});
+
+async function doDecrypt() {
+  const password = $('password-input').value;
+  if (!password) {
+    $('password-input').focus();
+    return;
+  }
+
+  show($('decrypt-error'), false);
+  show($('decrypt-progress'), true);
+  $('btn-decrypt').disabled = true;
+
+  try {
+    const m = state.manifest;
+    const enc = m.encryption || {};
+    const salt = hexToBytes(enc.salt_hex || '');
+    const nonce = hexToBytes(enc.nonce_hex || '');
+    const iterations = enc.iterations || 310000;
+
+    // Step 1: Verify ciphertext hash
+    const blobHash = 'sha256:' + await sha256hex(state.encryptedBlob);
+    if (m.ciphertext_sha256 && blobHash !== m.ciphertext_sha256) {
+      throw new Error('Ciphertext integrity check failed. The encrypted data does not match the manifest hash. The package may have been tampered with.');
+    }
+
+    // Cross-check with .sha256 file if present
+    if (state.sha256File && state.sha256File !== blobHash) {
+      throw new Error('Ciphertext hash file does not match the actual encrypted data.');
+    }
+
+    // Step 2: Derive key via PBKDF2-HMAC-SHA-256
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']
+    );
+    const derivedKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+
+    // Step 3: Decrypt (WebCrypto expects ciphertext+tag concatenated, which is our format)
+    let plaintext;
+    try {
+      plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: nonce, tagLength: 128 },
+        derivedKey,
+        state.encryptedBlob
+      );
+    } catch (decryptErr) {
+      throw new Error('Decryption failed. The password may be incorrect, or the data may have been tampered with.');
+    }
+
+    // Step 4: Parse plaintext payload
+    const payloadText = new TextDecoder().decode(plaintext);
+    state.payload = JSON.parse(payloadText);
+
+    // Step 5: Verify chain linkage
+    state.verification = verifyChain(state.payload.records, state.payload.predecessor_hash);
+
+    // Render results
+    renderResults();
+    showStep('results');
+
+  } catch (e) {
+    $('decrypt-error').textContent = e.message;
+    show($('decrypt-error'), true);
+  } finally {
+    show($('decrypt-progress'), false);
+    $('btn-decrypt').disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chain verification
+// ---------------------------------------------------------------------------
+
+function verifyChain(records, predecessorHash) {
+  if (!records || records.length === 0) {
+    return { status: 'empty', verified: 0, breaks: 0, signed: 0, unsigned: 0, total: 0, breakDetails: [] };
+  }
+
+  let verified = 0;
+  let breaks = 0;
+  let signed = 0;
+  let unsigned = 0;
+  const breakDetails = [];
+
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i];
+
+    // Signature status
+    if (rec.signature && rec.signing_key_id) signed++;
+    else unsigned++;
+
+    if (i === 0) {
+      // First record: check predecessor linkage if available
+      if (predecessorHash && rec.prev_record_hash) {
+        if (rec.prev_record_hash === predecessorHash) {
+          verified++;
+        } else {
+          breaks++;
+          breakDetails.push({ index: i, expected: predecessorHash, got: rec.prev_record_hash, type: 'predecessor' });
+        }
+      } else if (rec.record_hash) {
+        verified++;
+      }
+      continue;
+    }
+
+    const prevHash = records[i - 1].record_hash;
+    const linkedPrev = rec.prev_record_hash;
+
+    if (prevHash && linkedPrev && prevHash === linkedPrev) {
+      verified++;
+    } else if (prevHash && linkedPrev) {
+      breaks++;
+      breakDetails.push({ index: i, expected: prevHash, got: linkedPrev, type: 'linkage' });
+    } else {
+      // Missing hashes — legacy records
+      verified++;
+    }
+  }
+
+  let status;
+  if (breaks > 0) {
+    status = 'failed';
+  } else if (unsigned > 0 && signed > 0) {
+    status = 'verified_legacy';
+  } else {
+    status = 'verified';
+  }
+
+  return { status, verified, breaks, signed, unsigned, total: records.length, breakDetails };
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Render results
+// ---------------------------------------------------------------------------
+
+$('btn-nontechnical').addEventListener('click', () => {
+  $('btn-nontechnical').classList.add('active');
+  $('btn-technical').classList.remove('active');
+  show($('view-nontechnical'), true);
+  show($('view-technical'), false);
+});
+
+$('btn-technical').addEventListener('click', () => {
+  $('btn-technical').classList.add('active');
+  $('btn-nontechnical').classList.remove('active');
+  show($('view-nontechnical'), false);
+  show($('view-technical'), true);
+});
+
+function renderResults() {
+  renderNonTechnical();
+  renderTechnical();
+}
+
+// ---------------------------------------------------------------------------
+// Non-technical view
+// ---------------------------------------------------------------------------
+
+function renderNonTechnical() {
+  const v = state.verification;
+  const p = state.payload;
+  const m = state.manifest;
+  const el = $('view-nontechnical');
+
+  // Verification badge
+  let badgeClass, badgeIcon, badgeTitle, badgeDesc;
+  if (v.status === 'verified') {
+    badgeClass = 'verified';
+    badgeIcon = '\u2713';
+    badgeTitle = 'Verified';
+    badgeDesc = 'All records in this package have intact hash linkage. The evidence chain has not been altered.';
+  } else if (v.status === 'verified_legacy') {
+    badgeClass = 'verified-legacy';
+    badgeIcon = '\u2713';
+    badgeTitle = 'Verified';
+    badgeDesc = `Hash linkage is intact. ${v.unsigned} record${v.unsigned !== 1 ? 's' : ''} predate the signing key and are unsigned — this is expected for legacy records.`;
+  } else {
+    badgeClass = 'failed';
+    badgeIcon = '\u2717';
+    badgeTitle = 'Verification Failed';
+    badgeDesc = `${v.breaks} hash linkage break${v.breaks !== 1 ? 's' : ''} detected. The evidence chain may have been altered or corrupted.`;
+  }
+
+  // Time range
+  const records = p.records || [];
+  let timeRange = '';
+  if (records.length > 0) {
+    const first = records[0].timestamp_utc || '';
+    const last = records[records.length - 1].timestamp_utc || '';
+    if (first && last) timeRange = `${first} to ${last}`;
+    else if (first) timeRange = `Starting ${first}`;
+  }
+
+  // Findings
+  const findings = [];
+  const narratives = p.narratives || [];
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i];
+    const decision = (rec.policy_decision || rec.decision || '').toString().toUpperCase();
+    if (decision === 'DENY') {
+      findings.push({ type: 'deny', text: narratives[i] || `Record #${i + 1}: Policy denial`, index: i });
+    }
+  }
+  // Alert-type events
+  const alertTypes = new Set([
+    'chain_integrity_violation', 'chain_file_missing', 'chain_file_truncated',
+    'chain_tail_hash_mismatch', 'chain_record_count_mismatch',
+    'opaque_artifact_revocation', 'license_expired', 'license_revoked',
+    'proxy_code_hash_changed', 'policy_rules_changed'
+  ]);
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i];
+    const et = rec.event_type || '';
+    if (alertTypes.has(et)) {
+      findings.push({ type: 'alert', text: narratives[i] || `Record #${i + 1}: ${et.replace(/_/g, ' ')}`, index: i });
+    }
+  }
+
+  // Build HTML
+  let html = '';
+
+  // Badge
+  html += `<div class="badge ${badgeClass}">
+    <div class="badge-icon">${badgeIcon}</div>
+    <div class="badge-text"><h3>${esc(badgeTitle)}</h3><p>${esc(badgeDesc)}</p></div>
+  </div>`;
+
+  // What is this?
+  html += `<h2>About This Evidence</h2>`;
+  html += `<div class="info-box">
+    <p><strong>Atested</strong> is a governance layer that records every significant operation performed by AI agents, creating an auditable chain of evidence.</p>
+    <p>The <strong>governance chain</strong> is an append-only sequence of records. Each record is cryptographically linked to the previous one by including its hash, creating a tamper-evident log.</p>
+    <p><strong>Verification</strong> confirms that the records in this package have not been altered since they were created. The viewer checks that each record's back-reference matches the previous record's hash.</p>
+  </div>`;
+
+  // Package summary
+  html += `<h2>Package Summary</h2>`;
+  html += `<div class="info-box">
+    <p><strong>${v.total} record${v.total !== 1 ? 's' : ''}</strong> from the ${esc(m.chain_source || 'live')} governance chain, range #${m.range_start_sequence || '?'} through #${m.range_end_sequence || '?'}.</p>
+    ${timeRange ? `<p>Time range: <strong>${esc(timeRange)}</strong></p>` : ''}
+    <p>Package created: <strong>${esc(m.created_at_utc || 'unknown')}</strong></p>
+    ${m.intended_recipient ? `<p>Intended recipient: <strong>${esc(m.intended_recipient)}</strong></p>` : ''}
+    <p>Verification: <strong>${v.verified} of ${v.total}</strong> records have confirmed hash linkage.${v.breaks > 0 ? ` <strong style="color:var(--red)">${v.breaks} break${v.breaks !== 1 ? 's' : ''} detected.</strong>` : ''}</p>
+    ${v.unsigned > 0 ? `<p>${v.unsigned} record${v.unsigned !== 1 ? 's are' : ' is'} unsigned (legacy records created before the signing key was active).</p>` : ''}
+  </div>`;
+
+  // Findings
+  if (findings.length > 0) {
+    html += `<h2>Findings</h2>`;
+    for (const f of findings) {
+      const cls = f.type === 'deny' ? 'deny' : 'alert';
+      const icon = f.type === 'deny' ? '\u26D4' : '\u26A0';
+      html += `<div class="finding ${cls}"><span class="finding-icon">${icon}</span><span class="finding-text">${esc(f.text)}</span></div>`;
+    }
+  }
+
+  // Narratives
+  html += `<h2>Record Narratives</h2>`;
+  html += `<div class="narrative-list">`;
+  for (let i = 0; i < records.length; i++) {
+    const narr = narratives[i] || `Record #${i + 1}`;
+    const rec = records[i];
+    const decision = (rec.policy_decision || rec.decision || '').toString().toUpperCase();
+    const et = rec.event_type || '';
+    let cls = '';
+    if (decision === 'DENY') cls = ' is-deny';
+    else if (alertTypes.has(et)) cls = ' is-alert';
+    const seq = (m.range_start_sequence || 1) + i;
+    html += `<div class="narrative-item${cls}"><span class="narrative-seq">${seq}</span><span class="narrative-text">${esc(narr)}</span></div>`;
+  }
+  html += `</div>`;
+
+  // Disclaimer
+  html += `<div class="disclaimer">
+    <p><strong>What this viewer cannot prove:</strong></p>
+    <p>This viewer verifies the integrity of the governance records within this package. It does not verify what happened outside the governed scope, nor does it guarantee business correctness of the operations themselves. The viewer does not provide an unencrypted re-export function.</p>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Technical view
+// ---------------------------------------------------------------------------
+
+function renderTechnical() {
+  const v = state.verification;
+  const p = state.payload;
+  const m = state.manifest;
+  const enc = m.encryption || {};
+  const el = $('view-technical');
+
+  let html = '';
+
+  // Manifest
+  html += `<div class="tech-section"><h2>Package Manifest</h2>
+  <table class="tech-table">
+    ${techRow('Package ID', m.package_id)}
+    ${techRow('Schema version', m.schema_version)}
+    ${techRow('Created', m.created_at_utc)}
+    ${techRow('Created by', m.created_by)}
+    ${techRow('Chain source', m.chain_source)}
+    ${techRow('Archive ID', m.archive_id || 'none')}
+    ${techRow('Range', `#${m.range_start_sequence} \u2013 #${m.range_end_sequence}`)}
+    ${techRow('Record count', m.record_count)}
+    ${techRow('Intended recipient', m.intended_recipient || 'not specified')}
+    ${techRow('Plaintext schema', m.plaintext_schema)}
+  </table></div>`;
+
+  // Encryption
+  html += `<div class="tech-section"><h2>Encryption Parameters</h2>
+  <table class="tech-table">
+    ${techRow('Algorithm', enc.algorithm || 'unknown')}
+    ${techRow('Key derivation', enc.kdf || 'unknown')}
+    ${techRow('Iterations', enc.iterations ? enc.iterations.toLocaleString() : 'unknown')}
+    ${techRow('Salt', enc.salt_hex || 'unknown', true)}
+    ${techRow('Nonce / IV', enc.nonce_hex || 'unknown', true)}
+    ${techRow('Ciphertext SHA-256', m.ciphertext_sha256 || 'unknown', true)}
+  </table></div>`;
+
+  // Verification
+  html += `<div class="tech-section"><h2>Chain Verification</h2>
+  <table class="tech-table">
+    ${techRow('Status', v.status === 'failed' ? '<span style="color:var(--red)">FAILED</span>' : '<span style="color:var(--green)">VERIFIED</span>', false, true)}
+    ${techRow('Records checked', v.total)}
+    ${techRow('Verified links', v.verified)}
+    ${techRow('Broken links', v.breaks > 0 ? `<span style="color:var(--red)">${v.breaks}</span>` : '0', false, true)}
+    ${techRow('Signed records', v.signed)}
+    ${techRow('Unsigned records', v.unsigned)}
+    ${techRow('Predecessor hash', p.predecessor_hash || 'none', true)}
+    ${techRow('First record hash', p.records?.[0]?.record_hash || 'none', true)}
+    ${techRow('Last record hash', p.records?.[p.records.length - 1]?.record_hash || 'none', true)}
+  </table>`;
+
+  // Break details
+  if (v.breakDetails.length > 0) {
+    html += `<h3 style="margin-top:10px">Break Details</h3>
+    <table class="tech-table">
+      <tr><th>Record index</th><th>Type</th><th>Expected</th><th>Got</th></tr>`;
+    for (const bd of v.breakDetails) {
+      html += `<tr><td>${bd.index}</td><td>${esc(bd.type)}</td><td class="mono">${esc(bd.expected)}</td><td class="mono">${esc(bd.got)}</td></tr>`;
+    }
+    html += `</table>`;
+  }
+  html += `</div>`;
+
+  // Public key
+  if (state.publicKey) {
+    html += `<div class="tech-section"><h2>Public Key</h2>
+    <table class="tech-table">
+      ${techRow('Fingerprint', state.publicKey.fingerprint || m.public_key_fingerprint || 'unknown', true)}
+      ${techRow('Manifest fingerprint', m.public_key_fingerprint || 'unknown', true)}
+      ${techRow('Match', state.publicKey.fingerprint === m.public_key_fingerprint ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">Mismatch</span>', false, true)}
+    </table>
+    ${state.publicKey.public_key_pem ? `<pre style="background:var(--bg);border:1px solid var(--border);padding:10px;font-size:0.7rem;overflow-x:auto;margin-top:8px;color:var(--muted)">${esc(state.publicKey.public_key_pem)}</pre>` : ''}
+    </div>`;
+  }
+
+  // Server-side verification summary comparison
+  if (state.verificationSummaryFile) {
+    const sv = state.verificationSummaryFile;
+    html += `<div class="tech-section"><h2>Server-Side Verification Summary</h2>
+    <table class="tech-table">
+      ${techRow('Server status', sv.status || 'unknown')}
+      ${techRow('Server record count', sv.record_count)}
+      ${techRow('Server verified count', sv.verified_count)}
+      ${techRow('Server break count', sv.break_count)}
+      ${techRow('Viewer agrees', sv.break_count === v.breaks && sv.record_count === v.total ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--amber)">Discrepancy</span>', false, true)}
+    </table></div>`;
+  }
+
+  // Records table
+  const records = p.records || [];
+  if (records.length > 0) {
+    html += `<div class="tech-section"><h2>Records (${records.length})</h2>
+    <div class="records-wrap"><table class="records-table">
+      <tr><th>#</th><th>Timestamp</th><th>Type</th><th>Decision</th><th>Link</th><th>Signed</th><th>Hash</th></tr>`;
+    for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      const seq = (m.range_start_sequence || 1) + i;
+      const ts = rec.timestamp_utc || '';
+      const et = rec.event_type || rec.record_type || '';
+      const decision = (rec.policy_decision || rec.decision || '').toString().toUpperCase();
+      const decCls = decision === 'DENY' ? 'decision-deny' : (decision === 'ALLOW' ? 'decision-allow' : '');
+
+      let linkStatus, linkCls;
+      if (i === 0) {
+        if (p.predecessor_hash && rec.prev_record_hash) {
+          linkStatus = rec.prev_record_hash === p.predecessor_hash ? '\u2713' : '\u2717';
+          linkCls = rec.prev_record_hash === p.predecessor_hash ? 'link-ok' : 'link-break';
+        } else {
+          linkStatus = '\u2014';
+          linkCls = 'link-first';
+        }
+      } else {
+        const prevHash = records[i - 1].record_hash;
+        const linked = rec.prev_record_hash;
+        if (prevHash && linked && prevHash === linked) {
+          linkStatus = '\u2713';
+          linkCls = 'link-ok';
+        } else if (prevHash && linked) {
+          linkStatus = '\u2717';
+          linkCls = 'link-break';
+        } else {
+          linkStatus = '\u2014';
+          linkCls = 'link-first';
+        }
+      }
+
+      const hasSig = rec.signature && rec.signing_key_id;
+      const sigCls = hasSig ? 'sig-signed' : 'sig-unsigned';
+      const sigText = hasSig ? 'signed' : 'unsigned';
+
+      const shortHash = (rec.record_hash || '').substring(0, 19);
+
+      html += `<tr>
+        <td>${seq}</td>
+        <td>${esc(ts)}</td>
+        <td>${esc(et)}</td>
+        <td class="${decCls}">${esc(decision || '\u2014')}</td>
+        <td class="${linkCls}">${linkStatus}</td>
+        <td class="${sigCls}">${sigText}</td>
+        <td class="mono">${esc(shortHash || '\u2014')}</td>
+      </tr>`;
+    }
+    html += `</table></div></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function techRow(label, value, mono, raw) {
+  const valStr = raw ? String(value) : esc(String(value ?? ''));
+  return `<tr><td class="label">${esc(label)}</td><td${mono ? ' class="mono"' : ''}>${valStr}</td></tr>`;
+}
+
+// ---------------------------------------------------------------------------
+// Escape helper
+// ---------------------------------------------------------------------------
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+})();
+</script>
+</body>
+</html>
