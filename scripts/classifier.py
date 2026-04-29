@@ -111,6 +111,9 @@ _HEX_BLOB_PATTERN = re.compile(
     r"^[0-9a-fA-F]{40,}$"
 )
 
+# Variable expansion: matches $VAR, ${VAR}, $1 but not $( $' $$ $?
+_VAR_EXPANSION_PATTERN = re.compile(r'\$\{?\w')
+
 # Well-known Tier 2 commands with understood side effects
 _TIER2_COMMAND_MAP = {
     "git": {
@@ -371,7 +374,43 @@ def _classify_command_chain(chain: list, full_command: str) -> dict:
 
 
 def _classify_single_command(command: str) -> dict:
-    """Classify a single (non-chained) shell command."""
+    """Classify a single (non-chained) shell command with opacity enforcement.
+
+    After classifying the base command, applies an opacity floor:
+    if the command contains pipes, subshells, or variable expansion,
+    the confidence tier cannot be below TIER_OPAQUE regardless of
+    how well we recognize the base command.  This prevents known
+    commands (like curl, rm, git) from receiving a permissive Tier 2
+    classification when combined with opaque shell features.
+    """
+    result = _classify_single_command_base(command)
+
+    # Detect shell features that prevent full command inspection
+    has_pipes = "|" in command
+    has_subshell = "$(" in command or "`" in command
+    has_var_expansion = bool(_VAR_EXPANSION_PATTERN.search(command))
+
+    opacity_reasons = []
+    if has_pipes:
+        opacity_reasons.append("pipe")
+    if has_subshell:
+        opacity_reasons.append("subshell")
+    if has_var_expansion:
+        opacity_reasons.append("variable_expansion")
+
+    if opacity_reasons and result["confidence_tier"] < TIER_OPAQUE:
+        result["confidence_tier"] = TIER_OPAQUE
+        result["evidence_source"] += f"+opacity({','.join(opacity_reasons)})"
+
+    return result
+
+
+def _classify_single_command_base(command: str) -> dict:
+    """Classify a single shell command without opacity floor.
+
+    Returns the raw classification based on program identification.
+    The caller (_classify_single_command) applies the opacity floor.
+    """
     parsed = _parse_command(command)
     program = parsed["program"]
     args = parsed["args"]
@@ -596,19 +635,10 @@ def classify(tool_name: str, args: Optional[dict] = None) -> dict:
             original_tool=tool_name,
         )
 
-    # --- Network operations (URLs in parameters) ---
-    if urls:
-        return _result(
-            action_type=ACTION_NETWORK,
-            targets=urls,
-            scope=SCOPE_REMOTE,
-            confidence_tier=TIER_DIRECT if not paths else TIER_INFERRED,
-            evidence_source="parameter_url",
-            evidence_details={"urls": urls},
-            original_tool=tool_name,
-        )
-
-    # --- Tier 2: Command execution ---
+    # --- Command execution (must precede generic URL extraction) ---
+    # When a 'command' arg is present, the command classifier handles
+    # URL detection in context (e.g., a URL inside a pipeline should not
+    # short-circuit to Tier 1 NETWORK — the pipe makes it opaque).
     command = args.get("command", "")
     if command:
         cmd_class = _classify_command(command)
@@ -619,6 +649,18 @@ def classify(tool_name: str, args: Optional[dict] = None) -> dict:
             confidence_tier=cmd_class["confidence_tier"],
             evidence_source=cmd_class["evidence_source"],
             evidence_details={"command": command},
+            original_tool=tool_name,
+        )
+
+    # --- Network operations (URLs in parameters) ---
+    if urls:
+        return _result(
+            action_type=ACTION_NETWORK,
+            targets=urls,
+            scope=SCOPE_REMOTE,
+            confidence_tier=TIER_DIRECT if not paths else TIER_INFERRED,
+            evidence_source="parameter_url",
+            evidence_details={"urls": urls},
             original_tool=tool_name,
         )
 
