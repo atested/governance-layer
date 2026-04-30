@@ -1847,11 +1847,15 @@ def record_startup_integrity_events(
                 "session_id": session_id,
             },
         )
+    # SEC-2026-002: include metadata_hash so the signed event binds the
+    # integrity metadata to the chain, preventing silent replacement.
+    current_metadata = integrity_monitor.load_metadata() or {}
     chain_recorder.append_integrity_event(
         "proxy_startup_code_hash",
         {
             "current_proxy_code_hash": current_code_hash,
             "code_paths": hashes["code_paths"],
+            "metadata_hash": current_metadata.get("metadata_hash"),
             "user_identity": user_identity,
             "session_id": session_id,
         },

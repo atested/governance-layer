@@ -9,6 +9,7 @@ navigation focus.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional
 
@@ -116,6 +117,33 @@ def load_raw_records_range(
                 "archive_id": archive_id,
             }
         archive_path = Path(manifest["archive_chain_path"])
+        # SEC-2026-005: validate archive_chain_path stays inside archive dir
+        from chain_archive import archive_root_for
+        expected_root = archive_root_for(chain_path).resolve()
+        try:
+            resolved = archive_path.resolve(strict=False)
+        except (OSError, ValueError):
+            return {
+                "error": f"archive path invalid: {archive_path}",
+                "records": [],
+                "predecessor_hash": None,
+                "start_sequence": start_sequence,
+                "end_sequence": end_sequence,
+                "record_count": 0,
+                "chain_source": chain_source,
+                "archive_id": archive_id,
+            }
+        if not str(resolved).startswith(str(expected_root) + os.sep) and resolved != expected_root:
+            return {
+                "error": f"archive path escapes archive directory: {archive_path}",
+                "records": [],
+                "predecessor_hash": None,
+                "start_sequence": start_sequence,
+                "end_sequence": end_sequence,
+                "record_count": 0,
+                "chain_source": chain_source,
+                "archive_id": archive_id,
+            }
         if not archive_path.exists():
             return {
                 "error": f"archive file missing: {archive_path}",

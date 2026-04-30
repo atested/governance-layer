@@ -12,6 +12,7 @@ The password is never logged, stored, or written to any file.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -173,33 +174,92 @@ def build_plaintext_payload(
 # Verification summary
 # ---------------------------------------------------------------------------
 
+def _load_verify_record_module():
+    """Load the verify-record module for hash recomputation."""
+    verify_path = Path(__file__).resolve().parent / "verify-record.py"
+    spec = importlib.util.spec_from_file_location("verify_record_impl", verify_path)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _is_verifiable_record(record: dict) -> bool:
+    """Check if a record has a format that verify_record_dict can handle."""
+    if record.get("event_type"):
+        return True  # non-action event
+    if record.get("record_version") == "2.0" and record.get("record_type") == "mediated_decision":
+        return True  # v2 mediated decision
+    return False
+
+
+def _recompute_simple_hash(record: dict) -> str:
+    """Recompute a record hash using simple canonicalization.
+
+    For records not in a recognized format (v1 legacy, test records),
+    strips record_hash and computes SHA-256 of the canonical JSON.
+    """
+    body = {k: v for k, v in record.items() if k != "record_hash"}
+    canon = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
 def build_verification_summary(records: list[dict]) -> dict[str, Any]:
-    """Verify hash linkage within the selected records and produce a summary."""
+    """Verify record hashes and linkage within the selected records.
+
+    SEC-2026-003: Recomputes record hashes rather than trusting stored
+    values. Uses verify_record_dict() for recognized formats (v2 mediated
+    decisions, non-action events). For other records, recomputes via
+    simple canonicalization. Falls back to linkage-only if verify module
+    is unavailable.
+    """
     if not records:
         return {"status": "empty", "record_count": 0, "verified_count": 0, "break_count": 0}
+
+    verify_mod = _load_verify_record_module()
 
     verified = 0
     breaks = 0
     first_break_sequence = None
+    prev_hash = None
 
-    for i, record in enumerate(records):
-        if i == 0:
-            # First record: can only check self-consistency
-            if record.get("record_hash"):
+    old_dev = os.environ.get("GOV_SIGNING_DEV_MODE")
+    os.environ["GOV_SIGNING_DEV_MODE"] = "1"
+    try:
+        for i, record in enumerate(records):
+            record_ok = True
+
+            # Recompute and verify record hash
+            if verify_mod is not None and _is_verifiable_record(record):
+                rc, _lines = verify_mod.verify_record_dict(record)
+                if rc != 0:
+                    record_ok = False
+            elif record.get("record_hash"):
+                # Unrecognized format: recompute hash via simple method
+                recomputed = _recompute_simple_hash(record)
+                if recomputed != record["record_hash"]:
+                    record_ok = False
+
+            # Check prev_record_hash linkage
+            if record_ok and i > 0 and "prev_record_hash" in record:
+                linked_prev = record.get("prev_record_hash")
+                if prev_hash and linked_prev and prev_hash != linked_prev:
+                    record_ok = False
+
+            if record_ok:
                 verified += 1
-            continue
+            else:
+                breaks += 1
+                if first_break_sequence is None:
+                    first_break_sequence = i
 
-        prev_hash = records[i - 1].get("record_hash")
-        linked_prev = record.get("prev_record_hash")
-        if prev_hash and linked_prev and prev_hash == linked_prev:
-            verified += 1
-        elif prev_hash and linked_prev:
-            breaks += 1
-            if first_break_sequence is None:
-                first_break_sequence = i
+            prev_hash = record.get("record_hash")
+    finally:
+        if old_dev is None:
+            os.environ.pop("GOV_SIGNING_DEV_MODE", None)
         else:
-            # Missing hashes — count as verified (legacy records)
-            verified += 1
+            os.environ["GOV_SIGNING_DEV_MODE"] = old_dev
 
     status = "verified" if breaks == 0 else "breaks_detected"
     return {
@@ -437,6 +497,15 @@ def build_package(
     # Build verification-summary.json
     verification_json = json.dumps(verification, indent=2)
 
+    # SEC-2026-004: include viewer.html hash in manifest
+    viewer_html = _load_viewer_html()
+    viewer_sha256 = "sha256:" + hashlib.sha256(viewer_html.encode("utf-8")).hexdigest()
+    manifest["viewer_html_sha256"] = viewer_sha256
+
+    # Recompute manifest JSON/hash after adding viewer hash
+    manifest_json = json.dumps(manifest, indent=2)
+    manifest_hash = "sha256:" + hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
+
     # Assemble ZIP
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -446,7 +515,7 @@ def build_package(
         zf.writestr(f"{prefix}encrypted-chain.sha256", ciphertext_sha256)
         zf.writestr(f"{prefix}public-key.json", public_key_json)
         zf.writestr(f"{prefix}verification-summary.json", verification_json)
-        zf.writestr(f"{prefix}viewer.html", _load_viewer_html())
+        zf.writestr(f"{prefix}viewer.html", viewer_html)
 
     zip_bytes = zip_buffer.getvalue()
 
