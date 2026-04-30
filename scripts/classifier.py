@@ -114,6 +114,19 @@ _HEX_BLOB_PATTERN = re.compile(
 # Variable expansion: matches $VAR, ${VAR}, $1 but not $( $' $$ $?
 _VAR_EXPANSION_PATTERN = re.compile(r'\$\{?\w')
 
+# Shell redirection operators: >, >>, 2>, &>, >|, and bare < (input redirect).
+# Excludes <<  (heredoc, handled separately) and <( / >( (process substitution,
+# handled separately).  Uses negative lookbehind/lookahead to avoid false matches.
+_SHELL_REDIRECT_PATTERN = re.compile(
+    r'(?:&>>?'          # &> or &>>
+    r'|\d+>>?'          # 2> or 2>> or 1> etc.
+    r'|>\|'             # >| (clobber)
+    r'|>>(?!>)'         # >> (append, not >>>)
+    r'|(?<!\()>(?!\()'  # > but not >( and not preceded by ( for <(>
+    r'|(?<!<)<(?![<(])'  # < but not << and not <(
+    r')'
+)
+
 # Well-known Tier 2 commands with understood side effects
 _TIER2_COMMAND_MAP = {
     "git": {
@@ -391,6 +404,7 @@ def _classify_single_command(command: str) -> dict:
     has_var_expansion = bool(_VAR_EXPANSION_PATTERN.search(command))
     has_process_sub = "<(" in command or ">(" in command
     has_heredoc = "<<" in command
+    has_redirect = bool(_SHELL_REDIRECT_PATTERN.search(command))
 
     opacity_reasons = []
     if has_pipes:
@@ -403,6 +417,8 @@ def _classify_single_command(command: str) -> dict:
         opacity_reasons.append("process_substitution")
     if has_heredoc:
         opacity_reasons.append("heredoc")
+    if has_redirect:
+        opacity_reasons.append("redirection")
 
     if opacity_reasons and result["confidence_tier"] < TIER_OPAQUE:
         result["confidence_tier"] = TIER_OPAQUE

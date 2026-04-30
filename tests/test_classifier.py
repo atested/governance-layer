@@ -195,9 +195,10 @@ class TestTier2Commands:
         assert r["confidence_tier"] == TIER_INFERRED
 
     def test_redirect_is_write(self):
+        """Redirects are writes, elevated to Tier 3 by opacity floor (SEC-2026-001)."""
         r = classify("Bash", {"command": "echo hello > /tmp/out.txt"})
         assert r["action_type"] == ACTION_WRITE
-        assert r["confidence_tier"] == TIER_INFERRED
+        assert r["confidence_tier"] == TIER_OPAQUE
 
 
 # ---------------------------------------------------------------------------
