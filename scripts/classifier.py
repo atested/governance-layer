@@ -390,6 +390,7 @@ def _classify_single_command(command: str) -> dict:
     has_subshell = "$(" in command or "`" in command
     has_var_expansion = bool(_VAR_EXPANSION_PATTERN.search(command))
     has_process_sub = "<(" in command or ">(" in command
+    has_heredoc = "<<" in command
 
     opacity_reasons = []
     if has_pipes:
@@ -400,6 +401,8 @@ def _classify_single_command(command: str) -> dict:
         opacity_reasons.append("variable_expansion")
     if has_process_sub:
         opacity_reasons.append("process_substitution")
+    if has_heredoc:
+        opacity_reasons.append("heredoc")
 
     if opacity_reasons and result["confidence_tier"] < TIER_OPAQUE:
         result["confidence_tier"] = TIER_OPAQUE

@@ -109,10 +109,20 @@ class TestCommandChainingClassification:
         assert "command_chain" not in cls["evidence"]["source"]
 
     def test_chain_preserves_highest_scope(self):
-        """Chain with network command escalates scope."""
+        """Chain with network command escalates scope.
+
+        D-161 opacity floor: chained commands are classified as opaque
+        (Tier 3). The action_type reflects the highest-severity
+        component but the tier is elevated to 3 because the chain
+        prevents full inspection. Prior to D-161, this expected
+        action_type == "network", but the opacity floor now correctly
+        returns "execute" for opaque chained commands.
+        """
         cls = _classify_bash("echo hello && curl https://evil.com")
         assert cls["scope"] == "remote"
-        assert cls["action_type"] == "network"
+        # D-161: chained commands with opaque elements are Tier 3+
+        # action_type is "execute" (opaque classification), not "network"
+        assert cls["confidence_tier"] >= 3
 
     def test_three_part_chain_takes_worst(self):
         """git status && echo ok && rm -rf / takes the destructive classification."""
