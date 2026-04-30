@@ -146,6 +146,10 @@ DEFAULT_PORT = 8080
 DEFAULT_HOST = "127.0.0.1"
 ANTHROPIC_API_BASE = "https://api.anthropic.com"
 
+# Maximum request body size (bytes). Protects against unbounded reads.
+# 10 MB — large enough for any legitimate model API request.
+MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10 * 1024 * 1024))
+
 # ---------------------------------------------------------------------------
 # Chain recorder (thread-safe, append-only JSONL)
 # ---------------------------------------------------------------------------
@@ -1497,15 +1501,27 @@ class ProxyServer:
                     key, value = line_str.split(":", 1)
                     headers[key.strip().lower()] = value.strip()
 
-            # Read body
+            # Read body (with size limit)
             body = b""
             content_length = int(headers.get("content-length", "0"))
+            if content_length > MAX_REQUEST_BODY_BYTES:
+                logger.warning("Request body too large: %d bytes (limit %d)",
+                               content_length, MAX_REQUEST_BODY_BYTES)
+                err_body = json.dumps({"error": "request body too large"}).encode()
+                writer.write(b"HTTP/1.1 413 Content Too Large\r\n")
+                writer.write(b"content-type: application/json\r\n")
+                writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                writer.write(b"\r\n")
+                writer.write(err_body)
+                await writer.drain()
+                return
             if content_length > 0:
                 body = await asyncio.wait_for(
                     reader.readexactly(content_length), timeout=60.0
                 )
             elif headers.get("transfer-encoding", "").lower() == "chunked":
                 chunks = []
+                total_chunked = 0
                 while True:
                     size_line = await asyncio.wait_for(
                         reader.readline(), timeout=30.0
@@ -1514,6 +1530,18 @@ class ProxyServer:
                     if chunk_size == 0:
                         await reader.readline()
                         break
+                    total_chunked += chunk_size
+                    if total_chunked > MAX_REQUEST_BODY_BYTES:
+                        logger.warning("Chunked request body too large: %d+ bytes (limit %d)",
+                                       total_chunked, MAX_REQUEST_BODY_BYTES)
+                        err_body = json.dumps({"error": "request body too large"}).encode()
+                        writer.write(b"HTTP/1.1 413 Content Too Large\r\n")
+                        writer.write(b"content-type: application/json\r\n")
+                        writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                        writer.write(b"\r\n")
+                        writer.write(err_body)
+                        await writer.drain()
+                        return
                     chunk_data = await asyncio.wait_for(
                         reader.readexactly(chunk_size), timeout=30.0
                     )
@@ -1605,7 +1633,7 @@ class ProxyServer:
         except Exception as exc:
             logger.error("Request handling error: %s", exc, exc_info=True)
             try:
-                err_body = json.dumps({"error": str(exc)}).encode()
+                err_body = json.dumps({"error": "internal proxy error"}).encode()
                 writer.write(b"HTTP/1.1 502 Bad Gateway\r\n")
                 writer.write(b"content-type: application/json\r\n")
                 writer.write(f"content-length: {len(err_body)}\r\n".encode())
@@ -1735,6 +1763,20 @@ def main():
     logger.info("Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s",
                 anthropic_upstream, args.openai_upstream, args.gemini_upstream,
                 args.litellm_upstream or "(not configured)")
+
+    # Warn about non-HTTPS upstreams (informational — proxy starts regardless)
+    for provider_label, upstream_url in [
+        ("anthropic", anthropic_upstream),
+        ("openai", args.openai_upstream),
+        ("gemini", args.gemini_upstream),
+        ("litellm", args.litellm_upstream),
+    ]:
+        if upstream_url and upstream_url.startswith("http://"):
+            logger.warning(
+                "WARNING: upstream for %s is not using HTTPS — "
+                "traffic to this provider will be unencrypted: %s",
+                provider_label, upstream_url,
+            )
 
     try:
         if startup_archive_manifest is not None:
