@@ -29,7 +29,7 @@ const REPORT_TEMPLATES = [
   },
   {
     id: 'operator-comparison',
-    title: 'Operator Comparison',
+    title: 'User Comparison',
     subtitle: 'Compare activity by user or agent identity',
     accent: 'blue',
     defaultRange: '30d',
@@ -37,7 +37,7 @@ const REPORT_TEMPLATES = [
   },
   {
     id: 'audit-evidence',
-    title: 'Audit Evidence Pack',
+    title: 'Audit Evidence Export',
     subtitle: 'Evidence summary for external review',
     accent: 'purple',
     defaultRange: 'all',
@@ -45,7 +45,7 @@ const REPORT_TEMPLATES = [
   },
   {
     id: 'unusual-activity',
-    title: 'Unusual Activity Watch',
+    title: 'Unusual Activity Detection',
     subtitle: 'Low-frequency and high-denial signals',
     accent: 'red',
     defaultRange: '7d',
@@ -61,7 +61,7 @@ const REPORT_TEMPLATES = [
   },
   {
     id: 'trouble-history',
-    title: 'Trouble History',
+    title: 'Support Requests',
     subtitle: 'Support requests and captured page context',
     accent: 'amber',
     defaultRange: '30d',
@@ -136,8 +136,7 @@ function _applyStaticTooltips(state) {
   setTooltips(state.el, [
     ['#rp-from', 'Start of the reporting time range.'],
     ['#rp-to', 'End of the reporting time range.'],
-    ['#rp-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
-    ['#rp-export', 'Export the current formatted report in the selected format.'],
+    ['#rp-generate', 'Re-generate the report with current settings.'],
     ['#rp-stat-total', 'Total records included in this report.'],
     ['#rp-stat-allow', 'Allowed operations in the report range.'],
     ['#rp-stat-deny', 'Denied operations in the report range.'],
@@ -202,12 +201,11 @@ function _buildUI(state) {
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
           </div>
           <div class="rp-fp-actions">
-            <select class="rp-select rp-export-format" id="rp-export-format" aria-label="Export format">
-              <option value="json">JSON</option>
-              <option value="csv">CSV</option>
-              <option value="excel">Excel</option>
-            </select>
-            <button class="rp-btn rp-btn-export" id="rp-export">Export</button>
+            <button class="rp-btn rp-btn-primary" id="rp-generate">Generate</button>
+            <span class="rp-fp-mini-label" style="margin:0 4px;align-self:center;text-transform:none;font-size:0.72rem">Export:</span>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="json">JSON</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="csv">CSV</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="excel">Excel</button>
           </div>
         </div>
       </div>
@@ -282,8 +280,19 @@ function _wireControls(state) {
   el.querySelector('#rp-from').addEventListener('change', onCustomRange);
   el.querySelector('#rp-to').addEventListener('change', onCustomRange);
 
-  // Export button
-  el.querySelector('#rp-export').addEventListener('click', () => _exportReport(state));
+  // Generate button
+  el.querySelector('#rp-generate').addEventListener('click', () => {
+    recordUiAggregate('report_runs', state.reportId);
+    _loadReport(state);
+  });
+
+  // Export format buttons
+  el.querySelectorAll('.rp-export-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state._exportFormat = btn.dataset.format;
+      _exportReport(state);
+    });
+  });
 }
 
 function _readTimeFilters(state) {
@@ -561,19 +570,18 @@ function _renderReportView(state) {
   body.appendChild(findings);
 
   if (d.report_id === 'governance-summary') {
-    body.appendChild(_section('Decision mix', _barList(state, d.groups.decision?.groups || [], 'decision')));
+    body.appendChild(_section('Decision mix', _barList(state, (d.groups.decision?.groups || []).filter(g => g.key === 'ALLOW' || g.key === 'DENY'), 'decision')));
     body.appendChild(_section('Most active actions', _barList(state, d.groups.tool?.groups || [], 'tool')));
-    body.appendChild(_section('Activity categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
+    body.appendChild(_section('Activity categories', _barList(state, d.groups.category?.groups || [], 'category')));
   } else if (d.report_id === 'denial-patterns') {
-    body.appendChild(_section('Highest-risk actions', _compactTable(_groupsWithDenies(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Denied categories', _barList(state, _groupsWithDenies(d.groups.category), 'category')));
-    body.appendChild(_section('Operators with denials', _compactTable(_groupsWithDenies(d.groups.user), ['Operator', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('Most denied actions', _compactTable(_groupsWithDenies(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('Most denied rules', _barList(state, _groupsWithDenies(d.groups.category), 'category')));
+    body.appendChild(_section('Users with denials', _compactTable(_groupsWithDenies(d.groups.user), ['User', 'Records', 'DENY', 'Deny rate'])));
   } else if (d.report_id === 'operator-comparison') {
-    body.appendChild(_section('Operator activity', _compactTable(d.groups.user?.groups || [], ['Operator', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('User activity', _compactTable(d.groups.user?.groups || [], ['User', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Decision balance', _barList(state, d.groups.decision?.groups || [], 'decision')));
     body.appendChild(_section('Action distribution', _barList(state, d.groups.tool?.groups || [], 'tool')));
   } else if (d.report_id === 'audit-evidence') {
-    body.appendChild(_section('Evidence checklist', _auditChecklist(d)));
     body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
     body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
   } else if (d.report_id === 'trouble-history') {
@@ -598,13 +606,13 @@ function _buildFindings(reportId, grouped, totals) {
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: 'amber', detail: `${denyPct} of selected records were denied.` },
       { label: 'Most denied action', value: topDeniedTool?.key || 'None', tone: topDeniedTool ? 'amber' : 'green', detail: topDeniedTool ? `${_fmtNum(topDeniedTool.deny_count || 0)} denied records.` : 'No denied action activity in range.' },
       { label: 'Primary category', value: topCategory?.key || 'N/A', tone: 'blue', detail: 'Largest evidence category in the range.' },
-      { label: 'Operator signal', value: topUser?.key || 'N/A', tone: 'purple', detail: 'Most active identity in this report.' },
+      { label: 'User signal', value: topUser?.key || 'N/A', tone: 'purple', detail: 'Most active identity in this report.' },
     ];
   }
   if (reportId === 'operator-comparison') {
     return [
-      { label: 'Active identities', value: _fmtNum((grouped.user?.groups || []).length), tone: 'blue', detail: 'Distinct users or agents with records.' },
-      { label: 'Most active', value: topUser?.key || 'N/A', tone: 'amber', detail: topUser ? `${_fmtNum(topUser.count || 0)} records.` : 'No operator data available.' },
+      { label: 'Active users', value: _fmtNum((grouped.user?.groups || []).length), tone: 'blue', detail: 'Distinct users or agents with records.' },
+      { label: 'Most active', value: topUser?.key || 'N/A', tone: 'amber', detail: topUser ? `${_fmtNum(topUser.count || 0)} records.` : 'No user data available.' },
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
       { label: 'Dominant action', value: topTool?.key || 'N/A', tone: 'blue', detail: 'Most used operation path.' },
     ];
@@ -721,7 +729,7 @@ function _auditChecklist(d) {
 
 function _headlineForReport(d) {
   if (d.report_id === 'denial-patterns') return 'Policy denials are grouped by the actions, categories, and operators most useful for triage.';
-  if (d.report_id === 'operator-comparison') return 'Activity is organized by user or agent identity so outliers are easy to spot.';
+  if (d.report_id === 'operator-comparison') return 'Activity is organized by user or agent identity so unusual patterns are easy to spot.';
   if (d.report_id === 'audit-evidence') return 'This view packages the selected chain records into an auditor-ready summary.';
   if (d.report_id === 'unusual-activity') return 'This view highlights high-denial and low-frequency activity that deserves review.';
   if (d.report_id === 'telemetry-summary') return 'This report shows the same aggregate telemetry summary Atested can receive, with no raw event history.';
@@ -1028,7 +1036,7 @@ async function _exportReport(state) {
     { key: 'value', label: 'Value' },
     { key: 'detail', label: 'Detail' },
   ];
-  const format = state.el.querySelector('#rp-export-format')?.value || 'json';
+  const format = state._exportFormat || 'json';
   const auth = await authorizeExport({
     surface: 'reports',
     format,
@@ -1164,12 +1172,19 @@ rpStyles.textContent = `
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, transform 0.15s;
   }
-  .rp-report-card:hover,
-  .rp-report-active {
+  .rp-report-card:hover {
     background: #252a33;
     border-color: rgba(255,255,255,0.24);
     transform: translateY(-1px);
   }
+  .rp-report-active {
+    background: #252a33;
+    border-color: rgba(255,255,255,0.30);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .rp-report-active .rp-report-accent { height: 8px; }
+  .rp-report-active .rp-report-title { color: #fff; }
   .rp-report-accent {
     position: absolute;
     left: 0;
@@ -1672,8 +1687,8 @@ rpStyles.textContent = `
     background: rgba(102,153,204,0.06);
   }
   .rp-bar-label {
-    flex: 0 0 140px;
-    font-size: 0.82rem;
+    flex: 0 0 120px;
+    font-size: 0.78rem;
     color: #e4e6eb;
     overflow: hidden;
     text-overflow: ellipsis;

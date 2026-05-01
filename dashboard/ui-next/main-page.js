@@ -138,7 +138,7 @@ export function renderMainPage() {
   _page.innerHTML = `
     <div class="mp-title-pane">
       <div class="mp-title-accent"></div>
-      <h1 class="mp-page-title">Atested AI Operations</h1>
+      <h1 class="mp-page-title">Atested Operations Dashboard</h1>
     </div>
     <div class="mp-top-panes">
       <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">

@@ -14,18 +14,16 @@ import { authorizeExport, downloadExport } from '../export-utils.js';
 // ---------- Column definitions ----------
 
 const COLUMNS = [
-  // Standard columns (shown by default)
-  { key: 'timestamp_utc', label: 'Time',       standard: true,  width: '120px' },
-  { key: 'event_category', label: 'Event',     standard: true,  width: '140px' },
-  { key: 'policy_decision', label: 'Decision', standard: true,  width: '80px'  },
-  { key: 'tool_name',   label: 'Action',       standard: true  },
-  // Advanced columns (hidden by default)
-  { key: 'sequence_position', label: '#',       standard: false, width: '50px'  },
-  { key: 'action_type', label: 'Category',     standard: false, width: '100px' },
-  { key: 'confidence_tier', label: 'Tier',     standard: false, width: '50px'  },
-  { key: 'target',      label: 'Target',       standard: false },
-  { key: 'user_identity', label: 'User',       standard: false, width: '120px' },
-  { key: 'matched_rule', label: 'Rule',       standard: false, width: '140px' },
+  { key: 'sequence_position', label: '#',       width: '50px'  },
+  { key: 'timestamp_utc', label: 'Time',       width: '120px' },
+  { key: 'user_identity', label: 'User',       width: '120px' },
+  { key: 'event_category', label: 'Event',     width: '110px' },
+  { key: 'policy_decision', label: 'Decision', width: '80px'  },
+  { key: 'matched_rule', label: 'Rule',        width: '140px' },
+  { key: 'tool_name',   label: 'Action',       width: '140px' },
+  { key: 'confidence_tier', label: 'Tier',     width: '50px'  },
+  { key: 'action_type', label: 'Category',     width: '100px' },
+  { key: 'target',      label: 'Target',       width: 'minmax(100px, 1fr)' },
 ];
 
 const COLUMN_TOOLTIPS = {
@@ -64,6 +62,8 @@ export function openActivityWindow(trigger, opts = {}) {
     decisionFilter: opts.decisionFilter || '',       // '', 'ALLOW', 'DENY'
     eventTypeFilter: opts.eventTypeFilter || '',
     toolFilter: opts.toolFilter || '',
+    ruleFilter: '',
+    userFilter: '',
     // Pagination
     currentPage: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -73,14 +73,17 @@ export function openActivityWindow(trigger, opts = {}) {
     summary: { allow_count: 0, deny_count: 0, tool_categories: 0 },
     // Column visibility (keyed by column key)
     visibleColumns: {},
+    // Sort state
+    sortKey: null,
+    sortDir: 'asc',
     // Options
     scrollToRecord: opts.scrollToRecord || null,
     selectedRecordId: null,
   };
 
-  // Initialize column visibility to Standard preset
+  // Initialize column visibility — all columns visible by default
   for (const col of COLUMNS) {
-    state.visibleColumns[col.key] = col.standard;
+    state.visibleColumns[col.key] = true;
   }
 
   _buildUI(state);
@@ -189,7 +192,23 @@ function _buildUI(state) {
             </label>
             <label class="aw-fp-label">
               Action
-              <input type="text" class="aw-input" id="aw-tool-filter" placeholder="All actions">
+              <select class="aw-select" id="aw-tool-filter">
+                <option value="">All actions</option>
+              </select>
+            </label>
+          </div>
+          <div class="aw-fp-selects">
+            <label class="aw-fp-label">
+              Rule
+              <select class="aw-select" id="aw-rule-filter">
+                <option value="">All rules</option>
+              </select>
+            </label>
+            <label class="aw-fp-label">
+              User
+              <select class="aw-select" id="aw-user-filter">
+                <option value="">All users</option>
+              </select>
             </label>
           </div>
           <div class="aw-fp-actions">
@@ -223,9 +242,6 @@ function _buildUI(state) {
 
     <!-- Column toggles -->
     <div class="aw-col-bar" id="aw-col-bar">
-      <button class="aw-col-preset aw-col-preset-active" id="aw-preset-standard">Standard</button>
-      <button class="aw-col-preset" id="aw-preset-advanced">Advanced</button>
-      <span class="aw-col-sep"></span>
       <div class="aw-col-toggles" id="aw-col-toggles"></div>
     </div>
 
@@ -256,7 +272,6 @@ function _buildColumnToggles(state) {
     btn.addEventListener('click', () => {
       state.visibleColumns[col.key] = !state.visibleColumns[col.key];
       btn.classList.toggle('aw-col-toggle-on', state.visibleColumns[col.key]);
-      _updatePresetHighlight(state);
       _renderTable(state);
     });
     container.appendChild(btn);
@@ -273,12 +288,12 @@ function _applyStaticTooltips(state) {
     ['#aw-to', 'End of the Activity time filter.'],
     ['#aw-event-type', 'Limit the list to one kind of chain event.'],
     ['#aw-tool-filter', 'Filter by governed action name.'],
+    ['#aw-rule-filter', 'Filter by the policy rule that matched.'],
+    ['#aw-user-filter', 'Filter by user or agent identity.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
     ['#aw-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
     ['#aw-export', 'Export matching Activity records in the selected format.'],
-    ['#aw-preset-standard', 'Show the default Activity columns.'],
-    ['#aw-preset-advanced', 'Show all Activity columns.'],
   ]);
   state.el.querySelectorAll('.aw-quick-btn').forEach(btn => {
     setTooltip(btn, `Set the time range to ${btn.textContent.trim()}.`);
@@ -290,13 +305,6 @@ function _applyStaticTooltips(state) {
   state.el.querySelectorAll('.aw-ps-btn').forEach(btn => {
     setTooltip(btn, `Show ${btn.dataset.size} records per page.`);
   });
-}
-
-function _updatePresetHighlight(state) {
-  const isStandard = COLUMNS.every(c => state.visibleColumns[c.key] === c.standard);
-  const isAdvanced = COLUMNS.every(c => state.visibleColumns[c.key] === true);
-  state.el.querySelector('#aw-preset-standard').classList.toggle('aw-col-preset-active', isStandard);
-  state.el.querySelector('#aw-preset-advanced').classList.toggle('aw-col-preset-active', isAdvanced);
 }
 
 // ---------- Wire controls ----------
@@ -345,6 +353,8 @@ function _wireControls(state) {
     el.querySelector('#aw-to').value = '';
     el.querySelector('#aw-event-type').value = '';
     el.querySelector('#aw-tool-filter').value = '';
+    el.querySelector('#aw-rule-filter').value = '';
+    el.querySelector('#aw-user-filter').value = '';
     // Reset decision toggles
     el.querySelectorAll('.aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('aw-dtoggle-active');
@@ -353,6 +363,8 @@ function _wireControls(state) {
     state.decisionFilter = '';
     state.eventTypeFilter = '';
     state.toolFilter = '';
+    state.ruleFilter = '';
+    state.userFilter = '';
     state.currentPage = 1;
     _loadData(state);
   });
@@ -382,19 +394,6 @@ function _wireControls(state) {
   // Export
   el.querySelector('#aw-export').addEventListener('click', () => _exportActivity(state));
 
-  // Column presets
-  el.querySelector('#aw-preset-standard').addEventListener('click', () => {
-    for (const col of COLUMNS) state.visibleColumns[col.key] = col.standard;
-    _buildColumnToggles(state);
-    _updatePresetHighlight(state);
-    _renderTable(state);
-  });
-  el.querySelector('#aw-preset-advanced').addEventListener('click', () => {
-    for (const col of COLUMNS) state.visibleColumns[col.key] = true;
-    _buildColumnToggles(state);
-    _updatePresetHighlight(state);
-    _renderTable(state);
-  });
 }
 
 function _readFilters(state) {
@@ -404,7 +403,9 @@ function _readFilters(state) {
   state.startTime = fromVal ? new Date(fromVal).toISOString() : '';
   state.endTime = toVal ? new Date(toVal).toISOString() : '';
   state.eventTypeFilter = el.querySelector('#aw-event-type').value;
-  state.toolFilter = el.querySelector('#aw-tool-filter').value.trim();
+  state.toolFilter = el.querySelector('#aw-tool-filter').value;
+  state.ruleFilter = el.querySelector('#aw-rule-filter').value;
+  state.userFilter = el.querySelector('#aw-user-filter').value;
 }
 
 // ---------- Data loading ----------
@@ -433,6 +434,7 @@ async function _loadData(state) {
   state.totalMatching = res.data.total_matching || state.data.length;
   state.summary = res.data.summary || { allow_count: 0, deny_count: 0, tool_categories: 0 };
 
+  _populateFilterDropdowns(state);
   _updateStats(state);
   _renderTable(state);
   _renderPagination(state);
@@ -449,6 +451,37 @@ async function _loadData(state) {
       }, 100);
     }
   }
+}
+
+// ---------- Filter dropdowns ----------
+
+function _populateFilterDropdowns(state) {
+  const el = state.el;
+  const data = state.data;
+
+  // Collect unique values from loaded data
+  const actions = new Set(), rules = new Set(), users = new Set();
+  for (const entry of data) {
+    const detail = entry.detail || {};
+    if (detail.tool_name) actions.add(detail.tool_name);
+    if (detail.matched_rule) rules.add(detail.matched_rule);
+    if (entry.user_identity) users.add(entry.user_identity);
+  }
+
+  _fillSelect(el.querySelector('#aw-tool-filter'), 'All actions', actions, state.toolFilter);
+  _fillSelect(el.querySelector('#aw-rule-filter'), 'All rules', rules, state.ruleFilter);
+  _fillSelect(el.querySelector('#aw-user-filter'), 'All users', users, state.userFilter);
+}
+
+function _fillSelect(select, defaultLabel, values, currentValue) {
+  if (!select) return;
+  const sorted = [...values].sort();
+  const opts = [`<option value="">${defaultLabel}</option>`];
+  for (const v of sorted) {
+    const sel = v === currentValue ? ' selected' : '';
+    opts.push(`<option value="${_escAttr(v)}"${sel}>${_esc(v)}</option>`);
+  }
+  select.innerHTML = opts.join('');
 }
 
 // ---------- Stats ----------
@@ -472,7 +505,16 @@ function _renderTable(state) {
   const wrap = state.el.querySelector('#aw-table-wrap');
   wrap.innerHTML = '';
 
-  if (!state.data.length) {
+  // Apply client-side filters (rule, user)
+  let filteredData = state.data;
+  if (state.ruleFilter) {
+    filteredData = filteredData.filter(e => (e.detail || {}).matched_rule === state.ruleFilter);
+  }
+  if (state.userFilter) {
+    filteredData = filteredData.filter(e => e.user_identity === state.userFilter);
+  }
+
+  if (!filteredData.length) {
     wrap.innerHTML = '<div class="aw-empty">No events found</div>';
     return;
   }
@@ -492,17 +534,40 @@ function _renderTable(state) {
   const headerRow = document.createElement('tr');
   for (const col of visibleCols) {
     const th = document.createElement('th');
-    th.textContent = col.label;
+    th.className = 'aw-th-sortable';
+    const arrow = state.sortKey === col.key ? (state.sortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+    th.textContent = col.label + arrow;
     if (col.width) th.style.width = col.width;
+    if (state.sortKey === col.key) th.classList.add('aw-th-sorted');
     setTooltip(th, COLUMN_TOOLTIPS[col.key]);
+    th.addEventListener('click', () => {
+      if (state.sortKey === col.key) {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sortKey = col.key;
+        state.sortDir = 'asc';
+      }
+      _renderTable(state);
+    });
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
   table.appendChild(thead);
 
+  // Sort data if a sort key is active
+  let sortedData = filteredData;
+  if (state.sortKey) {
+    sortedData = [...filteredData].sort((a, b) => {
+      const av = _getCellValue(state.sortKey, a, a.detail || {});
+      const bv = _getCellValue(state.sortKey, b, b.detail || {});
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return state.sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
   // Body
   const tbody = document.createElement('tbody');
-  for (const entry of state.data) {
+  for (const entry of sortedData) {
     const tr = document.createElement('tr');
     tr.className = 'aw-row';
     tr.tabIndex = 0;
@@ -1158,13 +1223,20 @@ awStyles.textContent = `
     border-bottom: 1px solid rgba(255,255,255,0.08);
     white-space: nowrap;
   }
+  .aw-th-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.1s;
+  }
+  .aw-th-sortable:hover { color: #e4e6eb; }
+  .aw-th-sorted { color: #6699cc; }
   .aw-table tbody td {
     padding: 7px 10px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 300px;
+    max-width: 250px;
   }
   .aw-row {
     cursor: pointer;
