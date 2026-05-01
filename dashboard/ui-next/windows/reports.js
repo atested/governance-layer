@@ -46,10 +46,10 @@ const REPORT_TEMPLATES = [
   {
     id: 'unusual-activity',
     title: 'Unusual Activity Detection',
-    subtitle: 'Low-frequency and high-denial signals',
+    subtitle: 'Events outside normal operating patterns',
     accent: 'red',
     defaultRange: '7d',
-    groups: ['tool', 'category', 'hour', 'user'],
+    groups: ['tool', 'hour', 'user'],
   },
   {
     id: 'telemetry-summary',
@@ -122,6 +122,7 @@ export function openReportsWindow(trigger) {
     activeRange: REPORT_BY_ID['governance-summary'].defaultRange,
     reportId: 'governance-summary',
     data: null,
+    tier: 'personal',
   };
 
   _buildUI(state);
@@ -129,7 +130,13 @@ export function openReportsWindow(trigger) {
   installWindowTooltips(content);
   _applyStaticTooltips(state);
   _wireControls(state);
-  _loadReport(state);
+
+  // Fetch tier, enforce range restrictions, then load
+  api.getLicensingMode().then(res => {
+    if (res.ok) state.tier = res.data.license_tier || 'personal';
+    _enforceRangeTier(state);
+    _loadReport(state);
+  }).catch(() => _loadReport(state));
 }
 
 function _applyStaticTooltips(state) {
@@ -271,7 +278,7 @@ function _wireControls(state) {
   // Quick-select time buttons
   el.querySelector('#rp-quick-btns').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-range]');
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     recordUiAggregate('range_shortcuts', btn.dataset.range);
     _applyRange(state, btn.dataset.range);
   });
@@ -348,6 +355,33 @@ function _applyRange(state, range, opts = {}) {
   if (opts.load !== false) _loadReport(state);
 }
 
+// Personal tier: 7d max. Team+ unlocks 30d, all.
+const _TIER_RESTRICTED_RANGES = new Set(['30d', 'all']);
+const _TIER_UNRESTRICTED = new Set(['team', 'institution']);
+
+function _enforceRangeTier(state) {
+  const restricted = !_TIER_UNRESTRICTED.has(state.tier) && !['crew', 'personal_plus'].includes(state.tier);
+  state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
+    const range = btn.dataset.range;
+    if (_TIER_RESTRICTED_RANGES.has(range)) {
+      btn.disabled = restricted;
+      btn.classList.toggle('rp-range-locked', restricted);
+      btn.title = restricted ? 'Upgrade to Team tier for extended reporting ranges' : '';
+    }
+  });
+  // Show/hide upgrade note
+  let note = state.el.querySelector('.rp-range-upgrade');
+  if (restricted && !note) {
+    note = document.createElement('div');
+    note.className = 'rp-range-upgrade';
+    note.textContent = '30-day and all-time ranges require Team tier';
+    const btns = state.el.querySelector('#rp-quick-btns');
+    if (btns) btns.parentNode.insertBefore(note, btns.nextSibling);
+  } else if (!restricted && note) {
+    note.remove();
+  }
+}
+
 function _setActiveRange(state, range) {
   state.activeRange = range;
   state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
@@ -380,11 +414,9 @@ async function _loadReport(state) {
   if (template.id === 'telemetry-summary') {
     await flushTelemetrySummary();
     const res = await api.getTelemetrySummary();
-    if (!res.ok) {
-      body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
-      return;
-    }
-    state.data = _composeTelemetryReportData(template, res.data, params);
+    // Treat 404 (missing runtime dir) as empty data, not an error
+    const payload = res.ok ? res.data : { summary: {}, categories: {}, opted_in: false };
+    state.data = _composeTelemetryReportData(template, payload, params);
     _renderStats(state);
     _renderReportView(state);
     _setExportButtons(state, true);
@@ -392,11 +424,9 @@ async function _loadReport(state) {
   }
   if (template.id === 'trouble-history') {
     const res = await api.getTroubleReports();
-    if (!res.ok) {
-      body.innerHTML = `<div class="rp-error">${_esc(res.error)}</div>`;
-      return;
-    }
-    state.data = _composeTroubleReportData(template, res.data, params);
+    // Treat 404 (missing runtime dir) as empty data
+    const payload = res.ok ? res.data : { reports: [] };
+    state.data = _composeTroubleReportData(template, payload, params);
     _renderStats(state);
     _renderReportView(state);
     _setExportButtons(state, true);
@@ -633,13 +663,19 @@ function _renderReportView(state) {
     }
   } else if (d.report_id === 'trouble-history') {
     body.appendChild(_section('Priority breakdown', _troublePrioritySummary(d.trouble.reports)));
-    body.appendChild(_section('Support request history', _troubleHistoryTable(d.trouble.reports)));
-    body.appendChild(_section('Captured context', _troubleContextList(d.trouble.reports)));
+    body.appendChild(_section('Support requests', _troubleExpandableList(d.trouble.reports)));
   } else {
-    body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroups(d.groups.tool), ['Signal', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Hourly concentration', _compactTable(d.groups.hour?.groups || [], ['Hour', 'Records', 'DENY'])));
-    body.appendChild(_section('User signals', _compactTable(_highDenyGroups(d.groups.user), ['User', 'Records', 'DENY', 'Deny rate'])));
+    // Filter to governed tool calls only — exclude internal MCP broker operations and system events
+    const governedTools = _filterGovernedGroups(d.groups.tool?.groups || []);
+    const governedUsers = _filterGovernedGroups(d.groups.user?.groups || []);
+    body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroupsFiltered(governedTools), ['Action', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups({ groups: governedTools }), ['Action', 'Records', 'DENY', 'Deny rate'])));
+    // Side-by-side cards for hourly and user
+    const sideBySide = document.createElement('div');
+    sideBySide.className = 'rp-side-by-side';
+    sideBySide.appendChild(_section('Hourly distribution', _compactTable(d.groups.hour?.groups || [], ['Hour', 'Records', 'DENY'])));
+    sideBySide.appendChild(_section('User signals', _compactTable(_highDenyGroupsFiltered(governedUsers), ['User', 'Records', 'DENY', 'Deny rate'])));
+    body.appendChild(sideBySide);
   }
 }
 
@@ -679,13 +715,11 @@ function _buildFindings(reportId, grouped, totals) {
     ];
   }
   if (reportId === 'unusual-activity') {
-    const highDeny = _highDenyGroups(grouped.tool)[0];
-    const lowFreq = _lowFrequencyGroups(grouped.tool)[0];
     return [
-      { label: 'High-denial signal', value: highDeny?.key || 'None', tone: highDeny ? 'red' : 'green', detail: highDeny ? `${_groupDenyRate(highDeny)} deny rate.` : 'No high-denial group found.' },
-      { label: 'Low-frequency action', value: lowFreq?.key || 'None', tone: lowFreq ? 'amber' : 'green', detail: lowFreq ? `${_fmtNum(lowFreq.count || 0)} record(s).` : 'No low-frequency group found.' },
-      { label: 'Total records', value: _fmtNum(totals.total), tone: 'blue', detail: 'Records analyzed for unusual activity.' },
+      { label: 'Total records', value: _fmtNum(totals.total), tone: 'blue', detail: 'Governed decisions analyzed for unusual activity.' },
+      { label: 'ALLOW', value: _fmtNum(totals.allow), tone: 'green', detail: 'Operations allowed by policy.' },
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
+      { label: 'Deny rate', value: denyPct, tone: totals.deny ? 'red' : 'green', detail: 'Denied records divided by total records.' },
     ];
   }
   return [
@@ -824,7 +858,90 @@ function _renderTelemetryReport(body, d) {
     }
   }
 
-  body.appendChild(_section('Telemetry transmissions', _telemetryTransmissionsByCategory(d.telemetry, d.time_range)));
+  // Activity-style expandable transmission list
+  body.appendChild(_section('Transmission history', _telemetryTransmissionList(d.telemetry, d.time_range)));
+}
+
+function _telemetryTransmissionList(telemetry, range) {
+  const wrap = document.createElement('div');
+  wrap.className = 'rp-tx-list';
+  const transmissions = _filteredTransmissions(telemetry, range);
+  if (!transmissions.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No telemetry transmissions recorded. Telemetry data is only sent when the operator opts in from Communications.</div>';
+    return wrap;
+  }
+  for (const tx of transmissions) {
+    const entry = document.createElement('div');
+    entry.className = 'rp-tx-entry';
+    const ts = tx.timestamp_utc || tx.timestamp || '';
+    const artifactId = tx.artifact_id || 'summary';
+    entry.innerHTML = `
+      <div class="rp-tx-row">
+        <span class="rp-tx-time">${_esc(_formatShortDate(ts))}</span>
+        <span class="rp-tx-artifact">${_esc(_truncate(artifactId, 28))}</span>
+        <span class="rp-tx-status rp-tx-sent">Sent</span>
+        <span class="rp-tx-expand">&#9660;</span>
+      </div>
+      <div class="rp-tx-detail" style="display:none"></div>
+    `;
+    const row = entry.querySelector('.rp-tx-row');
+    const detail = entry.querySelector('.rp-tx-detail');
+    const arrow = entry.querySelector('.rp-tx-expand');
+    row.addEventListener('click', () => {
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'block';
+      arrow.innerHTML = open ? '&#9660;' : '&#9650;';
+      if (!open && !detail.dataset.loaded) {
+        detail.dataset.loaded = '1';
+        detail.appendChild(_telemetryPayloadDetail(tx));
+      }
+    });
+    wrap.appendChild(entry);
+  }
+  return wrap;
+}
+
+function _filteredTransmissions(telemetry, range) {
+  const transmissions = telemetry?.transmissions || [];
+  const startMs = range?.start ? new Date(range.start).getTime() : null;
+  const endMs = range?.end ? new Date(range.end).getTime() : null;
+  return transmissions.filter(tx => {
+    const sentMs = new Date(tx.timestamp_utc || tx.timestamp || '').getTime();
+    if (!Number.isFinite(sentMs)) return true;
+    if (startMs && sentMs < startMs) return false;
+    if (endMs && sentMs > endMs) return false;
+    return true;
+  }).sort((a, b) =>
+    String(b.timestamp_utc || b.timestamp || '').localeCompare(String(a.timestamp_utc || a.timestamp || ''))
+  );
+}
+
+function _telemetryPayloadDetail(tx) {
+  const detail = document.createElement('div');
+  detail.className = 'rp-tx-payload';
+  const periods = tx.periods_sent?.length
+    ? tx.periods_sent
+    : (tx.categories?.periods?.length ? tx.categories.periods : []);
+  if (!periods.length) {
+    detail.innerHTML = '<div class="rp-tx-legacy">Legacy summary artifact — detailed category breakdown was not recorded with this transmission.</div>';
+    return detail;
+  }
+  for (const period of periods) {
+    const cats = period.categories || {};
+    const block = document.createElement('div');
+    block.className = 'rp-tx-period';
+    block.innerHTML = `<div class="rp-tx-period-label">Period: ${_esc(period.period || 'current')}</div>`;
+    for (const cat of TELEMETRY_CATEGORIES) {
+      const data = cats[cat.key];
+      if (!data) continue;
+      const line = document.createElement('div');
+      line.className = 'rp-tx-cat-line';
+      line.innerHTML = `<span class="rp-tx-cat-name">${_esc(cat.title)}</span><span class="rp-tx-cat-summary">${_esc(_summarizeTelemetryCategory(cat.key, data))}</span>`;
+      block.appendChild(line);
+    }
+    detail.appendChild(block);
+  }
+  return detail;
 }
 
 function _telemetryFullCard(title, copy, accent) {
@@ -847,74 +964,7 @@ function _telemetryCategoryCard(category) {
   return card;
 }
 
-function _telemetryTransmissionsByCategory(telemetry, range) {
-  const wrap = document.createElement('div');
-  wrap.className = 'rp-telemetry-transmissions';
-  const rows = _telemetryTransmissionRows(telemetry, range);
-  if (!rows.length) {
-    wrap.innerHTML = '<div class="rp-empty-note">No Atested telemetry transmissions in the selected range.</div>';
-    return wrap;
-  }
-
-  for (const category of TELEMETRY_CATEGORIES) {
-    const categoryRows = rows.filter(row => row.category === category.key);
-    if (!categoryRows.length) continue;
-    const block = document.createElement('div');
-    block.className = 'rp-telemetry-category-block';
-    block.innerHTML = `<div class="rp-telemetry-block-title">${_esc(category.title)}</div>`;
-    block.appendChild(_simpleTable(['Period', 'Sent at', 'Artifact', 'What was sent'], categoryRows.map(row => [
-      row.period,
-      _formatShortDate(row.sent_at),
-      _truncate(row.artifact_id, 22),
-      row.summary,
-    ])));
-    wrap.appendChild(block);
-  }
-  return wrap;
-}
-
-function _telemetryTransmissionRows(telemetry, range) {
-  const transmissions = telemetry?.transmissions || [];
-  const startMs = range?.start ? new Date(range.start).getTime() : null;
-  const endMs = range?.end ? new Date(range.end).getTime() : null;
-  const rows = [];
-
-  for (const tx of transmissions) {
-    const sentMs = new Date(tx.timestamp_utc || tx.timestamp || '').getTime();
-    if (Number.isFinite(sentMs)) {
-      if (startMs && sentMs < startMs) continue;
-      if (endMs && sentMs > endMs) continue;
-    }
-    const periods = tx.periods_sent?.length
-      ? tx.periods_sent
-      : (tx.categories?.periods?.length ? tx.categories.periods : []);
-    if (!periods.length) {
-      for (const category of TELEMETRY_CATEGORIES) {
-        rows.push({
-          category: category.key,
-          period: _formatShortDate(tx.timestamp_utc || tx.timestamp || ''),
-          sent_at: tx.timestamp_utc || tx.timestamp || '',
-          artifact_id: tx.artifact_id || 'summary',
-          summary: 'Legacy summary artifact; category detail was not recorded with this transmission.',
-        });
-      }
-      continue;
-    }
-    for (const period of periods) {
-      const cats = period.categories || {};
-      for (const category of TELEMETRY_CATEGORIES) {
-        rows.push({
-          category: category.key,
-          period: period.period || 'current',
-          sent_at: tx.timestamp_utc || tx.timestamp || '',
-          artifact_id: tx.artifact_id || 'summary',
-          summary: _summarizeTelemetryCategory(category.key, cats[category.key]),
-        });
-      }
-    }
-  }
-  return rows;
-}
+// (telemetry transmission rendering moved to _telemetryTransmissionList above)
 
 function _summarizeTelemetryCategory(key, data = {}) {
   if (key === 'ui_interactions') {
@@ -975,41 +1025,66 @@ function _troublePrioritySummary(reports) {
   return _compactTable(groups, ['Priority', 'Count']);
 }
 
-function _troubleHistoryTable(reports) {
-  const rows = (reports || []).map(report => [
-    _formatShortDate(report.timestamp_utc || report.timestamp),
-    _labelize(report.priority || 'normal'),
-    report.context?.current_window || 'Main page',
-    _truncate(report.description || '', 90),
-    _truncate(report.artifact_hash || report.artifact_id || '', 24),
-  ]);
-  return _simpleTable(['Submitted', 'Priority', 'Window', 'Description', 'Artifact'], rows);
+function _troubleExpandableList(reports) {
+  const wrap = document.createElement('div');
+  wrap.className = 'rp-tx-list';
+  if (!(reports || []).length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No support requests submitted. Use the Trouble button in any window to submit a report.</div>';
+    return wrap;
+  }
+  for (const report of reports) {
+    const entry = document.createElement('div');
+    entry.className = 'rp-tx-entry';
+    const ts = report.timestamp_utc || report.timestamp || '';
+    const priority = _labelize(report.priority || 'normal');
+    const priorityClass = (report.priority === 'high' || report.priority === 'urgent') ? 'rp-tx-priority-high' : 'rp-tx-priority-normal';
+    const window = report.context?.current_window || 'Main page';
+    entry.innerHTML = `
+      <div class="rp-tx-row">
+        <span class="rp-tx-time">${_esc(_formatShortDate(ts))}</span>
+        <span class="rp-tx-artifact">${_esc(window)}</span>
+        <span class="rp-tx-status ${priorityClass}">${_esc(priority)}</span>
+        <span class="rp-tx-expand">&#9660;</span>
+      </div>
+      <div class="rp-tx-detail" style="display:none"></div>
+    `;
+    const row = entry.querySelector('.rp-tx-row');
+    const detail = entry.querySelector('.rp-tx-detail');
+    const arrow = entry.querySelector('.rp-tx-expand');
+    row.addEventListener('click', () => {
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'block';
+      arrow.innerHTML = open ? '&#9660;' : '&#9650;';
+      if (!open && !detail.dataset.loaded) {
+        detail.dataset.loaded = '1';
+        detail.appendChild(_troubleReportDetail(report));
+      }
+    });
+    wrap.appendChild(entry);
+  }
+  return wrap;
 }
 
-function _troubleContextList(reports) {
-  const list = document.createElement('div');
-  list.className = 'rp-audit-checklist';
-  const all = (reports || []).filter(r => r.context);
-  if (!all.length) {
-    list.innerHTML = '<div class="rp-empty-note">No trouble report context has been captured yet.</div>';
-    return list;
+function _troubleReportDetail(report) {
+  const detail = document.createElement('div');
+  detail.className = 'rp-tx-payload';
+  const context = report.context || {};
+  const fields = [
+    ['Description', report.description || 'No description provided'],
+    ['Priority', _labelize(report.priority || 'normal')],
+    ['Captured at', context.captured_at_utc || report.timestamp_utc || 'N/A'],
+    ['Path', context.path || 'N/A'],
+    ['Window stack', (context.modal_stack || []).map(w => w.title).filter(Boolean).join(' > ') || context.current_window || 'Main page'],
+    ['License label', context.visible_state?.license || 'N/A'],
+    ['Artifact', report.artifact_hash || report.artifact_id || 'N/A'],
+  ];
+  for (const [label, value] of fields) {
+    const line = document.createElement('div');
+    line.className = 'rp-tx-cat-line';
+    line.innerHTML = `<span class="rp-tx-cat-name">${_esc(label)}</span><span class="rp-tx-cat-summary">${_esc(value)}</span>`;
+    detail.appendChild(line);
   }
-  for (const report of all.slice(0, 10)) {
-    const context = report.context || {};
-    const checks = [
-      ['Captured at', context.captured_at_utc || report.timestamp_utc || 'N/A', 'When the UI context snapshot was created.'],
-      ['Path', context.path || 'N/A', 'Browser path visible when the report was submitted.'],
-      ['Window stack', (context.modal_stack || []).map(w => w.title).filter(Boolean).join(' > ') || context.current_window || 'Main page', 'Open window context attached to the report.'],
-      ['License label', context.visible_state?.license || 'N/A', 'License state shown in the operator chrome at capture time.'],
-    ];
-    for (const [label, value, detail] of checks) {
-      const row = document.createElement('div');
-      row.className = 'rp-audit-row';
-      row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
-      list.appendChild(row);
-    }
-  }
-  return list;
+  return detail;
 }
 
 function _topGroup(report) {
@@ -1030,6 +1105,26 @@ function _highDenyGroups(report) {
 
 function _lowFrequencyGroups(report) {
   return (report?.groups || []).filter(g => (g.count || 0) <= 2).sort((a, b) => (a.count || 0) - (b.count || 0));
+}
+
+const _SYSTEM_EVENT_KEYS = new Set([
+  'disclosure_shown', 'notifications_viewed', 'questionnaire_reset',
+  'capacity_inputs', 'session_start', 'session_end', 'heartbeat',
+  'config_reload', 'chain_rotate', 'ui_event',
+]);
+
+function _filterGovernedGroups(groups) {
+  return groups.filter(g => {
+    const k = (g.key || '').toLowerCase();
+    if (k.startsWith('mcp__governance-broker__') || k.startsWith('mcp__governance_broker__')) return false;
+    if (_SYSTEM_EVENT_KEYS.has(k)) return false;
+    return true;
+  });
+}
+
+function _highDenyGroupsFiltered(groups) {
+  return groups.filter(g => (g.deny_count || 0) > 0 && (g.count || 0) >= 3)
+    .sort((a, b) => (b.deny_count || 0) / Math.max(b.count || 1, 1) - (a.deny_count || 0) / Math.max(a.count || 1, 1));
 }
 
 function _groupDenyRate(group) {
@@ -1447,6 +1542,24 @@ rpStyles.textContent = `
   .rp-report-purple .rp-report-accent { background: #d2a8ff; }
   .rp-report-red .rp-report-accent { background: #f85149; }
 
+  /* Filled accent background on active card */
+  .rp-report-active.rp-report-green { background: rgba(63,185,80,0.18); border-color: rgba(63,185,80,0.4); }
+  .rp-report-active.rp-report-amber { background: rgba(210,153,34,0.18); border-color: rgba(210,153,34,0.4); }
+  .rp-report-active.rp-report-blue { background: rgba(102,153,204,0.18); border-color: rgba(102,153,204,0.4); }
+  .rp-report-active.rp-report-purple { background: rgba(210,168,255,0.18); border-color: rgba(210,168,255,0.4); }
+  .rp-report-active.rp-report-red { background: rgba(248,81,73,0.18); border-color: rgba(248,81,73,0.4); }
+  .rp-report-active .rp-report-subtitle { color: #c7cdd6; }
+
+  /* ---- Side-by-side layout ---- */
+  .rp-side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 600px) {
+    .rp-side-by-side { grid-template-columns: 1fr; }
+  }
+
   /* ---- Filter row ---- */
   .rp-filter-row {
     display: grid;
@@ -1555,6 +1668,17 @@ rpStyles.textContent = `
     color: #e4e6eb;
     border-color: rgba(102,153,204,0.55);
     font-weight: 700;
+  }
+  .rp-range-locked {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .rp-range-upgrade {
+    font-size: 0.68rem;
+    color: #d29922;
+    margin-top: 6px;
+    letter-spacing: 0.03em;
   }
 
   /* Group by toggles */
@@ -1787,16 +1911,26 @@ rpStyles.textContent = `
     font-size: 0.74rem;
     line-height: 1.4;
   }
-  .rp-telemetry-transmissions {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .rp-telemetry-category-block {
-    border: 1px dashed rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.018);
-    padding: 12px;
-  }
+  /* ---- Expandable transmission list ---- */
+  .rp-tx-list { display: flex; flex-direction: column; gap: 2px; }
+  .rp-tx-entry { border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; background: rgba(255,255,255,0.018); }
+  .rp-tx-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; transition: background 0.1s; }
+  .rp-tx-row:hover { background: rgba(255,255,255,0.04); }
+  .rp-tx-time { color: #8b919a; font-size: 0.78rem; flex: 0 0 130px; }
+  .rp-tx-artifact { color: #c7cdd6; font-size: 0.78rem; flex: 1; font-family: monospace; }
+  .rp-tx-status { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+  .rp-tx-sent { color: #3fb950; }
+  .rp-tx-priority-high { color: #f85149; }
+  .rp-tx-priority-normal { color: #d29922; }
+  .rp-tx-expand { color: #6b7280; font-size: 0.65rem; flex: 0 0 16px; text-align: center; }
+  .rp-tx-detail { padding: 0 14px 14px; border-top: 1px dashed rgba(255,255,255,0.08); }
+  .rp-tx-payload { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+  .rp-tx-legacy { color: #8b919a; font-size: 0.78rem; font-style: italic; padding: 8px 0; }
+  .rp-tx-period { border: 1px dashed rgba(255,255,255,0.06); padding: 10px; border-radius: 2px; }
+  .rp-tx-period-label { color: #6699cc; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .rp-tx-cat-line { display: flex; gap: 10px; padding: 3px 0; font-size: 0.78rem; }
+  .rp-tx-cat-name { color: #c7cdd6; font-weight: 600; flex: 0 0 160px; }
+  .rp-tx-cat-summary { color: #8b919a; flex: 1; }
   .rp-finding-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

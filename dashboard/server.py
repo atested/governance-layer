@@ -3996,11 +3996,28 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"archives": list_archives(CHAIN)})
 
         elif path == "/api/audit/report":
+            # Tier-based range enforcement: Personal tier max 7 days
+            start_time = qs("start_time") or None
+            end_time = qs("end_time") or None
+            if start_time:
+                try:
+                    from licensing import resolve_posture
+                    posture = resolve_posture(RUNTIME)
+                    tier = posture.get("license_tier", "personal")
+                    if tier in ("personal",):
+                        from datetime import datetime, timezone
+                        st = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                        now = datetime.now(timezone.utc)
+                        if (now - st).total_seconds() > 8 * 86400:
+                            _json_response(self, {"error": "Extended time ranges require Team tier or above."}, status=403)
+                            return
+                except Exception:
+                    pass  # Fail open — don't block report on licensing errors
             from readout import audit_report
             data = audit_report(
                 CHAIN, RECORDS_DIR,
-                start_time=qs("start_time") or None,
-                end_time=qs("end_time") or None,
+                start_time=start_time,
+                end_time=end_time,
                 group_by=qs("group_by", "tool"),
             )
             _json_response(self, data)
