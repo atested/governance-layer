@@ -991,6 +991,7 @@ def audit_report(
 
     groups: Counter[str] = Counter()
     group_deny: Counter[str] = Counter()
+    group_allow: Counter[str] = Counter()
     decision_counts: Counter[str] = Counter()
     total = 0
 
@@ -1042,6 +1043,15 @@ def audit_report(
         elif group_by == "rule":
             key = rec.get("matched_rule", "") or "No rule"
 
+        elif group_by == "action_type":
+            is_v2 = rec.get("record_version") == "2.0"
+            if is_v2:
+                classification = rec.get("classification", {})
+                key = classification.get("action_type", "") or rec.get("action_type", "")
+            else:
+                key = ""
+            key = key or "unknown"
+
         elif group_by == "hour":
             if ts:
                 # Extract HH:00 from timestamp
@@ -1052,14 +1062,19 @@ def audit_report(
         groups[key] += 1
         if pd == "DENY":
             group_deny[key] += 1
+        elif pd == "ALLOW":
+            group_allow[key] += 1
 
     # Build groups list with deny counts for amber-bar highlighting
     group_list = []
     for k, v in groups.most_common():
         entry = {"key": k, "count": v}
         deny_n = group_deny.get(k, 0)
+        allow_n = group_allow.get(k, 0)
         if deny_n > 0:
             entry["deny_count"] = deny_n
+        if allow_n > 0:
+            entry["allow_count"] = allow_n
         group_list.append(entry)
 
     return {

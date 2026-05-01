@@ -41,7 +41,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Evidence summary for external review',
     accent: 'purple',
     defaultRange: 'all',
-    groups: ['decision', 'category', 'tool', 'rule'],
+    groups: ['decision', 'action_type', 'tool', 'rule'],
   },
   {
     id: 'unusual-activity',
@@ -429,14 +429,17 @@ async function _loadReport(state) {
     } catch (_) { /* non-critical */ }
   }
   if (template.id === 'audit-evidence') {
-    const [approvalsRes, opaqueRes] = await Promise.all([
+    const [approvalsRes, activityRes] = await Promise.all([
       api.getApprovals(),
-      api.getActivity({ ...params, limit: 100 }),
+      api.getActivity({ ...params, limit: 500 }),
     ]);
     if (approvalsRes.ok) state.data.approvals = approvalsRes.data?.approvals || approvalsRes.data || [];
-    if (opaqueRes.ok) {
-      const entries = opaqueRes.data?.entries || opaqueRes.data || [];
-      state.data.opaqueActions = entries.filter(e => (e.event_category || '').includes('opaque'));
+    if (activityRes.ok) {
+      const entries = activityRes.data?.entries || activityRes.data || [];
+      state.data.opaqueActions = entries.filter(e =>
+        e.event_category === 'opaque_invocation_decision' ||
+        (e.detail?.confidence_tier && e.detail.confidence_tier >= 3)
+      );
     }
   }
 
@@ -615,14 +618,18 @@ function _renderReportView(state) {
       body.appendChild(_section('User detail', _userDetailSection(d.activityEntries)));
     }
   } else if (d.report_id === 'audit-evidence') {
-    body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
-    body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
+    // Item 1: Decision summary — only ALLOW and DENY
+    const decisions = (d.groups.decision?.groups || []).filter(g => g.key === 'ALLOW' || g.key === 'DENY');
+    body.appendChild(_section('Decision summary', _compactTable(decisions, ['Decision', 'Records'])));
+    // Item 3: Action breakdown by action_type with allow/deny counts
+    body.appendChild(_section('Action breakdown', _actionBreakdownTable(d.groups.action_type?.groups || [])));
     body.appendChild(_section('Rules summary', _compactTable(d.groups.rule?.groups || [], ['Rule', 'Records', 'DENY'])));
     if (d.approvals) {
       body.appendChild(_section('Active approvals', _approvalsSection(d.approvals)));
     }
+    // Item 4: Opaque actions paired with approval status
     if (d.opaqueActions) {
-      body.appendChild(_section('Capability actions', _opaqueActionsSection(d.opaqueActions)));
+      body.appendChild(_section('Opaque actions', _opaqueActionsPairedSection(d.opaqueActions, d.approvals || [])));
     }
   } else if (d.report_id === 'trouble-history') {
     body.appendChild(_section('Priority breakdown', _troublePrioritySummary(d.trouble.reports)));
@@ -662,11 +669,13 @@ function _buildFindings(reportId, grouped, totals) {
     ];
   }
   if (reportId === 'audit-evidence') {
+    const topAction = _topGroup(grouped.action_type);
+    const governed = totals.allow + totals.deny;
     return [
-      { label: 'Records in scope', value: _fmtNum(totals.total), tone: 'purple', detail: 'Chain records covered by this evidence pack.' },
+      { label: 'Governed decisions', value: _fmtNum(governed), tone: 'purple', detail: `${_fmtNum(totals.total)} total chain records, ${_fmtNum(governed)} with ALLOW/DENY decisions.` },
       { label: 'ALLOW', value: _fmtNum(totals.allow), tone: 'green', detail: 'Operations allowed by policy.' },
       { label: 'DENY', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: 'Operations blocked by policy.' },
-      { label: 'Top category', value: topCategory?.key || 'N/A', tone: 'blue', detail: 'Largest record category.' },
+      { label: 'Top action', value: topAction?.key || 'N/A', tone: 'blue', detail: topAction ? `${_fmtNum(topAction.count || 0)} records of this action type.` : 'No action type data.' },
     ];
   }
   if (reportId === 'unusual-activity') {
@@ -1096,19 +1105,85 @@ function _approvalsSection(approvals) {
   return wrap;
 }
 
-function _opaqueActionsSection(entries) {
+function _actionBreakdownTable(groups) {
   const wrap = document.createElement('div');
-  if (!entries || !entries.length) {
-    wrap.innerHTML = '<div class="rp-empty-note">No capability actions in this range.</div>';
+  if (!groups || !groups.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No action type data available.</div>';
     return wrap;
   }
-  const rows = entries.slice(0, 20).map(e => [
-    _formatShortDate(e.timestamp_utc || ''),
-    e.tool_name || e.detail?.tool_name || 'N/A',
-    e.policy_decision || 'N/A',
-    _truncate(e.detail?.target || '', 50),
+  const rows = groups.map(g => [
+    g.key,
+    String(g.count || 0),
+    String(g.allow_count || 0),
+    String(g.deny_count || 0),
   ]);
-  wrap.appendChild(_simpleTable(['Time', 'Action', 'Decision', 'Target'], rows));
+  wrap.appendChild(_simpleTable(['Action type', 'Records', 'ALLOW', 'DENY'], rows));
+  return wrap;
+}
+
+function _opaqueActionsPairedSection(entries, approvals) {
+  const wrap = document.createElement('div');
+  if (!entries || !entries.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No opaque actions in this range.</div>';
+    return wrap;
+  }
+
+  // Build approval lookup by artifact_identity
+  const approvalMap = {};
+  for (const a of (approvals || [])) {
+    const key = a.artifact_identity || a.artifact_id || '';
+    if (key) approvalMap[key] = a;
+  }
+
+  // Filter to opaque invocation decisions (Tier 3+)
+  const opaque = entries.filter(e =>
+    e.event_category === 'opaque_invocation_decision' ||
+    (e.detail?.confidence_tier && e.detail.confidence_tier >= 3)
+  );
+
+  if (!opaque.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No opaque actions in this range.</div>';
+    return wrap;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'rp-report-table';
+  table.innerHTML = '<thead><tr><th>Time</th><th>Action</th><th>Decision</th><th>Approval status</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  for (const e of opaque.slice(0, 30)) {
+    const tr = document.createElement('tr');
+    const decision = e.policy_decision || e.detail?.resolution || 'N/A';
+    const artifactId = e.detail?.artifact_identity || '';
+    const approval = approvalMap[artifactId];
+
+    let statusText, statusClass;
+    if (decision === 'DENY') {
+      statusText = 'Denied — no approval or approval did not cover this action';
+      statusClass = 'rp-opaque-denied';
+    } else if (decision === 'ALLOW' && approval) {
+      const who = approval.operator_identity || approval.operator || 'operator';
+      const when = _formatShortDate(approval.granted_at || approval.timestamp_utc || '');
+      statusText = `Approved by ${who} on ${when}`;
+      statusClass = 'rp-opaque-approved';
+    } else if (decision === 'ALLOW') {
+      statusText = 'ALLOW without approval — anomaly';
+      statusClass = 'rp-opaque-anomaly';
+    } else {
+      statusText = decision;
+      statusClass = '';
+    }
+
+    tr.innerHTML = `
+      <td>${_esc(_formatShortDate(e.timestamp_utc || ''))}</td>
+      <td>${_esc(e.tool_name || e.detail?.tool_name || 'N/A')}</td>
+      <td><span class="${statusClass}">${_esc(decision)}</span></td>
+      <td>${_esc(statusText)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
   return wrap;
 }
 
@@ -1902,6 +1977,11 @@ rpStyles.textContent = `
     padding: 16px 20px;
   }
 
+  /* ---- Opaque action status ---- */
+  .rp-opaque-denied { color: #d29922; }
+  .rp-opaque-approved { color: #3fb950; }
+  .rp-opaque-anomaly { color: #f85149; font-weight: 600; }
+
   /* ---- Export buttons ---- */
   .rp-export-btn:disabled {
     opacity: 0.35;
@@ -2002,6 +2082,10 @@ rpStyles.textContent = `
     .rp-telemetry-category { background: #f8f8f8 !important; border-color: #ddd !important; }
     .rp-telemetry-category-title { color: #333 !important; }
     .rp-telemetry-category-copy { color: #555 !important; }
+
+    .rp-opaque-denied { color: #9a6700 !important; }
+    .rp-opaque-approved { color: #1a7f37 !important; }
+    .rp-opaque-anomaly { color: #cf222e !important; }
   }
 
   /* ---- Responsive ---- */
