@@ -123,6 +123,7 @@ export function openReportsWindow(trigger) {
     reportId: 'governance-summary',
     data: null,
     tier: 'personal',
+    includeArchives: false,
   };
 
   _buildUI(state);
@@ -205,6 +206,13 @@ function _buildUI(state) {
             <span class="rp-fp-mini-label">Selected report</span>
             <span class="rp-selected-title" id="rp-selected-title">${_esc(REPORT_BY_ID[state.reportId].title)}</span>
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
+          </div>
+          <div class="rp-fp-source-row">
+            <span class="rp-fp-mini-label">Source</span>
+            <div class="rp-source-toggles" id="rp-source-toggles">
+              <button class="rp-dtoggle rp-dtoggle-active" data-source="live">Live</button>
+              <button class="rp-dtoggle" data-source="all">+ Archives</button>
+            </div>
           </div>
           <div class="rp-fp-actions">
             <span class="rp-fp-mini-label" style="margin:0 4px;align-self:center;text-transform:none;font-size:0.72rem">Export:</span>
@@ -291,6 +299,16 @@ function _wireControls(state) {
   };
   el.querySelector('#rp-from').addEventListener('change', onCustomRange);
   el.querySelector('#rp-to').addEventListener('change', onCustomRange);
+
+  // Archive source toggle
+  el.querySelector('#rp-source-toggles').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-source]');
+    if (!btn) return;
+    el.querySelectorAll('#rp-source-toggles .rp-dtoggle').forEach(b => b.classList.remove('rp-dtoggle-active'));
+    btn.classList.add('rp-dtoggle-active');
+    state.includeArchives = btn.dataset.source === 'all';
+    _loadReport(state);
+  });
 
   // Export format buttons
   el.querySelectorAll('.rp-export-btn').forEach(btn => {
@@ -410,6 +428,7 @@ async function _loadReport(state) {
   const params = {};
   if (state.startTime) params.start_time = state.startTime;
   if (state.endTime) params.end_time = state.endTime;
+  if (state.includeArchives) params.include_archives = '1';
 
   if (template.id === 'telemetry-summary') {
     await flushTelemetrySummary();
@@ -1588,6 +1607,35 @@ rpStyles.textContent = `
   }
   .rp-fp-body {
     padding: 8px 20px 16px;
+  }
+  .rp-fp-source-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .rp-source-toggles {
+    display: flex;
+    gap: 4px;
+  }
+  .rp-dtoggle {
+    background: #23272e;
+    color: #8b919a;
+    border: 1px solid #31363f;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .rp-dtoggle:hover {
+    background: #2a2f38;
+    color: #c0c4cc;
+  }
+  .rp-dtoggle-active {
+    background: #2d6a4f;
+    color: #e4e6eb;
+    border-color: #40916c;
   }
   .rp-selected-report {
     display: flex;

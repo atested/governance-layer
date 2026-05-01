@@ -946,8 +946,12 @@ def collect_health_signals(
         "archive_count": len(list(archive_dir.glob("*.jsonl"))) if archive_dir.exists() else 0,
     }
 
-    # Load chain rows once and share across sub-signal functions
-    _shared_rows = _load_chain_rows_raw(chain_path) if chain_path.exists() else []
+    # Load chain rows once via the shared incremental cache and pass to sub-signals
+    try:
+        from readout import load_chain_rows as _readout_load
+        _shared_rows = _readout_load(chain_path) if chain_path.exists() else []
+    except ImportError:
+        _shared_rows = _load_chain_rows_raw(chain_path) if chain_path.exists() else []
 
     # Policy / DENY rate
     deny_rate = _compute_deny_rate(chain_path, _rows=_shared_rows)

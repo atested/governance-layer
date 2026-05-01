@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import threading
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,40 +49,50 @@ def _load_verify_record_module():
     return mod
 
 
-_row_cache: dict[str, Any] = {"mtime": 0.0, "size": 0, "rows": None, "path": ""}
+_chain_cache_lock = threading.Lock()
+_chain_cache: dict[str, Any] = {"path": "", "offset": 0, "rows": []}
 
 
 def load_chain_rows(chain_path: Path) -> list[dict]:
-    if not chain_path.exists():
-        return []
+    """Load chain rows with incremental tail-read caching.
 
-    try:
-        st = chain_path.stat()
-        mtime, size = st.st_mtime, st.st_size
-    except OSError:
-        mtime, size = 0.0, 0
+    Thread-safe.  On first call, parses the full file.  On subsequent calls,
+    only reads bytes appended since the last read.  Detects file shrink (e.g.
+    after archiving) and does a full reload.
+    """
+    with _chain_cache_lock:
+        path_str = str(chain_path)
+        try:
+            current_size = chain_path.stat().st_size
+        except OSError:
+            return []
 
-    if (
-        _row_cache["rows"] is not None
-        and _row_cache["mtime"] == mtime
-        and _row_cache["size"] == size
-        and _row_cache["path"] == str(chain_path)
-    ):
-        return _row_cache["rows"]
+        # Cache hit — file unchanged
+        if _chain_cache["path"] == path_str and _chain_cache["offset"] == current_size:
+            return list(_chain_cache["rows"])
 
-    rows: list[dict] = []
-    with open(chain_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
+        # File shrank (archived) or different path — full reload
+        if _chain_cache["path"] != path_str or current_size < _chain_cache["offset"]:
+            _chain_cache["rows"] = []
+            _chain_cache["offset"] = 0
 
-    _row_cache["mtime"] = mtime
-    _row_cache["size"] = size
-    _row_cache["path"] = str(chain_path)
-    _row_cache["rows"] = rows
-    return rows
+        # Incremental tail read from last known byte position
+        new_rows: list[dict] = []
+        with open(chain_path, "r", encoding="utf-8") as fh:
+            fh.seek(_chain_cache["offset"])
+            for line in fh:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    new_rows.append(json.loads(stripped))
+                except json.JSONDecodeError:
+                    continue
+
+        _chain_cache["rows"].extend(new_rows)
+        _chain_cache["offset"] = current_size
+        _chain_cache["path"] = path_str
+        return list(_chain_cache["rows"])
 
 
 _integrity_cache: dict[str, Any] = {"mtime": 0.0, "size": 0, "result": None}

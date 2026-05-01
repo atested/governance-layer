@@ -76,6 +76,8 @@ export function openActivityWindow(trigger, opts = {}) {
     // Sort state
     sortKey: null,
     sortDir: 'asc',
+    // Archive toggle
+    includeArchives: false,
     // Options
     scrollToRecord: opts.scrollToRecord || null,
     selectedRecordId: null,
@@ -177,6 +179,13 @@ function _buildUI(state) {
               <button class="aw-dtoggle aw-dtoggle-active" data-decision="">All</button>
               <button class="aw-dtoggle aw-dtoggle-allow" data-decision="ALLOW">Allow</button>
               <button class="aw-dtoggle aw-dtoggle-deny" data-decision="DENY">Deny</button>
+            </div>
+          </div>
+          <div class="aw-fp-decision-row">
+            <span class="aw-fp-mini-label">Source</span>
+            <div class="aw-decision-toggles" id="aw-source-toggles">
+              <button class="aw-dtoggle aw-dtoggle-active" data-source="live">Live</button>
+              <button class="aw-dtoggle" data-source="all">+ Archives</button>
             </div>
           </div>
           <div class="aw-fp-selects">
@@ -298,9 +307,13 @@ function _applyStaticTooltips(state) {
   state.el.querySelectorAll('.aw-quick-btn').forEach(btn => {
     setTooltip(btn, `Set the time range to ${btn.textContent.trim()}.`);
   });
-  state.el.querySelectorAll('.aw-dtoggle').forEach(btn => {
+  state.el.querySelectorAll('#aw-decision-toggles .aw-dtoggle').forEach(btn => {
     const label = btn.textContent.trim();
     setTooltip(btn, label === 'All' ? 'Show both allowed and denied decisions.' : `Show only ${label} decisions.`);
+  });
+  state.el.querySelectorAll('#aw-source-toggles .aw-dtoggle').forEach(btn => {
+    const label = btn.textContent.trim();
+    setTooltip(btn, label === 'Live' ? 'Show only live chain data.' : 'Include archived chain data.');
   });
   state.el.querySelectorAll('.aw-ps-btn').forEach(btn => {
     setTooltip(btn, `Show ${btn.dataset.size} records per page.`);
@@ -356,8 +369,11 @@ function _wireControls(state) {
     el.querySelector('#aw-rule-filter').value = '';
     el.querySelector('#aw-user-filter').value = '';
     // Reset decision toggles
-    el.querySelectorAll('.aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
+    el.querySelectorAll('#aw-decision-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('aw-dtoggle-active');
+    // Reset source toggles
+    el.querySelectorAll('#aw-source-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
+    el.querySelector('[data-source="live"]').classList.add('aw-dtoggle-active');
     state.startTime = '';
     state.endTime = '';
     state.decisionFilter = '';
@@ -365,6 +381,7 @@ function _wireControls(state) {
     state.toolFilter = '';
     state.ruleFilter = '';
     state.userFilter = '';
+    state.includeArchives = false;
     state.currentPage = 1;
     _loadData(state);
   });
@@ -373,9 +390,20 @@ function _wireControls(state) {
   el.querySelector('#aw-decision-toggles').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-decision]');
     if (!btn) return;
-    el.querySelectorAll('.aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
+    el.querySelectorAll('#aw-decision-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
     btn.classList.add('aw-dtoggle-active');
     state.decisionFilter = btn.dataset.decision;
+    state.currentPage = 1;
+    _loadData(state);
+  });
+
+  // Archive source toggle
+  el.querySelector('#aw-source-toggles').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-source]');
+    if (!btn) return;
+    el.querySelectorAll('#aw-source-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
+    btn.classList.add('aw-dtoggle-active');
+    state.includeArchives = btn.dataset.source === 'all';
     state.currentPage = 1;
     _loadData(state);
   });
@@ -423,6 +451,7 @@ async function _loadData(state) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.includeArchives) params.include_archives = '1';
 
   const res = await api.getActivity(params);
   if (!res.ok) {

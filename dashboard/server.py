@@ -665,6 +665,299 @@ def _append_chain_record_atomic(event):
             _release_chain_file_lock(lockdir)
 
 
+# ---------------------------------------------------------------------------
+# Size-based chain archive trigger (non-blocking)
+# ---------------------------------------------------------------------------
+
+_archive_check_state = {"last_check": 0.0, "running": False}
+_archive_check_lock = threading.Lock()
+
+
+def _maybe_trigger_archive():
+    """Non-blocking: spawn background thread if chain exceeds size threshold."""
+    now = _time_mod.time()
+    with _archive_check_lock:
+        if now - _archive_check_state["last_check"] < 30:
+            return
+        _archive_check_state["last_check"] = now
+        if _archive_check_state["running"]:
+            return
+    try:
+        size = CHAIN.stat().st_size
+    except OSError:
+        return
+    if size < 20 * 1024 * 1024:
+        return
+    with _archive_check_lock:
+        if _archive_check_state["running"]:
+            return
+        _archive_check_state["running"] = True
+    threading.Thread(target=_do_archive_background, daemon=True).start()
+
+
+def _do_archive_background():
+    """Background thread: trigger archive and generate artifacts."""
+    try:
+        from chain_archiver_trigger import trigger_archive_if_needed
+        from archive_artifacts import generate_artifacts
+        trigger_archive_if_needed(
+            CHAIN,
+            callback=lambda m: generate_artifacts(
+                Path(m["archive_chain_path"]), m["archive_id"]
+            ) if m.get("archive_chain_path") else None,
+        )
+    except Exception:
+        pass
+    finally:
+        with _archive_check_lock:
+            _archive_check_state["running"] = False
+
+
+# ---------------------------------------------------------------------------
+# Archive data merge helpers
+# ---------------------------------------------------------------------------
+
+def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
+    """Merge live activity entries with archive SQLite data."""
+    from chain_archive import list_archives, archive_root_for
+    from archive_artifacts import get_or_regenerate_sqlite
+
+    archives = list_archives(CHAIN)
+    if not archives:
+        return live_data
+
+    archive_root = archive_root_for(CHAIN)
+    all_entries = list(live_data.get("entries", []))
+
+    for manifest in archives:
+        archive_id = manifest.get("archive_id", "")
+        archive_chain_path = archive_root / f"{archive_id}.jsonl"
+        sqlite_path = archive_root / f"{archive_id}.sqlite"
+
+        if not archive_chain_path.exists():
+            continue
+
+        db_path = get_or_regenerate_sqlite(archive_chain_path, sqlite_path)
+        if db_path is None:
+            continue
+
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                query = "SELECT timestamp_utc, event_type, user_identity, tool_name, policy_decision, action_type, record_hash FROM records"
+                conditions = []
+                params = []
+                if start_time:
+                    conditions.append("timestamp_utc >= ?")
+                    params.append(start_time)
+                if end_time:
+                    conditions.append("timestamp_utc <= ?")
+                    params.append(end_time)
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                query += " ORDER BY timestamp_utc DESC"
+
+                for row in conn.execute(query, params):
+                    all_entries.append({
+                        "timestamp_utc": row["timestamp_utc"],
+                        "event_type": row["event_type"],
+                        "user_identity": row["user_identity"],
+                        "tool_name": row["tool_name"],
+                        "policy_decision": row["policy_decision"],
+                        "action_type": row["action_type"],
+                        "record_hash": row["record_hash"],
+                        "_source": "archive",
+                        "_archive_id": archive_id,
+                    })
+            finally:
+                conn.close()
+        except Exception:
+            continue
+
+    all_entries.sort(key=lambda e: e.get("timestamp_utc", ""), reverse=True)
+
+    limit = live_data.get("limit", 50)
+    offset = live_data.get("offset", 0)
+    result = dict(live_data)
+    result["entries"] = all_entries[offset:offset + limit] if limit else all_entries
+    result["total"] = len(all_entries)
+    result["include_archives"] = True
+    result["archive_count"] = len(archives)
+    return result
+
+
+def _merge_report_with_archives(live_data, start_time=None, end_time=None, group_by="tool"):
+    """Merge live audit report with archive summary data."""
+    from chain_archive import list_archives, archive_root_for
+
+    archives = list_archives(CHAIN)
+    if not archives:
+        return live_data
+
+    archive_root = archive_root_for(CHAIN)
+    result = dict(live_data)
+
+    for manifest in archives:
+        archive_id = manifest.get("archive_id", "")
+        summary_path = archive_root / f"{archive_id}.summary.json"
+
+        if not summary_path.exists():
+            continue
+
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        # Check time range overlap
+        time_range = summary.get("time_range", {})
+        archive_first = time_range.get("first", "")
+        archive_last = time_range.get("last", "")
+        if start_time and archive_last and archive_last < start_time:
+            continue
+        if end_time and archive_first and archive_first > end_time:
+            continue
+
+        # Merge counts into the decision summary
+        decision_summary = result.get("decision_summary", {})
+        for decision, count in summary.get("by_decision", {}).items():
+            decision_summary[decision] = decision_summary.get(decision, 0) + count
+        result["decision_summary"] = decision_summary
+
+        # Merge group data
+        group_key = f"by_{group_by}" if group_by in ("tool", "user", "category", "decision") else ""
+        if group_key and group_key in summary:
+            groups = result.get("groups", [])
+            archive_groups = summary[group_key]
+            # Merge into existing group list
+            existing = {g.get("key", g.get("name", "")): g for g in groups}
+            for name, count in archive_groups.items():
+                if name in existing:
+                    existing[name]["count"] = existing[name].get("count", 0) + count
+                else:
+                    groups.append({"key": name, "name": name, "count": count})
+            result["groups"] = sorted(groups, key=lambda g: g.get("count", 0), reverse=True)
+
+        result.setdefault("total_records", 0)
+        result["total_records"] += summary.get("record_count", 0)
+
+    result["include_archives"] = True
+    result["archive_count"] = len(archives)
+    return result
+
+
+def _merge_audit_query_with_archives(live_data, start_time=None, end_time=None,
+                                      user_identity=None, tool_name=None,
+                                      policy_decision=None, event_category=None,
+                                      action_type=None, confidence_tier=None,
+                                      limit=100, offset=0):
+    """Merge live audit query entries with archive SQLite data."""
+    from chain_archive import list_archives, archive_root_for
+    from archive_artifacts import get_or_regenerate_sqlite
+
+    archives = list_archives(CHAIN)
+    if not archives:
+        return live_data
+
+    archive_root = archive_root_for(CHAIN)
+    archive_entries = []
+
+    for manifest in archives:
+        archive_id = manifest.get("archive_id", "")
+        archive_chain_path = archive_root / f"{archive_id}.jsonl"
+        sqlite_path = archive_root / f"{archive_id}.sqlite"
+
+        if not archive_chain_path.exists():
+            continue
+
+        db_path = get_or_regenerate_sqlite(archive_chain_path, sqlite_path)
+        if db_path is None:
+            continue
+
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                query = "SELECT * FROM records"
+                conditions = []
+                params = []
+                if start_time:
+                    conditions.append("timestamp_utc >= ?")
+                    params.append(start_time)
+                if end_time:
+                    conditions.append("timestamp_utc <= ?")
+                    params.append(end_time)
+                if user_identity:
+                    conditions.append("user_identity = ?")
+                    params.append(user_identity)
+                if tool_name:
+                    conditions.append("tool_name = ?")
+                    params.append(tool_name)
+                if policy_decision:
+                    conditions.append("policy_decision = ?")
+                    params.append(policy_decision)
+                if event_category:
+                    conditions.append("event_type = ?")
+                    params.append(event_category)
+                if action_type:
+                    conditions.append("action_type = ?")
+                    params.append(action_type)
+                if confidence_tier:
+                    conditions.append("confidence_tier = ?")
+                    params.append(confidence_tier)
+                if conditions:
+                    query += " WHERE " + " AND ".join(conditions)
+                query += " ORDER BY timestamp_utc DESC"
+
+                for row in conn.execute(query, params):
+                    archive_entries.append({
+                        "timestamp_utc": row["timestamp_utc"],
+                        "event_type": row["event_type"],
+                        "event_category": row["event_type"],
+                        "user_identity": row["user_identity"],
+                        "detail": {
+                            "tool_name": row["tool_name"],
+                            "policy_decision": row["policy_decision"],
+                            "action_type": row["action_type"],
+                            "confidence_tier": row["confidence_tier"],
+                            "matched_rule": row["matched_rule"],
+                        },
+                        "record_hash": row["record_hash"],
+                        "_source": "archive",
+                        "_archive_id": archive_id,
+                    })
+            finally:
+                conn.close()
+        except Exception:
+            continue
+
+    if not archive_entries:
+        return live_data
+
+    all_entries = list(live_data.get("entries", [])) + archive_entries
+    all_entries.sort(key=lambda e: e.get("timestamp_utc", ""), reverse=True)
+
+    total = len(all_entries)
+    allow_count = sum(1 for e in all_entries if e.get("detail", {}).get("policy_decision") == "ALLOW")
+    deny_count = sum(1 for e in all_entries if e.get("detail", {}).get("policy_decision") == "DENY")
+    tool_categories = len({e.get("detail", {}).get("tool_name", "") for e in all_entries if e.get("detail", {}).get("tool_name")})
+
+    result = dict(live_data)
+    result["entries"] = all_entries[offset:offset + limit] if limit else all_entries
+    result["total_matching"] = total
+    result["summary"] = {
+        "allow_count": allow_count,
+        "deny_count": deny_count,
+        "tool_categories": tool_categories,
+    }
+    result["include_archives"] = True
+    result["archive_count"] = len(archives)
+    return result
+
+
 def _license_fingerprint(license_key: str) -> str:
     digest = hashlib.sha256(license_key.encode("utf-8")).hexdigest()
     return f"license_sha256:{digest[:16]}"
@@ -3921,7 +4214,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 policy_decision=qs("policy_decision") or None,
                 tool_name=qs("tool_name") or None,
             )
+            if qs("include_archives") in ("1", "true", "yes"):
+                try:
+                    data = _merge_activity_with_archives(
+                        data,
+                        start_time=qs("start_time") or None,
+                        end_time=qs("end_time") or None,
+                    )
+                except Exception:
+                    pass  # Fail open — serve live data if archive merge fails
             _json_response(self, data)
+            _maybe_trigger_archive()
 
         elif path == "/api/approvals":
             from readout import governance_approvals_view
@@ -3944,19 +4247,36 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 from background_verifier import run_verification
                 run_verification(CHAIN, background=False)
             from readout import audit_query
+            _aq_start = qs("start_time") or None
+            _aq_end = qs("end_time") or None
+            _aq_user = qs("user_identity") or None
+            _aq_tool = qs("tool_name") or None
+            _aq_action = qs("action_type") or None
+            _aq_tier = qs("confidence_tier") or None
+            _aq_decision = qs("policy_decision") or None
+            _aq_category = qs("event_category") or None
+            _aq_limit = qs_int("limit", 100)
+            _aq_offset = qs_int("offset", 0)
             data = audit_query(
                 CHAIN, RECORDS_DIR,
-                start_time=qs("start_time") or None,
-                end_time=qs("end_time") or None,
-                user_identity=qs("user_identity") or None,
-                tool_name=qs("tool_name") or None,
-                action_type=qs("action_type") or None,
-                confidence_tier=qs("confidence_tier") or None,
-                policy_decision=qs("policy_decision") or None,
-                event_category=qs("event_category") or None,
-                limit=qs_int("limit", 100),
-                offset=qs_int("offset", 0),
+                start_time=_aq_start, end_time=_aq_end,
+                user_identity=_aq_user, tool_name=_aq_tool,
+                action_type=_aq_action, confidence_tier=_aq_tier,
+                policy_decision=_aq_decision, event_category=_aq_category,
+                limit=_aq_limit, offset=_aq_offset,
             )
+            if qs("include_archives") in ("1", "true", "yes"):
+                try:
+                    data = _merge_audit_query_with_archives(
+                        data,
+                        start_time=_aq_start, end_time=_aq_end,
+                        user_identity=_aq_user, tool_name=_aq_tool,
+                        policy_decision=_aq_decision, event_category=_aq_category,
+                        action_type=_aq_action, confidence_tier=_aq_tier,
+                        limit=_aq_limit, offset=_aq_offset,
+                    )
+                except Exception:
+                    pass
             _json_response(self, data)
 
         elif path == "/api/audit/record":
@@ -4014,13 +4334,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 except Exception:
                     pass  # Fail open — don't block report on licensing errors
             from readout import audit_report
+            group_by = qs("group_by", "tool")
             data = audit_report(
                 CHAIN, RECORDS_DIR,
                 start_time=start_time,
                 end_time=end_time,
-                group_by=qs("group_by", "tool"),
+                group_by=group_by,
             )
+            if qs("include_archives") in ("1", "true", "yes"):
+                try:
+                    data = _merge_report_with_archives(
+                        data,
+                        start_time=start_time,
+                        end_time=end_time,
+                        group_by=group_by,
+                    )
+                except Exception:
+                    pass  # Fail open — serve live data if archive merge fails
             _json_response(self, data)
+            _maybe_trigger_archive()
 
         elif path == "/api/transparency":
             from readout import load_chain_rows, compute_transparency_metric
@@ -4038,6 +4370,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
             data = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
             _json_response(self, data)
+            _maybe_trigger_archive()
 
         elif path == "/api/health/acknowledge":
             # POST-only, but handle GET gracefully
