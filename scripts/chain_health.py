@@ -28,6 +28,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+def _load_chain_rows_raw(chain_path: Path) -> list:
+    """Load chain rows with minimal overhead (fallback when no rows passed)."""
+    rows = []
+    with open(chain_path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                rows.append(json.loads(stripped))
+            except json.JSONDecodeError:
+                continue
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -474,12 +489,18 @@ def purge_expired_archives(
 # Enhanced chain integrity check with classification
 # ---------------------------------------------------------------------------
 
+_chain_health_cache: Dict[str, Any] = {"mtime": 0.0, "size": 0, "result": None}
+
+
 def check_chain_health(
     chain_path: Path,
     stability_log_path: Optional[Path] = None,
     chain_meta_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Enhanced chain integrity check with break classification.
+
+    Results are cached by file mtime + size when the chain is healthy.
+    Unhealthy states are never cached (side effects may apply).
 
     Returns:
         {
@@ -502,6 +523,20 @@ def check_chain_health(
             "pattern_alert": None,
             "recent_stability_events": [],
         }
+
+    # Cache check: reuse healthy result if file unchanged
+    try:
+        st = chain_path.stat()
+        c_mtime, c_size = st.st_mtime, st.st_size
+    except OSError:
+        c_mtime, c_size = 0.0, 0
+
+    if (
+        _chain_health_cache["result"] is not None
+        and _chain_health_cache["mtime"] == c_mtime
+        and _chain_health_cache["size"] == c_size
+    ):
+        return _chain_health_cache["result"]
 
     import importlib.util
     verify_record_path = Path(__file__).resolve().parent / "verify-record.py"
@@ -573,8 +608,8 @@ def check_chain_health(
     recent_events = read_stability_log(stability_log_path, limit=10) if stability_log_path else []
 
     if break_info is None:
-        # Chain is healthy
-        return {
+        # Chain is healthy — cache the result
+        result = {
             "status": HEALTH_HEALTHY,
             "chain_event_count": line_no,
             "checked": True,
@@ -585,6 +620,10 @@ def check_chain_health(
             "pattern_alert": None,
             "recent_stability_events": recent_events,
         }
+        _chain_health_cache["mtime"] = c_mtime
+        _chain_health_cache["size"] = c_size
+        _chain_health_cache["result"] = result
+        return result
 
     # Break detected — classify it
     classification = classify_chain_break(
@@ -672,24 +711,18 @@ def check_chain_health(
 # Health signal collection
 # ---------------------------------------------------------------------------
 
-def _compute_deny_rate(chain_path: Path, window: int = 100) -> Dict[str, Any]:
+def _compute_deny_rate(chain_path: Path, window: int = 100, _rows: list = None) -> Dict[str, Any]:
     """Compute DENY rate from recent chain records."""
-    if not chain_path.exists():
-        return {"deny_count": 0, "allow_count": 0, "total": 0, "deny_rate": 0.0, "anomaly": False}
+    if _rows is None:
+        if not chain_path.exists():
+            return {"deny_count": 0, "allow_count": 0, "total": 0, "deny_rate": 0.0, "anomaly": False}
+        _rows = _load_chain_rows_raw(chain_path)
 
     decisions = []
-    with open(chain_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                rec = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            decision = rec.get("policy_decision")
-            if decision in ("ALLOW", "DENY"):
-                decisions.append(decision)
+    for rec in _rows:
+        decision = rec.get("policy_decision")
+        if decision in ("ALLOW", "DENY"):
+            decisions.append(decision)
 
     recent = decisions[-window:] if len(decisions) > window else decisions
     if not recent:
@@ -721,32 +754,26 @@ def _compute_deny_rate(chain_path: Path, window: int = 100) -> Dict[str, Any]:
     }
 
 
-def _observation_gap(chain_path: Path) -> Dict[str, Any]:
+def _observation_gap(chain_path: Path, _rows: list = None) -> Dict[str, Any]:
     """Detect gaps in observation data (transparency metric drop)."""
-    if not chain_path.exists():
-        return {"has_observations": False, "gap_detected": False}
+    if _rows is None:
+        if not chain_path.exists():
+            return {"has_observations": False, "gap_detected": False}
+        _rows = _load_chain_rows_raw(chain_path)
 
     last_governed_ts = None
     last_observation_ts = None
     governed_count = 0
     observation_count = 0
 
-    with open(chain_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                rec = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            ts = rec.get("timestamp_utc")
-            if rec.get("event_type") == "ungoverned_operation_observed":
-                observation_count += 1
-                last_observation_ts = ts
-            elif rec.get("policy_decision") in ("ALLOW", "DENY"):
-                governed_count += 1
-                last_governed_ts = ts
+    for rec in _rows:
+        ts = rec.get("timestamp_utc")
+        if rec.get("event_type") == "ungoverned_operation_observed":
+            observation_count += 1
+            last_observation_ts = ts
+        elif rec.get("policy_decision") in ("ALLOW", "DENY"):
+            governed_count += 1
+            last_governed_ts = ts
 
     if observation_count == 0:
         return {"has_observations": False, "gap_detected": False, "governed_count": governed_count}
@@ -779,24 +806,18 @@ def _observation_gap(chain_path: Path) -> Dict[str, Any]:
     }
 
 
-def _user_activity(chain_path: Path) -> Dict[str, Any]:
+def _user_activity(chain_path: Path, _rows: list = None) -> Dict[str, Any]:
     """Analyze user activity for anomalies."""
-    if not chain_path.exists():
-        return {"unique_users": 0, "users": {}, "anomalies": []}
+    if _rows is None:
+        if not chain_path.exists():
+            return {"unique_users": 0, "users": {}, "anomalies": []}
+        _rows = _load_chain_rows_raw(chain_path)
 
     user_counts: Counter = Counter()
-    with open(chain_path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                rec = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
-            uid = rec.get("actor") or rec.get("user_identity")
-            if uid and uid != "unknown":
-                user_counts[uid] += 1
+    for rec in _rows:
+        uid = rec.get("actor") or rec.get("user_identity")
+        if uid and uid != "unknown":
+            user_counts[uid] += 1
 
     anomalies = []
     if user_counts:
@@ -925,15 +946,18 @@ def collect_health_signals(
         "archive_count": len(list(archive_dir.glob("*.jsonl"))) if archive_dir.exists() else 0,
     }
 
+    # Load chain rows once and share across sub-signal functions
+    _shared_rows = _load_chain_rows_raw(chain_path) if chain_path.exists() else []
+
     # Policy / DENY rate
-    deny_rate = _compute_deny_rate(chain_path)
+    deny_rate = _compute_deny_rate(chain_path, _rows=_shared_rows)
 
     # User activity
-    users = _user_activity(chain_path)
+    users = _user_activity(chain_path, _rows=_shared_rows)
 
     # Legacy health contract retained for CLI/tests; the v3 dashboard no longer
     # renders this as a Transparency card.
-    observations = _observation_gap(chain_path)
+    observations = _observation_gap(chain_path, _rows=_shared_rows)
 
     # License
     license_info = _license_health(runtime_root)

@@ -48,9 +48,27 @@ def _load_verify_record_module():
     return mod
 
 
+_row_cache: dict[str, Any] = {"mtime": 0.0, "size": 0, "rows": None, "path": ""}
+
+
 def load_chain_rows(chain_path: Path) -> list[dict]:
     if not chain_path.exists():
         return []
+
+    try:
+        st = chain_path.stat()
+        mtime, size = st.st_mtime, st.st_size
+    except OSError:
+        mtime, size = 0.0, 0
+
+    if (
+        _row_cache["rows"] is not None
+        and _row_cache["mtime"] == mtime
+        and _row_cache["size"] == size
+        and _row_cache["path"] == str(chain_path)
+    ):
+        return _row_cache["rows"]
+
     rows: list[dict] = []
     with open(chain_path, "r", encoding="utf-8") as fh:
         for line in fh:
@@ -58,6 +76,11 @@ def load_chain_rows(chain_path: Path) -> list[dict]:
             if not line:
                 continue
             rows.append(json.loads(line))
+
+    _row_cache["mtime"] = mtime
+    _row_cache["size"] = size
+    _row_cache["path"] = str(chain_path)
+    _row_cache["rows"] = rows
     return rows
 
 
@@ -530,42 +553,39 @@ def _deduplicate_proxy_and_hook(entries: list[dict]) -> list[dict]:
     the hook's observation (post-execution) is redundant.
 
     Match criteria: same target, action type compatible, within 10 seconds.
+
+    Uses a dict keyed by target for O(n+m) instead of O(n×m) scanning.
     """
-    # Build an index of mediated decision targets with parsed timestamps.
-    mediated: list[tuple[str, str, Optional[datetime]]] = []
+    # Build a dict index: target → list of (action_type, parsed_ts)
+    mediated_by_target: dict[str, list[tuple[str, Optional[datetime]]]] = {}
     for e in entries:
         if e["event_category"] == "action_decision":
             target = e["detail"].get("target", "")
             action_type = e["detail"].get("action_type", "")
-            ts = _parse_ts(e["timestamp_utc"])
             if target:
-                mediated.append((target, action_type, ts))
+                ts = _parse_ts(e["timestamp_utc"])
+                mediated_by_target.setdefault(target, []).append((action_type, ts))
 
-    if not mediated:
+    if not mediated_by_target:
         return entries
 
     def _is_duplicate_observation(entry: dict) -> bool:
         if entry["event_category"] != "ungoverned_observation":
             return False
         obs_target = entry["detail"].get("target", "")
-        obs_op = entry["detail"].get("operation_type", "")
-        if not obs_target:
+        if not obs_target or obs_target not in mediated_by_target:
             return False
+        obs_op = entry["detail"].get("operation_type", "")
         obs_ts = _parse_ts(entry["timestamp_utc"])
-        for m_target, m_action, m_ts in mediated:
-            if obs_target != m_target:
-                continue
-            # Check action type compatibility
+        for m_action, m_ts in mediated_by_target[obs_target]:
             compatible_ops = _ACTION_TO_OP.get(m_action, set())
             if obs_op and obs_op not in compatible_ops:
                 continue
-            # Check timestamp proximity (within 10 seconds)
             if obs_ts is not None and m_ts is not None:
                 delta = abs((obs_ts - m_ts).total_seconds())
                 if delta <= 10:
                     return True
             else:
-                # Cannot compare timestamps — match on target alone
                 return True
         return False
 
@@ -975,19 +995,27 @@ def audit_report(
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     group_by: str = "tool",
+    _preloaded_rows: Optional[list] = None,
+    _preloaded_sidecars: Optional[dict] = None,
 ) -> dict:
     """Generate an audit summary report over a time period.
 
     group_by: "tool", "user", "decision", "category", or "hour".
     Returns counts grouped by the specified dimension with per-group
     deny counts for highlighting.
+
+    _preloaded_rows / _preloaded_sidecars: Optional pre-loaded data to
+    avoid redundant file I/O when generating multiple group_by reports.
     """
-    rows = load_chain_rows(chain_path)
-    sidecar_by_request_id: dict[str, dict] = {}
-    for rec in _load_sidecar_records(records_dir):
-        rid = rec.get("request_id")
-        if rid:
-            sidecar_by_request_id[rid] = rec
+    rows = _preloaded_rows if _preloaded_rows is not None else load_chain_rows(chain_path)
+    if _preloaded_sidecars is not None:
+        sidecar_by_request_id = _preloaded_sidecars
+    else:
+        sidecar_by_request_id: dict[str, dict] = {}
+        for rec in _load_sidecar_records(records_dir):
+            rid = rec.get("request_id")
+            if rid:
+                sidecar_by_request_id[rid] = rec
 
     groups: Counter[str] = Counter()
     group_deny: Counter[str] = Counter()
