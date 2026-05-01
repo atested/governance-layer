@@ -1025,7 +1025,7 @@ def audit_report(
             if not uid:
                 sidecar = sidecar_by_request_id.get(rec.get("request_id", ""), {})
                 uid = sidecar.get("user_identity", "")
-            key = uid or "Anonymous"
+            key = uid or "unknown"
 
         elif group_by == "decision":
             key = rec.get("policy_decision", "")
@@ -1038,6 +1038,9 @@ def audit_report(
             entry = _normalize_activity_entry(rec, sequence_position=0)
             cat = entry["event_category"] if entry else "unknown"
             key = cat
+
+        elif group_by == "rule":
+            key = rec.get("matched_rule", "") or "No rule"
 
         elif group_by == "hour":
             if ts:

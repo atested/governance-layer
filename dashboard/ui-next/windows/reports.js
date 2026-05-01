@@ -17,7 +17,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'What happened in the selected period',
     accent: 'green',
     defaultRange: '7d',
-    groups: ['decision', 'tool', 'category'],
+    groups: ['decision', 'tool', 'rule'],
   },
   {
     id: 'denial-patterns',
@@ -25,7 +25,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Where policy is stopping risky activity',
     accent: 'amber',
     defaultRange: '30d',
-    groups: ['tool', 'category', 'user'],
+    groups: ['tool', 'rule', 'user'],
   },
   {
     id: 'operator-comparison',
@@ -33,7 +33,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Compare activity by user or agent identity',
     accent: 'blue',
     defaultRange: '30d',
-    groups: ['user', 'decision', 'tool'],
+    groups: ['user', 'decision', 'tool', 'rule'],
   },
   {
     id: 'audit-evidence',
@@ -41,7 +41,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Evidence summary for external review',
     accent: 'purple',
     defaultRange: 'all',
-    groups: ['decision', 'category', 'tool'],
+    groups: ['decision', 'category', 'tool', 'rule'],
   },
   {
     id: 'unusual-activity',
@@ -136,7 +136,6 @@ function _applyStaticTooltips(state) {
   setTooltips(state.el, [
     ['#rp-from', 'Start of the reporting time range.'],
     ['#rp-to', 'End of the reporting time range.'],
-    ['#rp-generate', 'Re-generate the report with current settings.'],
     ['#rp-stat-total', 'Total records included in this report.'],
     ['#rp-stat-allow', 'Allowed operations in the report range.'],
     ['#rp-stat-deny', 'Denied operations in the report range.'],
@@ -201,11 +200,11 @@ function _buildUI(state) {
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
           </div>
           <div class="rp-fp-actions">
-            <button class="rp-btn rp-btn-primary" id="rp-generate">Generate</button>
             <span class="rp-fp-mini-label" style="margin:0 4px;align-self:center;text-transform:none;font-size:0.72rem">Export:</span>
-            <button class="rp-btn rp-btn-export rp-export-btn" data-format="json">JSON</button>
-            <button class="rp-btn rp-btn-export rp-export-btn" data-format="csv">CSV</button>
-            <button class="rp-btn rp-btn-export rp-export-btn" data-format="excel">Excel</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="pdf" disabled>PDF</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="json" disabled>JSON</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="csv" disabled>CSV</button>
+            <button class="rp-btn rp-btn-export rp-export-btn" data-format="excel" disabled>Excel</button>
           </div>
         </div>
       </div>
@@ -241,6 +240,12 @@ function _buildUI(state) {
       <div class="rp-gp-body" id="rp-gp-body">
         <div class="rp-loading">Loading\u2026</div>
       </div>
+    </div>
+
+    <div class="rp-print-header">
+      <div class="rp-print-brand">Atested</div>
+      <div class="rp-print-title"></div>
+      <div class="rp-print-date"></div>
     </div>
   `;
 }
@@ -279,12 +284,6 @@ function _wireControls(state) {
   };
   el.querySelector('#rp-from').addEventListener('change', onCustomRange);
   el.querySelector('#rp-to').addEventListener('change', onCustomRange);
-
-  // Generate button
-  el.querySelector('#rp-generate').addEventListener('click', () => {
-    recordUiAggregate('report_runs', state.reportId);
-    _loadReport(state);
-  });
 
   // Export format buttons
   el.querySelectorAll('.rp-export-btn').forEach(btn => {
@@ -358,7 +357,14 @@ function _setActiveRange(state, range) {
 
 // ---------- Load report ----------
 
+function _setExportButtons(state, enabled) {
+  state.el.querySelectorAll('.rp-export-btn').forEach(btn => {
+    btn.disabled = !enabled;
+  });
+}
+
 async function _loadReport(state) {
+  _setExportButtons(state, false);
   const body = state.el.querySelector('#rp-gp-body');
   body.innerHTML = '<div class="rp-loading">Loading\u2026</div>';
   if (state.rangeError) {
@@ -381,6 +387,7 @@ async function _loadReport(state) {
     state.data = _composeTelemetryReportData(template, res.data, params);
     _renderStats(state);
     _renderReportView(state);
+    _setExportButtons(state, true);
     return;
   }
   if (template.id === 'trouble-history') {
@@ -392,6 +399,7 @@ async function _loadReport(state) {
     state.data = _composeTroubleReportData(template, res.data, params);
     _renderStats(state);
     _renderReportView(state);
+    _setExportButtons(state, true);
     return;
   }
 
@@ -412,8 +420,29 @@ async function _loadReport(state) {
 
   const base = grouped[groupKeys[0]] || {};
   state.data = _composeReportData(template, grouped, base, params);
+
+  // Fetch supplemental data for specific reports
+  if (template.id === 'operator-comparison') {
+    try {
+      const actRes = await api.getActivity({ ...params, limit: 5000 });
+      if (actRes.ok) state.data.activityEntries = actRes.data?.entries || actRes.data || [];
+    } catch (_) { /* non-critical */ }
+  }
+  if (template.id === 'audit-evidence') {
+    const [approvalsRes, opaqueRes] = await Promise.all([
+      api.getApprovals(),
+      api.getActivity({ ...params, limit: 100 }),
+    ]);
+    if (approvalsRes.ok) state.data.approvals = approvalsRes.data?.approvals || approvalsRes.data || [];
+    if (opaqueRes.ok) {
+      const entries = opaqueRes.data?.entries || opaqueRes.data || [];
+      state.data.opaqueActions = entries.filter(e => (e.event_category || '').includes('opaque'));
+    }
+  }
+
   _renderStats(state);
   _renderReportView(state);
+  _setExportButtons(state, true);
 }
 
 function _renderRangeError(state) {
@@ -572,25 +601,38 @@ function _renderReportView(state) {
   if (d.report_id === 'governance-summary') {
     body.appendChild(_section('Decision mix', _barList(state, (d.groups.decision?.groups || []).filter(g => g.key === 'ALLOW' || g.key === 'DENY'), 'decision')));
     body.appendChild(_section('Most active actions', _barList(state, d.groups.tool?.groups || [], 'tool')));
-    body.appendChild(_section('Activity categories', _barList(state, d.groups.category?.groups || [], 'category')));
+    body.appendChild(_section('Most active rules', _barList(state, d.groups.rule?.groups || [], 'rule')));
   } else if (d.report_id === 'denial-patterns') {
     body.appendChild(_section('Most denied actions', _compactTable(_groupsWithDenies(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Most denied rules', _barList(state, _groupsWithDenies(d.groups.category), 'category')));
+    body.appendChild(_section('Most denied rules', _barList(state, _groupsWithDenies(d.groups.rule), 'rule')));
     body.appendChild(_section('Users with denials', _compactTable(_groupsWithDenies(d.groups.user), ['User', 'Records', 'DENY', 'Deny rate'])));
   } else if (d.report_id === 'operator-comparison') {
     body.appendChild(_section('User activity', _compactTable(d.groups.user?.groups || [], ['User', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Decision balance', _barList(state, d.groups.decision?.groups || [], 'decision')));
     body.appendChild(_section('Action distribution', _barList(state, d.groups.tool?.groups || [], 'tool')));
+    body.appendChild(_section('Rules triggered', _barList(state, d.groups.rule?.groups || [], 'rule')));
+    if (d.activityEntries) {
+      body.appendChild(_section('User detail', _userDetailSection(d.activityEntries)));
+    }
   } else if (d.report_id === 'audit-evidence') {
     body.appendChild(_section('Decision summary', _compactTable(d.groups.decision?.groups || [], ['Decision/Event', 'Records', 'DENY'])));
     body.appendChild(_section('Evidence categories', _compactTable(d.groups.category?.groups || [], ['Category', 'Records', 'DENY'])));
+    body.appendChild(_section('Rules summary', _compactTable(d.groups.rule?.groups || [], ['Rule', 'Records', 'DENY'])));
+    if (d.approvals) {
+      body.appendChild(_section('Active approvals', _approvalsSection(d.approvals)));
+    }
+    if (d.opaqueActions) {
+      body.appendChild(_section('Capability actions', _opaqueActionsSection(d.opaqueActions)));
+    }
   } else if (d.report_id === 'trouble-history') {
+    body.appendChild(_section('Priority breakdown', _troublePrioritySummary(d.trouble.reports)));
     body.appendChild(_section('Support request history', _troubleHistoryTable(d.trouble.reports)));
     body.appendChild(_section('Captured context', _troubleContextList(d.trouble.reports)));
   } else {
     body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroups(d.groups.tool), ['Signal', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups(d.groups.tool), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Hourly concentration', _barList(state, d.groups.hour?.groups || [], 'hour')));
+    body.appendChild(_section('Hourly concentration', _compactTable(d.groups.hour?.groups || [], ['Hour', 'Records', 'DENY'])));
+    body.appendChild(_section('User signals', _compactTable(_highDenyGroups(d.groups.user), ['User', 'Records', 'DENY', 'Deny rate'])));
   }
 }
 
@@ -599,13 +641,15 @@ function _buildFindings(reportId, grouped, totals) {
   const topDeniedTool = _topDenied(grouped.tool);
   const topUser = _topGroup(grouped.user);
   const topCategory = _topGroup(grouped.category);
+  const topRule = _topGroup(grouped.rule);
   const denyPct = (totals.denyRate * 100).toFixed(1) + '%';
 
   if (reportId === 'denial-patterns') {
+    const topDeniedRule = _topDenied(grouped.rule);
     return [
       { label: 'Denied records', value: _fmtNum(totals.deny), tone: 'amber', detail: `${denyPct} of selected records were denied.` },
       { label: 'Most denied action', value: topDeniedTool?.key || 'None', tone: topDeniedTool ? 'amber' : 'green', detail: topDeniedTool ? `${_fmtNum(topDeniedTool.deny_count || 0)} denied records.` : 'No denied action activity in range.' },
-      { label: 'Primary category', value: topCategory?.key || 'N/A', tone: 'blue', detail: 'Largest evidence category in the range.' },
+      { label: 'Most denied rule', value: topDeniedRule?.key || 'N/A', tone: 'blue', detail: topDeniedRule ? `${_fmtNum(topDeniedRule.deny_count || 0)} denied records.` : 'No denied rules in range.' },
       { label: 'User signal', value: topUser?.key || 'N/A', tone: 'purple', detail: 'Most active identity in this report.' },
     ];
   }
@@ -738,6 +782,12 @@ function _headlineForReport(d) {
 }
 
 function _renderTelemetryReport(body, d) {
+  // Opt-in status
+  const optedIn = d.telemetry?.opted_in;
+  const statusText = optedIn === true ? 'Opted in' : optedIn === false ? 'Opted out' : 'Not configured';
+  const statusTone = optedIn === true ? 'green' : 'amber';
+  body.appendChild(_telemetryFullCard('TELEMETRY STATUS', `Current participation: ${statusText}. Telemetry can be changed at any time from Communications.`, statusTone));
+
   body.appendChild(_telemetryFullCard('ATESTED TELEMETRY PURPOSE', TELEMETRY_PURPOSE, 'blue'));
   body.appendChild(_telemetryFullCard('PRIVACY MODEL', TELEMETRY_PRIVACY_TEXT, 'purple'));
 
@@ -751,6 +801,19 @@ function _renderTelemetryReport(body, d) {
   }
   categories.appendChild(grid);
   body.appendChild(categories);
+
+  // Current period counters
+  const counters = d.telemetry?.categories || d.telemetry?.summary?.categories || {};
+  if (Object.keys(counters).length) {
+    const counterRows = [];
+    for (const cat of TELEMETRY_CATEGORIES) {
+      const data = counters[cat.key];
+      if (data) counterRows.push([cat.title, _summarizeTelemetryCategory(cat.key, data)]);
+    }
+    if (counterRows.length) {
+      body.appendChild(_section('Current period data', _simpleTable(['Category', 'Summary'], counterRows)));
+    }
+  }
 
   body.appendChild(_section('Telemetry transmissions', _telemetryTransmissionsByCategory(d.telemetry, d.time_range)));
 }
@@ -888,6 +951,21 @@ function _simpleTable(headers, rows) {
   return table;
 }
 
+function _troublePrioritySummary(reports) {
+  const counts = {};
+  for (const r of (reports || [])) {
+    const p = _labelize(r.priority || 'normal');
+    counts[p] = (counts[p] || 0) + 1;
+  }
+  const groups = Object.entries(counts).map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count);
+  if (!groups.length) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<div class="rp-empty-note">No support requests submitted.</div>';
+    return wrap;
+  }
+  return _compactTable(groups, ['Priority', 'Count']);
+}
+
 function _troubleHistoryTable(reports) {
   const rows = (reports || []).map(report => [
     _formatShortDate(report.timestamp_utc || report.timestamp),
@@ -902,23 +980,25 @@ function _troubleHistoryTable(reports) {
 function _troubleContextList(reports) {
   const list = document.createElement('div');
   list.className = 'rp-audit-checklist';
-  const latest = (reports || [])[0];
-  if (!latest) {
+  const all = (reports || []).filter(r => r.context);
+  if (!all.length) {
     list.innerHTML = '<div class="rp-empty-note">No trouble report context has been captured yet.</div>';
     return list;
   }
-  const context = latest.context || {};
-  const checks = [
-    ['Captured at', context.captured_at_utc || latest.timestamp_utc || 'N/A', 'When the UI context snapshot was created.'],
-    ['Path', context.path || 'N/A', 'Browser path visible when the report was submitted.'],
-    ['Window stack', (context.modal_stack || []).map(w => w.title).filter(Boolean).join(' > ') || context.current_window || 'Main page', 'Open window context attached to the report.'],
-    ['License label', context.visible_state?.license || 'N/A', 'License state shown in the operator chrome at capture time.'],
-  ];
-  for (const [label, value, detail] of checks) {
-    const row = document.createElement('div');
-    row.className = 'rp-audit-row';
-    row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
-    list.appendChild(row);
+  for (const report of all.slice(0, 10)) {
+    const context = report.context || {};
+    const checks = [
+      ['Captured at', context.captured_at_utc || report.timestamp_utc || 'N/A', 'When the UI context snapshot was created.'],
+      ['Path', context.path || 'N/A', 'Browser path visible when the report was submitted.'],
+      ['Window stack', (context.modal_stack || []).map(w => w.title).filter(Boolean).join(' > ') || context.current_window || 'Main page', 'Open window context attached to the report.'],
+      ['License label', context.visible_state?.license || 'N/A', 'License state shown in the operator chrome at capture time.'],
+    ];
+    for (const [label, value, detail] of checks) {
+      const row = document.createElement('div');
+      row.className = 'rp-audit-row';
+      row.innerHTML = `<span>${_esc(label)}</span><strong>${_esc(value)}</strong><small>${_esc(detail)}</small>`;
+      list.appendChild(row);
+    }
   }
   return list;
 }
@@ -962,6 +1042,74 @@ function _formatShortDate(iso) {
   } catch {
     return iso || '';
   }
+}
+
+// ---------- Supplemental sections ----------
+
+function _userDetailSection(entries) {
+  const wrap = document.createElement('div');
+  wrap.className = 'rp-user-detail';
+  if (!entries || !entries.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No activity data available.</div>';
+    return wrap;
+  }
+  // Group by user
+  const byUser = {};
+  for (const e of entries) {
+    const uid = e.user_identity || 'unknown';
+    if (!byUser[uid]) byUser[uid] = {};
+    const tool = e.tool_name || e.detail?.tool_name || 'unknown';
+    byUser[uid][tool] = (byUser[uid][tool] || 0) + 1;
+  }
+  // Sort users by total count, take top 5
+  const users = Object.entries(byUser)
+    .map(([user, tools]) => ({ user, total: Object.values(tools).reduce((a, b) => a + b, 0), tools }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+  for (const u of users) {
+    const header = document.createElement('div');
+    header.className = 'rp-section-sub';
+    header.innerHTML = `<strong>${_esc(u.user)}</strong> <span class="rp-section-sub-count">${_fmtNum(u.total)} records</span>`;
+    wrap.appendChild(header);
+    // Top 5 actions for this user
+    const actions = Object.entries(u.tools)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([action, count]) => ({ key: action, count }));
+    wrap.appendChild(_compactTable(actions, ['Action', 'Records']));
+  }
+  return wrap;
+}
+
+function _approvalsSection(approvals) {
+  const wrap = document.createElement('div');
+  if (!approvals || !approvals.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No active approvals.</div>';
+    return wrap;
+  }
+  const rows = approvals.map(a => [
+    a.artifact_identity || a.artifact_id || 'N/A',
+    a.operator_identity || a.operator || 'N/A',
+    _formatShortDate(a.granted_at || a.timestamp_utc || ''),
+  ]);
+  wrap.appendChild(_simpleTable(['Artifact', 'Operator', 'Granted'], rows));
+  return wrap;
+}
+
+function _opaqueActionsSection(entries) {
+  const wrap = document.createElement('div');
+  if (!entries || !entries.length) {
+    wrap.innerHTML = '<div class="rp-empty-note">No capability actions in this range.</div>';
+    return wrap;
+  }
+  const rows = entries.slice(0, 20).map(e => [
+    _formatShortDate(e.timestamp_utc || ''),
+    e.tool_name || e.detail?.tool_name || 'N/A',
+    e.policy_decision || 'N/A',
+    _truncate(e.detail?.target || '', 50),
+  ]);
+  wrap.appendChild(_simpleTable(['Time', 'Action', 'Decision', 'Target'], rows));
+  return wrap;
 }
 
 // ---------- Atomic navigation ----------
@@ -1010,6 +1158,12 @@ function _navigateToActivity(state, groupBy, groupKey) {
 async function _exportReport(state) {
   if (!state.data || state.rangeError) return;
 
+  const format = state._exportFormat || 'json';
+  if (format === 'pdf') {
+    _printReport(state);
+    return;
+  }
+
   const exportData = {
     report_id: state.data.report_id,
     report_title: state.data.report_title,
@@ -1036,7 +1190,6 @@ async function _exportReport(state) {
     { key: 'value', label: 'Value' },
     { key: 'detail', label: 'Detail' },
   ];
-  const format = state._exportFormat || 'json';
   const auth = await authorizeExport({
     surface: 'reports',
     format,
@@ -1054,6 +1207,15 @@ async function _exportReport(state) {
     sheetName: 'Report Export',
     jsonData: () => exportData,
   });
+}
+
+function _printReport(state) {
+  const header = state.el.querySelector('.rp-print-header');
+  if (header) {
+    header.querySelector('.rp-print-date').textContent = new Date().toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+    header.querySelector('.rp-print-title').textContent = state.data?.report_title || 'Governance Report';
+  }
+  window.print();
 }
 
 // ---------- Utility ----------
@@ -1183,7 +1345,7 @@ rpStyles.textContent = `
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   }
-  .rp-report-active .rp-report-accent { height: 8px; }
+  .rp-report-active .rp-report-accent { height: 10px; }
   .rp-report-active .rp-report-title { color: #fff; }
   .rp-report-accent {
     position: absolute;
@@ -1687,7 +1849,7 @@ rpStyles.textContent = `
     background: rgba(102,153,204,0.06);
   }
   .rp-bar-label {
-    flex: 0 0 120px;
+    flex: 0 0 160px;
     font-size: 0.78rem;
     color: #e4e6eb;
     overflow: hidden;
@@ -1720,6 +1882,32 @@ rpStyles.textContent = `
     color: #8b919a;
   }
 
+  /* ---- User detail ---- */
+  .rp-section-sub {
+    padding: 10px 20px 4px;
+    font-size: 0.8rem;
+    color: #e4e6eb;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .rp-section-sub:first-child { border-top: none; }
+  .rp-section-sub-count {
+    color: #8b919a;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.74rem;
+    margin-left: 8px;
+  }
+  .rp-empty-note {
+    color: #8b919a;
+    font-size: 0.82rem;
+    padding: 16px 20px;
+  }
+
+  /* ---- Export buttons ---- */
+  .rp-export-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
   /* ---- States ---- */
   .rp-loading {
     color: #8b919a;
@@ -1741,6 +1929,81 @@ rpStyles.textContent = `
     margin: 0 20px;
   }
 
+  /* ---- Print header (hidden on screen) ---- */
+  .rp-print-header {
+    display: none;
+  }
+  .rp-print-brand {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .rp-print-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .rp-print-date {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #333;
+    padding-bottom: 12px;
+  }
+
+  /* ---- Print ---- */
+  @media print {
+    .rp-report-picker,
+    .rp-filter-row,
+    .rp-fp-actions,
+    .chrome-bar,
+    .chrome-trouble-btn { display: none !important; }
+
+    .rp-print-header { display: block !important; }
+
+    .rp-root,
+    .rp-group-pane,
+    .rp-gp-body { background: white !important; color: #111 !important; }
+
+    .rp-stat-card { background: #f5f5f5 !important; border-color: #ddd !important; }
+    .rp-stat-label { color: #555 !important; }
+    .rp-stat-value { color: #111 !important; }
+    .rp-val-green { color: #1a7f37 !important; }
+    .rp-val-amber { color: #9a6700 !important; }
+
+    .rp-gp-header { color: #111 !important; border-bottom: 1px solid #ccc !important; }
+    .rp-gp-accent { background: #333 !important; }
+
+    .rp-report-section-title { color: #333 !important; border-bottom-color: #ddd !important; }
+
+    .rp-finding-card { background: #f8f8f8 !important; border-color: #ddd !important; }
+    .rp-finding-label { color: #555 !important; }
+    .rp-finding-value { color: #111 !important; }
+    .rp-finding-detail { color: #666 !important; }
+
+    .rp-report-table th { color: #333 !important; border-color: #ccc !important; background: #f5f5f5 !important; }
+    .rp-report-table td { color: #111 !important; border-color: #eee !important; }
+    .rp-report-table td:not(:first-child) { color: #555 !important; }
+
+    .rp-bar-label { color: #111 !important; }
+    .rp-bar-track { background: #eee !important; }
+    .rp-bar-fill { background: #555 !important; }
+    .rp-bar-fill.rp-bar-amber { background: #9a6700 !important; }
+    .rp-bar-count { color: #555 !important; }
+
+    .rp-section-sub { color: #111 !important; border-color: #ddd !important; }
+    .rp-section-sub-count { color: #666 !important; }
+    .rp-empty-note { color: #666 !important; }
+
+    .rp-telemetry-full { background: #f5f5f5 !important; }
+    .rp-telemetry-full-title { color: #333 !important; }
+    .rp-telemetry-full-copy { color: #111 !important; }
+    .rp-telemetry-category { background: #f8f8f8 !important; border-color: #ddd !important; }
+    .rp-telemetry-category-title { color: #333 !important; }
+    .rp-telemetry-category-copy { color: #555 !important; }
+  }
+
   /* ---- Responsive ---- */
   @media (max-width: 600px) {
     .rp-report-picker { grid-template-columns: 1fr; }
@@ -1749,7 +2012,7 @@ rpStyles.textContent = `
     .rp-finding-grid { grid-template-columns: 1fr; }
     .rp-telemetry-category-grid { grid-template-columns: 1fr; }
     .rp-audit-checklist { grid-template-columns: 1fr; }
-    .rp-bar-label { flex: 0 0 80px; font-size: 0.72rem; }
+    .rp-bar-label { flex: 0 0 110px; font-size: 0.72rem; }
     .rp-fp-fields { flex-direction: column; }
   }
   @media (min-width: 601px) and (max-width: 900px) {

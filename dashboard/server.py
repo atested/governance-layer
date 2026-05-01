@@ -849,81 +849,82 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         _check_and_reload()
         parsed = urlparse(self.path)
-        if parsed.path.startswith("/api/"):
+        path = parsed.path.rstrip("/")
+        if path.startswith("/api/"):
             if not self._check_auth():
                 _json_response(self, {"error": "Unauthorized"}, 401)
                 return
-            if parsed.path == "/api/observe":
+            if path == "/api/observe":
                 self._handle_observe()
-            elif parsed.path == "/api/approvals/add":
+            elif path == "/api/approvals/add":
                 self._handle_approve()
-            elif parsed.path == "/api/approvals/revoke":
+            elif path == "/api/approvals/revoke":
                 self._handle_revoke()
-            elif parsed.path == "/api/health/acknowledge":
+            elif path == "/api/health/acknowledge":
                 self._handle_acknowledge()
-            elif parsed.path == "/api/config/update":
+            elif path == "/api/config/update":
                 self._handle_config_update()
-            elif parsed.path == "/api/config/verify-license":
+            elif path == "/api/config/verify-license":
                 self._handle_config_verify_license()
-            elif parsed.path == "/api/export/authorize":
+            elif path == "/api/export/authorize":
                 self._handle_export_authorize()
-            elif parsed.path == "/api/export/package":
+            elif path == "/api/export/package":
                 self._handle_export_package()
-            elif parsed.path == "/api/feedback/submit":
+            elif path == "/api/feedback/submit":
                 self._handle_feedback_submit()
-            elif parsed.path == "/api/trouble/report":
+            elif path == "/api/trouble/report":
                 self._handle_trouble_report()
-            elif parsed.path == "/api/communications/request":
+            elif path == "/api/communications/request":
                 self._handle_communications_request()
-            elif parsed.path == "/api/telemetry/summary":
+            elif path == "/api/telemetry/summary":
                 self._handle_telemetry_summary()
-            elif parsed.path == "/api/telemetry/submit":
+            elif path == "/api/telemetry/submit":
                 self._handle_telemetry_submit()
-            elif parsed.path == "/api/telemetry/opt-in":
+            elif path == "/api/telemetry/opt-in":
                 self._handle_telemetry_opt_in()
-            elif parsed.path == "/api/notifications/dismiss":
+            elif path == "/api/notifications/dismiss":
                 self._handle_notification_dismiss()
-            elif parsed.path == "/api/notifications/viewed":
+            elif path == "/api/notifications/viewed":
                 self._handle_notifications_viewed()
-            elif parsed.path == "/api/disclosure/acknowledge":
+            elif path == "/api/disclosure/acknowledge":
                 self._handle_disclosure_acknowledge()
-            elif parsed.path == "/api/identity/lock":
+            elif path == "/api/identity/lock":
                 self._handle_identity_lock()
-            elif parsed.path == "/api/licensing/questionnaire/answer":
+            elif path == "/api/licensing/questionnaire/answer":
                 self._handle_questionnaire_answer()
-            elif parsed.path == "/api/licensing/questionnaire/reset":
+            elif path == "/api/licensing/questionnaire/reset":
                 self._handle_questionnaire_reset()
-            elif parsed.path == "/api/licensing/capacity":
+            elif path == "/api/licensing/capacity":
                 self._handle_capacity_inputs()
-            elif parsed.path == "/api/licensing/register":
+            elif path == "/api/licensing/register":
                 self._handle_licensing_register()
-            elif parsed.path == "/api/licensing/purchase":
+            elif path == "/api/licensing/purchase":
                 self._handle_licensing_purchase()
-            elif parsed.path == "/api/licensing/auto-renewal":
+            elif path == "/api/licensing/auto-renewal":
                 self._handle_auto_renewal()
-            elif parsed.path == "/api/licensing/downgrade":
+            elif path == "/api/licensing/downgrade":
                 self._handle_licensing_downgrade()
-            elif parsed.path == "/api/licensing/terms-acknowledge":
+            elif path == "/api/licensing/terms-acknowledge":
                 self._handle_terms_acknowledge()
-            elif parsed.path == "/api/licensing/institution-inquiry":
+            elif path == "/api/licensing/institution-inquiry":
                 self._handle_institution_inquiry()
-            elif parsed.path == "/api/licensing/research-opt-in":
+            elif path == "/api/licensing/research-opt-in":
                 self._handle_research_opt_in()
-            elif parsed.path == "/api/licensing/activate-with-key":
+            elif path == "/api/licensing/activate-with-key":
                 self._handle_activate_with_key()
-            elif parsed.path == "/api/sharing/start":
+            elif path == "/api/sharing/start":
                 self._handle_sharing_start()
-            elif parsed.path == "/api/sharing/stop":
+            elif path == "/api/sharing/stop":
                 self._handle_sharing_stop()
-            elif parsed.path == "/api/sharing/approve":
+            elif path == "/api/sharing/approve":
                 self._handle_sharing_approve()
-            elif parsed.path == "/api/sharing/deny":
+            elif path == "/api/sharing/deny":
                 self._handle_sharing_deny()
-            elif parsed.path == "/api/sharing/join":
+            elif path == "/api/sharing/join":
                 self._handle_sharing_join()
-            elif parsed.path == "/api/sharing/discover":
+            elif path == "/api/sharing/discover":
                 self._handle_sharing_discover()
-            elif parsed.path == "/api/sharing/revoke-machine":
+            elif path == "/api/sharing/revoke-machine":
                 self._handle_revoke_machine()
             else:
                 _json_response(self, {"error": "method not allowed"}, 405)

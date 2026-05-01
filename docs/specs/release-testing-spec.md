@@ -809,6 +809,15 @@ Changes from Codex's draft:
    limited to AES-GCM ciphertext integrity and chain hash linkage; Ed25519 is
    server-side for this release.
 
+## Performance Constraint
+
+Dashboard performance has been tested against governance chains up to **18 MB**
+containing approximately **21,000 events**. This is the validated ceiling for
+this release. Larger chains may degrade load times for audit queries, activity
+feeds, and report generation, as `audit_report` loads the full chain into
+memory for aggregation. Operators with chains approaching this size should
+consider archiving older chain segments.
+
 ## Guiding Principle
 
 The release process should produce the same kind of evidence Atested promises

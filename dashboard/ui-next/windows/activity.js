@@ -645,7 +645,7 @@ function _renderCell(key, entry, detail) {
     }
 
     case 'user_identity':
-      return _esc(entry.user_identity || '\u2014');
+      return _esc(entry.user_identity || 'unknown');
 
     case 'matched_rule': {
       const rule = detail.matched_rule || '';
