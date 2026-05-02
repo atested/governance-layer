@@ -34,6 +34,9 @@ import {
 import {
   CAPACITY_RANGES,
   COMMERCIAL_TERMS,
+  PAYMENT_LINKS,
+  CHARTER,
+  CHARTER_ACTIVE,
   TIER_CAPABILITIES,
   TRANSLATION_TEMPLATES,
   getTemplate,
@@ -1373,10 +1376,14 @@ function _renderUnifiedPurchase(el, state) {
     if (isCurrent) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-current">[CURRENT]</span>';
     else if (isRec) badgeHtml = '<span class="lup-sel-badge lup-sel-badge-rec">[RECOMMENDED]</span>';
 
+    const hasCharter = CHARTER_ACTIVE && CHARTER[t.id];
+    const charterTag = hasCharter ? `<span class="lup-sel-charter">${_esc(CHARTER[t.id].price)} first yr</span>` : '';
+
     selectorHtml += `<button class="lup-sel-row${isSelected ? ' lup-sel-active' : ''}${isRec && !isCurrent ? ' lup-sel-recommended' : ''}${belowCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
       <span class="lup-sel-name">${_esc(t.name)}</span>
       <span class="lup-sel-spec">${_esc(t.spec)}</span>
       <span class="lup-sel-price">${_esc(t.price)}</span>
+      ${charterTag}
       ${badgeHtml}
     </button>`;
   }
@@ -1511,9 +1518,24 @@ function _renderPurchaseBody(el, tier, formData, state) {
   if (isInstitution) {
     purchaseHtml = _buildInstitutionQuestions(formData);
   } else {
+    const hasCharter = CHARTER_ACTIVE && CHARTER[tier];
+    const charterPrice = hasCharter ? CHARTER[tier].price : null;
     const actionLabel = isPersonal
       ? 'Register \u2014 Free'
-      : `${isLicensed ? 'Upgrade to' : 'Purchase'} ${_tierLabel(tier)} \u2014 ${price}`;
+      : hasCharter
+        ? `Purchase ${_tierLabel(tier)} \u2014 ${charterPrice} first year`
+        : `${isLicensed ? 'Upgrade to' : 'Purchase'} ${_tierLabel(tier)} \u2014 ${price}`;
+
+    let charterHtml = '';
+    if (hasCharter) {
+      charterHtml = `
+        <div class="lup-charter-banner">
+          <span class="lup-charter-badge">Charter</span>
+          <span class="lup-charter-price">${_esc(charterPrice)} first year</span>
+          <span class="lup-charter-note">${_esc(CHARTER.copy)}</span>
+          <span class="lup-charter-renewal">Renews at ${_esc(CHARTER[tier].renewal)}</span>
+        </div>`;
+    }
 
     purchaseHtml = `
       <div class="lup-purchase-pane">
@@ -1523,8 +1545,10 @@ function _renderPurchaseBody(el, tier, formData, state) {
           <span class="lup-purchase-price">${_esc(price)}</span>
           <span class="lup-purchase-billing">${isPersonal ? 'Free forever' : (terms.billing || 'Annual billing')}</span>
         </div>
+        ${charterHtml}
         <div class="lup-purchase-dates">License period: <span class="lup-date-blue">${_esc(dates.start)}</span> to <span class="lup-date-blue">${_esc(dates.end)}</span></div>
-        <button class="lic-action-btn lic-action-primary lup-action-btn">${_esc(actionLabel)}</button>
+        <button class="lic-action-btn lic-action-primary lup-action-btn" data-charter="${hasCharter ? 'true' : 'false'}">${_esc(actionLabel)}</button>
+        ${hasCharter ? `<button class="lic-action-btn lup-list-price-btn">Or purchase at list price \u2014 ${_esc(price)}</button>` : ''}
         <div class="lup-purchase-divider"></div>
         <button class="lup-invoice-btn lup-invoice-disabled" disabled>Invoice available after purchase</button>
         <div class="lup-action-error" style="display:none"></div>
@@ -1931,34 +1955,19 @@ function _wirePurchaseAction(bodyArea, el, tier, formData, state) {
       _refreshLicenseState();
       _loadUnifiedPurchase(el, state);
     } else {
-      const payRes = await licensingApi.initiatePurchase({ tier });
-      if (!payRes.ok) {
-        actionBtn.disabled = false;
-        actionBtn.textContent = actionLabel;
-        errorEl.textContent = payRes.error || 'Payment failed.';
-        errorEl.style.display = '';
-        return;
-      }
-
-      const res = await api.postPurchase({
-        tier,
-        payment_ref: payRes.data.payment_ref,
-        operator_name: formData.operator_name,
-        ...ciFields,
-      });
-
-      if (!res.ok) {
-        actionBtn.disabled = false;
-        actionBtn.textContent = actionLabel;
-        errorEl.textContent = res.error || 'Purchase failed.';
-        errorEl.style.display = '';
-        return;
-      }
-
-      _refreshLicenseState();
-      _loadUnifiedPurchase(el, state);
+      // Direct redirect to Stripe Payment Link
+      const useCharter = actionBtn.dataset.charter === 'true';
+      licensingApi.initiatePurchase({ tier, useCharter });
     }
   });
+
+  // Wire list-price button (shown when charter is active)
+  const listPriceBtn = bodyArea.querySelector('.lup-list-price-btn');
+  if (listPriceBtn) {
+    listPriceBtn.addEventListener('click', () => {
+      licensingApi.initiatePurchase({ tier, useCharter: false });
+    });
+  }
 }
 
 // ---------- Post-purchase management view ----------

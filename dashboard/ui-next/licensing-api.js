@@ -91,18 +91,27 @@ export function registerEmail({ email } = {}) {
 
 // ---------- Purchase ----------
 
+import { PAYMENT_LINKS, CHARTER, CHARTER_ACTIVE } from './tier-definitions.js';
+
 /**
- * Initiate a purchase flow.
- * Spec v1 section 6.
- * Mock: returns a successful purchase with a mock payment reference.
- * Replace with real Stripe integration when the licensing server exists.
+ * Initiate a purchase flow via Stripe Payment Links.
+ * Redirects the browser to Stripe Checkout. Never resolves on success.
  */
-export function initiatePurchase({ tier } = {}) {
-  return _mockOk({
-    payment_ref: `mock_pay_${Date.now()}`,
-    tier: tier || 'personal_plus',
-    status: 'completed',
-  });
+export function initiatePurchase({ tier, useCharter = false } = {}) {
+  let url;
+
+  if (useCharter && CHARTER_ACTIVE && CHARTER[tier]) {
+    url = CHARTER[tier].link;
+  } else {
+    url = PAYMENT_LINKS[tier];
+  }
+
+  if (!url) {
+    return Promise.resolve({ ok: false, error: 'No purchase link available for this tier.' });
+  }
+
+  window.location.href = url;
+  return new Promise(() => {});
 }
 
 // ---------- License management ----------

@@ -13,6 +13,34 @@
  * Spec v1 sections 2, 4.3.  Dispatch 027-D-2026-0417 Phase 3.
  */
 
+// ---------- Payment Links (Stripe) ----------
+
+export const PAYMENT_LINKS = {
+  personal:      'https://buy.stripe.com/dRmdR166q2Wi7WbdVq5Vu00',
+  personal_plus: 'https://buy.stripe.com/00w6oz3Yi2Wi7Wb9Fa5Vu03',
+  crew:          'https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01',
+  team:          'https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02',
+};
+
+// Charter pricing — limited availability, 50% off first year for Crew and Team.
+// Set CHARTER_ACTIVE to false to hide charter pricing and show only list prices.
+export const CHARTER_ACTIVE = true;
+
+export const CHARTER = {
+  promo_code: 'CHARTER2026',
+  crew: {
+    price: '$2,498',
+    renewal: '$4,995/yr',
+    link: 'https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01?prefilled_promo_code=CHARTER2026',
+  },
+  team: {
+    price: '$24,998',
+    renewal: '$49,995/yr',
+    link: 'https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02?prefilled_promo_code=CHARTER2026',
+  },
+  copy: 'Charter pricing \u2014 limited availability. 50% off your first year. Standard pricing at renewal. We reserve the right to limit quantities.',
+};
+
 // ---------- Capacity ranges ----------
 
 export const CAPACITY_RANGES = {
