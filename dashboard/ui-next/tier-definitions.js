@@ -41,14 +41,14 @@ export const COMMERCIAL_TERMS = {
     summary: 'Single operator, multi-machine, support through the Atested feedback system.',
   },
   crew: {
-    price: '$2,995/yr',
+    price: '$4,995/yr',
     billing: 'Annual',
     support: 'Feedback System',
     dating: 'From trial completion',
     summary: '2\u201312 operators, shared governance chain, team visibility.',
   },
   team: {
-    price: '$19,995/yr',
+    price: '$49,995/yr',
     billing: 'Annual',
     support: 'Priority Feedback',
     dating: 'From trial completion',

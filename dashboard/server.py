@@ -92,7 +92,9 @@ def _write_json_file(path, data):
 def _telemetry_opted_in():
     opt_in_file = RUNTIME / "telemetry_opt_in"
     try:
-        return opt_in_file.exists() and opt_in_file.read_text(encoding="utf-8").strip() == "1"
+        if not opt_in_file.exists():
+            return True  # Telemetry on by default
+        return opt_in_file.read_text(encoding="utf-8").strip() != "0"
     except OSError:
         return False
 
@@ -4163,8 +4165,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         TERMS = {
             "personal":      {"price": "Free",        "billing": "N/A",    "support": "Documentation & Feedback",  "dating": "From registration",     "summary": "Single operator, full governance."},
             "personal_plus": {"price": "$99/yr",      "billing": "Annual", "support": "Feedback System",           "dating": "From purchase",         "summary": "Single operator, multi-machine."},
-            "crew":          {"price": "$2,995/yr",   "billing": "Annual", "support": "Feedback System",           "dating": "From trial completion", "summary": "2\u201312 operators, shared governance."},
-            "team":          {"price": "$19,995/yr",  "billing": "Annual", "support": "Priority Feedback",         "dating": "From trial completion", "summary": "13\u201350 operators, role-based governance."},
+            "crew":          {"price": "$4,995/yr",   "billing": "Annual", "support": "Feedback System",           "dating": "From trial completion", "summary": "2\u201312 operators, shared governance."},
+            "team":          {"price": "$49,995/yr",  "billing": "Annual", "support": "Priority Feedback",         "dating": "From trial completion", "summary": "13\u201350 operators, role-based governance."},
             "institution":   {"price": "Negotiated",  "billing": "Annual", "support": "Dedicated Feedback",        "dating": "From trial completion", "summary": "51+ operators, enterprise governance."},
         }
         return TERMS.get(tier, {})

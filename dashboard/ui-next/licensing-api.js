@@ -41,8 +41,8 @@ export function getTierDefinitions() {
     tiers: [
       { id: 'personal', name: 'Personal', price: 'Free', description: 'Single operator, full governance.' },
       { id: 'personal_plus', name: 'Personal Plus', price: '$99/yr', description: 'Single operator, multi-machine.' },
-      { id: 'crew', name: 'Crew', price: '$2,995/yr', description: '2\u201312 operators, shared governance.' },
-      { id: 'team', name: 'Team', price: '$19,995/yr', description: '13\u201350 operators, role-based governance.' },
+      { id: 'crew', name: 'Crew', price: '$4,995/yr', description: '2\u201312 operators, shared governance.' },
+      { id: 'team', name: 'Team', price: '$49,995/yr', description: '13\u201350 operators, role-based governance.' },
       { id: 'institution', name: 'Institution', price: 'Negotiated', description: '51+ operators, enterprise governance.' },
     ],
   });

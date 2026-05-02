@@ -2933,8 +2933,8 @@ const PRICING_FEATURES = {
 const _TIER_SELECTOR = [
   { id: 'personal',      name: 'Personal',      spec: '1 user, 1 machine',                       price: 'Free' },
   { id: 'personal_plus', name: 'Personal Plus',  spec: '1 user, up to 3 machines',                price: '$99/yr' },
-  { id: 'crew',          name: 'Crew',           spec: '2\u201312 users, unlimited machines',      price: '$2,995/yr' },
-  { id: 'team',          name: 'Team',           spec: '13\u201350 users, organizational governance', price: '$19,995/yr' },
+  { id: 'crew',          name: 'Crew',           spec: '2\u201312 users, unlimited machines',      price: '$4,995/yr' },
+  { id: 'team',          name: 'Team',           spec: '13\u201350 users, organizational governance', price: '$49,995/yr' },
   { id: 'institution',   name: 'Institution',    spec: '51+ users, custom deployment',             price: 'Negotiated' },
 ];
 
