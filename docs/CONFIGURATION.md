@@ -1,9 +1,9 @@
 # Configuration Guide
 
-> **v3 note:** The capability registry described below applies to the MCP
-> server surface. The API governance proxy (`proxy/server.py`) uses
-> `capabilities/policy-rules.json` for policy evaluation. Both share the
-> same classification and path validation logic. See
+> **v3 note:** The API governance proxy (`proxy/server.py`) uses
+> `capabilities/policy-rules.json` for policy evaluation. The capability
+> registry described below applied to the MCP server surface, which was
+> archived in D-203. See
 > [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
 > current architecture.
 
@@ -133,27 +133,11 @@ Any absolute path can also be added directly (e.g., `/home/deploy/staging`).
 | `GOV_DEPLOYMENT_CONTEXT` | `"default"` | Deployment environment label |
 | `GOV_POLICY_VERSION` | `"baseline-v1"` | Policy engine version identifier |
 
-### HTTP transport (multi-client)
+### HTTP transport (archived — MCP broker removed D-203)
 
-| Variable | Default | Description |
-|---|---|---|
-| `GOVMCP_HOST` | `"127.0.0.1"` | Server bind address |
-| `GOVMCP_PORT` | `"8000"` | Server port |
-| `GOVMCP_STREAMABLE_HTTP_PATH` | `"/mcp"` | HTTP path for MCP endpoint |
-| `GOVMCP_LOG_LEVEL` | `"INFO"` | Logging level |
-| `GOVMCP_PUBLIC_BASE_URL` | — | Public URL for OIDC (HTTPS required) |
-
-### Authentication
-
-| Variable | Default | Description |
-|---|---|---|
-| `GOVMCP_REMOTE_AUTH_MODE` | `"bearer"` | Auth mode: `"bearer"` or `"oidc"` |
-| `GOVMCP_REMOTE_AUTH_TOKEN` | — | Shared bearer token |
-| `GOVMCP_REMOTE_AUTH_TOKEN_FILE` | — | Path to file containing bearer token |
-| `GOVMCP_OIDC_ISSUER_URL` | — | OpenID Connect issuer URL |
-| `GOVMCP_OIDC_AUDIENCE` | — | Expected JWT audience claim |
-| `GOVMCP_OIDC_REQUIRED_SCOPES` | `""` | Space-separated required scopes |
-| `GOVMCP_OIDC_SIGNING_ALGORITHMS` | `"RS256"` | JWT signing algorithms |
+The `GOVMCP_*` environment variables configured the MCP governance broker,
+which was archived in D-203. The API proxy uses standard `--port` and `--host`
+CLI arguments. See the [Quickstart](QUICKSTART.md) for proxy configuration.
 
 ---
 

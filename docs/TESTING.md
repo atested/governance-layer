@@ -26,9 +26,9 @@ python3 -m pytest tests/ -v -m shell
 
 ### Interpreter notes
 
-The system Python (3.9) cannot collect 3 test files that use Python 3.10+
-syntax (`str | None` type unions) or require the `mcp` package. These are
-reported as collection errors but do not affect the passing test count.
+MCP-dependent tests have been archived to `tests/_archived_mcp/` and
+`system/tests/_archived_mcp/` (excluded from collection via `norecursedirs`
+in pytest.ini). The remaining test suite runs cleanly on Python 3.9+.
 
 For a clean collection with zero errors, use the project venv:
 

@@ -176,16 +176,10 @@ Explicit `RELEASE_GATE_STRICT_PROOF_PACKET` setting overrides `GOV_PROFILE`.
 
 ## Dependency Handling
 
-### MCP Smoke Dependency
+### MCP Smoke Dependency (archived)
 
-The proof-bundle generation may attempt to run `queue-drift-scan.py` (MCP smoke check).
-
-**Behavior:**
-- **dev:** Logs "INFO: unavailable" if missing, continues
-- **ci:** Logs "WARN: unavailable" if missing, continues (does not gate)
-- **Explicit require:** `RELEASE_GATE_REQUIRE_MCP=1` makes it gating (fails if unavailable)
-
-**Contract:** Missing MCP dependency does not fail release-gate by default in either profile.
+The MCP governance broker was removed in D-203. The `RELEASE_GATE_REQUIRE_MCP`
+variable is no longer supported. MCP-related proof-bundle checks are skipped.
 
 ---
 

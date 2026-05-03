@@ -1,12 +1,12 @@
 # Governance Layer Overview
 
-> **v3 architecture note:** Atested now operates as an API governance proxy
+> **v3 architecture note:** Atested operates as an API governance proxy
 > (`proxy/server.py`) that intercepts tool calls at the HTTP transport layer.
 > The classification, policy evaluation, and chain recording described below
-> are unchanged — only the interception point has moved from MCP to the API
-> layer. References to "capability registry" and specific governed tool names
-> (e.g., `FS_WRITE`) below describe the MCP server surface, which remains
-> available as a complementary layer. See
+> are unchanged. The MCP broker was removed in D-203 because it created an
+> agent-discoverable path around the proxy chokepoint. References to
+> capability-class names (e.g., `FS_WRITE`) below are historical — the proxy
+> uses action-type classification from `capabilities/policy-rules.json`. See
 > [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
 > current architecture.
 
@@ -35,7 +35,7 @@ The Governance Layer is a deterministic policy enforcement system for tool execu
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Tool Request (MCP client, CLI, or API)                      │
+│ Tool Request (API proxy intercept)                           │
 │   { tool: "FS_WRITE", args: {...}, intent: {...} }          │
 └────────────────┬────────────────────────────────────────────┘
                  │
@@ -75,7 +75,7 @@ The Governance Layer is a deterministic policy enforcement system for tool execu
 
 **Implemented**:
 - Core policy evaluation (FS_READ, FS_WRITE, FS_LIST, FS_MOVE, FS_DELETE)
-- MCP server with governed filesystem tools
+- API proxy with transparent tool call governance
 - Deterministic record generation and replay
 - Trust-grade GovLayer-core record signing and verifier closure (record, chain, replay)
 - Reason code taxonomy (12 filesystem rejection codes)
@@ -166,7 +166,7 @@ Two fields activated in Phase 3:
 
 ### GovLayer boundary note
 
-GovLayer-core signing covers canonical `PolicyRecord` semantics only. `mcp/receipt_signing.py` signs MCP receipt digests for the connector/application layer and is not part of the core GovLayer signing completion claim.
+GovLayer-core signing covers canonical `PolicyRecord` semantics only. `scripts/receipt_signing.py` signs receipt digests for the application layer and is not part of the core GovLayer signing completion claim.
 
 **Exit codes**: `0` = pass, `1` = verification failed, `2` = fatal error
 

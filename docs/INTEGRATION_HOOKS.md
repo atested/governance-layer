@@ -16,7 +16,7 @@ a misleading 100%.
 ## What the Transparency Metric Measures
 
 - **Governed operations**: Actions that flow through the governance chain
-  (MCP tools like `fs_read`, `fs_write`, etc.). These are automatically counted.
+  (tool calls intercepted by the API proxy). These are automatically counted.
 - **Ungoverned observations**: Native tool calls (Read, Write, Bash, etc.)
   reported by action hooks. These are only counted when hooks are configured.
 
@@ -32,7 +32,7 @@ metric makes this gap visible to operators.
 
 ## Observation Endpoints
 
-### 1. MCP Tool (for MCP-connected tools)
+### 1. Dashboard API endpoint
 
 Tool name: `observe_ungoverned_operation`
 
@@ -165,7 +165,6 @@ for custom ranges.
    but does not prevent ungoverned operations.
 2. **Lightweight** — observation events are minimal chain records with no policy
    evaluation overhead.
-3. **Platform-agnostic** — any tool that can make an HTTP POST or call an MCP
-   tool can integrate.
+3. **Platform-agnostic** — any tool that can make an HTTP POST can integrate.
 4. **Privacy** — the `target` field is optional. Tools can report operation types
    without revealing paths if desired.
