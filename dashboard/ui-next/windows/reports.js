@@ -9,6 +9,7 @@ import { modalManager } from '../modal-manager.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 import { authorizeExport, downloadExport } from '../export-utils.js';
 import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
+import { openCommunicationsWindow } from './communications.js';
 
 const REPORT_TEMPLATES = [
   {
@@ -204,7 +205,7 @@ function _buildUI(state) {
         <div class="rp-fp-body">
           <div class="rp-selected-report">
             <span class="rp-fp-mini-label">Selected report</span>
-            <span class="rp-selected-title" id="rp-selected-title">${_esc(REPORT_BY_ID[state.reportId].title)}</span>
+            <span class="rp-selected-title" id="rp-selected-title" data-accent="${REPORT_BY_ID[state.reportId].accent}">${_esc(REPORT_BY_ID[state.reportId].title)}</span>
             <span class="rp-selected-subtitle" id="rp-selected-subtitle">${_esc(REPORT_BY_ID[state.reportId].subtitle)}</span>
           </div>
           <div class="rp-fp-source-row">
@@ -277,7 +278,9 @@ function _wireControls(state) {
     el.querySelectorAll('.rp-report-card').forEach(c => c.classList.remove('rp-report-active'));
     card.classList.add('rp-report-active');
     const report = REPORT_BY_ID[state.reportId];
-    el.querySelector('#rp-selected-title').textContent = report.title;
+    const titleEl = el.querySelector('#rp-selected-title');
+    titleEl.textContent = report.title;
+    titleEl.dataset.accent = report.accent;
     el.querySelector('#rp-selected-subtitle').textContent = report.subtitle;
     recordUiAggregate('report_runs', state.reportId);
     _applyRange(state, report.defaultRange || '7d');
@@ -477,6 +480,12 @@ async function _loadReport(state) {
       if (actRes.ok) state.data.activityEntries = actRes.data?.entries || actRes.data || [];
     } catch (_) { /* non-critical */ }
   }
+  if (template.id === 'unusual-activity') {
+    try {
+      const denyRes = await api.getActivity({ ...params, policy_decision: 'DENY', limit: 20 });
+      if (denyRes.ok) state.data.deniedEntries = denyRes.data?.entries || denyRes.data || [];
+    } catch (_) { /* non-critical */ }
+  }
   if (template.id === 'audit-evidence') {
     const [approvalsRes, activityRes] = await Promise.all([
       api.getApprovals(),
@@ -605,10 +614,32 @@ function _renderStats(state) {
   const deny = summary.DENY || 0;
   const rate = total > 0 ? ((deny / total) * 100).toFixed(1) + '%' : '0%';
 
+  if (d.report_id === 'unusual-activity') {
+    // Custom stat cards: Denied Records, Rare Actions, Deny Rate
+    const governedTools = _filterGovernedGroups(d.groups?.tool?.groups || []);
+    const rareCount = governedTools.filter(g => (g.count || 0) <= 3).length;
+    const cards = stats.querySelectorAll('.rp-stat-card');
+    if (cards[0]) { cards[0].querySelector('.rp-stat-label').textContent = 'Denied records'; cards[0].querySelector('.rp-stat-value').textContent = _fmtNum(deny); }
+    if (cards[1]) { cards[1].querySelector('.rp-stat-label').textContent = 'Rare actions'; cards[1].querySelector('.rp-stat-value').textContent = _fmtNum(rareCount); }
+    if (cards[2]) { cards[2].querySelector('.rp-stat-label').textContent = 'Deny rate'; cards[2].querySelector('.rp-stat-value').textContent = rate; }
+    if (cards[3]) { cards[3].style.display = 'none'; }
+    return;
+  }
+
+  // Reset hidden card if switching away from unusual-activity
+  const cards = stats.querySelectorAll('.rp-stat-card');
+  if (cards[3]) cards[3].style.display = '';
+
   state.el.querySelector('#rp-stat-total').textContent = _fmtNum(total);
   state.el.querySelector('#rp-stat-allow').textContent = _fmtNum(allow);
   state.el.querySelector('#rp-stat-deny').textContent = _fmtNum(deny);
   state.el.querySelector('#rp-stat-rate').textContent = rate;
+
+  // Restore default labels
+  if (cards[0]) { cards[0].querySelector('.rp-stat-label').textContent = 'Total records'; }
+  if (cards[1]) { cards[1].querySelector('.rp-stat-label').textContent = 'Allow'; }
+  if (cards[2]) { cards[2].querySelector('.rp-stat-label').textContent = 'Deny'; }
+  if (cards[3]) { cards[3].querySelector('.rp-stat-label').textContent = 'Deny rate'; }
 }
 
 // ---------- Render predefined reports ----------
@@ -684,16 +715,21 @@ function _renderReportView(state) {
     body.appendChild(_section('Priority breakdown', _troublePrioritySummary(d.trouble.reports)));
     body.appendChild(_section('Support requests', _troubleExpandableList(d.trouble.reports)));
   } else {
-    // Filter to governed tool calls only — exclude internal MCP broker operations and system events
+    // Unusual Activity — governed decisions only
     const governedTools = _filterGovernedGroups(d.groups.tool?.groups || []);
     const governedUsers = _filterGovernedGroups(d.groups.user?.groups || []);
-    body.appendChild(_section('High-denial signals', _compactTable(_highDenyGroupsFiltered(governedTools), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    body.appendChild(_section('Low-frequency activity', _compactTable(_lowFrequencyGroups({ groups: governedTools }), ['Action', 'Records', 'DENY', 'Deny rate'])));
-    // Side-by-side cards for hourly and user
+
+    // Denied Actions — actual DENY entries from activity feed
+    body.appendChild(_section('Denied Actions', _deniedActionsTable(d.deniedEntries || [])));
+
+    // Rare Actions — governed actions appearing ≤3 times
+    body.appendChild(_section('Rare Actions', _compactTable(_lowFrequencyGroups({ groups: governedTools }), ['Action', 'Records', 'DENY', 'Deny rate'])));
+
+    // Side-by-side: Hourly Distribution + User Activity
     const sideBySide = document.createElement('div');
     sideBySide.className = 'rp-side-by-side';
     sideBySide.appendChild(_section('Hourly distribution', _compactTable(d.groups.hour?.groups || [], ['Hour', 'Records', 'DENY'])));
-    sideBySide.appendChild(_section('User signals', _compactTable(_highDenyGroupsFiltered(governedUsers), ['User', 'Records', 'DENY', 'Deny rate'])));
+    sideBySide.appendChild(_section('User Activity', _compactTable(governedUsers, ['User', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(sideBySide);
   }
 }
@@ -815,6 +851,31 @@ function _compactTable(groups, headers) {
   return table;
 }
 
+function _deniedActionsTable(entries) {
+  const table = document.createElement('table');
+  table.className = 'rp-report-table';
+  const headers = ['Time', 'User', 'Action', 'Target', 'Rule'];
+  table.innerHTML = `<thead><tr>${headers.map(h => `<th>${_esc(h)}</th>`).join('')}</tr></thead>`;
+  const tbody = document.createElement('tbody');
+  if (!entries.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="${headers.length}">No denied actions in this range.</td>`;
+    tbody.appendChild(tr);
+  }
+  for (const e of entries.slice(0, 20)) {
+    const tr = document.createElement('tr');
+    const time = _formatShortDate(e.timestamp_utc || '');
+    const user = e.user_identity || 'unknown';
+    const action = e.tool_name || e.detail?.tool_name || 'N/A';
+    const target = e.detail?.path || e.detail?.target || '';
+    const rule = e.detail?.matched_rule || e.detail?.rule_id || '';
+    tr.innerHTML = [time, user, action, _truncate(target, 40), rule].map(c => `<td>${_esc(c)}</td>`).join('');
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
 function _auditChecklist(d) {
   const list = document.createElement('div');
   list.className = 'rp-audit-checklist';
@@ -844,14 +905,53 @@ function _headlineForReport(d) {
 }
 
 function _renderTelemetryReport(body, d) {
-  // Opt-in status
+  // Two-column layout: Status on left, Purpose + Privacy stacked on right
   const optedIn = d.telemetry?.opted_in;
   const statusText = optedIn === true ? 'Opted in' : optedIn === false ? 'Opted out' : 'Not configured';
-  const statusTone = optedIn === true ? 'green' : 'amber';
-  body.appendChild(_telemetryFullCard('TELEMETRY STATUS', `Current participation: ${statusText}. Telemetry can be changed at any time from Communications.`, statusTone));
+  const dotColor = optedIn === true ? '#3fb950' : '#d29922';
 
-  body.appendChild(_telemetryFullCard('ATESTED TELEMETRY PURPOSE', TELEMETRY_PURPOSE, 'blue'));
-  body.appendChild(_telemetryFullCard('PRIVACY MODEL', TELEMETRY_PRIVACY_TEXT, 'purple'));
+  const twoCol = document.createElement('div');
+  twoCol.className = 'rp-telemetry-two-col';
+
+  // Left: Status card
+  const statusCard = document.createElement('div');
+  statusCard.className = 'rp-telemetry-full rp-telemetry-green';
+  statusCard.style.margin = '0';
+  statusCard.innerHTML = `
+    <div class="rp-telemetry-full-title">STATUS</div>
+    <div style="display:flex;align-items:center;gap:8px;margin:12px 0 16px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotColor}"></span>
+      <span style="color:#e4e6eb;font-size:1rem;font-weight:700">${_esc(statusText)}</span>
+    </div>
+    <button class="rp-btn rp-btn-comms" style="background:rgba(102,153,204,0.15);color:#6699cc;border:1px dashed rgba(102,153,204,0.4);border-radius:2px;padding:7px 14px;font-size:0.78rem;cursor:pointer;font-weight:600">Manage in Communications \u2192</button>
+  `;
+  statusCard.querySelector('.rp-btn-comms').addEventListener('click', () => openCommunicationsWindow(null));
+  twoCol.appendChild(statusCard);
+
+  // Right: Purpose + Privacy stacked
+  const rightCol = document.createElement('div');
+  rightCol.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+
+  const purposeCard = document.createElement('div');
+  purposeCard.className = 'rp-telemetry-full rp-telemetry-blue';
+  purposeCard.style.margin = '0';
+  purposeCard.innerHTML = `
+    <div class="rp-telemetry-full-title">PURPOSE</div>
+    <div class="rp-telemetry-full-copy">${_esc(TELEMETRY_PURPOSE)}</div>
+  `;
+  rightCol.appendChild(purposeCard);
+
+  const privacyCard = document.createElement('div');
+  privacyCard.className = 'rp-telemetry-full rp-telemetry-purple';
+  privacyCard.style.margin = '0';
+  privacyCard.innerHTML = `
+    <div class="rp-telemetry-full-title">PRIVACY MODEL</div>
+    <div class="rp-telemetry-full-copy">${_esc(TELEMETRY_PRIVACY_TEXT)}</div>
+  `;
+  rightCol.appendChild(privacyCard);
+
+  twoCol.appendChild(rightCol);
+  body.appendChild(twoCol);
 
   const categories = document.createElement('div');
   categories.className = 'rp-telemetry-section';
@@ -878,7 +978,7 @@ function _renderTelemetryReport(body, d) {
   }
 
   // Activity-style expandable transmission list
-  body.appendChild(_section('Transmission history', _telemetryTransmissionList(d.telemetry, d.time_range)));
+  body.appendChild(_section('Atested Telemetry History', _telemetryTransmissionList(d.telemetry, d.time_range)));
 }
 
 function _telemetryTransmissionList(telemetry, range) {
@@ -1123,11 +1223,12 @@ function _highDenyGroups(report) {
 }
 
 function _lowFrequencyGroups(report) {
-  return (report?.groups || []).filter(g => (g.count || 0) <= 2).sort((a, b) => (a.count || 0) - (b.count || 0));
+  return (report?.groups || []).filter(g => (g.count || 0) <= 3).sort((a, b) => (a.count || 0) - (b.count || 0));
 }
 
 const _SYSTEM_EVENT_KEYS = new Set([
-  'disclosure_shown', 'notifications_viewed', 'questionnaire_reset',
+  'disclosure_shown', 'notifications_viewed', 'notification_dismissed',
+  'questionnaire_reset',
   'capacity_inputs', 'session_start', 'session_end', 'heartbeat',
   'config_reload', 'chain_rotate', 'ui_event',
 ]);
@@ -1622,7 +1723,7 @@ rpStyles.textContent = `
     background: #23272e;
     color: #8b919a;
     border: 1px solid #31363f;
-    border-radius: 6px;
+    border-radius: 0;
     padding: 4px 12px;
     font-size: 0.75rem;
     cursor: pointer;
@@ -1648,6 +1749,17 @@ rpStyles.textContent = `
     font-size: 0.9rem;
     font-weight: 700;
   }
+  .rp-selected-title[data-accent] {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 0;
+    font-weight: 700;
+  }
+  .rp-selected-title[data-accent="green"]  { background: #3fb950; color: #fff; }
+  .rp-selected-title[data-accent="amber"]  { background: #d29922; color: #fff; }
+  .rp-selected-title[data-accent="blue"]   { background: #6699cc; color: #fff; }
+  .rp-selected-title[data-accent="purple"] { background: #d2a8ff; color: #1c2028; }
+  .rp-selected-title[data-accent="red"]    { background: #f85149; color: #fff; }
   .rp-selected-subtitle {
     color: #8b919a;
     font-size: 0.8rem;
@@ -1958,6 +2070,15 @@ rpStyles.textContent = `
     color: #8b919a;
     font-size: 0.74rem;
     line-height: 1.4;
+  }
+  .rp-telemetry-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 8px 20px 14px;
+  }
+  @media (max-width: 600px) {
+    .rp-telemetry-two-col { grid-template-columns: 1fr; }
   }
   /* ---- Expandable transmission list ---- */
   .rp-tx-list { display: flex; flex-direction: column; gap: 2px; }
