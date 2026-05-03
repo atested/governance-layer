@@ -1388,8 +1388,15 @@ function _renderUnifiedPurchase(el, state) {
     </button>`;
   }
 
+  const charterBlockHtml = CHARTER_ACTIVE ? `
+    <div class="lup-charter-block">
+      <h4 class="lup-charter-block-heading">Charter pricing \u2014 limited availability</h4>
+      <p class="lup-charter-block-body">We\u2019re launching. A limited number of Crew and Team plans are at 50% off making Crew @ $2,498 and Team @ $24,998. Standard pricing at renewal. We reserve the right to close this at any time. Charter price applied at checkout.</p>
+    </div>` : '';
+
   el.innerHTML = `
     <div class="lup-context"><div class="lup-context-bar"></div><p class="lup-context-text">${contextText}</p></div>
+    ${charterBlockHtml}
     <div class="lup-selector">${selectorHtml}</div>
     <div class="lup-body-area"></div>
     <div class="lup-confirm-dialog" style="display:none"></div>
@@ -4279,6 +4286,29 @@ licStyles.textContent = `
   .lup-context-text {
     font-size: 0.95rem;
     color: #e4e6eb;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* Charter announcement block */
+  .lup-charter-block {
+    margin-bottom: 20px;
+    padding: 14px 16px;
+    position: relative;
+    padding-left: 19px;
+    border-left: 3px solid #22c55e;
+    background: rgba(34, 197, 94, 0.04);
+    border-radius: 2px;
+  }
+  .lup-charter-block-heading {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e4e6eb;
+    margin: 0 0 6px 0;
+  }
+  .lup-charter-block-body {
+    font-size: 0.82rem;
+    color: #b0b6c0;
     margin: 0;
     line-height: 1.6;
   }
