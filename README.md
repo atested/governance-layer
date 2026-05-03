@@ -41,8 +41,8 @@ Agent → Atested Proxy → Model Provider API
 ```bash
 git clone https://github.com/atested/governance-layer.git
 cd governance-layer
-python3 -m venv mcp/.venv
-mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
+python3 -m venv .venv
+.venv/bin/python3 -m pip install -r requirements.txt
 ```
 
 ### 2. Start the proxy
@@ -102,7 +102,6 @@ Policy rules are declarative JSON (`capabilities/policy-rules.json`). First matc
 Atested includes a live dashboard for real-time visibility into governance activity.
 
 ```bash
-# Start via the MCP governance-broker, or directly:
 python3 dashboard/server.py
 ```
 
@@ -116,7 +115,7 @@ The dashboard shows: chain health, mediated decisions, denied actions, operation
 
 **Model providers:** Anthropic API (native support). OpenAI-compatible APIs (with `--upstream`). Any provider using the standard tool call format.
 
-**MCP governance (complementary):** The MCP server (`mcp/server.py`) remains available for governing upstream MCP tool servers. The API proxy governs the agent; the MCP proxy governs tool servers. Different layers, both useful.
+**MCP governance broker (archived):** The MCP broker was removed from the active product (D-203) because it creates an agent-discoverable path around the proxy chokepoint. Code preserved in `mcp/_archived/`.
 
 ---
 
@@ -139,7 +138,6 @@ The dashboard shows: chain health, mediated decisions, denied actions, operation
 | Policy rules | `capabilities/policy-rules.json` | Declarative action-based rules (first match wins) |
 | Policy evaluator | `scripts/policy_eval_v2.py` | Evaluate classification against policy |
 | Dashboard | `dashboard/server.py` | Live web UI for governance visibility |
-| MCP server | `mcp/server.py` | MCP tools for governance operations |
 
 ---
 

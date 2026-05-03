@@ -11,10 +11,8 @@ from pathlib import Path
 
 import pytest
 
-# Add mcp/ to path for imports
-MCP_DIR = Path(__file__).resolve().parents[1] / "mcp"
+# Add scripts/ to path for imports
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
-sys.path.insert(0, str(MCP_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from registry_integrity import RegistryIntegrity, validate_registry_schema

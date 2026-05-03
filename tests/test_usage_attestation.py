@@ -13,14 +13,15 @@ import json
 import os
 import socket
 import subprocess
+
+import pytest
 import sys
 import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = REPO / "mcp" / "remote_server.py"
 
-sys.path.insert(0, str(REPO / "mcp"))
+sys.path.insert(0, str(REPO / "scripts"))
 from licensing import initialize_trial
 
 
@@ -92,8 +93,7 @@ def test_attestation_artifact_hash():
 
 def test_attestation_via_remote_server():
     """usage_attestation tool returns valid artifact via remote server."""
-    from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    pytest.skip("MCP broker archived (D-203) — test requires mcp server")
 
     async def _run():
         port = _choose_free_port()

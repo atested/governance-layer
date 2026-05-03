@@ -23,11 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO / "scripts"
-MCP_DIR = REPO / "mcp"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
-if str(MCP_DIR) not in sys.path:
-    sys.path.insert(0, str(MCP_DIR))
 
 from storage_contract import runtime_root
 
@@ -476,8 +473,8 @@ def _check_and_reload():
     py_changed = False
     ui_changed = False
 
-    # Check Python source files in scripts/ and mcp/
-    for search_dir in (SCRIPTS_DIR, MCP_DIR):
+    # Check Python source files in scripts/
+    for search_dir in (SCRIPTS_DIR,):
         if not search_dir.exists():
             continue
         for py_file in search_dir.glob("*.py"):
@@ -552,7 +549,7 @@ _chain_lock = threading.Lock()
 
 
 def _acquire_chain_file_lock():
-    """Acquire cross-process mkdir lock (same protocol as mcp/server.py)."""
+    """Acquire cross-process mkdir lock (same protocol as the governance layer)."""
     lockdir = Path(str(CHAIN) + ".lock.d")
     lock_meta = lockdir / "lock_owner.json"
     max_wait = 50
@@ -1841,7 +1838,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         send_to_remote = bool(data.get("send_to_remote", False))
 
         try:
-            sys.path.insert(0, str(MCP_DIR))
             from feedback_signing import build_feedback_artifact, write_artifact, send_artifact_to_remote
 
             artifact = build_feedback_artifact(
@@ -1908,7 +1904,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 })
                 return
 
-            sys.path.insert(0, str(MCP_DIR))
             from feedback_signing import write_artifact, send_artifact_to_remote
 
             artifact = _build_summary_telemetry_artifact()
@@ -2098,7 +2093,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "stored_at": str(out_path),
             }
             try:
-                sys.path.insert(0, str(MCP_DIR))
                 from feedback_signing import send_artifact_to_remote
                 result["remote"] = send_artifact_to_remote(
                     artifact, "https://license.atested.com/api/trouble"

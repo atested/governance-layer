@@ -241,17 +241,9 @@ class TestVerifyBeforeExport:
         assert "build_verification_summary" in source
 
     def test_mcp_export_has_no_verification_trigger(self):
-        """MCP server export tools do not trigger background verification.
-
-        DOCUMENTED FINDING: The MCP server's export-related tools (e.g.,
-        capabilities_export_attestation) do not call run_verification()
-        before proceeding. Export relies on the evidence package's own
-        inline verification summary.
-        """
-        source = (REPO / "mcp" / "server.py").read_text(encoding="utf-8")
-        # MCP server should not reference background verifier for exports
-        # (it does reference read_verification_status for health signals)
-        assert "run_verification" not in source
+        """MCP server export tools do not trigger background verification."""
+        import pytest
+        pytest.skip("MCP broker archived (D-203) — test requires mcp server")
 
 
 # ===========================================================================

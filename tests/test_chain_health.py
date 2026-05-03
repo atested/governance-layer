@@ -327,10 +327,8 @@ def test_dashboard_health_api_endpoint():
 
 def test_mcp_system_health_tool():
     """mcp/server.py has system_health tool."""
-    server_py = (REPO / "mcp" / "server.py").read_text()
-    assert "def system_health()" in server_py, "Missing system_health tool"
-    assert "collect_health_signals" in server_py, "Missing health signals import in MCP"
-    print("PASS: mcp_system_health_tool")
+    import pytest
+    pytest.skip("MCP broker archived (D-203) — test requires mcp server")
 
 
 def test_health_alert_styles():
@@ -362,12 +360,12 @@ if __name__ == "__main__":
     test_chain_health_healthy_chain()
     test_dashboard_health_page_registered()
     test_dashboard_health_api_endpoint()
-    test_mcp_system_health_tool()
+    # test_mcp_system_health_tool — skipped (MCP broker archived D-203)
     test_health_alert_styles()
     test_check_chain_health_enumerates_two_breaks()
     test_check_chain_health_enumerates_three_breaks()
     test_check_chain_integrity_enumerates_three_breaks()
-    print(f"\nAll 20 tests passed.")
+    print(f"\nAll 19 tests passed.")
 
 
 # ---------------------------------------------------------------------------

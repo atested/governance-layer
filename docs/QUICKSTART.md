@@ -28,11 +28,11 @@ git clone <repo-url> governance-layer
 cd governance-layer
 
 # Create the Python virtualenv and install dependencies
-python3 -m venv mcp/.venv
-mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
+python3 -m venv .venv
+.venv/bin/python3 -m pip install -r requirements.txt
 ```
 
-The virtualenv lives at `mcp/.venv/` and is gitignored.
+The virtualenv lives at `.venv/` and is gitignored.
 
 ---
 
@@ -139,19 +139,11 @@ The dashboard shows chain health, mediated decisions, operation approvals, audit
 
 ---
 
-## MCP server (complementary)
+## MCP server (archived)
 
-The MCP server remains available for governance operations that have no native agent equivalent — status queries, audit, capabilities management, approvals, and certification:
-
-```bash
-# Local (stdio transport)
-mcp/.venv/bin/python3 mcp/server.py
-
-# Remote (HTTP transport with bearer auth)
-mcp/.venv/bin/python3 mcp/remote_server.py
-```
-
-The API proxy governs the agent. The MCP server provides governance tools. Different layers, both useful.
+The MCP governance broker was removed from the active product in D-203.
+It created an agent-discoverable path around the API proxy chokepoint.
+Code is preserved in `mcp/_archived/` for reference.
 
 ---
 
@@ -192,7 +184,7 @@ A `DENY` response means the governance layer evaluated the request and rejected 
 ### Proxy won't start
 
 1. Check Python version: `python3 --version` (must be 3.10+)
-2. Check dependencies: `mcp/.venv/bin/python3 -c "import httpx; print('OK')"`
+2. Check dependencies: `.venv/bin/python3 -c "import httpx; print('OK')"`
 3. Check API key: `ANTHROPIC_API_KEY` must be set
 
 ### Agent not connecting

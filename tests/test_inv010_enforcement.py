@@ -22,7 +22,6 @@ REPO = Path(__file__).resolve().parents[1]
 # is (relative file path, function/identifier comment for documentation).
 ALLOWLIST = {
     "dashboard/server.py",       # _append_chain_record_atomic
-    "mcp/server.py",             # _append_v2_record + _append_non_action_event
     "proxy/server.py",           # ChainRecorder.append_atomic
     "scripts/atested_cli.py",    # _append_chain_record_atomic
     "scripts/append-record-runtime.sh",  # production shell writer
@@ -36,8 +35,8 @@ ALLOWLIST = {
 PY_PATTERN = re.compile(r"O_APPEND.*CHAIN|CHAIN.*O_APPEND", re.IGNORECASE)
 SH_PATTERN = re.compile(r">>\s*[\"']?\$?\{?CHAIN", re.IGNORECASE)
 
-# Directories to scan. Exclude tests/, fixtures, and out-of-tree dirs.
-SCAN_DIRS = ["dashboard", "mcp", "proxy", "scripts"]
+# Directories to scan. Exclude tests/, fixtures, out-of-tree dirs, and archived code.
+SCAN_DIRS = ["dashboard", "proxy", "scripts"]
 
 
 def _scan_file(path: Path):

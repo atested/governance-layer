@@ -13,16 +13,17 @@ import json
 import os
 import socket
 import subprocess
+
+import pytest
 import sys
 import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = REPO / "mcp" / "remote_server.py"
 
-# Add mcp/ to path so we can import licensing directly
-sys.path.insert(0, str(REPO / "mcp"))
+# Add scripts/ to path for licensing imports
+sys.path.insert(0, str(REPO / "scripts"))
 from licensing import (
     generate_license_token,
     validate_license_key,
@@ -287,8 +288,7 @@ def test_invalid_activation():
 
 def test_posture_in_governed_records():
     """Governance records from a remote server include licensing fields."""
-    from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    pytest.skip("MCP broker archived (D-203) — test requires mcp server")
 
     async def _run():
         port = _choose_free_port()

@@ -25,7 +25,7 @@ RELAY_PYTHON = RELAY_DIR / ".venv" / "bin" / "python3"
 
 
 def _relay_python_available():
-    return RELAY_PYTHON.exists()
+    return RELAY_PYTHON.exists() and RELAY_MODULE.exists()
 
 
 # ---------------------------------------------------------------------------

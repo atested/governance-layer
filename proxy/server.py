@@ -53,7 +53,6 @@ from event_model import build_non_action_event
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
 
 # Storage contract for chain path
-sys.path.insert(0, str(REPO / "mcp"))
 from storage_contract import runtime_root
 from receipt_signing import _read_private_key, _public_key_fingerprint, _b64url_nopad
 
@@ -158,7 +157,7 @@ MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10
 class ChainRecorder:
     """Appends v2 decision records to the governance chain file.
 
-    Uses the same cross-process mkdir lock as mcp/server.py and
+    Uses the same cross-process mkdir lock as the governance layer and
     dashboard/server.py to prevent concurrent writers from reading
     the same prev_record_hash (D-024 / D-026 fix).
     """
@@ -264,7 +263,7 @@ class ChainRecorder:
             return None
 
     def _acquire_file_lock(self) -> Path:
-        """Acquire cross-process mkdir lock (same protocol as mcp/server.py)."""
+        """Acquire cross-process mkdir lock (same protocol as the governance layer)."""
         lockdir = Path(str(self._chain_path) + ".lock.d")
         lock_meta = lockdir / "lock_owner.json"
         max_wait = 50
