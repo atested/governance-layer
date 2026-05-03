@@ -10,6 +10,7 @@ import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils
 import { authorizeExport, downloadExport } from '../export-utils.js';
 import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
 import { openCommunicationsWindow } from './communications.js';
+import { setTitleMessage } from '../window-messaging.js';
 
 const REPORT_TEMPLATES = [
   {
@@ -135,7 +136,10 @@ export function openReportsWindow(trigger) {
 
   // Fetch tier, enforce range restrictions, then load
   api.getLicensingMode().then(res => {
-    if (res.ok) state.tier = res.data.license_tier || 'personal';
+    if (res.ok) {
+      state.tier = res.data.license_tier || 'personal';
+      state._licensingStatus = res.data.license_status || '';
+    }
     _enforceRangeTier(state);
     _loadReport(state);
   }).catch(() => _loadReport(state));
@@ -289,7 +293,11 @@ function _wireControls(state) {
   // Quick-select time buttons
   el.querySelector('#rp-quick-btns').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-range]');
-    if (!btn || btn.disabled) return;
+    if (!btn) return;
+    if (btn.classList.contains('rp-range-restricted')) {
+      _showTierRestriction(state, 'range', btn.dataset.range);
+      return;
+    }
     recordUiAggregate('range_shortcuts', btn.dataset.range);
     _applyRange(state, btn.dataset.range);
   });
@@ -376,31 +384,49 @@ function _applyRange(state, range, opts = {}) {
   if (opts.load !== false) _loadReport(state);
 }
 
-// Personal tier: 7d max. Team+ unlocks 30d, all.
-const _TIER_RESTRICTED_RANGES = new Set(['30d', 'all']);
-const _TIER_UNRESTRICTED = new Set(['team', 'institution']);
+// Tier-based time range restrictions.
+// Personal: 10-day rolling window. Personal Plus: 30-day. Crew+: unrestricted.
+const _TIER_RANGE_CONFIG = {
+  personal:      { maxDays: 10, restricted: ['30d', 'all'], unlocksAt: 'Crew' },
+  personal_plus: { maxDays: 30, restricted: ['all'],        unlocksAt: 'Crew' },
+};
 
 function _enforceRangeTier(state) {
-  const restricted = !_TIER_UNRESTRICTED.has(state.tier) && !['crew', 'personal_plus'].includes(state.tier);
+  const config = _TIER_RANGE_CONFIG[state.tier];
+  const restrictedSet = config ? new Set(config.restricted) : new Set();
   state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
-    const range = btn.dataset.range;
-    if (_TIER_RESTRICTED_RANGES.has(range)) {
-      btn.disabled = restricted;
-      btn.classList.toggle('rp-range-locked', restricted);
-      btn.title = restricted ? 'Upgrade to Team tier for extended reporting ranges' : '';
-    }
+    const isRestricted = restrictedSet.has(btn.dataset.range);
+    btn.classList.toggle('rp-range-restricted', isRestricted);
+    btn.disabled = false;
+    btn.removeAttribute('title');
   });
-  // Show/hide upgrade note
-  let note = state.el.querySelector('.rp-range-upgrade');
-  if (restricted && !note) {
-    note = document.createElement('div');
-    note.className = 'rp-range-upgrade';
-    note.textContent = '30-day and all-time ranges require Team tier';
-    const btns = state.el.querySelector('#rp-quick-btns');
-    if (btns) btns.parentNode.insertBefore(note, btns.nextSibling);
-  } else if (!restricted && note) {
-    note.remove();
+  // Remove legacy upgrade note
+  const note = state.el.querySelector('.rp-range-upgrade');
+  if (note) note.remove();
+}
+
+function _showTierRestriction(state, feature, detail) {
+  const config = _TIER_RANGE_CONFIG[state.tier];
+  if (!config) return;
+  const isDemo = typeof api.getScenario === 'function';
+  let text, action;
+  if (feature === 'range') {
+    const label = detail === '30d' ? 'Last 30 days' : 'All time';
+    text = `${_tierLabel(state.tier)} includes a ${config.maxDays}-day rolling history. ${label} is available on ${config.unlocksAt} and above.`;
+  } else {
+    text = `${detail} is available on ${config.unlocksAt} and above.`;
   }
+  if (!isDemo) {
+    const isLicensed = state.tier !== 'personal' || state._licensingStatus === 'licensed';
+    const actionLabel = isLicensed ? 'See Licensing to upgrade.' : 'See Licensing to choose a plan.';
+    action = { label: actionLabel, onClick: () => { import('./licensing.js').then(m => m.openLicensingWindow && m.openLicensingWindow(state.el)); } };
+  }
+  setTitleMessage(state.el, text, 'amber', { duration: 6000, dismissable: true, action });
+}
+
+function _tierLabel(tier) {
+  const labels = { personal: 'Personal tier', personal_plus: 'Personal Plus', crew: 'Crew', team: 'Team', institution: 'Institution' };
+  return labels[tier] || tier;
 }
 
 function _setActiveRange(state, range) {
@@ -1829,10 +1855,17 @@ rpStyles.textContent = `
     border-color: rgba(102,153,204,0.55);
     font-weight: 700;
   }
-  .rp-range-locked {
-    opacity: 0.35;
-    cursor: not-allowed;
-    pointer-events: none;
+  .rp-range-restricted {
+    opacity: 0.45;
+    border-style: dashed;
+    border-color: rgba(210, 153, 34, 0.25);
+    color: #6b7280;
+  }
+  .rp-range-restricted:hover {
+    opacity: 0.7;
+    border-color: rgba(210, 153, 34, 0.4);
+    color: #d29922;
+    background: rgba(210, 153, 34, 0.06);
   }
   .rp-range-upgrade {
     font-size: 0.68rem;

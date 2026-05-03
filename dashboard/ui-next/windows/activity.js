@@ -10,6 +10,7 @@ import { modalManager } from '../modal-manager.js';
 import { openRecordDetail } from './record-detail.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 import { authorizeExport, downloadExport } from '../export-utils.js';
+import { setTitleMessage } from '../window-messaging.js';
 
 // ---------- Column definitions ----------
 
@@ -81,6 +82,9 @@ export function openActivityWindow(trigger, opts = {}) {
     // Options
     scrollToRecord: opts.scrollToRecord || null,
     selectedRecordId: null,
+    // Tier
+    tier: 'personal',
+    _licensingStatus: '',
   };
 
   // Initialize column visibility — all columns visible by default
@@ -91,6 +95,15 @@ export function openActivityWindow(trigger, opts = {}) {
   _buildUI(state);
   installWindowTooltips(content);
   _applyStaticTooltips(state);
+
+  // Fetch tier for range restrictions
+  api.getLicensingMode().then(res => {
+    if (res.ok) {
+      state.tier = res.data.license_tier || 'personal';
+      state._licensingStatus = res.data.license_status || '';
+    }
+    _enforceRangeTier(state);
+  }).catch(() => {});
 
   // Apply pre-set filters to UI controls
   if (state.startTime) {
@@ -329,6 +342,10 @@ function _wireControls(state) {
   el.querySelector('#aw-quick-btns').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-range]');
     if (!btn) return;
+    if (btn.classList.contains('aw-range-restricted')) {
+      _showTierRestriction(state, btn.dataset.range);
+      return;
+    }
     const range = btn.dataset.range;
     const now = new Date();
     let from = '';
@@ -515,17 +532,21 @@ function _fillSelect(select, defaultLabel, values, currentValue) {
 
 // ---------- Stats ----------
 
+function _fmtNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : String(n);
+}
+
 function _updateStats(state) {
   const el = state.el;
-  el.querySelector('#aw-stat-total').textContent = String(state.totalMatching);
-  el.querySelector('#aw-stat-allow').textContent = String(state.summary.allow_count);
-  el.querySelector('#aw-stat-deny').textContent = String(state.summary.deny_count);
-  el.querySelector('#aw-stat-tools').textContent = String(state.summary.tool_categories);
+  el.querySelector('#aw-stat-total').textContent = _fmtNum(state.totalMatching);
+  el.querySelector('#aw-stat-allow').textContent = _fmtNum(state.summary.allow_count);
+  el.querySelector('#aw-stat-deny').textContent = _fmtNum(state.summary.deny_count);
+  el.querySelector('#aw-stat-tools').textContent = _fmtNum(state.summary.tool_categories);
 
   // Update results bar
   const showing = state.data.length;
   el.querySelector('#aw-results-showing').textContent =
-    `Showing ${showing} of ${state.totalMatching} matching events`;
+    `Showing ${_fmtNum(showing)} of ${_fmtNum(state.totalMatching)} matching events`;
 }
 
 // ---------- Table ----------
@@ -868,6 +889,38 @@ function _applySelectedRow(state) {
   });
 }
 
+// ---------- Tier enforcement ----------
+
+const _AW_TIER_RANGE_CONFIG = {
+  personal:      { maxDays: 10, restricted: ['30d', 'all'], unlocksAt: 'Crew' },
+  personal_plus: { maxDays: 30, restricted: ['all'],        unlocksAt: 'Crew' },
+};
+
+function _enforceRangeTier(state) {
+  const config = _AW_TIER_RANGE_CONFIG[state.tier];
+  const restrictedSet = config ? new Set(config.restricted) : new Set();
+  state.el.querySelectorAll('.aw-quick-btn').forEach(btn => {
+    const isRestricted = restrictedSet.has(btn.dataset.range);
+    btn.classList.toggle('aw-range-restricted', isRestricted);
+    btn.disabled = false;
+  });
+}
+
+function _showTierRestriction(state, rangeKey) {
+  const config = _AW_TIER_RANGE_CONFIG[state.tier];
+  if (!config) return;
+  const isDemo = typeof api.getScenario === 'function';
+  const label = rangeKey === '30d' ? 'Last 30 days' : 'All time';
+  const tierLabel = state.tier === 'personal' ? 'Personal tier' : 'Personal Plus';
+  const text = `${tierLabel} includes a ${config.maxDays}-day rolling history. ${label} is available on ${config.unlocksAt} and above.`;
+  let action;
+  if (!isDemo) {
+    const actionLabel = state._licensingStatus === 'licensed' ? 'See Licensing to upgrade.' : 'See Licensing to choose a plan.';
+    action = { label: actionLabel, onClick: () => { import('./licensing.js').then(m => m.openLicensingWindow && m.openLicensingWindow(state.el)); } };
+  }
+  setTitleMessage(state.el, text, 'amber', { duration: 6000, dismissable: true, action });
+}
+
 // ---------- Helpers ----------
 
 function _openAsChild(title, subtitle, trigger, content) {
@@ -1038,6 +1091,18 @@ awStyles.textContent = `
   .aw-quick-btn:hover {
     background: #272b34;
     color: #e4e6eb;
+  }
+  .aw-range-restricted {
+    opacity: 0.45;
+    border-style: dashed;
+    border-color: rgba(210, 153, 34, 0.25);
+    color: #6b7280;
+  }
+  .aw-range-restricted:hover {
+    opacity: 0.7;
+    border-color: rgba(210, 153, 34, 0.4);
+    color: #d29922;
+    background: rgba(210, 153, 34, 0.06);
   }
 
   /* Decision toggles */

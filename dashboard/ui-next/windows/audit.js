@@ -801,7 +801,7 @@ function _updateVerificationPane(state) {
   const el = state.el;
   const v = state.verification;
 
-  el.querySelector('#au-v-records').textContent = String(state.chainEventCount);
+  el.querySelector('#au-v-records').textContent = _fmtNum(state.chainEventCount);
 
   const intEl = el.querySelector('#au-v-integrity');
   const status = v.status || 'unknown';
@@ -940,7 +940,7 @@ function _renderWalker(state) {
   const titleEl = state.el.querySelector('.au-walker-title');
   if (titleEl) titleEl.textContent = state.walker.source === 'archive' ? 'Archived Chain Walker' : 'Live Chain Walker';
   state.el.querySelector('#au-walker-subtitle').textContent = total
-    ? `${sourceLabel} | record ${center + 1} of ${total} matching filtered records`
+    ? `${sourceLabel} | record ${_fmtNum(center + 1)} of ${_fmtNum(total)} matching filtered records`
     : `${sourceLabel} | no matching records`;
   state.el.querySelector('#au-walker-prev').disabled = !state.walker.hasPrevious;
   state.el.querySelector('#au-walker-next').disabled = !state.walker.hasNext;
@@ -1456,6 +1456,10 @@ function _dateStr() {
 
 function _labelize(str) {
   return String(str || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function _fmtNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : String(n);
 }
 
 function _esc(str) {

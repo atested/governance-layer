@@ -322,7 +322,7 @@ export async function loadMainPageData() {
   // Chain Health pane
   if (healthRes.ok) {
     const h = healthRes.data;
-    _setMetric('mv-chain-events', String(h.chain?.chain_event_count ?? 0));
+    _setMetric('mv-chain-events', _fmtNum(h.chain?.chain_event_count ?? 0));
 
     const integrity = h.chain?.status ?? 'N/A';
     const intEl = _page.querySelector('#mv-chain-integrity');
@@ -370,24 +370,24 @@ export async function loadMainPageData() {
     if (denyRate) {
       const deniedEl = _page.querySelector('#mv-denied');
       const denyCount = denyRate.deny_count ?? 0;
-      deniedEl.textContent = String(denyCount);
+      deniedEl.textContent = _fmtNum(denyCount);
       if (denyCount > 5) deniedEl.classList.add('mp-metric-red');
       else if (denyCount > 0) deniedEl.classList.add('mp-metric-amber');
     }
 
     // Unique users
     const uniqueUsers = h.users?.unique_users ?? 0;
-    _setMetric('mv-users', String(uniqueUsers));
+    _setMetric('mv-users', _fmtNum(uniqueUsers));
   }
 
   // Atested Activity pane — derives from status
   if (statusRes.ok) {
     const s = statusRes.data;
     const mediated = s.opacity_posture?.transparent_count ?? 0;
-    _setMetric('mv-mediated', String(mediated));
+    _setMetric('mv-mediated', _fmtNum(mediated));
 
     const approved = s.approval_snapshot?.active_approvals ?? 0;
-    _setMetric('mv-approved', String(approved));
+    _setMetric('mv-approved', _fmtNum(approved));
   }
 
   // Recent Activity feed
@@ -447,6 +447,10 @@ export function setLicenseMode(modeData) {
 }
 
 // ---------- Internal helpers ----------
+
+function _fmtNum(n) {
+  return typeof n === 'number' ? n.toLocaleString() : String(n);
+}
 
 function _setMetric(id, value) {
   const el = _page?.querySelector(`#${id}`);
@@ -814,7 +818,7 @@ mpStyles.textContent = `
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #8b919a;
+    color: #6699cc;
     font-weight: 600;
     padding: 12px 0 8px;
   }
