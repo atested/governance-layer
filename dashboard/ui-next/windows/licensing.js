@@ -42,6 +42,7 @@ import {
   getTemplate,
   getGroupedCapabilities,
 } from '../tier-definitions.js';
+import { setTitleMessage } from '../window-messaging.js';
 
 // ---------- Public API ----------
 
@@ -192,6 +193,11 @@ async function _loadLauncherData(state) {
   if (caseRes.ok) state.caseData = caseRes.data;
 
   _renderLauncher(state);
+
+  // Charter pricing title bar message (trial context only, auto-clears)
+  if (state.mode === 'trial' && CHARTER_ACTIVE) {
+    setTitleMessage(state.el, 'Charter pricing in effect. Time is limited.', 'amber', { duration: 10000 });
+  }
 }
 
 function _normalizeMode(data) {
@@ -608,6 +614,11 @@ function _openBoxGrandchild(boxId, trigger, state) {
   const ps = paneStates[paneMap[boxId]] || 'amber';
   const accent = ps === 'green' ? '#22c55e' : '#f5a623';
   if (result.frame) result.frame.style.setProperty('--grandchild-accent', accent);
+
+  // Charter pricing title bar message on pricing grandchild (trial only)
+  if (boxId === 'tiers' && state.mode === 'trial' && CHARTER_ACTIVE && result.frame && result.frame.setTitleMessage) {
+    result.frame.setTitleMessage('Charter pricing in effect. Time is limited.', 'amber', { duration: 0 });
+  }
 
   modalManager.setOnClose(() => _refreshLauncher(state));
 }
@@ -1382,7 +1393,7 @@ function _renderUnifiedPurchase(el, state) {
     selectorHtml += `<button class="lup-sel-row${isSelected ? ' lup-sel-active' : ''}${isRec && !isCurrent ? ' lup-sel-recommended' : ''}${belowCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
       <span class="lup-sel-name">${_esc(t.name)}</span>
       <span class="lup-sel-spec">${_esc(t.spec)}</span>
-      <span class="lup-sel-price">${_esc(t.price)}</span>
+      <span class="lup-sel-price${hasCharter ? ' lup-sel-price-struck' : ''}">${_esc(t.price)}</span>
       ${charterTag}
       ${badgeHtml}
     </button>`;
@@ -2956,10 +2967,13 @@ function _buildTierDisplayPanel(state) {
   // Tier selector panes
   let selectorHtml = '';
   for (const t of _TIER_SELECTOR) {
+    const hasCharter = CHARTER_ACTIVE && CHARTER[t.id];
+    const charterTag = hasCharter ? `<span class="lp-tier-charter">${_esc(CHARTER[t.id].price)} first yr</span>` : '';
     selectorHtml += `<button class="lp-tier-row" data-tier="${t.id}">
       <span class="lp-tier-name">${_esc(t.name)}</span>
       <span class="lp-tier-spec">${_esc(t.spec)}</span>
-      <span class="lp-tier-price">${_esc(t.price)}</span>
+      <span class="lp-tier-price${hasCharter ? ' lp-tier-price-struck' : ''}">${_esc(t.price)}</span>
+      ${charterTag}
     </button>`;
   }
 
@@ -4182,6 +4196,16 @@ licStyles.textContent = `
     color: #b0b6c0;
     text-align: right;
   }
+  .lp-tier-price-struck {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+  .lp-tier-charter {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #f5a623;
+    text-align: right;
+  }
 
   /* Detail pane */
   .lp-detail {
@@ -4343,6 +4367,15 @@ licStyles.textContent = `
     font-size: 0.82rem;
     color: #8b919a;
     text-align: right;
+  }
+  .lup-sel-price-struck {
+    text-decoration: line-through;
+    opacity: 0.6;
+  }
+  .lup-sel-charter {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #f5a623;
   }
   .lup-sel-badge {
     font-size: 0.65rem;
