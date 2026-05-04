@@ -585,16 +585,17 @@ class TestTelemetryTroubleBoundary:
             "telemetry is never written to the governance chain"
 
     def test_trouble_report_stored_outside_chain(self, dashboard_env):
-        """Trouble report handler stores to LOGS/trouble/, not chain."""
+        """Trouble report content stores to LOGS/trouble/, not chain.
+        The transmission event IS recorded in the chain (D-207 principle)."""
         source = inspect.getsource(ds.DashboardHandler._handle_trouble_report)
-        # Explicit code comment
-        assert "not governance records" in source.lower() or \
-               "intentionally do not append to the decision chain" in source
+        # Content goes to trouble dir, transmission fact goes to chain
+        assert "trouble_dir" in source or "LOGS" in source
 
-    def test_trouble_report_no_chain_append(self, dashboard_env):
-        """_handle_trouble_report source does not call _append_chain_record_atomic."""
+    def test_trouble_report_chain_event_for_transmission(self, dashboard_env):
+        """_handle_trouble_report records a chain event for external communication (D-207)."""
         source = inspect.getsource(ds.DashboardHandler._handle_trouble_report)
-        assert "_append_chain_record_atomic" not in source
+        assert "trouble_report_submitted" in source
+        assert "_append_chain_record_atomic" in source
 
     def test_telemetry_summary_no_chain_append(self, dashboard_env):
         """_handle_telemetry_summary does not call _append_chain_record_atomic."""

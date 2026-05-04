@@ -1529,6 +1529,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": f"write failed: {exc}"}, 500)
             return
 
+        # Record registry configuration change in chain
+        try:
+            from event_model import build_non_action_event
+            _append_chain_record_atomic(build_non_action_event(
+                "registry_config_change", {
+                    "new_registry_hash": new_hash,
+                    "tools_count": len(registry.get("tools", [])),
+                    "licensed": licensed,
+                }))
+        except Exception:
+            pass
+
         result = {
             "success": True,
             "registry_hash": new_hash,
@@ -1562,9 +1574,41 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         from licensing import validate_license_key
         info = validate_license_key(license_key)
+
+        # Record chain event for license validation attempt
+        try:
+            from event_model import build_non_action_event
+            _append_chain_record_atomic(build_non_action_event(
+                "license_validation_attempted", {
+                    "result": "success" if info else "failure",
+                    "tier_activated": info.get("tier") if info else None,
+                    "endpoint": "/api/config/verify-license",
+                }))
+        except Exception:
+            pass
+
         if info is None:
             _json_response(self, {"valid": False, "tier": None, "expiry": None})
             return
+
+        # Record dashboard configuration unlock
+        try:
+            from event_model import build_non_action_event
+            operator_label = ""
+            session_file = RUNTIME / "identity_session.json"
+            if session_file.exists():
+                try:
+                    sess = json.loads(session_file.read_text(encoding="utf-8"))
+                    operator_label = sess.get("operator_name", "")
+                except Exception:
+                    pass
+            _append_chain_record_atomic(build_non_action_event(
+                "dashboard_config_unlocked", {
+                    "operator_label": operator_label,
+                    "tier": info.get("tier"),
+                }))
+        except Exception:
+            pass
 
         _json_response(self, {
             "valid": True,
@@ -1593,6 +1637,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         from licensing import validate_license_key
         info = validate_license_key(license_key)
         if info is None:
+            # Record failed authentication attempt
+            try:
+                from event_model import build_non_action_event
+                _append_chain_record_atomic(build_non_action_event(
+                    "failed_authentication_attempt", {
+                        "endpoint": "/api/export/authorize",
+                        "failure_reason": "invalid_license_key",
+                    }))
+            except Exception:
+                pass
             _json_response(self, {"error": "invalid license key"}, 403)
             return
 
@@ -1956,7 +2010,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                             }
                             chain_event_type = event_type_map.get(notif_type)
                             if not chain_event_type:
-                                continue
+                                # Record as generic notification_received
+                                chain_event_type = "notification_received"
+                                payload = {"notification_type": notif_type, **payload}
                             try:
                                 from event_model import build_non_action_event
                                 evt = build_non_action_event(
@@ -1999,6 +2055,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             })
             summary["updated_at_utc"] = _now_utc_z()
             _write_json_file(TELEMETRY_SUMMARY, summary)
+
+            # Record chain event for telemetry transmission
+            if send_to_remote:
+                try:
+                    from event_model import build_non_action_event
+                    _append_chain_record_atomic(build_non_action_event(
+                        "telemetry_submitted", {
+                            "destination": "https://license.atested.com/api/telemetry",
+                            "payload_hash": artifact["artifact_hash"],
+                            "payload_size": len(json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")),
+                        }))
+                except Exception:
+                    pass
 
             _json_response(self, result)
         except Exception as exc:
@@ -2082,8 +2151,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             out_path = RUNTIME / "LOGS" / "trouble" / f"{artifact_id}.json"
             _write_json_file(out_path, artifact)
 
-            # Trouble reports are support artifacts, not governance records.
-            # They intentionally do not append to the decision chain.
             _record_telemetry_summary({"trouble_reports": {"submitted": 1}}) if _telemetry_opted_in() else None
 
             result = {
@@ -2092,13 +2159,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "artifact_hash": artifact["artifact_hash"],
                 "stored_at": str(out_path),
             }
+            remote_dest = "https://license.atested.com/api/trouble"
             try:
                 from feedback_signing import send_artifact_to_remote
-                result["remote"] = send_artifact_to_remote(
-                    artifact, "https://license.atested.com/api/trouble"
-                )
+                result["remote"] = send_artifact_to_remote(artifact, remote_dest)
             except Exception as exc:
                 result["remote"] = {"sent": False, "error": str(exc)}
+
+            # Record chain event for external communication
+            try:
+                from event_model import build_non_action_event
+                _append_chain_record_atomic(build_non_action_event(
+                    "trouble_report_submitted", {
+                        "destination": remote_dest,
+                        "payload_hash": artifact["artifact_hash"],
+                        "payload_size": len(payload),
+                        "priority": priority,
+                    }))
+            except Exception:
+                pass
 
             _json_response(self, result)
         except Exception as exc:
@@ -2119,10 +2198,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         opted_in = bool(data.get("opted_in", False))
         opt_in_file = RUNTIME / "telemetry_opt_in"
+        previous_state = _telemetry_opted_in()
 
         try:
             opt_in_file.parent.mkdir(parents=True, exist_ok=True)
             opt_in_file.write_text("1" if opted_in else "0", encoding="utf-8")
+
+            # Record chain event for opt-in state change
+            if opted_in != previous_state:
+                try:
+                    from event_model import build_non_action_event
+                    _append_chain_record_atomic(build_non_action_event(
+                        "telemetry_opt_in_changed", {
+                            "previous_state": "opted_in" if previous_state else "opted_out",
+                            "new_state": "opted_in" if opted_in else "opted_out",
+                        }))
+                except Exception:
+                    pass
 
             _json_response(self, {"opted_in": opted_in})
         except Exception as exc:

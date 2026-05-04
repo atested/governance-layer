@@ -97,6 +97,7 @@ class IntegrityMonitor:
         policy_path: Optional[Path] = None,
         repo_root: Optional[Path] = None,
         code_paths: Optional[list[Path]] = None,
+        data_paths: Optional[list[Path]] = None,
     ):
         self.chain_path = Path(chain_path)
         self.metadata_path = Path(
@@ -112,6 +113,7 @@ class IntegrityMonitor:
             or self.repo_root / "capabilities" / "policy-rules.json"
         )
         self.code_paths = code_paths or self.default_code_paths(self.repo_root)
+        self.data_paths = data_paths or self.default_data_paths(self.chain_path)
         self.sentinel_path = self.chain_path.parent / INSTALL_SENTINEL_NAME
         self._metadata: Optional[dict] = None
         self._startup_policy_hash: Optional[str] = None
@@ -126,6 +128,21 @@ class IntegrityMonitor:
             repo_root / "scripts" / "policy_eval_shared.py",
             repo_root / "scripts" / "event_model.py",
         ]
+
+    @staticmethod
+    def default_data_paths(chain_path: Path) -> list[Path]:
+        """Supplemental data files tracked for tamper detection."""
+        runtime = chain_path.parent
+        return [
+            runtime / "LOGS" / "telemetry" / "summary.json",
+        ]
+
+    def current_data_hash(self) -> Optional[str]:
+        """Compute composite hash of data_paths that exist."""
+        existing = [p for p in self.data_paths if p.exists()]
+        if not existing:
+            return None
+        return sha256_files(existing)
 
     def load_metadata(self) -> Optional[dict]:
         if not self.metadata_path.exists():
@@ -368,11 +385,13 @@ class IntegrityMonitor:
         previous_code_hash = metadata.get("proxy_code_hash")
         current_code_hash = self.current_proxy_code_hash()
         current_policy_hash = self.current_policy_rules_hash()
+        current_data_hash = self.current_data_hash()
         self._startup_policy_hash = current_policy_hash
         self._policy_change_event_recorded_for = metadata.get("policy_rules_blocked_hash")
         self.save_metadata({
             "proxy_code_hash": current_code_hash,
             "policy_rules_hash": current_policy_hash,
+            "data_hash": current_data_hash,
             "policy_rules_blocked_hash": None,
             "blocked_reason": None,
         })
@@ -380,7 +399,9 @@ class IntegrityMonitor:
             "previous_proxy_code_hash": previous_code_hash,
             "current_proxy_code_hash": current_code_hash,
             "current_policy_rules_hash": current_policy_hash,
+            "current_data_hash": current_data_hash,
             "code_paths": [str(p) for p in self.code_paths],
+            "data_paths": [str(p) for p in self.data_paths if p.exists()],
             "policy_path": str(self.policy_path),
         }
 

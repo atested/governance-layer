@@ -81,6 +81,11 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "chain_started_after_archive",
     "chain_export_created",
     "encrypted_evidence_package_created",
+    "trouble_report_submitted",
+    "report_exported",
+    "dashboard_config_unlocked",
+    "failed_authentication_attempt",
+    "license_validation_attempted",
 ])
 
 UNGOVERNED_OPERATION_TYPES = frozenset([
