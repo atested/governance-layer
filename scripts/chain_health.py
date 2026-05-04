@@ -1031,9 +1031,16 @@ def collect_health_signals(
             "guidance": "Open Chain Integrity details and jump to the break point in the Chain Walker.",
         })
 
+    # Product version
+    version = ""
+    version_file = Path(__file__).resolve().parent.parent / "VERSION"
+    if version_file.exists():
+        version = version_file.read_text(encoding="utf-8").strip()
+
     return {
         "timestamp_utc": _now_utc_z(),
         "overall_status": overall,
+        "version": version,
         "alerts": alerts,
         "chain": chain_health,
         "deny_rate": deny_rate,

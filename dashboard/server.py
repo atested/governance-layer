@@ -665,6 +665,65 @@ def _append_chain_record_atomic(event):
 
 
 # ---------------------------------------------------------------------------
+# Version update notification storage
+# ---------------------------------------------------------------------------
+
+def _store_update_notification(result):
+    """Store an update notification as a Communications message and record in chain."""
+    from event_model import build_non_action_event
+    notif_path = RUNTIME / "LOGS" / "update_notifications.jsonl"
+    notif_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Dedup: skip if this version was already notified
+    latest = result.get("latest_version", "")
+    if notif_path.exists():
+        for line in notif_path.read_text(encoding="utf-8").strip().splitlines():
+            try:
+                rec = json.loads(line)
+                if rec.get("version") == latest:
+                    return
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+    notif_id = str(uuid.uuid4())
+    changelog = result.get("changelog", "")
+    sec_count = result.get("security_fix_count", 0)
+    notes_url = result.get("release_notes_url", "")
+    docs_url = result.get("install_docs_url", "")
+
+    message_parts = [f"Version {latest} is available."]
+    if changelog:
+        message_parts.append(changelog)
+    if sec_count:
+        message_parts.append(f"Includes {sec_count} security fix{'es' if sec_count != 1 else ''}.")
+    if notes_url:
+        message_parts.append(f"Release notes: {notes_url}")
+    if docs_url:
+        message_parts.append(f"Install docs: {docs_url}")
+
+    record = {
+        "notification_id": notif_id,
+        "version": latest,
+        "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "message": " ".join(message_parts),
+        "dismissed": False,
+    }
+    with open(notif_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, separators=(",", ":")) + "\n")
+
+    # Record in governance chain
+    try:
+        _append_chain_record_atomic(build_non_action_event(
+            "notification_received", {
+                "notification_id": notif_id,
+                "notification_type": "version_update",
+                "version": latest,
+            }))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Size-based chain archive trigger (non-blocking)
 # ---------------------------------------------------------------------------
 
@@ -1176,6 +1235,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_telemetry_opt_in()
             elif path == "/api/notifications/dismiss":
                 self._handle_notification_dismiss()
+            elif path == "/api/update-notification/dismiss":
+                self._handle_update_notification_dismiss()
             elif path == "/api/notifications/viewed":
                 self._handle_notifications_viewed()
             elif path == "/api/disclosure/acknowledge":
@@ -2573,6 +2634,50 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "notification_id": notification_id,
                 "event_id": event.get("event_id"),
             })
+        except Exception as exc:
+            _json_response(self, {"error": str(exc)}, 500)
+
+    def _handle_update_notification_dismiss(self):
+        """POST /api/update-notification/dismiss — dismiss an update notification."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length > 4096:
+                _json_response(self, {"error": "payload too large"}, 413)
+                return
+            body = self.rfile.read(length)
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            _json_response(self, {"error": "invalid JSON"}, 400)
+            return
+
+        notif_id = str(data.get("notification_id", "")).strip()
+        if not notif_id:
+            _json_response(self, {"error": "notification_id is required"}, 400)
+            return
+
+        try:
+            notif_path = RUNTIME / "LOGS" / "update_notifications.jsonl"
+            if notif_path.exists():
+                lines = notif_path.read_text(encoding="utf-8").strip().splitlines()
+                updated = []
+                for line in lines:
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("notification_id") == notif_id:
+                            rec["dismissed"] = True
+                        updated.append(json.dumps(rec, separators=(",", ":")))
+                    except json.JSONDecodeError:
+                        updated.append(line)
+                notif_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+            # Record in chain
+            _append_chain_record_atomic(build_non_action_event(
+                "notification_dismissed", {
+                    "notification_id": notif_id,
+                    "notification_type": "version_update",
+                }))
+
+            _json_response(self, {"dismissed": True, "notification_id": notif_id})
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 
@@ -4535,27 +4640,48 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         elif path == "/api/update-check":
             import urllib.request
             import urllib.error
+            from event_model import build_non_action_event
+            _version_file = REPO / "VERSION"
+            _current_version = _version_file.read_text(encoding="utf-8").strip() if _version_file.exists() else "0.0.0"
             try:
                 req = urllib.request.Request(
-                    "https://api.github.com/repos/atested/governance-layer/releases/latest",
-                    headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "atested-dashboard"},
+                    f"https://version.atested.com/check?v={_current_version}",
+                    headers={"User-Agent": "atested-dashboard"},
                 )
                 with urllib.request.urlopen(req, timeout=5) as resp:
-                    release = json.loads(resp.read().decode("utf-8"))
-                tag = release.get("tag_name", "").lstrip("v")
-                _json_response(self, {
-                    "latest_version": tag,
-                    "current_version": "1.0.0",
-                    "update_available": tag != "1.0.0" and bool(tag),
-                    "release_url": release.get("html_url", ""),
-                    "published_at": release.get("published_at", ""),
-                })
+                    vdata = json.loads(resp.read().decode("utf-8"))
+                update_available = vdata.get("update_available", False)
+                result = {
+                    "latest_version": vdata.get("latest_version", _current_version),
+                    "current_version": _current_version,
+                    "update_available": update_available,
+                    "changelog": vdata.get("changelog", ""),
+                    "release_notes_url": vdata.get("release_notes_url", ""),
+                    "install_docs_url": vdata.get("install_docs_url", ""),
+                    "security_fix_count": vdata.get("security_fix_count", 0),
+                }
+                # Record version check in chain
+                try:
+                    _append_chain_record_atomic(build_non_action_event(
+                        "version_check_performed", {
+                            "current_version": _current_version,
+                            "latest_version": result["latest_version"],
+                            "update_available": update_available,
+                        }))
+                except Exception:
+                    pass
+                # If update available, store notification for Communications
+                if update_available:
+                    _store_update_notification(result)
+                _json_response(self, result)
             except Exception:
                 _json_response(self, {
                     "latest_version": None,
-                    "current_version": "1.0.0",
+                    "current_version": _current_version,
                     "update_available": False,
-                    "release_url": "",
+                    "changelog": "",
+                    "release_notes_url": "",
+                    "install_docs_url": "",
                     "error": "could not check for updates",
                 })
 
@@ -4609,6 +4735,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         except (json.JSONDecodeError, OSError):
                             continue
 
+                # Update notifications
+                update_notifs = []
+                notif_path = RUNTIME / "LOGS" / "update_notifications.jsonl"
+                if notif_path.exists():
+                    for line in notif_path.read_text(encoding="utf-8").strip().splitlines():
+                        try:
+                            rec = json.loads(line)
+                            if not rec.get("dismissed"):
+                                update_notifs.append(rec)
+                        except json.JSONDecodeError:
+                            continue
+
                 # Last exchange timestamp
                 last_exchange = ""
                 if requests:
@@ -4628,6 +4766,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "history": history,
                     "telemetry_opted_in": telemetry_opted_in,
                     "telemetry_traffic": telemetry_artifacts,
+                    "update_notifications": update_notifs,
                     "last_exchange": last_exchange,
                 })
             except Exception as exc:
@@ -4924,6 +5063,49 @@ def main():
     # Snapshot current source file mtimes so the first request doesn't
     # trigger a spurious reload.
     _check_and_reload()
+
+    # Background version check on startup and periodically (every 6 hours)
+    def _background_version_check():
+        import urllib.request
+        from event_model import build_non_action_event
+        _version_file = REPO / "VERSION"
+        _current = _version_file.read_text(encoding="utf-8").strip() if _version_file.exists() else "0.0.0"
+        try:
+            req = urllib.request.Request(
+                f"https://version.atested.com/check?v={_current}",
+                headers={"User-Agent": "atested-dashboard"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                vdata = json.loads(resp.read().decode("utf-8"))
+            if vdata.get("update_available"):
+                _store_update_notification({
+                    "latest_version": vdata.get("latest_version", ""),
+                    "changelog": vdata.get("changelog", ""),
+                    "release_notes_url": vdata.get("release_notes_url", ""),
+                    "install_docs_url": vdata.get("install_docs_url", ""),
+                    "security_fix_count": vdata.get("security_fix_count", 0),
+                })
+            try:
+                _append_chain_record_atomic(build_non_action_event(
+                    "version_check_performed", {
+                        "current_version": _current,
+                        "latest_version": vdata.get("latest_version", _current),
+                        "update_available": vdata.get("update_available", False),
+                    }))
+            except Exception:
+                pass
+        except Exception:
+            pass  # Fail silently per spec
+
+    def _periodic_version_check():
+        import time as _t
+        _background_version_check()
+        while True:
+            _t.sleep(6 * 3600)  # 6 hours
+            _background_version_check()
+
+    _vc_thread = threading.Thread(target=_periodic_version_check, daemon=True)
+    _vc_thread.start()
 
     server = ThreadingHTTPServer(("127.0.0.1", port), DashboardHandler)
     server.serve_forever()

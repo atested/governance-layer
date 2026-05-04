@@ -157,6 +157,11 @@ function _buildIntegrityPane(h) {
   const pane = _pane('purple', 'Integrity', false);
   const body = pane.querySelector('.hw-pane-body');
 
+  // Product version
+  if (h.version) {
+    body.appendChild(_kvRow('Version', `v${h.version}`, 'green'));
+  }
+
   if (!integrity.available) {
     body.appendChild(_kvRow('Proxy code hash', 'Not available', 'amber'));
     body.appendChild(_kvRow('Policy rules hash', 'Not available', 'amber'));

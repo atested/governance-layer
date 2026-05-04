@@ -82,6 +82,9 @@ function init() {
 
     // Load license state into chrome and main page
     _loadLicenseState();
+
+    // Check for product updates (non-blocking, title bar notification)
+    _checkForUpdates();
   });
 }
 
@@ -241,6 +244,36 @@ async function _loadNotifications() {
     }
   } catch {
     // Non-critical — leave indicator at 0
+  }
+}
+
+/**
+ * Check for product updates and show a brief title bar notification.
+ */
+async function _checkForUpdates() {
+  try {
+    const res = await api.getUpdateCheck();
+    if (!res.ok || !res.data.update_available) return;
+    const ver = res.data.latest_version || '';
+    if (!ver) return;
+    // Show banner-style notification pointing to Communications
+    showBanner({
+      id: `update-${ver}`,
+      severity: 'routine',
+      title: `Version ${ver} available`,
+      message: 'See Communications.',
+    }, () => {
+      showBanner(null);
+    });
+    // Auto-clear after 15 seconds
+    setTimeout(() => {
+      const banner = document.querySelector('.chrome-banner');
+      if (banner && banner.textContent.includes(ver)) {
+        showBanner(null);
+      }
+    }, 15000);
+  } catch {
+    // Non-critical
   }
 }
 

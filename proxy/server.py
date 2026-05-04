@@ -1849,10 +1849,14 @@ def record_startup_integrity_events(
     # SEC-2026-002: include metadata_hash so the signed event binds the
     # integrity metadata to the chain, preventing silent replacement.
     current_metadata = integrity_monitor.load_metadata() or {}
+    # Product version from VERSION file
+    _version_file = REPO / "VERSION"
+    _product_version = _version_file.read_text(encoding="utf-8").strip() if _version_file.exists() else ""
     startup_payload = {
         "current_proxy_code_hash": current_code_hash,
         "code_paths": hashes["code_paths"],
         "metadata_hash": current_metadata.get("metadata_hash"),
+        "product_version": _product_version,
         "user_identity": user_identity,
         "session_id": session_id,
     }

@@ -365,6 +365,22 @@ export function postNotificationsViewed({ count } = {}) {
   return _request('POST', '/notifications/viewed', { body: { count } });
 }
 
+/**
+ * Dismiss an update notification.
+ * POST /api/update-notification/dismiss
+ */
+export function postDismissUpdateNotification({ notification_id } = {}) {
+  return _request('POST', '/update-notification/dismiss', { body: { notification_id } });
+}
+
+/**
+ * Check for product updates.
+ * GET /api/update-check
+ */
+export function getUpdateCheck() {
+  return _request('GET', '/update-check');
+}
+
 // ---------- Disclosure endpoints ----------
 
 /**

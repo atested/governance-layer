@@ -99,6 +99,42 @@ function _renderAll(state) {
   `;
   el.appendChild(stats);
 
+  // Update notifications (version updates)
+  const updateNotifs = d.update_notifications || [];
+  if (updateNotifs.length > 0) {
+    const updateSection = document.createElement('div');
+    updateSection.className = 'cm-pane cm-update-pane';
+    updateSection.innerHTML = `
+      <div class="cm-pane-accent cm-accent-green"></div>
+      <div class="cm-pane-header">Software Updates</div>
+      <div class="cm-pane-body cm-update-list"></div>
+    `;
+    const list = updateSection.querySelector('.cm-update-list');
+    for (const notif of updateNotifs) {
+      const card = document.createElement('div');
+      card.className = 'cm-update-card';
+      card.innerHTML = `
+        <div class="cm-update-msg">${_esc(notif.message)}</div>
+        <div class="cm-update-meta">
+          <span class="cm-update-date">${notif.timestamp_utc ? _formatHumanDate(notif.timestamp_utc) : ''}</span>
+          <button class="cm-btn cm-btn-dismiss" data-nid="${_esc(notif.notification_id)}">Dismiss</button>
+        </div>
+      `;
+      list.appendChild(card);
+    }
+    // Dismiss handler
+    list.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.cm-btn-dismiss');
+      if (!btn) return;
+      const nid = btn.dataset.nid;
+      btn.disabled = true;
+      btn.textContent = 'Dismissing\u2026';
+      await api.postDismissUpdateNotification({ notification_id: nid });
+      _loadData(state);
+    });
+    el.appendChild(updateSection);
+  }
+
   // Submit a request pane
   const submitPane = _buildSubmitPane(state, medAvail, highAvail);
   el.appendChild(submitPane);
@@ -788,6 +824,29 @@ cmStyles.textContent = `
   .cm-btn-toggle:hover { background: rgba(102,153,204,0.20); }
   .cm-result-success { color: #3fb950; font-size: 0.82rem; margin-top: 8px; }
   .cm-result-error { color: #d29922; font-size: 0.82rem; margin-top: 8px; }
+  .cm-btn-dismiss {
+    background: rgba(255,255,255,0.06);
+    color: #8b919a;
+    border: 1px solid rgba(255,255,255,0.10);
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  .cm-btn-dismiss:hover { color: #e4e6eb; background: rgba(255,255,255,0.10); }
+
+  /* ---- Update notifications ---- */
+  .cm-update-pane { margin-bottom: 16px; }
+  .cm-update-card {
+    padding: 12px 14px;
+    background: rgba(34, 197, 94, 0.04);
+    border: 1px dashed rgba(34, 197, 94, 0.15);
+    border-radius: 2px;
+    margin-bottom: 8px;
+  }
+  .cm-update-msg { font-size: 0.85rem; color: #e4e6eb; line-height: 1.5; margin-bottom: 8px; }
+  .cm-update-meta { display: flex; justify-content: space-between; align-items: center; }
+  .cm-update-date { font-size: 0.75rem; color: #6b7280; }
 
   /* ---- Slot row ---- */
   .cm-slot-row {

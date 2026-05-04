@@ -84,6 +84,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "encrypted_evidence_package_created",
     "trouble_report_submitted",
     "report_exported",
+    "version_check_performed",
     "dashboard_config_unlocked",
     "failed_authentication_attempt",
     "license_validation_attempted",
