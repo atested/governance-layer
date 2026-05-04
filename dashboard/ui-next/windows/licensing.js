@@ -4147,7 +4147,7 @@ licStyles.textContent = `
 
   /* ---- Pricing grandchild ---- */
   .lp-panel {
-    max-width: 900px;
+    max-width: 100%;
   }
   .lp-selector {
     display: flex;
@@ -4281,7 +4281,7 @@ licStyles.textContent = `
 
   /* ---- Unified Purchase panel ---- */
   .lup-panel {
-    max-width: 900px;
+    max-width: 100%;
     font-family: "Inter", system-ui, sans-serif;
     color: #e4e6eb;
   }
