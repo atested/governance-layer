@@ -1707,6 +1707,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": f"export event failed: {exc}"}, 500)
             return
 
+        # Record report_exported for reports surface specifically
+        if surface == "reports":
+            try:
+                from event_model import build_non_action_event
+                _append_chain_record_atomic(build_non_action_event(
+                    "report_exported", {
+                        "report_name": filters.get("report_id", ""),
+                        "format": export_format,
+                        "time_range_start": filters.get("start_time", ""),
+                        "time_range_end": filters.get("end_time", ""),
+                        "record_count": record_count,
+                    }))
+            except Exception:
+                pass
+
         _json_response(self, {
             "authorized": True,
             "export_token": token_data["token"],
@@ -2031,9 +2046,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                     try:
                                         cfg = load_license(RUNTIME)
                                         if cfg:
+                                            prev_tier = cfg.get("license_tier", "personal")
                                             cfg["license_status"] = "personal"
                                             cfg["license_tier"] = "personal"
                                             save_license(RUNTIME, cfg)
+                                            # Unified tier change event
+                                            _append_chain_record_atomic(build_non_action_event(
+                                                "license_tier_changed", {
+                                                    "previous_tier": prev_tier,
+                                                    "new_tier": "personal",
+                                                    "reason": "revocation",
+                                                }))
                                     except Exception:
                                         pass
                                 processed_set.add(notif_id)
@@ -3172,6 +3195,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 )
             _append_chain_record_atomic(event)
 
+            # Unified tier change event
+            try:
+                _append_chain_record_atomic(build_non_action_event(
+                    "license_tier_changed", {
+                        "previous_tier": prev_tier or "personal",
+                        "new_tier": tier,
+                        "reason": "upgrade" if is_upgrade else "purchase",
+                    }))
+            except Exception:
+                pass
+
             # If research opted in, record separate chain event
             if research_opted_in:
                 research_event = build_non_action_event(
@@ -3830,6 +3864,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 prev_record_hash=None,
             )
             _append_chain_record_atomic(event)
+
+            # Unified tier change event
+            try:
+                _append_chain_record_atomic(build_non_action_event(
+                    "license_tier_changed", {
+                        "previous_tier": current_tier,
+                        "new_tier": to_tier,
+                        "reason": "downgrade",
+                    }))
+            except Exception:
+                pass
 
             _json_response(self, {
                 "scheduled": True,

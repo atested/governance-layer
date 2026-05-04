@@ -62,6 +62,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "auto_renewal_opted_in",
     "license_upgraded",
     "license_downgraded",
+    "license_tier_changed",
     "license_revoked",
     "license_activated",
     "license_expiration_warning",

@@ -193,6 +193,78 @@ Verify the environment variable is set: `echo $ANTHROPIC_BASE_URL` should show `
 
 ---
 
+## Software Updates
+
+### Checking for updates
+
+- **GitHub releases**: New versions are published as tagged releases on the
+  repository. Check the releases page for changelogs and download links.
+- **Communications window**: If telemetry is enabled, version update
+  notifications appear in the dashboard Communications window when a new
+  release is available.
+
+### Applying an update
+
+1. Download the new version (clone or download the release archive).
+2. Replace the product files (`proxy/`, `scripts/`, `dashboard/`, `capabilities/`).
+3. Reinstall dependencies if `requirements.txt` has changed:
+   ```bash
+   .venv/bin/python3 -m pip install -r requirements.txt
+   ```
+4. Restart the proxy and dashboard.
+
+Your `gov_runtime/` directory is preserved across updates. The governance chain,
+telemetry data, license configuration, and all runtime state remain intact.
+The proxy records a `proxy_code_hash_changed` event on next startup when it
+detects the code has changed.
+
+---
+
+## Uninstall
+
+### Stop services
+
+```bash
+# Stop the proxy (Ctrl-C or kill the process)
+# Stop the dashboard (Ctrl-C or kill the process)
+```
+
+### Remove shell profile configuration
+
+If you added `ANTHROPIC_BASE_URL` to your shell profile, remove that line:
+
+```bash
+# In ~/.bash_profile, ~/.zshrc, or equivalent:
+# Remove this line:
+export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
+```
+
+Reload your shell or open a new terminal for the change to take effect.
+
+### Remove product files
+
+Delete the cloned repository:
+
+```bash
+rm -rf governance-layer/
+```
+
+### Runtime data
+
+The `gov_runtime/` directory contains your governance chain, license
+configuration, and operational logs. You can:
+
+- **Keep it** as a permanent archive of your AI governance history.
+- **Delete it** if you no longer need the records:
+  ```bash
+  rm -rf gov_runtime/
+  ```
+
+If you kept `gov_runtime/` outside the repo (via `GOV_RUNTIME_DIR`), remove it
+from that location as well.
+
+---
+
 ## Next steps
 
 - [V3 Architecture Design](design/atested-v3-design.md): how the proxy works, design principles
