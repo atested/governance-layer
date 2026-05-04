@@ -38,7 +38,7 @@ export const CHARTER = {
     renewal: '$49,995/yr',
     link: 'https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02?prefilled_promo_code=CHARTER2026',
   },
-  copy: 'Charter pricing \u2014 limited availability. 50% off your first year. Standard pricing at renewal. We reserve the right to limit quantities.',
+  copy: 'Charter pricing. Limited availability. 50% off your first year. Standard pricing at renewal. We reserve the right to limit quantities.',
 };
 
 // ---------- Capacity ranges ----------
