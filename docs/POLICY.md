@@ -4,7 +4,7 @@ Updated: 2026-02-15
 > **v3 note:** The API governance proxy uses `capabilities/policy-rules.json`
 > for action-based policy evaluation (action type, confidence tier, scope,
 > target path checks). The capability-class rules below (`FS_WRITE`, etc.)
-> applied to the MCP server surface (archived D-203). The same principles
+> applied to the MCP server surface (archived). The same principles
 > apply: deterministic evaluation, fail-closed posture, bounded scope. See
 > [docs/design/atested-v3-design.md](design/atested-v3-design.md).
 

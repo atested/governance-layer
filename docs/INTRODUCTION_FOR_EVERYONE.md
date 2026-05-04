@@ -52,7 +52,7 @@ When multiple AI systems interact, or when one AI builds on another's work, unce
 
 ## The Solution: Deterministic Governance
 
-The **Governance Layer** transforms AI operations from probabilistic chaos into deterministic, auditable, trustworthy workflows. Here's how:
+The **Governance Layer** applies deterministic rules and produces auditable records for every AI action. Here's how:
 
 ### What "Deterministic" Means
 
@@ -134,7 +134,7 @@ Now here's what happens **with** the Governance Layer:
 
 ## Compelling Applications
 
-The Governance Layer enables several powerful applications that would be too risky without deterministic oversight:
+The Governance Layer enables applications that would be too risky without deterministic oversight:
 
 ### 1. AI-Mediated Code Generation at Scale
 
@@ -220,12 +220,9 @@ The Governance Layer enables several powerful applications that would be too ris
 
 ### The Trust Shift
 
-We're entering an era where AI systems will handle increasingly critical tasks. The traditional approach—"trust the AI because it's smart"—breaks down as tasks become complex, stakes become high, and outputs become non-intuitive.
+AI systems are taking on tasks where errors have consequences: regulated workflows, code that runs in production, decisions that get audited. "Trust the AI because it's smart" breaks down as tasks become complex and stakes increase.
 
-The Governance Layer represents a fundamental shift:
-
-**From**: Trust based on model capability
-**To**: Trust based on verifiable process
+Governance shifts the basis of trust from model capability to verifiable process.
 
 ### The Enabling Cost
 
@@ -246,7 +243,7 @@ As AI capabilities grow, institutions (regulators, auditors, legal systems, insu
 - "Can you prove this process was followed?"
 - "If we replay this decision chain, does it match your records?"
 
-The Governance Layer makes these questions answerable. It positions AI operations as **auditable processes** rather than **mysterious black boxes**.
+The Governance Layer makes these questions answerable. AI operations become auditable processes with a recorded decision trail.
 
 ---
 
@@ -281,7 +278,7 @@ The principles apply to any system where you need deterministic decisions, audit
 
 1. **Probabilistic** by nature (creating reproducibility problems)
 2. **Opaque** in their reasoning (creating audit problems)
-3. **Powerful** in their capabilities (creating risk if unconstrained)
+3. **Broad** in their capabilities (creating risk if unconstrained)
 4. **Rapidly evolving** (creating need for stable interfaces)
 
 Human-only workflows often have informal governance (code review, approval processes, cultural norms). AI systems need formal, technical governance because they lack human judgment and accountability.
@@ -304,15 +301,9 @@ For more technical detail, see:
 
 ---
 
-## Summary: The Core Insight
+## Next Steps
 
-**AI systems are probabilistic by nature**: They guess, they vary, they can't explain their reasoning in reproducible ways.
-
-**The Governance Layer makes AI actions deterministic**: Not by changing how AI works internally, but by governing what it can actually do in the real world—with consistent rules, complete audit trails, and cryptographic proof.
-
-**This unlocks trust at scale**: Organizations can use AI for critical tasks not because they trust the AI's judgment, but because they trust the verified constraints, the audit trail, and the ability to replay and verify decisions independently.
-
-**The shift from "trust the model" to "trust the proof"** is the foundation for AI systems that can be used in institutional, regulated, and high-stakes environments where "the AI said so" will never be good enough.
+For system architecture and guarantees, see [GOVERNANCE_OVERVIEW.md](GOVERNANCE_OVERVIEW.md). For installation, see [QUICKSTART.md](QUICKSTART.md).
 
 ---
 

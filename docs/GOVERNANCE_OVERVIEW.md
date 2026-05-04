@@ -3,9 +3,9 @@
 > **v3 architecture note:** Atested operates as an API governance proxy
 > (`proxy/server.py`) that intercepts tool calls at the HTTP transport layer.
 > The classification, policy evaluation, and chain recording described below
-> are unchanged. The MCP broker was removed in D-203 because it created an
+> are unchanged. The MCP broker was removed because it created an
 > agent-discoverable path around the proxy chokepoint. References to
-> capability-class names (e.g., `FS_WRITE`) below are historical — the proxy
+> capability-class names (e.g., `FS_WRITE`) below are historical. The proxy
 > uses action-type classification from `capabilities/policy-rules.json`. See
 > [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
 > current architecture.

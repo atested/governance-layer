@@ -3,7 +3,7 @@
 > **v3 note:** The API governance proxy (`proxy/server.py`) uses
 > `capabilities/policy-rules.json` for policy evaluation. The capability
 > registry described below applied to the MCP server surface, which was
-> archived in D-203. See
+> archived. See
 > [docs/design/atested-v3-design.md](design/atested-v3-design.md) for the
 > current architecture.
 
@@ -121,7 +121,7 @@ Any absolute path can also be added directly (e.g., `/home/deploy/staging`).
 
 | Variable | Default | Description |
 |---|---|---|
-| `GOV_SIGNING_KEY_PATH` | — | Path to Ed25519 private key (PEM) |
+| `GOV_SIGNING_KEY_PATH` | (none) | Path to Ed25519 private key (PEM) |
 | `GOV_SIGNING_DEV_MODE` | `"0"` | Set to `"1"` to allow unsigned records (development only) |
 | `GOV_SIGNING_REQUIRED` | `"1"` | Set to `"0"` to disable signing |
 
@@ -133,10 +133,10 @@ Any absolute path can also be added directly (e.g., `/home/deploy/staging`).
 | `GOV_DEPLOYMENT_CONTEXT` | `"default"` | Deployment environment label |
 | `GOV_POLICY_VERSION` | `"baseline-v1"` | Policy engine version identifier |
 
-### HTTP transport (archived — MCP broker removed D-203)
+### HTTP transport (archived: MCP broker removed)
 
 The `GOVMCP_*` environment variables configured the MCP governance broker,
-which was archived in D-203. The API proxy uses standard `--port` and `--host`
+which was archived. The API proxy uses standard `--port` and `--host`
 CLI arguments. See the [Quickstart](QUICKSTART.md) for proxy configuration.
 
 ---

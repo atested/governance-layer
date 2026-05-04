@@ -17,7 +17,7 @@ python3 --version
 # Must be 3.10 or higher
 ```
 
-If your system Python is older, install a newer version via your package manager (e.g., `brew install python@3.12`). The rest of this guide uses `python3` — substitute the versioned binary if needed.
+If your system Python is older, install a newer version via your package manager (e.g., `brew install python@3.12`). The rest of this guide uses `python3`. Substitute the versioned binary if needed.
 
 ---
 
@@ -141,7 +141,7 @@ The dashboard shows chain health, mediated decisions, operation approvals, audit
 
 ## MCP server (archived)
 
-The MCP governance broker was removed from the active product in D-203.
+The MCP governance broker was removed from the active product.
 It created an agent-discoverable path around the API proxy chokepoint.
 Code is preserved in `mcp/_archived/` for reference.
 
@@ -195,7 +195,7 @@ Verify the environment variable is set: `echo $ANTHROPIC_BASE_URL` should show `
 
 ## Next steps
 
-- [V3 Architecture Design](design/atested-v3-design.md) — how the proxy works, design principles
-- [Governance Overview](GOVERNANCE_OVERVIEW.md) — system guarantees, classification, policy
-- [Licensing](LICENSING.md) — license terms and commercial use
-- [External Contracts](EXTERNAL_CONTRACTS.md) — stability guarantees for CI/CD integration
+- [V3 Architecture Design](design/atested-v3-design.md): how the proxy works, design principles
+- [Governance Overview](GOVERNANCE_OVERVIEW.md): system guarantees, classification, policy
+- [Licensing](LICENSING.md): license terms and commercial use
+- [External Contracts](EXTERNAL_CONTRACTS.md): stability guarantees for CI/CD integration
