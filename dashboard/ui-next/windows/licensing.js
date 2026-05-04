@@ -1393,8 +1393,7 @@ function _renderUnifiedPurchase(el, state) {
     selectorHtml += `<button class="lup-sel-row${isSelected ? ' lup-sel-active' : ''}${isRec && !isCurrent ? ' lup-sel-recommended' : ''}${belowCurrent ? ' lup-sel-disabled' : ''}" data-tier="${t.id}" ${belowCurrent ? 'disabled' : ''}>
       <span class="lup-sel-name">${_esc(t.name)}</span>
       <span class="lup-sel-spec">${_esc(t.spec)}</span>
-      <span class="lup-sel-price${hasCharter ? ' lup-sel-price-struck' : ''}">${_esc(t.price)}</span>
-      ${charterTag}
+      <span class="lup-sel-pricing">${hasCharter ? `<span class="lup-sel-price lup-sel-price-struck">${_esc(t.price)}</span> ${charterTag}` : `<span class="lup-sel-price">${_esc(t.price)}</span>`}</span>
       ${badgeHtml}
     </button>`;
   }
@@ -2972,8 +2971,7 @@ function _buildTierDisplayPanel(state) {
     selectorHtml += `<button class="lp-tier-row" data-tier="${t.id}">
       <span class="lp-tier-name">${_esc(t.name)}</span>
       <span class="lp-tier-spec">${_esc(t.spec)}</span>
-      <span class="lp-tier-price${hasCharter ? ' lp-tier-price-struck' : ''}">${_esc(t.price)}</span>
-      ${charterTag}
+      <span class="lp-tier-pricing">${hasCharter ? `<span class="lp-tier-price lp-tier-price-struck">${_esc(t.price)}</span> ${charterTag}` : `<span class="lp-tier-price">${_esc(t.price)}</span>`}</span>
     </button>`;
   }
 
@@ -4190,6 +4188,13 @@ licStyles.textContent = `
     font-size: 0.82rem;
     color: #60a5fa;
   }
+  .lp-tier-pricing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    white-space: nowrap;
+  }
   .lp-tier-price {
     font-size: 0.9rem;
     font-weight: 500;
@@ -4362,6 +4367,13 @@ licStyles.textContent = `
   .lup-sel-spec {
     font-size: 0.82rem;
     color: #60a5fa;
+  }
+  .lup-sel-pricing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    white-space: nowrap;
   }
   .lup-sel-price {
     font-size: 0.82rem;
