@@ -1880,6 +1880,11 @@ def record_startup_integrity_events(
             "session_id": session_id,
         },
     )
+    # Commit startup hashes to metadata AFTER events are written.
+    # This ensures expected_record_count in metadata already reflects
+    # the startup events (via refresh_after_chain_write in append_atomic),
+    # preventing chain_record_count_mismatch on the first tool call.
+    integrity_monitor.commit_startup_hashes()
     return hashes
 
 

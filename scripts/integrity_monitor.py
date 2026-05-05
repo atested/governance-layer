@@ -119,6 +119,7 @@ class IntegrityMonitor:
         self._metadata: Optional[dict] = None
         self._startup_policy_hash: Optional[str] = None
         self._policy_change_event_recorded_for: Optional[str] = None
+        self._pending_startup_hashes: Optional[dict] = None
 
     @staticmethod
     def default_code_paths(repo_root: Path) -> list[Path]:
@@ -382,6 +383,13 @@ class IntegrityMonitor:
         return sha256_file(self.policy_path)
 
     def startup_hashes(self) -> dict:
+        """Compute startup code/policy hashes without saving metadata.
+
+        The caller (record_startup_integrity_events) is responsible for
+        calling commit_startup_hashes() AFTER startup events are written,
+        ensuring the integrity metadata always reflects the post-startup
+        chain state.
+        """
         metadata = self.load_metadata() or self._empty_metadata()
         previous_code_hash = metadata.get("proxy_code_hash")
         current_code_hash = self.current_proxy_code_hash()
@@ -389,13 +397,14 @@ class IntegrityMonitor:
         current_data_hash = self.current_data_hash()
         self._startup_policy_hash = current_policy_hash
         self._policy_change_event_recorded_for = metadata.get("policy_rules_blocked_hash")
-        self.save_metadata({
+        # Store pending hashes for commit_startup_hashes()
+        self._pending_startup_hashes = {
             "proxy_code_hash": current_code_hash,
             "policy_rules_hash": current_policy_hash,
             "data_hash": current_data_hash,
             "policy_rules_blocked_hash": None,
             "blocked_reason": None,
-        })
+        }
         return {
             "previous_proxy_code_hash": previous_code_hash,
             "current_proxy_code_hash": current_code_hash,
@@ -405,6 +414,19 @@ class IntegrityMonitor:
             "data_paths": [str(p) for p in self.data_paths if p.exists()],
             "policy_path": str(self.policy_path),
         }
+
+    def commit_startup_hashes(self) -> None:
+        """Save startup hashes to metadata AFTER startup events are written.
+
+        Must be called after all startup chain events have been appended
+        so that refresh_after_chain_write has already updated the expected
+        record count. This prevents the stale-count window where
+        save_metadata could record count=N while the chain already has
+        N+K records from startup events.
+        """
+        if self._pending_startup_hashes is not None:
+            self.save_metadata(self._pending_startup_hashes)
+            self._pending_startup_hashes = None
 
     def check_policy_rules_unchanged(self) -> Optional[dict]:
         if self._startup_policy_hash is None:

@@ -680,6 +680,7 @@ class TestMetadataTampering:
         )
         monitor.verify_startup_chain()
         hashes1 = monitor.startup_hashes()
+        monitor.commit_startup_hashes()
 
         # Modify code file (simulating tampering)
         code_file.write_text("print('TAMPERED')\n", encoding="utf-8")
@@ -1075,3 +1076,134 @@ class TestDashboardChainWriteSync:
         restarted_monitor = _monitor(tmp_path, chain_path)
         summary = restarted_monitor.verify_startup_chain()
         assert summary.record_count == 2
+
+
+# ===========================================================================
+# SCOPE 10 — D-219: Startup sequence ordering prevents stale count
+# ===========================================================================
+
+class TestStartupSequenceOrdering:
+    """D-219: Verify that the startup sequence commits hashes to metadata
+    AFTER startup events are written, preventing chain_record_count_mismatch
+    on the first tool call.
+    """
+
+    def test_fresh_startup_then_tool_call_no_violation(self, tmp_path):
+        """Full fresh startup sequence followed by tool call: no violation."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Simulate record_startup_integrity_events:
+        # 1. startup_hashes (no save)
+        hashes = monitor.startup_hashes()
+        assert hashes["current_proxy_code_hash"] is not None
+
+        # 2. Append startup events (these call refresh_after_chain_write)
+        recorder.append_atomic(_record("startup-event-1"))
+        recorder.append_atomic(_record("startup-event-2"))
+
+        # 3. commit_startup_hashes (saves code/policy hashes to metadata)
+        monitor.commit_startup_hashes()
+
+        # 4. First tool call — must NOT raise chain_record_count_mismatch
+        recorder.append_atomic(_record("first-tool-call"))
+
+        records = _read_chain(chain_path)
+        assert len(records) == 3
+
+    def test_commit_startup_hashes_preserves_count(self, tmp_path):
+        """commit_startup_hashes merges into metadata without resetting count."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        monitor.startup_hashes()
+        recorder.append_atomic(_record("event-1"))
+        recorder.append_atomic(_record("event-2"))
+
+        # At this point metadata has count=2 from refresh_after_chain_write
+        metadata_before = json.loads(monitor.metadata_path.read_text(encoding="utf-8"))
+        assert metadata_before["expected_record_count"] == 2
+
+        # commit_startup_hashes should preserve count=2
+        monitor.commit_startup_hashes()
+
+        metadata_after = json.loads(monitor.metadata_path.read_text(encoding="utf-8"))
+        assert metadata_after["expected_record_count"] == 2
+        assert metadata_after["proxy_code_hash"] is not None
+
+    def test_full_startup_with_code_hash_change(self, tmp_path):
+        """Startup with code hash change (3 events) then tool call: no violation."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        code_file = tmp_path / "server.py"
+        code_file.write_text("print('v1')\n", encoding="utf-8")
+        policy_path = tmp_path / "policy-rules.json"
+        policy_path.write_text('{"rules":[]}\n', encoding="utf-8")
+
+        # First run — establish baseline
+        monitor1 = IntegrityMonitor(
+            chain_path,
+            metadata_path=tmp_path / "chain.integrity.json",
+            policy_path=policy_path,
+            repo_root=tmp_path,
+            code_paths=[code_file],
+        )
+        monitor1.verify_startup_chain()
+        monitor1.startup_hashes()
+        monitor1.commit_startup_hashes()
+
+        # Code changes between runs
+        code_file.write_text("print('v2')\n", encoding="utf-8")
+
+        # Second run — code hash changed → 3 events
+        monitor2 = IntegrityMonitor(
+            chain_path,
+            metadata_path=tmp_path / "chain.integrity.json",
+            policy_path=policy_path,
+            repo_root=tmp_path,
+            code_paths=[code_file],
+        )
+        monitor2.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor2)
+
+        hashes = monitor2.startup_hashes()
+        assert hashes["previous_proxy_code_hash"] is not None
+        assert hashes["previous_proxy_code_hash"] != hashes["current_proxy_code_hash"]
+
+        # 3 startup events: code_hash_changed + startup_code_hash + policy_loaded
+        recorder.append_atomic(_record("code-hash-changed"))
+        recorder.append_atomic(_record("startup-code-hash"))
+        recorder.append_atomic(_record("policy-rules-loaded"))
+        monitor2.commit_startup_hashes()
+
+        # First tool call — no violation
+        recorder.append_atomic(_record("first-tool-call"))
+        records = _read_chain(chain_path)
+        assert len(records) == 4
+
+    def test_ten_tool_calls_after_startup_no_violations(self, tmp_path):
+        """10 tool calls after startup with zero integrity violations."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Startup sequence
+        monitor.startup_hashes()
+        recorder.append_atomic(_record("startup-event-1"))
+        recorder.append_atomic(_record("startup-event-2"))
+        monitor.commit_startup_hashes()
+
+        # 10 tool calls
+        for i in range(10):
+            recorder.append_atomic(_record(f"tool-call-{i}"))
+
+        records = _read_chain(chain_path)
+        assert len(records) == 12
+
+        # Verify chain linkage is intact
+        for i in range(1, len(records)):
+            assert records[i]["prev_record_hash"] == records[i - 1]["record_hash"]
