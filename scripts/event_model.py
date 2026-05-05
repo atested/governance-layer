@@ -112,7 +112,8 @@ OPAQUE_INVOCATION_RESOLUTIONS = frozenset([
 # ---------------------------------------------------------------------------
 
 def canonical_json(obj) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, allow_nan=False)
 
 
 def sha256_hex(s: str) -> str:

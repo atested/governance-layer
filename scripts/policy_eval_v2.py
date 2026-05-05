@@ -232,10 +232,20 @@ def _now_utc_z() -> str:
 
 
 def _compute_record_hash(record: dict) -> str:
-    """Compute SHA-256 hash of the record with record_hash set to null."""
+    """Compute SHA-256 hash of the record with hash/signature fields nulled.
+
+    Nulls record_hash, signature, and signing_key_id before hashing.
+    This matches the writer's preimage (signature fields are null at
+    hash time, populated after signing).
+    """
     hashable = dict(record)
     hashable["record_hash"] = None
-    canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if "signature" in hashable:
+        hashable["signature"] = None
+    if "signing_key_id" in hashable:
+        hashable["signing_key_id"] = None
+    canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=False, allow_nan=False)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 

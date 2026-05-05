@@ -51,7 +51,8 @@ def sha256_files(paths: Iterable[Path]) -> str:
 
 
 def _canonical(obj: dict) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False, allow_nan=False)
 
 
 def _metadata_hash(metadata: dict) -> str:

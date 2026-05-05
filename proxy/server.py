@@ -199,7 +199,7 @@ class ChainRecorder:
                     record["signing_key_id"] = _SIGNING_KEY_ID
                 line = json.dumps(
                     record, sort_keys=True, separators=(",", ":"),
-                    ensure_ascii=False,
+                    ensure_ascii=False, allow_nan=False,
                 )
                 fd = os.open(
                     str(self._chain_path),

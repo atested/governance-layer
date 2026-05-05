@@ -653,7 +653,8 @@ def _append_chain_record_atomic(event):
                 sign_non_action_event(
                     event, _DASHBOARD_SIGNING_KEY, _DASHBOARD_SIGNING_KEY_ID,
                 )
-            line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+            line = json.dumps(event, sort_keys=True, separators=(",", ":"),
+                              ensure_ascii=False, allow_nan=False) + "\n"
             fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
                           _stat.S_IRUSR | _stat.S_IWUSR)
             try:
