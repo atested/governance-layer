@@ -63,6 +63,22 @@ def _load_dashboard_signing_key():
 
 _load_dashboard_signing_key()
 
+# ---------------------------------------------------------------------------
+# Integrity monitor (shared with proxy — keeps metadata in sync when
+# the dashboard appends chain records independently of the proxy)
+# ---------------------------------------------------------------------------
+
+_dashboard_integrity_monitor = None  # lazy-init on first chain write
+
+
+def _get_integrity_monitor():
+    """Return (or create) the IntegrityMonitor for dashboard chain writes."""
+    global _dashboard_integrity_monitor
+    if _dashboard_integrity_monitor is None:
+        from integrity_monitor import IntegrityMonitor
+        _dashboard_integrity_monitor = IntegrityMonitor(CHAIN)
+    return _dashboard_integrity_monitor
+
 
 def _now_utc_z():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -661,6 +677,11 @@ def _append_chain_record_atomic(event):
                 os.write(fd, line.encode("utf-8"))
             finally:
                 os.close(fd)
+            # Update integrity metadata so the proxy's monitor stays in sync
+            try:
+                _get_integrity_monitor().refresh_after_chain_write()
+            except Exception:
+                pass  # Non-fatal: don't block dashboard operations
         finally:
             _release_chain_file_lock(lockdir)
 

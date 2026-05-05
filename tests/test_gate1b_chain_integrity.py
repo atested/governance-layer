@@ -935,3 +935,143 @@ class TestINV008ReplayOutcome:
         assert replayed["policy_decision"] == stored["policy_decision"]
         assert replayed["matched_rule"] == stored["matched_rule"]
         assert replayed["classification"]["action_type"] == stored["classification"]["action_type"]
+
+
+# ===========================================================================
+# SCOPE 9 — D-218: Dashboard writes do not desync integrity metadata
+# ===========================================================================
+
+class TestDashboardChainWriteSync:
+    """D-218: Verify that dashboard chain writes keep integrity metadata
+    in sync so that the proxy's integrity monitor does not raise
+    chain_record_count_mismatch on subsequent writes.
+    """
+
+    def _dashboard_append(self, chain_path: Path, event: dict):
+        """Simulate dashboard's _append_chain_record_atomic (with fix)."""
+        import stat as _stat
+        from event_model import _compute_event_record_hash
+
+        chain_path.parent.mkdir(parents=True, exist_ok=True)
+        # Read head hash
+        head_hash = None
+        if chain_path.exists():
+            lines = chain_path.read_text(encoding="utf-8").strip().splitlines()
+            if lines:
+                try:
+                    head_hash = json.loads(lines[-1]).get("record_hash")
+                except json.JSONDecodeError:
+                    pass
+        event["prev_record_hash"] = head_hash
+        if "signature" not in event:
+            event["signature"] = None
+        if "signing_key_id" not in event:
+            event["signing_key_id"] = None
+        event["record_hash"] = _compute_event_record_hash(event)
+        line = json.dumps(event, sort_keys=True, separators=(",", ":"),
+                          ensure_ascii=False, allow_nan=False) + "\n"
+        fd = os.open(str(chain_path), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                      _stat.S_IRUSR | _stat.S_IWUSR)
+        try:
+            os.write(fd, line.encode("utf-8"))
+        finally:
+            os.close(fd)
+
+    def _dashboard_event(self, label: str) -> dict:
+        """Build a minimal non-action event like the dashboard produces."""
+        return {
+            "record_version": "2.0",
+            "record_type": "non_action_event",
+            "event_type": "test_dashboard_event",
+            "timestamp_utc": "2026-05-05T00:00:00Z",
+            "payload": {"label": label},
+            "prev_record_hash": None,
+            "record_hash": None,
+            "signature": None,
+            "signing_key_id": None,
+        }
+
+    def test_dashboard_write_without_refresh_causes_mismatch(self, tmp_path):
+        """Without metadata refresh, dashboard writes cause count mismatch."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Proxy writes a record (updates metadata)
+        recorder.append_atomic(_record("proxy-1"))
+
+        # Dashboard writes WITHOUT refreshing metadata
+        self._dashboard_append(chain_path, self._dashboard_event("dash-1"))
+        # Metadata still says count=1, but chain has count=2
+
+        # Proxy's next verify_chain_writable should see the mismatch
+        with pytest.raises(IntegrityViolation, match="chain_record_count_mismatch"):
+            monitor.verify_chain_writable()
+
+    def test_dashboard_write_with_refresh_no_mismatch(self, tmp_path):
+        """With metadata refresh after write, no integrity violation."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Proxy writes a record (updates metadata)
+        recorder.append_atomic(_record("proxy-1"))
+
+        # Dashboard writes AND refreshes metadata (the fix)
+        self._dashboard_append(chain_path, self._dashboard_event("dash-1"))
+        monitor.refresh_after_chain_write()
+
+        # Proxy's next verify_chain_writable should succeed
+        summary = monitor.verify_chain_writable()
+        assert summary.record_count == 2
+
+        # Proxy can write again without error
+        recorder.append_atomic(_record("proxy-2"))
+        records = _read_chain(chain_path)
+        assert len(records) == 3
+
+    def test_interleaved_proxy_dashboard_writes(self, tmp_path):
+        """Multiple interleaved writes from proxy and dashboard stay in sync."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Simulate realistic interleaved write pattern
+        recorder.append_atomic(_record("proxy-1"))
+        self._dashboard_append(chain_path, self._dashboard_event("dash-1"))
+        monitor.refresh_after_chain_write()
+        recorder.append_atomic(_record("proxy-2"))
+        self._dashboard_append(chain_path, self._dashboard_event("dash-2"))
+        monitor.refresh_after_chain_write()
+        self._dashboard_append(chain_path, self._dashboard_event("dash-3"))
+        monitor.refresh_after_chain_write()
+        recorder.append_atomic(_record("proxy-3"))
+
+        records = _read_chain(chain_path)
+        assert len(records) == 6
+
+        # Verify full chain linkage
+        for i in range(1, len(records)):
+            assert records[i]["prev_record_hash"] == records[i - 1]["record_hash"]
+
+    def test_startup_after_dashboard_writes_no_violation(self, tmp_path):
+        """Proxy restart after dashboard writes should not raise violation."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        # Proxy writes
+        recorder.append_atomic(_record("proxy-1"))
+
+        # Dashboard writes with metadata refresh (the fix)
+        self._dashboard_append(chain_path, self._dashboard_event("dash-1"))
+        monitor.refresh_after_chain_write()
+
+        # Simulate proxy restart — new monitor, verify_startup_chain
+        restarted_monitor = _monitor(tmp_path, chain_path)
+        summary = restarted_monitor.verify_startup_chain()
+        assert summary.record_count == 2
