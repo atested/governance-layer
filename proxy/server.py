@@ -1706,7 +1706,11 @@ def main():
     if _SIGNING_KEY is None:
         key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
         if not key_path:
-            logger.error("GOV_SIGNING_KEY_PATH not set — proxy requires a signing key (INV-005)")
+            logger.error(
+                "No signing key found — proxy requires a signing key (INV-005). "
+                "Run 'python3 scripts/atested_cli.py init' to generate one, "
+                "or set GOV_SIGNING_KEY_PATH to an existing Ed25519 PEM file."
+            )
         else:
             logger.error("Failed to load signing key from %s — proxy requires a valid key (INV-005)", key_path)
         sys.exit(1)

@@ -312,6 +312,110 @@ def cmd_verification(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Init command — first-run setup
+# ---------------------------------------------------------------------------
+
+
+def cmd_init(args) -> int:
+    """First-run setup: create gov_runtime, generate signing key, configure base_dirs."""
+    runtime = RUNTIME
+    signing_key_path = runtime / ".atested-signing-key.pem"
+    logs_dir = runtime / "LOGS"
+
+    # Guard against overwrite
+    if signing_key_path.exists() and not getattr(args, "force", False):
+        print("Atested is already initialized.", file=sys.stderr)
+        print(f"  Signing key: {signing_key_path}", file=sys.stderr)
+        print(f"  Runtime:     {runtime}", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("To reinitialize, run: atested init --force", file=sys.stderr)
+        return 1
+
+    # 1. Create runtime directory structure
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    (runtime / "LOGS" / "records").mkdir(parents=True, exist_ok=True)
+    print(f"  Created runtime directory: {runtime}")
+
+    # 2. Generate Ed25519 signing key
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+    except ImportError:
+        print("error: 'cryptography' package is required. Install with:", file=sys.stderr)
+        print("  pip install cryptography", file=sys.stderr)
+        return 1
+
+    private_key = Ed25519PrivateKey.generate()
+    pem_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    signing_key_path.write_bytes(pem_bytes)
+    os.chmod(str(signing_key_path), 0o600)
+    print(f"  Generated signing key:    {signing_key_path}")
+
+    # 3. Ask for working directories (or use defaults)
+    base_dirs = ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
+    dirs_arg = getattr(args, "dirs", None)
+    if dirs_arg:
+        for d in dirs_arg:
+            resolved = str(Path(d).resolve())
+            if resolved not in base_dirs:
+                base_dirs.append(resolved)
+    else:
+        # Default: current working directory
+        cwd = str(Path.cwd().resolve())
+        if cwd != str(REPO.resolve()):
+            base_dirs.append(cwd)
+            print(f"  Added working directory:  {cwd}")
+
+    # 4. Configure policy-rules.json base_dirs
+    policy_data = json.loads(POLICY_RULES_PATH.read_text(encoding="utf-8"))
+    policy_data["base_dirs"] = base_dirs
+    POLICY_RULES_PATH.write_text(
+        json.dumps(policy_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(f"  Configured policy rules:  {POLICY_RULES_PATH}")
+    if len(base_dirs) > 2:
+        for d in base_dirs[2:]:
+            print(f"    base_dir: {d}")
+
+    # 5. Summary
+    print("")
+    print("Atested is initialized.")
+    print("")
+    print("What happens next:")
+    print("")
+    print("  1. Start the proxy:")
+    print(f"     python3 -m proxy.server")
+    print("")
+    print("  2. Point your AI agent at the proxy:")
+    print("     export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic")
+    print("")
+    print("  3. Use your agent normally.")
+    print("")
+    print("How governance works:")
+    print("")
+    print("  The proxy evaluates every tool call against policy before it")
+    print("  executes. Operations within your working directories are allowed")
+    print("  by policy. Operations outside that scope — or opaque commands")
+    print("  the proxy cannot inspect — are denied until you approve them.")
+    print("")
+    print("  Your first session will have the most approval prompts as the")
+    print("  proxy encounters new tools and paths. After that, approvals")
+    print("  should be rare. Each approval is you deciding what is acceptable")
+    print("  in your environment.")
+    print("")
+    print("  Open the dashboard to see governance in action:")
+    print("     python3 dashboard/server.py")
+    print("     http://localhost:9700")
+    print("")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -328,6 +432,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_init = sub.add_parser("init", help="First-run setup (create runtime, generate key, configure policy)")
+    p_init.add_argument("--dirs", nargs="*", metavar="DIR",
+                        help="Working directories for your AI agent (default: current directory)")
+    p_init.add_argument("--force", action="store_true", help="Overwrite existing configuration")
+    p_init.set_defaults(func=cmd_init)
 
     p_status = sub.add_parser("status", help="Show governance status summary")
     p_status.add_argument("--window", type=int, default=None, help="Limit metrics to last N records")

@@ -19,22 +19,25 @@ python3 -m venv mcp/.venv
 mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
 ```
 
-## Generate a signing key
+## Initialize
 
-Atested signs chain records with an Ed25519 key. This makes the chain cryptographically verifiable by anyone who has the public key.
-
-```bash
-openssl genpkey -algorithm Ed25519 -out signing.key
-chmod 600 signing.key
-```
-
-Set the environment variable so the proxy finds the key on startup:
+Run the init command to create the runtime directory, generate a signing key, and configure policy for your working directories.
 
 ```bash
-export GOV_SIGNING_KEY_PATH=./signing.key
+python3 scripts/atested_cli.py init
 ```
 
-The proxy logs the key fingerprint when it starts. Every chain record from this point forward is signed. If you skip this step, records are written unsigned and cannot be independently verified.
+By default, init configures the current working directory as an allowed base directory for your AI agent. To specify different directories:
+
+```bash
+python3 scripts/atested_cli.py init --dirs /path/to/project1 /path/to/project2
+```
+
+Init creates:
+
+- `gov_runtime/` — runtime data directory (chain, logs, metadata)
+- `gov_runtime/.atested-signing-key.pem` — Ed25519 key for signing chain records (permissions: 600)
+- `capabilities/policy-rules.json` — updated with your working directories
 
 ## Provider setup
 
@@ -135,3 +138,9 @@ When Atested is running correctly:
 - ALLOW decisions pass through. The agent executes the tool call.
 - DENY decisions are replaced with a denial message. The agent sees the denial instead of the tool call and adapts.
 - The Atested Dashboard shows every decision in real time. The chain records everything, signed with your Ed25519 key.
+
+## What to expect in the first session
+
+The proxy governs by policy. Operations within your configured working directories are allowed automatically. Operations outside that scope, or opaque commands the proxy cannot fully inspect, are denied until you approve them.
+
+Your first session will have the most approval prompts as the proxy encounters new tools and paths for the first time. After that, approvals should be rare. Each approval is you deciding what is acceptable in your environment.
