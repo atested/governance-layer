@@ -82,6 +82,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "machine_key_rotated",
     "machine_license_status_changed",
     "machine_revoked",
+    "remote_chain_import",
     "institution_inquiry_submitted",
     "research_program_opted_in",
     "research_program_opt_in_changed",

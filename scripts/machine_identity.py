@@ -23,6 +23,7 @@ MACHINE_REGISTRY_VERSION = 1
 DEFAULT_MACHINE_ROLE = "primary"
 VALID_MACHINE_ROLES = {"primary", "remote"}
 ACTIVE_LICENSE_STATUS = "active"
+REMOVED_LICENSE_STATUS = "removed"
 
 
 def now_utc_z() -> str:
@@ -184,6 +185,7 @@ def ensure_primary_machine_registry(
     *,
     identity: Optional[dict] = None,
     public_key_fingerprint: Optional[str] = None,
+    public_key_pem: Optional[str] = None,
 ) -> dict:
     """Create the v1 local registry for the primary if it does not exist."""
     identity = identity or ensure_machine_identity(repo_root, role=DEFAULT_MACHINE_ROLE)
@@ -208,34 +210,67 @@ def ensure_primary_machine_registry(
             "public_key_fingerprint": key_id,
             "license_status": ACTIVE_LICENSE_STATUS,
             "sync_authorized": True,
+            "operator_confirmed_utc": identity.get("created_utc") or now_utc_z(),
+            "operator_confirmation_event_id": "primary-bootstrap",
             "first_seen_utc": identity.get("created_utc") or now_utc_z(),
             "last_sync_utc": None,
             "keys": [{
                 "public_key_fingerprint": key_id,
-                "public_key_pem": "",
+                "public_key_pem": public_key_pem or "",
                 "valid_from_utc": identity.get("created_utc") or now_utc_z(),
                 "valid_until_utc": None,
                 "revoked_utc": None,
             }],
         })
     elif key_id:
+        existing.setdefault("operator_confirmed_utc", identity.get("created_utc") or now_utc_z())
+        existing.setdefault("operator_confirmation_event_id", "primary-bootstrap")
         existing["public_key_fingerprint"] = existing.get("public_key_fingerprint") or key_id
         keys = existing.setdefault("keys", [])
         if not any(k.get("public_key_fingerprint") == key_id for k in keys):
             keys.append({
                 "public_key_fingerprint": key_id,
-                "public_key_pem": "",
+                "public_key_pem": public_key_pem or "",
                 "valid_from_utc": now_utc_z(),
                 "valid_until_utc": None,
                 "revoked_utc": None,
             })
+        elif public_key_pem:
+            for key in keys:
+                if key.get("public_key_fingerprint") == key_id and not key.get("public_key_pem"):
+                    key["public_key_pem"] = public_key_pem
     return save_machine_registry(repo_root, registry)
+
+
+def _parse_utc(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def key_is_valid_at(key: dict, at_utc: Optional[str] = None) -> bool:
+    at = _parse_utc(at_utc) or datetime.now(timezone.utc)
+    valid_from = _parse_utc(key.get("valid_from_utc"))
+    valid_until = _parse_utc(key.get("valid_until_utc"))
+    revoked = _parse_utc(key.get("revoked_utc"))
+    if valid_from is not None and at < valid_from:
+        return False
+    if valid_until is not None and at >= valid_until:
+        return False
+    if revoked is not None and at >= revoked:
+        return False
+    return True
 
 
 def authorized_machine_lookup(
     repo_root: Path,
     machine_id: str,
     public_key_fingerprint: str,
+    *,
+    at_utc: Optional[str] = None,
 ) -> Optional[dict]:
     """Return the registry row if a machine is authorized for sync."""
     registry = load_machine_registry(repo_root)
@@ -248,10 +283,257 @@ def authorized_machine_lookup(
             return None
         if machine.get("license_status") != ACTIVE_LICENSE_STATUS:
             return None
+        if not machine.get("operator_confirmed_utc") or not machine.get("operator_confirmation_event_id"):
+            return None
         for key in machine.get("keys", []):
             if key.get("public_key_fingerprint") != public_key_fingerprint:
                 continue
-            if key.get("revoked_utc") or key.get("valid_until_utc"):
+            if not key_is_valid_at(key, at_utc):
                 return None
             return machine
     return None
+
+
+def _machine_row(registry: dict, machine_id: str) -> Optional[dict]:
+    for machine in registry.get("machines", []):
+        if machine.get("machine_id") == machine_id:
+            return machine
+    return None
+
+
+def _registry_event(
+    repo_root: Path,
+    event_type: str,
+    payload: dict,
+    *,
+    registry_hash_before: Optional[str],
+    registry_hash_after: Optional[str],
+    append_event=None,
+) -> dict:
+    try:
+        from event_model import build_non_action_event
+    except ImportError:  # pragma: no cover - package import path
+        from scripts.event_model import build_non_action_event
+
+    event = build_non_action_event(
+        event_type,
+        {
+            **payload,
+            "registry_hash_before": registry_hash_before,
+            "registry_hash_after": registry_hash_after,
+        },
+    )
+    if append_event is not None:
+        return append_event(event)
+    return event
+
+
+def add_machine_to_registry(
+    repo_root: Path,
+    *,
+    machine_id: str,
+    role: str,
+    display_name: str,
+    public_key_fingerprint: str,
+    public_key_pem: str,
+    operator_confirmation_event_id: str,
+    license_status: str = ACTIVE_LICENSE_STATUS,
+    sync_authorized: bool = True,
+    append_event=None,
+) -> tuple[dict, dict]:
+    registry = load_machine_registry(repo_root)
+    if registry is None:
+        identity = ensure_machine_identity(repo_root, role=DEFAULT_MACHINE_ROLE)
+        registry = {
+            "registry_version": MACHINE_REGISTRY_VERSION,
+            "installation_id": identity.get("installation_id"),
+            "machines": [],
+            "registry_hash": None,
+        }
+    if _machine_row(registry, machine_id) is not None:
+        raise ValueError(f"machine already registered: {machine_id}")
+    before = registry.get("registry_hash")
+    ts = now_utc_z()
+    registry.setdefault("machines", []).append({
+        "machine_id": machine_id,
+        "role": _normalized_role(role),
+        "display_name": display_name,
+        "public_key_fingerprint": public_key_fingerprint,
+        "license_status": license_status,
+        "sync_authorized": bool(sync_authorized),
+        "operator_confirmed_utc": ts,
+        "operator_confirmation_event_id": operator_confirmation_event_id,
+        "first_seen_utc": ts,
+        "last_sync_utc": None,
+        "keys": [{
+            "public_key_fingerprint": public_key_fingerprint,
+            "public_key_pem": public_key_pem,
+            "valid_from_utc": ts,
+            "valid_until_utc": None,
+            "revoked_utc": None,
+        }],
+    })
+    saved = save_machine_registry(repo_root, registry)
+    event = _registry_event(
+        repo_root,
+        "machine_added",
+        {
+            "subject_machine_id": machine_id,
+            "subject_machine_role": _normalized_role(role),
+            "public_key_fingerprint": public_key_fingerprint,
+            "operator_confirmation_event_id": operator_confirmation_event_id,
+            "license_status": license_status,
+            "sync_authorized": bool(sync_authorized),
+        },
+        registry_hash_before=before,
+        registry_hash_after=saved.get("registry_hash"),
+        append_event=append_event,
+    )
+    return saved, event
+
+
+def remove_machine_from_registry(
+    repo_root: Path,
+    machine_id: str,
+    *,
+    reason: str = "",
+    append_event=None,
+) -> tuple[dict, dict]:
+    registry = load_machine_registry(repo_root)
+    if registry is None:
+        raise ValueError("registry missing")
+    machine = _machine_row(registry, machine_id)
+    if machine is None:
+        raise ValueError(f"machine not registered: {machine_id}")
+    before = registry.get("registry_hash")
+    machine["license_status"] = REMOVED_LICENSE_STATUS
+    machine["sync_authorized"] = False
+    machine["removed_utc"] = now_utc_z()
+    saved = save_machine_registry(repo_root, registry)
+    event = _registry_event(
+        repo_root,
+        "machine_removed",
+        {
+            "subject_machine_id": machine_id,
+            "reason": reason,
+            "license_status": REMOVED_LICENSE_STATUS,
+            "sync_authorized": False,
+        },
+        registry_hash_before=before,
+        registry_hash_after=saved.get("registry_hash"),
+        append_event=append_event,
+    )
+    return saved, event
+
+
+def change_machine_license_status(
+    repo_root: Path,
+    machine_id: str,
+    license_status: str,
+    *,
+    sync_authorized: Optional[bool] = None,
+    append_event=None,
+) -> tuple[dict, dict]:
+    registry = load_machine_registry(repo_root)
+    if registry is None:
+        raise ValueError("registry missing")
+    machine = _machine_row(registry, machine_id)
+    if machine is None:
+        raise ValueError(f"machine not registered: {machine_id}")
+    before = registry.get("registry_hash")
+    old_status = machine.get("license_status")
+    machine["license_status"] = license_status
+    if sync_authorized is not None:
+        machine["sync_authorized"] = bool(sync_authorized)
+    saved = save_machine_registry(repo_root, registry)
+    event = _registry_event(
+        repo_root,
+        "machine_license_status_changed",
+        {
+            "subject_machine_id": machine_id,
+            "from_license_status": old_status,
+            "to_license_status": license_status,
+            "sync_authorized": machine.get("sync_authorized"),
+        },
+        registry_hash_before=before,
+        registry_hash_after=saved.get("registry_hash"),
+        append_event=append_event,
+    )
+    return saved, event
+
+
+def change_machine_role(
+    repo_root: Path,
+    machine_id: str,
+    role: str,
+    *,
+    append_event=None,
+) -> tuple[dict, dict]:
+    registry = load_machine_registry(repo_root)
+    if registry is None:
+        raise ValueError("registry missing")
+    machine = _machine_row(registry, machine_id)
+    if machine is None:
+        raise ValueError(f"machine not registered: {machine_id}")
+    before = registry.get("registry_hash")
+    old_role = machine.get("role")
+    new_role = _normalized_role(role)
+    machine["role"] = new_role
+    saved = save_machine_registry(repo_root, registry)
+    event = _registry_event(
+        repo_root,
+        "machine_role_changed",
+        {
+            "subject_machine_id": machine_id,
+            "from_role": old_role,
+            "to_role": new_role,
+        },
+        registry_hash_before=before,
+        registry_hash_after=saved.get("registry_hash"),
+        append_event=append_event,
+    )
+    return saved, event
+
+
+def rotate_machine_key(
+    repo_root: Path,
+    machine_id: str,
+    *,
+    new_public_key_fingerprint: str,
+    new_public_key_pem: str,
+    append_event=None,
+) -> tuple[dict, dict]:
+    registry = load_machine_registry(repo_root)
+    if registry is None:
+        raise ValueError("registry missing")
+    machine = _machine_row(registry, machine_id)
+    if machine is None:
+        raise ValueError(f"machine not registered: {machine_id}")
+    before = registry.get("registry_hash")
+    ts = now_utc_z()
+    old_key = machine.get("public_key_fingerprint")
+    for key in machine.setdefault("keys", []):
+        if key.get("public_key_fingerprint") == old_key and not key.get("valid_until_utc"):
+            key["valid_until_utc"] = ts
+    machine["public_key_fingerprint"] = new_public_key_fingerprint
+    machine["keys"].append({
+        "public_key_fingerprint": new_public_key_fingerprint,
+        "public_key_pem": new_public_key_pem,
+        "valid_from_utc": ts,
+        "valid_until_utc": None,
+        "revoked_utc": None,
+    })
+    saved = save_machine_registry(repo_root, registry)
+    event = _registry_event(
+        repo_root,
+        "machine_key_rotated",
+        {
+            "subject_machine_id": machine_id,
+            "old_public_key_fingerprint": old_key,
+            "new_public_key_fingerprint": new_public_key_fingerprint,
+        },
+        registry_hash_before=before,
+        registry_hash_after=saved.get("registry_hash"),
+        append_event=append_event,
+    )
+    return saved, event
