@@ -1781,6 +1781,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "range_end_sequence": selected_range.get("end_sequence"),
             "record_count": record_count,
             "filters": filters,
+            "machine_scope": filters.get("machine_scope") or metadata.get("machine_scope") or metadata.get("machines") or "all",
+            "machine_ids": filters.get("machine_ids") or metadata.get("machine_ids") or metadata.get("machine_id") or [],
             "password_recorded": False,
         }
         token_data = _issue_export_token(scope)
@@ -1840,6 +1842,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         end_seq = data.get("end_sequence")
         req_chain_source = str(data.get("chain_source") or "live")
         req_archive_id = str(data.get("archive_id") or "")
+        machine_scope = str(data.get("machine_scope") or data.get("machines") or "all").strip() or "all"
+        machine_ids_raw = data.get("machine_ids") or data.get("machine_id") or []
+        if isinstance(machine_ids_raw, str):
+            machine_ids = [part.strip() for part in machine_ids_raw.split(",") if part.strip()]
+        elif isinstance(machine_ids_raw, list):
+            machine_ids = [str(part).strip() for part in machine_ids_raw if str(part).strip()]
+        else:
+            machine_ids = []
 
         # Parse sequence numbers before token validation
         try:
@@ -1888,16 +1898,39 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         intended_recipient = str(data.get("intended_recipient") or "").strip()
 
-        # Load raw records for the range
-        from chain_walker import load_raw_records_range
-        range_data = load_raw_records_range(
-            CHAIN,
-            start_sequence=start_seq,
-            end_sequence=end_seq,
-            chain_source=chain_source,
-            archive_id=archive_id,
-        )
-        records = range_data.get("records") or []
+        # Load raw records for the range. Machine-scoped live exports use the
+        # Layer 3 unified view so imported remote records can be included.
+        multi_machine_context = None
+        if chain_source == "live" and (machine_scope != "primary" or machine_ids):
+            from unified_readout import load_unified_records, selected_import_context
+            unified_records, _unified_context = load_unified_records(
+                REPO,
+                CHAIN,
+                machine_scope=machine_scope,
+                machine_ids=machine_ids or None,
+            )
+            records = unified_records[start_seq - 1:end_seq]
+            predecessor_hash = unified_records[start_seq - 2].get("record_hash") if start_seq > 1 and len(unified_records) >= start_seq - 1 else None
+            range_data = {
+                "records": records,
+                "predecessor_hash": predecessor_hash,
+                "start_sequence": start_seq,
+                "end_sequence": end_seq,
+                "record_count": len(records),
+                "chain_source": chain_source,
+                "archive_id": archive_id,
+            }
+            multi_machine_context = selected_import_context(REPO, records)
+        else:
+            from chain_walker import load_raw_records_range
+            range_data = load_raw_records_range(
+                CHAIN,
+                start_sequence=start_seq,
+                end_sequence=end_seq,
+                chain_source=chain_source,
+                archive_id=archive_id,
+            )
+            records = range_data.get("records") or []
         if not records:
             _json_response(self, {"error": "no records found in the specified range"}, 404)
             return
@@ -1945,6 +1978,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 intended_recipient=intended_recipient,
                 export_event_hash=export_event_hash,
                 signing_key_path=key_path,
+                multi_machine_context=multi_machine_context,
+                machine_scope=machine_scope,
+                machine_ids=machine_ids,
             )
         except Exception as exc:
             _json_response(self, {"error": f"package build failed: {exc}"}, 500)
@@ -4447,6 +4483,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             except (ValueError, TypeError):
                 return default
 
+        def qs_machines():
+            raw = qs("machines") or qs("machine_ids") or qs("machine_id") or ""
+            return [part.strip() for part in raw.split(",") if part.strip()] or None
+
         path = parsed.path
 
         if path == "/api/status":
@@ -4475,6 +4515,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 end_time=qs("end_time") or None,
                 policy_decision=qs("policy_decision") or None,
                 tool_name=qs("tool_name") or None,
+                machine_scope=qs("machine_scope", "all") or "all",
+                machine_ids=qs_machines(),
             )
             if qs("include_archives") in ("1", "true", "yes"):
                 try:
@@ -4525,6 +4567,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 user_identity=_aq_user, tool_name=_aq_tool,
                 action_type=_aq_action, confidence_tier=_aq_tier,
                 policy_decision=_aq_decision, event_category=_aq_category,
+                machine_scope=qs("machine_scope", "all") or "all",
+                machine_ids=qs_machines(),
                 limit=_aq_limit, offset=_aq_offset,
             )
             if qs("include_archives") in ("1", "true", "yes"):
@@ -4570,6 +4614,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 center_sequence=int(center_sequence) if center_sequence else None,
                 center_index=int(center_index) if center_index else None,
                 alert_direction=qs("alert_direction") or None,
+                machine_scope=qs("machine_scope", "all") or "all",
+                machine_ids=qs_machines(),
             )
             _json_response(self, data)
 
@@ -4602,6 +4648,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 start_time=start_time,
                 end_time=end_time,
                 group_by=group_by,
+                machine_scope=qs("machine_scope", "all") or "all",
+                machine_ids=qs_machines(),
             )
             if qs("include_archives") in ("1", "true", "yes"):
                 try:

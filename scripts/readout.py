@@ -368,6 +368,8 @@ _EVENT_TYPE_TO_CATEGORY = {
     "opaque_artifact_revocation": "opaque_revocation",
     "opaque_invocation_decision": "opaque_invocation_decision",
     "ungoverned_operation_observed": "ungoverned_observation",
+    "usage_attestation": "usage_attestation",
+    "remote_chain_import": "remote_chain_import",
 }
 
 
@@ -520,7 +522,13 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
 
     entry = {
         "sequence_position": sequence_position,
-        "timestamp_utc": rec.get("timestamp_utc", ""),
+        "timestamp_utc": rec.get("event_timestamp_utc") or rec.get("timestamp_utc", ""),
+        "event_timestamp_utc": rec.get("event_timestamp_utc") or rec.get("timestamp_utc", ""),
+        "primary_import_timestamp_utc": rec.get("primary_import_timestamp_utc"),
+        "machine_id": rec.get("machine_id", ""),
+        "machine_role": rec.get("machine_role", ""),
+        "record_origin": rec.get("_unified_source", "primary_chain"),
+        "import_envelope_hash": rec.get("import_envelope_hash"),
         "event_category": category,
         "governed_family": governed_family,
         "summary": summary,
@@ -615,6 +623,8 @@ def governance_activity_view(
     end_time: Optional[str] = None,
     policy_decision: Optional[str] = None,
     tool_name: Optional[str] = None,
+    machine_scope: str = "all",
+    machine_ids: Optional[str | list[str]] = None,
 ) -> dict:
     """Assemble a Governance Activity Projection (GAP).
 
@@ -623,7 +633,8 @@ def governance_activity_view(
 
     Events are returned in reverse chronological order (most recent first).
     """
-    rows = load_chain_rows(chain_path)
+    from unified_readout import load_unified_records
+    rows, unified_context = load_unified_records(REPO, chain_path, machine_scope=machine_scope, machine_ids=machine_ids)
 
     # Normalize all rows into activity entries with 1-based sequence positions.
     entries: list[dict] = []
@@ -711,7 +722,10 @@ def governance_activity_view(
             "end_time": end_time,
             "policy_decision": policy_decision,
             "tool_name": tool_name,
+            "machine_scope": machine_scope,
+            "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
         },
+        "unified_view": unified_context,
     }
 
 
@@ -827,6 +841,8 @@ def audit_query(
     confidence_tier: Optional[str] = None,
     policy_decision: Optional[str] = None,
     event_category: Optional[str] = None,
+    machine_scope: str = "all",
+    machine_ids: Optional[str | list[str]] = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
@@ -836,7 +852,8 @@ def audit_query(
     decision, and event category. Returns matching entries in reverse
     chronological order.
     """
-    rows = load_chain_rows(chain_path)
+    from unified_readout import load_unified_records
+    rows, unified_context = load_unified_records(REPO, chain_path, machine_scope=machine_scope, machine_ids=machine_ids)
     sidecar_by_request_id: dict[str, dict] = {}
     for rec in _load_sidecar_records(records_dir):
         rid = rec.get("request_id")
@@ -953,7 +970,10 @@ def audit_query(
             "confidence_tier": confidence_tier,
             "policy_decision": policy_decision,
             "event_category": event_category,
+            "machine_scope": machine_scope,
+            "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
         },
+        "unified_view": unified_context,
     }
 
 
@@ -1006,6 +1026,8 @@ def audit_report(
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     group_by: str = "tool",
+    machine_scope: str = "all",
+    machine_ids: Optional[str | list[str]] = None,
     _preloaded_rows: Optional[list] = None,
     _preloaded_sidecars: Optional[dict] = None,
 ) -> dict:
@@ -1018,7 +1040,12 @@ def audit_report(
     _preloaded_rows / _preloaded_sidecars: Optional pre-loaded data to
     avoid redundant file I/O when generating multiple group_by reports.
     """
-    rows = _preloaded_rows if _preloaded_rows is not None else load_chain_rows(chain_path)
+    unified_context = None
+    if _preloaded_rows is not None:
+        rows = _preloaded_rows
+    else:
+        from unified_readout import load_unified_records
+        rows, unified_context = load_unified_records(REPO, chain_path, machine_scope=machine_scope, machine_ids=machine_ids)
     if _preloaded_sidecars is not None:
         sidecar_by_request_id = _preloaded_sidecars
     else:
@@ -1124,4 +1151,7 @@ def audit_report(
         "total_records": total,
         "decision_summary": dict(decision_counts.most_common()),
         "groups": group_list,
+        "machine_scope": machine_scope,
+        "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
+        "unified_view": unified_context,
     }

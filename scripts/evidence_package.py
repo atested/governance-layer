@@ -140,6 +140,7 @@ def build_plaintext_payload(
     verification_summary: Optional[dict] = None,
     narratives: Optional[list[str]] = None,
     export_event_hash: Optional[str] = None,
+    multi_machine_context: Optional[dict] = None,
 ) -> dict[str, Any]:
     """Assemble the plaintext payload that will be encrypted.
 
@@ -156,7 +157,7 @@ def build_plaintext_payload(
     if verification_summary is None:
         verification_summary = build_verification_summary(records)
 
-    return {
+    payload = {
         "schema_version": PLAINTEXT_SCHEMA_VERSION,
         "chain_source": chain_source,
         "archive_id": archive_id,
@@ -168,6 +169,9 @@ def build_plaintext_payload(
         "verification_summary": verification_summary,
         "export_event_reference": export_event_hash,
     }
+    if multi_machine_context is not None:
+        payload["multi_machine_context"] = multi_machine_context
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +297,10 @@ def build_manifest(
     iterations: int,
     ciphertext_sha256: str,
     intended_recipient: str = "",
+    machine_scope: str = "all",
+    machine_ids: Optional[list[str]] = None,
+    import_envelope_count: int = 0,
+    remote_sidecar_count: int = 0,
 ) -> dict[str, Any]:
     """Build the package manifest.json content."""
     return {
@@ -316,6 +324,12 @@ def build_manifest(
         "ciphertext_sha256": ciphertext_sha256,
         "plaintext_schema": PLAINTEXT_SCHEMA_VERSION,
         "intended_recipient": intended_recipient,
+        "machine_scope": {
+            "mode": machine_scope,
+            "machine_ids": machine_ids or [],
+            "import_envelope_count": import_envelope_count,
+            "remote_sidecar_count": remote_sidecar_count,
+        },
     }
 
 
@@ -423,6 +437,9 @@ def build_package(
     intended_recipient: str = "",
     export_event_hash: Optional[str] = None,
     signing_key_path: Optional[str] = None,
+    multi_machine_context: Optional[dict] = None,
+    machine_scope: str = "all",
+    machine_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Build a complete encrypted evidence package.
 
@@ -458,6 +475,7 @@ def build_package(
         end_sequence=end_sequence,
         verification_summary=verification,
         export_event_hash=export_event_hash,
+        multi_machine_context=multi_machine_context,
     )
     plaintext_bytes = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -483,6 +501,10 @@ def build_package(
         iterations=enc["iterations"],
         ciphertext_sha256=ciphertext_sha256,
         intended_recipient=intended_recipient,
+        machine_scope=machine_scope,
+        machine_ids=machine_ids,
+        import_envelope_count=len((multi_machine_context or {}).get("import_envelopes", [])),
+        remote_sidecar_count=len((multi_machine_context or {}).get("remote_sidecar_hashes", [])),
     )
 
     manifest_json = json.dumps(manifest, indent=2)

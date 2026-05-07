@@ -237,7 +237,13 @@ def normalize_record(record: Any, *, sequence: int) -> dict[str, Any]:
     matched_rule = _string(record.get("matched_rule"))
     row = {
         "sequence": sequence,
-        "timestamp_utc": _string(record.get("timestamp_utc")),
+        "timestamp_utc": _string(record.get("event_timestamp_utc") or record.get("timestamp_utc")),
+        "event_timestamp_utc": _string(record.get("event_timestamp_utc") or record.get("timestamp_utc")),
+        "primary_import_timestamp_utc": record.get("primary_import_timestamp_utc"),
+        "machine_id": _string(record.get("machine_id")),
+        "machine_role": _string(record.get("machine_role")),
+        "record_origin": _string(record.get("_unified_source") or "primary_chain"),
+        "import_envelope_hash": record.get("import_envelope_hash"),
         "category": category,
         "decision": decision,
         "action": action,
@@ -457,6 +463,8 @@ def walker_query(
     center_sequence: Optional[int] = None,
     center_index: Optional[int] = None,
     alert_direction: Optional[str] = None,
+    machine_scope: str = "all",
+    machine_ids: Optional[str | list[str]] = None,
     radius: int = 5,
 ) -> dict[str, Any]:
     """Return a centered chain window for the Audit Chain Walker."""
@@ -480,7 +488,21 @@ def walker_query(
         source_path = archive_path
         source_label = "archive"
 
-    all_rows = load_walker_rows(source_path)
+    unified_context = None
+    if chain_source == "live":
+        try:
+            from unified_readout import load_unified_records
+            unified_records, unified_context = load_unified_records(
+                Path(__file__).resolve().parents[1],
+                source_path,
+                machine_scope=machine_scope,
+                machine_ids=machine_ids,
+            )
+            all_rows = normalize_records(unified_records, start_sequence=1)
+        except Exception:
+            all_rows = load_walker_rows(source_path)
+    else:
+        all_rows = load_walker_rows(source_path)
     filtered = apply_walker_filters(
         all_rows,
         start_time=start_time,
@@ -514,6 +536,9 @@ def walker_query(
                 start_time, end_time, user_identity, tool_name, action_type,
                 confidence_tier, policy_decision, event_category,
             ),
+            "machine_scope": machine_scope,
+            "machine_ids": machine_ids,
+            "unified_view": unified_context,
         }
 
     idx = _resolve_center_index(
@@ -553,6 +578,9 @@ def walker_query(
             start_time, end_time, user_identity, tool_name, action_type,
             confidence_tier, policy_decision, event_category,
         ),
+        "machine_scope": machine_scope,
+        "machine_ids": machine_ids,
+        "unified_view": unified_context,
     }
 
 
