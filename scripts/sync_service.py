@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import argparse
+import os
 import threading
 import time
 import uuid
@@ -340,3 +342,33 @@ def _mark_machine_synced(repo_root: Path, machine_id: str) -> None:
             machine["last_sync_utc"] = now_utc_z()
             save_machine_registry(repo_root, registry)
             return
+
+
+def _load_primary_private_key(repo_root: Path):
+    try:
+        from receipt_signing import _read_private_key
+    except ImportError:  # pragma: no cover - package import path
+        from scripts.receipt_signing import _read_private_key
+
+    explicit = str(os.environ.get("GOV_SIGNING_KEY_PATH", "")).strip()
+    key_path = Path(explicit) if explicit else runtime_root(repo_root) / ".atested-signing-key.pem"
+    return _read_private_key(key_path)[0]
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Run the Atested primary sync HTTP service")
+    parser.add_argument("--host", default=DEFAULT_SYNC_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_SYNC_PORT)
+    args = parser.parse_args(argv)
+    private_key = _load_primary_private_key(Path(__file__).resolve().parent.parent)
+    run_sync_server(
+        Path(__file__).resolve().parent.parent,
+        host=args.host,
+        port=args.port,
+        primary_private_key=private_key,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
