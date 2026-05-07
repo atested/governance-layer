@@ -650,6 +650,7 @@ def _append_chain_record_atomic(event):
     Signs the event with Ed25519 if a signing key is loaded.
     """
     from event_model import _compute_event_record_hash, sign_non_action_event
+    from machine_identity import add_machine_identity_fields
     import stat as _stat
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
@@ -657,6 +658,7 @@ def _append_chain_record_atomic(event):
         lockdir = _acquire_chain_file_lock()
         try:
             # Read head hash INSIDE the lock
+            add_machine_identity_fields(event, REPO)
             event["prev_record_hash"] = _get_chain_head_hash()
             # Ensure signature fields exist before hash computation
             if "signature" not in event:

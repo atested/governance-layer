@@ -112,6 +112,9 @@ def test_approve_then_lookup():
         rec = json.loads(lines[0])
         assert rec["event_type"] == "opaque_artifact_approval"
         assert rec["artifact_identity"] == "sha256:abcdef0123456789"
+        assert "machine_id" in rec
+        assert rec["machine_role"] == "primary"
+        assert "event_timestamp_utc" in rec
 
         # Approvals listing should show it
         rc, out, err = _run_cli(["approvals"], env_overrides=env)

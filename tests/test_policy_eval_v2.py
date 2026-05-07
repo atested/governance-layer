@@ -136,6 +136,11 @@ class TestRecordStructure:
         assert "evidence" in r
         assert "policy_decision" in r
         assert "matched_rule" in r
+        assert "machine_id" in r
+        assert r["machine_role"] in ("primary", "remote")
+        assert "event_timestamp_utc" in r
+        assert r["approval_store_hash"].startswith("sha256:")
+        assert r["policy_rules_hash"].startswith("sha256:")
         assert "record_hash" in r
         assert r["record_hash"].startswith("sha256:")
 
@@ -179,7 +184,14 @@ class TestRecordStructure:
         import json, hashlib
         hashable = dict(r)
         hashable["record_hash"] = None
-        canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        if "signature" in hashable:
+            hashable["signature"] = None
+        if "signing_key_id" in hashable:
+            hashable["signing_key_id"] = None
+        canonical = json.dumps(
+            hashable, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        )
         expected = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         assert r["record_hash"] == expected
 

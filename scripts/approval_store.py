@@ -27,12 +27,33 @@ signature or with an invalid signature are rejected (not ingested).
 
 import json
 import logging
+import hashlib
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger("atested.approval_store")
 
 APPROVAL_STORE_VERSION = "0.1"
+
+
+def _canonical_json(obj) -> str:
+    return json.dumps(
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def approval_store_hash(store: Optional["ApprovalStore"] = None) -> str:
+    """Hash the active approval-store snapshot used for a decision."""
+    approvals = [] if store is None else store.all_approvals()
+    normalized = {
+        "approval_store_version": APPROVAL_STORE_VERSION,
+        "active_approvals": sorted(
+            approvals,
+            key=lambda row: _canonical_json(row),
+        ),
+    }
+    return "sha256:" + hashlib.sha256(_canonical_json(normalized).encode("utf-8")).hexdigest()
 
 
 def _verify_event_signature(event: dict, public_key) -> bool:

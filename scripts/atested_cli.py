@@ -138,14 +138,19 @@ def _get_chain_head_hash():
 def _append_chain_record_atomic(event: dict) -> dict:
     """Atomically append a non-action event to the chain."""
     from event_model import _compute_event_record_hash
+    from machine_identity import add_machine_identity_fields
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
     with _chain_lock:
         lockdir = _acquire_chain_file_lock()
         try:
+            add_machine_identity_fields(event, REPO)
             event["prev_record_hash"] = _get_chain_head_hash()
             event["record_hash"] = _compute_event_record_hash(event)
-            line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
+            line = json.dumps(
+                event, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False, allow_nan=False,
+            ) + "\n"
             fd = os.open(
                 str(CHAIN),
                 os.O_WRONLY | os.O_APPEND | os.O_CREAT,
@@ -355,7 +360,20 @@ def cmd_init(args) -> int:
     os.chmod(str(signing_key_path), 0o600)
     print(f"  Generated signing key:    {signing_key_path}")
 
-    # 3. Ask for working directories (or use defaults)
+    # 3. Create persistent machine identity and primary registry.
+    try:
+        from receipt_signing import _public_key_fingerprint
+        from machine_identity import ensure_machine_identity, ensure_primary_machine_registry
+        key_id = _public_key_fingerprint(private_key.public_key(), serialization)
+        identity = ensure_machine_identity(REPO, role="primary", signing_key_id=key_id)
+        ensure_primary_machine_registry(REPO, identity=identity, public_key_fingerprint=key_id)
+        print(f"  Assigned machine ID:      {identity['machine_id']}")
+        print("  Machine role:             primary")
+    except Exception as exc:
+        print(f"error: failed to create machine identity: {exc}", file=sys.stderr)
+        return 1
+
+    # 4. Ask for working directories (or use defaults)
     base_dirs = ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
     dirs_arg = getattr(args, "dirs", None)
     if dirs_arg:
@@ -370,7 +388,7 @@ def cmd_init(args) -> int:
             base_dirs.append(cwd)
             print(f"  Added working directory:  {cwd}")
 
-    # 4. Configure policy-rules.json base_dirs
+    # 5. Configure policy-rules.json base_dirs
     policy_data = json.loads(POLICY_RULES_PATH.read_text(encoding="utf-8"))
     policy_data["base_dirs"] = base_dirs
     POLICY_RULES_PATH.write_text(
@@ -382,7 +400,7 @@ def cmd_init(args) -> int:
         for d in base_dirs[2:]:
             print(f"    base_dir: {d}")
 
-    # 5. Summary
+    # 6. Summary
     print("")
     print("Atested is initialized.")
     print("")

@@ -49,3 +49,6 @@ class TestEventTypeRegistration:
         for event_type in sorted(NON_ACTION_EVENT_TYPES):
             event = build_non_action_event(event_type, {"test": True})
             assert event["event_type"] == event_type
+            assert "machine_id" in event
+            assert event["machine_role"] in ("primary", "remote")
+            assert "event_timestamp_utc" in event

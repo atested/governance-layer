@@ -24,8 +24,17 @@ Design constraints (per GOVERNED_ACTION_BASELINE_SPEC v1.1):
 import hashlib
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 import uuid
+
+try:
+    from machine_identity import add_machine_identity_fields
+except ImportError:  # pragma: no cover - package import path
+    from scripts.machine_identity import add_machine_identity_fields
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +77,10 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "license_expiration_warning",
     "license_modified",
     "machine_added",
+    "machine_removed",
+    "machine_role_changed",
+    "machine_key_rotated",
+    "machine_license_status_changed",
     "machine_revoked",
     "institution_inquiry_submitted",
     "research_program_opted_in",
@@ -428,6 +441,7 @@ def build_non_action_event(
         "signing_key_id": None,
     }
     event.update(payload)
+    add_machine_identity_fields(event, REPO_ROOT)
 
     if compound_metadata is not None:
         event["compound_metadata"] = compound_metadata

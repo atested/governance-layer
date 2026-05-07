@@ -48,9 +48,10 @@ if str(SCRIPTS) not in sys.path:
 
 from classifier import classify
 from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash
-from approval_store import ApprovalStore, load_approval_store_from_chain
+from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_chain
 from event_model import build_non_action_event
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
+from machine_identity import add_machine_identity_fields, ensure_machine_identity, ensure_primary_machine_registry
 
 # Storage contract for chain path
 from storage_contract import runtime_root
@@ -184,6 +185,7 @@ class ChainRecorder:
             try:
                 if self._integrity_monitor is not None:
                     self._integrity_monitor.verify_chain_writable()
+                add_machine_identity_fields(record, REPO)
                 record["prev_record_hash"] = self._last_hash()
                 # Set signature fields to null BEFORE hashing so they're
                 # included in the canonical form (stable hash regardless
@@ -462,11 +464,13 @@ def mediate_decision(
         prev_record_hash=None,
         user_identity=user_identity,
         session_id=session_id,
+        approval_store_hash=approval_store_hash(approval_store),
     )
 
     # Add provider field to chain records
     if provider_name:
         record["provider"] = provider_name
+        record["record_hash"] = _compute_record_hash(record)
 
     # Check approval store for denied operations
     if record["policy_decision"] == "DENY" and approval_store is not None:
@@ -509,6 +513,7 @@ def _build_integrity_denial_record(
         prev_record_hash=None,
         user_identity=user_identity,
         session_id=session_id,
+        approval_store_hash=approval_store_hash(None),
     )
     record["matched_rule"] = matched_rule
     record["policy_reasons"] = [{
@@ -1722,6 +1727,8 @@ def main():
 
     # Setup chain recorder
     runtime = runtime_root(REPO)
+    identity = ensure_machine_identity(REPO, role="primary", signing_key_id=_SIGNING_KEY_ID)
+    ensure_primary_machine_registry(REPO, identity=identity, public_key_fingerprint=_SIGNING_KEY_ID)
     chain_path = runtime / "LOGS" / "decision-chain.jsonl"
     integrity_monitor = IntegrityMonitor(chain_path)
     startup_archive_manifest = None

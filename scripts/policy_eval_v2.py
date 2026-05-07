@@ -31,6 +31,10 @@ from policy_eval_shared import (
     sanitize_base_dir,
     resolve_base_dirs,
 )
+try:
+    from machine_identity import add_machine_identity_fields
+except ImportError:  # pragma: no cover - package import path
+    from scripts.machine_identity import add_machine_identity_fields
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +235,22 @@ def _now_utc_z() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _canonical_json(obj: Any) -> str:
+    return json.dumps(
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def compute_policy_rules_hash(policy: Optional[dict]) -> str:
+    """Hash the policy snapshot used for a decision record."""
+    public_policy = {
+        k: v for k, v in dict(policy or {}).items()
+        if not str(k).startswith("_")
+    }
+    return "sha256:" + hashlib.sha256(_canonical_json(public_policy).encode("utf-8")).hexdigest()
+
+
 def _compute_record_hash(record: dict) -> str:
     """Compute SHA-256 hash of the record with hash/signature fields nulled.
 
@@ -244,8 +264,7 @@ def _compute_record_hash(record: dict) -> str:
         hashable["signature"] = None
     if "signing_key_id" in hashable:
         hashable["signing_key_id"] = None
-    canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"),
-                           ensure_ascii=False, allow_nan=False)
+    canonical = _canonical_json(hashable)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -260,6 +279,8 @@ def evaluate(
     prev_record_hash: Optional[str] = None,
     user_identity: Optional[str] = None,
     session_id: Optional[str] = None,
+    approval_store_hash: Optional[str] = None,
+    policy_rules_hash: Optional[str] = None,
 ) -> dict:
     """Evaluate a classified operation against policy rules.
 
@@ -317,11 +338,13 @@ def evaluate(
             },
         })
 
+    timestamp_utc = _now_utc_z()
+
     # Build decision record
     record = {
         "record_version": "2.0",
         "record_type": "mediated_decision",
-        "timestamp_utc": _now_utc_z(),
+        "timestamp_utc": timestamp_utc,
         "request_id": str(uuid.uuid4()),
         "session_id": session_id or "",
         "user_identity": user_identity or "",
@@ -336,9 +359,18 @@ def evaluate(
         "policy_decision": decision,
         "policy_reasons": policy_reasons,
         "matched_rule": rule_id,
+        "policy_rules_hash": policy_rules_hash or compute_policy_rules_hash(policy),
+        "approval_store_hash": approval_store_hash,
         "prev_record_hash": prev_record_hash,
         "record_hash": None,
     }
+    add_machine_identity_fields(record, Path(__file__).resolve().parents[1])
+    if record["approval_store_hash"] is None:
+        try:
+            from approval_store import approval_store_hash as _approval_store_hash
+            record["approval_store_hash"] = _approval_store_hash(None)
+        except Exception:
+            record["approval_store_hash"] = "sha256:" + ("0" * 64)
 
     record["record_hash"] = _compute_record_hash(record)
 
