@@ -504,10 +504,25 @@ def _machine_registry_summary() -> dict:
     registry = load_machine_registry(REPO)
     if not registry:
         return {"registry_present": False, "machines": []}
+    machines = registry.get("machines", [])
+    stale = [
+        machine for machine in machines
+        if machine.get("version_status") in {"stale", "stale_update_required", "protocol_incompatible"}
+    ]
     return {
         "registry_present": True,
         "registry_hash": registry.get("registry_hash"),
-        "machines": registry.get("machines", []),
+        "machines": machines,
+        "version_warnings": [
+            {
+                "machine_id": machine.get("machine_id"),
+                "product_version": machine.get("product_version"),
+                "sync_protocol_version": machine.get("sync_protocol_version"),
+                "version_status": machine.get("version_status"),
+                "minimum_supported_version": machine.get("minimum_supported_version"),
+            }
+            for machine in stale
+        ],
     }
 
 
@@ -1049,6 +1064,15 @@ def cmd_machine_remove(args) -> int:
     return 0
 
 
+def cmd_restore_verify(args) -> int:
+    from multi_machine_ops import validate_primary_restore_runtime
+
+    runtime = Path(args.runtime).expanduser().resolve() if args.runtime else _runtime()
+    result = validate_primary_restore_runtime(REPO, runtime=runtime)
+    _emit(args, result)
+    return 0 if result.get("restore_runtime_valid") else 1
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -1149,6 +1173,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_machine_remove.add_argument("machine_id")
     p_machine_remove.add_argument("--reason", default="operator removal")
     p_machine_remove.set_defaults(func=cmd_machine_remove)
+
+    p_restore = sub.add_parser("restore", help="Primary restore operations")
+    restore_sub = p_restore.add_subparsers(dest="restore_command", required=True)
+    p_restore_verify = restore_sub.add_parser("verify", help="Validate a restored primary gov_runtime")
+    p_restore_verify.add_argument("--runtime", default=None, help="Runtime directory to validate (default: configured gov_runtime)")
+    p_restore_verify.set_defaults(func=cmd_restore_verify)
 
     return parser
 

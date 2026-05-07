@@ -203,6 +203,23 @@ def test_start_primary_lifecycle_no_services():
     print("PASS: test_start_primary_lifecycle_no_services")
 
 
+def test_restore_verify_primary_runtime():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        env = {"GOV_RUNTIME_DIR": str(runtime)}
+        rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=env)
+        assert rc == 0, f"stderr: {err}"
+        rc, out, err = _run_cli(["approve", "sha256:restoretest", "--operator", "op"], env_overrides=env)
+        assert rc == 0, f"stderr: {err}"
+
+        rc, out, err = _run_cli(["restore", "verify", "--runtime", str(runtime)], env_overrides=env)
+        assert rc == 0, f"stderr: {err}"
+        data = json.loads(out)
+        assert data["restore_runtime_valid"] is True
+        assert any(check["name"] == "chain_integrity" and check["status"] == "ok" for check in data["checks"])
+    print("PASS: test_restore_verify_primary_runtime")
+
+
 def test_remote_start_manual_sync_no_pending():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)

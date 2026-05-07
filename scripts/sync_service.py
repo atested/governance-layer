@@ -17,6 +17,13 @@ from typing import Optional
 try:
     from approval_store import approval_store_hash, load_approval_store_from_chain
     from machine_identity import authorized_machine_lookup, ensure_machine_identity, load_machine_registry, save_machine_registry
+    from multi_machine_ops import (
+        normalize_communications,
+        product_version,
+        store_remote_telemetry_summary,
+        update_machine_version_report,
+        validate_sync_versions,
+    )
     from policy_eval_v2 import compute_policy_rules_hash
     from remote_import import import_remote_segment, sha256_bytes
     from storage_contract import runtime_root
@@ -32,6 +39,13 @@ try:
 except ImportError:  # pragma: no cover - package import path
     from scripts.approval_store import approval_store_hash, load_approval_store_from_chain
     from scripts.machine_identity import authorized_machine_lookup, ensure_machine_identity, load_machine_registry, save_machine_registry
+    from scripts.multi_machine_ops import (
+        normalize_communications,
+        product_version,
+        store_remote_telemetry_summary,
+        update_machine_version_report,
+        validate_sync_versions,
+    )
     from scripts.policy_eval_v2 import compute_policy_rules_hash
     from scripts.remote_import import import_remote_segment, sha256_bytes
     from scripts.storage_contract import runtime_root
@@ -58,6 +72,8 @@ class SyncSession:
     nonce: str
     source_machine_id: str
     source_machine_key_id: str
+    protocol_version: str
+    product_version: str
     created_epoch: float
     last_request_number: int = 0
     segment_hashes: dict[str, str] = field(default_factory=dict)
@@ -81,16 +97,29 @@ class SyncService:
         ensure_machine_identity(self.repo_root, role="primary", signing_key_id=primary_signing_key_id)
 
     def start_session(self, payload: dict) -> tuple[int, dict]:
+        versions_ok, version_error = validate_sync_versions(payload, self.repo_root)
+        if not versions_ok:
+            return 426, version_error
         source_machine_id = str(payload.get("source_machine_id", "")).strip()
         source_machine_key_id = str(payload.get("source_machine_key_id", "")).strip()
         if not source_machine_id or not source_machine_key_id:
             return 400, {"accepted": False, "error": "MACHINE_ID_AND_KEY_REQUIRED"}
+        protocol_version = str(payload.get("protocol_version") or "").strip()
+        product_version_value = str(payload.get("product_version") or "").strip() or "0.0.0"
+        update_machine_version_report(
+            self.repo_root,
+            source_machine_id,
+            product_version_value=product_version_value,
+            protocol_version=protocol_version,
+        )
 
         session = SyncSession(
             sync_session_id=f"sync_{uuid.uuid4()}",
             nonce=uuid.uuid4().hex + uuid.uuid4().hex,
             source_machine_id=source_machine_id,
             source_machine_key_id=source_machine_key_id,
+            protocol_version=protocol_version,
+            product_version=product_version_value,
             created_epoch=time.time(),
         )
         with self._lock:
@@ -103,11 +132,15 @@ class SyncService:
             "nonce": session.nonce,
             "primary_machine_identity": ensure_machine_identity(self.repo_root, role="primary"),
             "supported_protocol_versions": [SYNC_PROTOCOL_VERSION],
+            "primary_product_version": product_version(self.repo_root),
             "machine_registry_hash": registry.get("registry_hash"),
         }
         return 200, self._maybe_sign("/sync/v1/session/start", response)
 
     def receive_segment(self, payload: dict) -> tuple[int, dict]:
+        versions_ok, version_error = validate_sync_versions(payload, self.repo_root)
+        if not versions_ok:
+            return 426, version_error
         session_id = str(payload.get("sync_session_id", "")).strip()
         with self._lock:
             session = self._sessions.get(session_id)
@@ -121,6 +154,10 @@ class SyncService:
         source_machine_id = str(payload.get("source_machine_id", "")).strip()
         if source_machine_id != session.source_machine_id:
             return 403, {"accepted": False, "error": "SESSION_MACHINE_MISMATCH"}
+        protocol_version = str(payload.get("protocol_version") or "").strip()
+        product_version_value = str(payload.get("product_version") or "").strip() or "0.0.0"
+        if protocol_version != session.protocol_version or product_version_value != session.product_version:
+            return 409, {"accepted": False, "error": "SESSION_VERSION_MISMATCH"}
 
         request_number = payload.get("request_number")
         if not isinstance(request_number, int) or request_number <= session.last_request_number:
@@ -181,12 +218,34 @@ class SyncService:
             session.last_request_number = request_number
             session.segment_hashes[segment_id] = segment_sha256
         _mark_machine_synced(self.repo_root, source_machine_id)
+        update_machine_version_report(
+            self.repo_root,
+            source_machine_id,
+            product_version_value=product_version_value,
+            protocol_version=protocol_version,
+        )
+        telemetry_received = False
+        telemetry = payload.get("telemetry_summary")
+        if isinstance(telemetry, dict):
+            reported_summary_hash = telemetry.get("summary_hash")
+            signed_summary_hash = payload.get("telemetry_summary_hash")
+            if isinstance(signed_summary_hash, str) and signed_summary_hash and signed_summary_hash != reported_summary_hash:
+                return 400, {"accepted": False, "error": "REMOTE_TELEMETRY_HASH_MISMATCH"}
+        try:
+            telemetry_received = store_remote_telemetry_summary(
+                self.repo_root,
+                source_machine_id,
+                telemetry,
+            ) is not None
+        except ValueError as exc:
+            return 400, {"accepted": False, "error": str(exc)}
 
         response = {
             "accepted": True,
             "segment_id": import_result.segment_id,
             "import_envelope_hash": import_result.import_envelope_hash,
             "duplicate": import_result.duplicate,
+            "telemetry_received": telemetry_received,
             **build_state_bundle(self.repo_root),
         }
         return 200, self._maybe_sign("/sync/v1/segment", response)
@@ -221,7 +280,7 @@ def build_state_bundle(repo_root: Path) -> dict:
         "approval_store_hash": approval_store_hash(store),
         "policy_rules": policy_rules,
         "policy_rules_hash": compute_policy_rules_hash(policy_rules),
-        "communications": _load_communications(runtime),
+        "communications": normalize_communications(_load_communications(runtime)),
         "version_info": _load_version_info(repo_root),
         "machine_registry_hash": registry.get("registry_hash"),
         "machine_registry": registry,
@@ -321,6 +380,17 @@ def _load_version_info(repo_root: Path) -> dict:
     return {
         "current_version": current,
         "sync_protocol_version": SYNC_PROTOCOL_VERSION,
+        "minimum_remote_version": os.environ.get("ATESTED_MIN_REMOTE_VERSION", "0.0.0"),
+        "machine_versions": [
+            {
+                "machine_id": machine.get("machine_id"),
+                "product_version": machine.get("product_version"),
+                "sync_protocol_version": machine.get("sync_protocol_version"),
+                "version_status": machine.get("version_status"),
+                "last_version_report_utc": machine.get("last_version_report_utc"),
+            }
+            for machine in (load_machine_registry(repo_root) or {}).get("machines", [])
+        ],
         "checked_at_utc": now_utc_z(),
     }
 

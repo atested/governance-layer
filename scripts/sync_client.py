@@ -11,6 +11,7 @@ from typing import Optional
 
 try:
     from machine_identity import ensure_machine_identity
+    from multi_machine_ops import remote_telemetry_payload, store_relayed_communications
     from remote_import import CURRENT_CHAIN_SEGMENT, compute_segment_id
     from storage_contract import runtime_root
     from sync_protocol import (
@@ -26,6 +27,7 @@ try:
     )
 except ImportError:  # pragma: no cover - package import path
     from scripts.machine_identity import ensure_machine_identity
+    from scripts.multi_machine_ops import remote_telemetry_payload, store_relayed_communications
     from scripts.remote_import import CURRENT_CHAIN_SEGMENT, compute_segment_id
     from scripts.storage_contract import runtime_root
     from scripts.sync_protocol import (
@@ -101,17 +103,22 @@ class SyncClient:
             count,
             stored_sha,
         )
+        telemetry = remote_telemetry_payload(self.repo_root)
         self.request_number += 1
         payload = {
             "sync_session_id": self.session["sync_session_id"],
             "request_number": self.request_number,
             "timestamp_utc": now_utc_z(),
             "source_machine_id": source_machine_id,
+            "protocol_version": SYNC_PROTOCOL_VERSION,
+            "product_version": _current_version(self.repo_root),
             "segment_id": segment_id,
             "segment_kind": segment_kind,
             "segment_sha256": stored_sha,
             "records_jsonl_b64": b64encode(raw),
             "archive_manifest": None,
+            "telemetry_summary": telemetry,
+            "telemetry_summary_hash": telemetry.get("summary_hash") if isinstance(telemetry, dict) else None,
         }
         signed = sign_segment_request(
             "POST",
@@ -191,6 +198,7 @@ def store_state_bundle(repo_root: Path, bundle: dict) -> None:
         "policy_rules_hash": state["policy_rules_hash"],
         "received_at_utc": state["received_at_utc"],
     })
+    store_relayed_communications(repo_root, state["communications"])
 
 
 def _segment_hash_bounds(records_jsonl: bytes) -> tuple[str, str, int]:

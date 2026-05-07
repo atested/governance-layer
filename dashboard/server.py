@@ -2084,6 +2084,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         send_to_remote = bool(data.get("send_to_remote", False))
+        try:
+            from machine_identity import load_machine_identity
+            _machine_role = (load_machine_identity(REPO) or {}).get("machine_role")
+        except Exception:
+            _machine_role = None
+        remote_external_blocked = False
+        if _machine_role == "remote" and send_to_remote:
+            send_to_remote = False
+            remote_external_blocked = True
 
         try:
             if not _telemetry_opted_in():
@@ -2097,6 +2106,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             from feedback_signing import write_artifact, send_artifact_to_remote
 
             artifact = _build_summary_telemetry_artifact()
+            if _machine_role != "remote":
+                try:
+                    from multi_machine_ops import apply_machine_coverage_to_telemetry_artifact
+                    artifact = apply_machine_coverage_to_telemetry_artifact(REPO, artifact)
+                except Exception:
+                    pass
             telemetry_dir = RUNTIME / "LOGS" / "telemetry"
             out_path = write_artifact(artifact, telemetry_dir)
 
@@ -2109,6 +2124,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "stored_at": str(out_path),
                 "privacy_model": artifact.get("privacy_model", {}),
                 "summary": artifact.get("summary", {}),
+                "machine_coverage": artifact.get("machine_coverage", []),
+                "remote_external_blocked": remote_external_blocked,
             }
 
             if send_to_remote:
@@ -2204,12 +2221,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if send_to_remote:
                 try:
                     from event_model import build_non_action_event
-                    _append_chain_record_atomic(build_non_action_event(
-                        "telemetry_submitted", {
+                    try:
+                        from multi_machine_ops import telemetry_submission_event_payload
+                        event_payload = telemetry_submission_event_payload(
+                            "https://license.atested.com/api/telemetry",
+                            artifact,
+                        )
+                    except Exception:
+                        event_payload = {
                             "destination": "https://license.atested.com/api/telemetry",
                             "payload_hash": artifact["artifact_hash"],
                             "payload_size": len(json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")),
-                        }))
+                        }
+                    _append_chain_record_atomic(build_non_action_event(
+                        "telemetry_submitted",
+                        event_payload,
+                    ))
                 except Exception:
                     pass
 

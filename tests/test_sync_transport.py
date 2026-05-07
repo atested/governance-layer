@@ -22,6 +22,7 @@ from machine_identity import (  # noqa: E402
 from remote_import import CURRENT_CHAIN_SEGMENT, compute_segment_id  # noqa: E402
 from sync_client import SyncClient, SyncClientError  # noqa: E402
 from sync_protocol import (  # noqa: E402
+    SYNC_PROTOCOL_VERSION,
     SyncTriggerManager,
     b64encode,
     private_key_fingerprint,
@@ -115,7 +116,23 @@ def _jsonl(records):
     return ("\n".join(json.dumps(r, sort_keys=True, separators=(",", ":")) for r in records) + "\n").encode("utf-8")
 
 
+def _session_payload(machine_id: str, remote_private_key) -> dict:
+    return {
+        "source_machine_id": machine_id,
+        "source_machine_key_id": private_key_fingerprint(remote_private_key),
+        "protocol_version": SYNC_PROTOCOL_VERSION,
+        "product_version": "1.0.0",
+        "timestamp_utc": now_utc_z(),
+    }
+
+
 def test_client_handshake_segment_sync_and_state_bundle(sync_server, tmp_path, monkeypatch):
+    telemetry_dir = tmp_path / "runtime" / "LOGS" / "telemetry"
+    telemetry_dir.mkdir(parents=True, exist_ok=True)
+    (telemetry_dir / "summary.json").write_text(
+        json.dumps({"schema_version": 1, "periods": {"2026-05-06": {"flushes": 1}}, "lifetime": {"flushes": 1}}),
+        encoding="utf-8",
+    )
     client = SyncClient(
         REPO,
         sync_server["url"],
@@ -136,7 +153,12 @@ def test_client_handshake_segment_sync_and_state_bundle(sync_server, tmp_path, m
     assert response["approval_store_hash"].startswith("sha256:")
     assert response["policy_rules_hash"].startswith("sha256:")
     assert response["communications"][0]["notification_id"] == "n1"
+    assert response["communications"][0]["message_id"] == "n1"
+    assert response["telemetry_received"] is True
     assert (tmp_path / "runtime" / "sync" / "state_bundle.json").exists()
+    assert (tmp_path / "runtime" / "sync" / "remote_telemetry" / "remote-sync-1.json").exists()
+    comms = (tmp_path / "runtime" / "sync" / "communications.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(comms) == 1
 
 
 def test_unknown_machine_rejects_segment(monkeypatch, tmp_path, keypair):
@@ -148,10 +170,8 @@ def test_unknown_machine_rejects_segment(monkeypatch, tmp_path, keypair):
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(tmp_path / "runtime"))
     ensure_primary_machine_registry(REPO, identity=ensure_machine_identity(REPO, role="primary", signing_key_id=primary_key_id))
     service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
-    status, session = service.start_session({
-        "source_machine_id": "unknown-remote",
-        "source_machine_key_id": private_key_fingerprint(remote_priv),
-    })
+    status, session = service.start_session(_session_payload("unknown-remote", remote_priv))
+    assert status == 200
     record = _remote_event(remote_priv, "unknown", machine_id="unknown-remote")
     payload = _signed_segment_payload(session, remote_priv, "unknown-remote", _jsonl([record]))
     status, response = service.receive_segment(payload)
@@ -168,10 +188,7 @@ def test_removed_machine_rejects_segment(monkeypatch, tmp_path, keypair):
     primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, primary_keypair, remote_keypair)
     remove_machine_from_registry(REPO, "remote-sync-1")
     service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
-    _, session = service.start_session({
-        "source_machine_id": "remote-sync-1",
-        "source_machine_key_id": private_key_fingerprint(remote_priv),
-    })
+    _, session = service.start_session(_session_payload("remote-sync-1", remote_priv))
     record = _remote_event(remote_priv, "removed")
     payload = _signed_segment_payload(session, remote_priv, "remote-sync-1", _jsonl([record]))
     status, response = service.receive_segment(payload)
@@ -186,10 +203,7 @@ def test_replay_request_number_rejected(monkeypatch, tmp_path, keypair):
     remote_keypair = (remote_priv, private_key_fingerprint(remote_priv), private_key_public_pem(remote_priv))
     primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, keypair, remote_keypair)
     service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
-    _, session = service.start_session({
-        "source_machine_id": "remote-sync-1",
-        "source_machine_key_id": private_key_fingerprint(remote_priv),
-    })
+    _, session = service.start_session(_session_payload("remote-sync-1", remote_priv))
     record = _remote_event(remote_priv, "replay")
     payload = _signed_segment_payload(session, remote_priv, "remote-sync-1", _jsonl([record]), request_number=1)
     assert service.receive_segment(payload)[0] == 200
@@ -249,6 +263,37 @@ def test_client_rejects_tampered_primary_response(sync_server):
         client.start_session()
 
 
+def test_incompatible_protocol_rejected_with_update_required(monkeypatch, tmp_path, keypair):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    remote_priv = Ed25519PrivateKey.generate()
+    remote_keypair = (remote_priv, private_key_fingerprint(remote_priv), private_key_public_pem(remote_priv))
+    primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, keypair, remote_keypair)
+    service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
+    payload = _session_payload("remote-sync-1", remote_priv)
+    payload["protocol_version"] = "sync_v0"
+    status, response = service.start_session(payload)
+    assert status == 426
+    assert response["error"] == "UPDATE_REQUIRED_SYNC_PROTOCOL_INCOMPATIBLE"
+    assert "Update the remote" in response["message"]
+
+
+def test_old_remote_version_rejected_with_update_required(monkeypatch, tmp_path, keypair):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    monkeypatch.setenv("ATESTED_MIN_REMOTE_VERSION", "2.0.0")
+    remote_priv = Ed25519PrivateKey.generate()
+    remote_keypair = (remote_priv, private_key_fingerprint(remote_priv), private_key_public_pem(remote_priv))
+    primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, keypair, remote_keypair)
+    service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
+    payload = _session_payload("remote-sync-1", remote_priv)
+    payload["product_version"] = "1.0.0"
+    status, response = service.start_session(payload)
+    assert status == 426
+    assert response["error"] == "UPDATE_REQUIRED_REMOTE_VERSION_TOO_OLD"
+    assert response["minimum_supported_version"] == "2.0.0"
+
+
 def _signed_segment_payload(session, remote_private_key, machine_id, raw, *, request_number=1):
     stored_sha = sha256_bytes(raw)
     records = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
@@ -265,10 +310,14 @@ def _signed_segment_payload(session, remote_private_key, machine_id, raw, *, req
         "request_number": request_number,
         "timestamp_utc": now_utc_z(),
         "source_machine_id": machine_id,
+        "protocol_version": SYNC_PROTOCOL_VERSION,
+        "product_version": "1.0.0",
         "segment_id": segment_id,
         "segment_kind": CURRENT_CHAIN_SEGMENT,
         "segment_sha256": stored_sha,
         "records_jsonl_b64": b64encode(raw),
         "archive_manifest": None,
+        "telemetry_summary": None,
+        "telemetry_summary_hash": None,
     }
     return sign_segment_request("POST", "/sync/v1/segment", payload, session["nonce"], remote_private_key)

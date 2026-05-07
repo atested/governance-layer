@@ -340,6 +340,13 @@ Restore procedure:
 5. Remotes reconnect using existing primary identity if key material was restored.
 6. If primary key changed, operator must explicitly re-pair remotes.
 
+Operational procedure and validation details are maintained in
+`docs/operations/primary-restore-from-backup.md`. The v1 verification command is:
+
+```text
+atested restore verify --runtime /path/to/gov_runtime
+```
+
 ## 12. Operator Experience
 
 Primary first start:
