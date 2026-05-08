@@ -292,6 +292,7 @@ def build_manifest(
     end_sequence: int,
     record_count: int,
     public_key_fingerprint: str,
+    public_key_pem: str,
     salt_hex: str,
     nonce_hex: str,
     iterations: int,
@@ -314,6 +315,7 @@ def build_manifest(
         "range_end_sequence": end_sequence,
         "record_count": record_count,
         "public_key_fingerprint": public_key_fingerprint,
+        "public_key_pem": public_key_pem,
         "encryption": {
             "algorithm": "AES-256-GCM",
             "kdf": "PBKDF2-HMAC-SHA-256",
@@ -496,6 +498,7 @@ def build_package(
         end_sequence=end_sequence,
         record_count=len(records),
         public_key_fingerprint=pk_info["fingerprint"],
+        public_key_pem=pk_info["public_key_pem"],
         salt_hex=enc["salt"].hex(),
         nonce_hex=enc["nonce"].hex(),
         iterations=enc["iterations"],

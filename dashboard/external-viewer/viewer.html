@@ -335,6 +335,11 @@ $('btn-proceed').addEventListener('click', () => {
     if (state.files['public-key.json']) {
       const pkBytes = new Uint8Array(state.files['public-key.json']);
       state.publicKey = JSON.parse(new TextDecoder().decode(pkBytes));
+    } else if (state.manifest.public_key_pem) {
+      state.publicKey = {
+        public_key_pem: state.manifest.public_key_pem,
+        fingerprint: state.manifest.public_key_fingerprint || ''
+      };
     }
     if (state.files['verification-summary.json']) {
       const vsBytes = new Uint8Array(state.files['verification-summary.json']);
@@ -563,6 +568,19 @@ function pemToRawEd25519(pem) {
   }
 }
 
+function publicKeyInfo() {
+  if (state.publicKey && state.publicKey.public_key_pem) {
+    return state.publicKey;
+  }
+  if (state.manifest && state.manifest.public_key_pem) {
+    return {
+      public_key_pem: state.manifest.public_key_pem,
+      fingerprint: state.manifest.public_key_fingerprint || ''
+    };
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Chain verification (with real hash + signature verification)
 // ---------------------------------------------------------------------------
@@ -580,8 +598,9 @@ async function verifyChain(records, predecessorHash) {
   let publicKeyRaw = null;
   let sigAvailable = false;
   const ed25519Ok = await isEd25519Available();
-  if (ed25519Ok && state.publicKey && state.publicKey.public_key_pem) {
-    publicKeyRaw = pemToRawEd25519(state.publicKey.public_key_pem);
+  const pk = publicKeyInfo();
+  if (ed25519Ok && pk && pk.public_key_pem) {
+    publicKeyRaw = pemToRawEd25519(pk.public_key_pem);
     if (publicKeyRaw) sigAvailable = true;
   }
 
@@ -930,14 +949,15 @@ function renderTechnical() {
   html += `</div>`;
 
   // Public key
-  if (state.publicKey) {
+  const pk = publicKeyInfo();
+  if (pk) {
     html += `<div class="tech-section"><h2>Public Key</h2>
     <table class="tech-table">
-      ${techRow('Fingerprint', state.publicKey.fingerprint || m.public_key_fingerprint || 'unknown', true)}
+      ${techRow('Fingerprint', pk.fingerprint || m.public_key_fingerprint || 'unknown', true)}
       ${techRow('Manifest fingerprint', m.public_key_fingerprint || 'unknown', true)}
-      ${techRow('Match', state.publicKey.fingerprint === m.public_key_fingerprint ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">Mismatch</span>', false, true)}
+      ${techRow('Match', (pk.fingerprint || m.public_key_fingerprint) === m.public_key_fingerprint ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">Mismatch</span>', false, true)}
     </table>
-    ${state.publicKey.public_key_pem ? `<pre style="background:var(--bg);border:1px solid var(--border);padding:10px;font-size:0.7rem;overflow-x:auto;margin-top:8px;color:var(--muted)">${esc(state.publicKey.public_key_pem)}</pre>` : ''}
+    ${pk.public_key_pem ? `<pre style="background:var(--bg);border:1px solid var(--border);padding:10px;font-size:0.7rem;overflow-x:auto;margin-top:8px;color:var(--muted)">${esc(pk.public_key_pem)}</pre>` : ''}
     </div>`;
   }
 

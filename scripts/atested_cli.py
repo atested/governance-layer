@@ -229,6 +229,14 @@ def _services_path() -> Path:
     return _supervisor_dir() / "services.json"
 
 
+def _supervisor_pid_path() -> Path:
+    return _supervisor_dir() / "supervisor.pid"
+
+
+def _supervisor_status_path() -> Path:
+    return _supervisor_dir() / "status.json"
+
+
 def _write_json_file(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -319,6 +327,123 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+def _supervisor_status() -> dict:
+    status = _read_json_file(_supervisor_status_path(), {})
+    if not isinstance(status, dict):
+        status = {}
+    supervisor_data = status.get("supervisor")
+    if not isinstance(supervisor_data, dict):
+        supervisor_data = {}
+    pid = int(supervisor_data.get("pid") or _read_supervisor_pid() or 0)
+    running = _pid_alive(pid)
+    supervisor = dict(supervisor_data)
+    if pid:
+        supervisor["pid"] = pid
+    supervisor["running"] = running
+    supervisor.setdefault("pid_file", str(_supervisor_pid_path()))
+    supervisor.setdefault("status_path", str(_supervisor_status_path()))
+    status["supervisor"] = supervisor
+    return status
+
+
+def _read_supervisor_pid() -> int | None:
+    try:
+        return int(_supervisor_pid_path().read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _supervisor_running() -> bool:
+    return _pid_alive(int(_read_supervisor_pid() or 0))
+
+
+def _detach_popen_kwargs() -> dict:
+    if os.name == "nt":
+        flags = 0
+        flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        return {"creationflags": flags} if flags else {}
+    return {"start_new_session": True}
+
+
+def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
+    if _supervisor_running():
+        status = _supervisor_status()
+        supervisor = status.get("supervisor", {})
+        supervisor["already_running"] = True
+        return supervisor
+
+    log_dir = _supervisor_dir() / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    out = open(log_dir / "supervisor.out.log", "ab")
+    err = open(log_dir / "supervisor.err.log", "ab")
+    env = os.environ.copy()
+    env["GOV_RUNTIME_DIR"] = str(_runtime())
+    env.setdefault("GOV_SIGNING_KEY_PATH", str(_runtime() / SIGNING_KEY_NAME))
+    argv = [
+        sys.executable,
+        "scripts/process_supervisor.py",
+        "--runtime",
+        str(_runtime()),
+        "--role",
+        role,
+        "--sync-host",
+        sync_host,
+        "--sync-port",
+        str(sync_port),
+    ]
+    try:
+        proc = subprocess.Popen(
+            argv,
+            cwd=str(REPO),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=err,
+            **_detach_popen_kwargs(),
+        )
+    finally:
+        out.close()
+        err.close()
+    _supervisor_pid_path().write_text(str(proc.pid), encoding="utf-8")
+    return {
+        "pid": proc.pid,
+        "running": True,
+        "role": role,
+        "started_utc": _now_utc_z(),
+        "pid_file": str(_supervisor_pid_path()),
+        "status_path": str(_supervisor_status_path()),
+        "log_stdout": str(log_dir / "supervisor.out.log"),
+        "log_stderr": str(log_dir / "supervisor.err.log"),
+        "already_running": False,
+    }
+
+
+def _stop_supervisor() -> dict:
+    pid = _read_supervisor_pid()
+    if not pid or not _pid_alive(pid):
+        try:
+            _supervisor_pid_path().unlink()
+        except FileNotFoundError:
+            pass
+        return {"stopped": False, "reason": "not_running", "pid": pid}
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return {"stopped": False, "reason": "not_running", "pid": pid}
+    deadline = _time_mod.time() + 10
+    while _time_mod.time() < deadline:
+        if not _pid_alive(pid):
+            break
+        _time_mod.sleep(0.1)
+    if _pid_alive(pid) and hasattr(signal, "SIGKILL"):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return {"stopped": not _pid_alive(pid), "pid": pid}
+
+
 def _load_services() -> dict:
     data = _read_json_file(_services_path(), {})
     return data if isinstance(data, dict) else {}
@@ -376,7 +501,7 @@ def _stop_service(name: str) -> dict:
         _save_services(services)
         return {"name": name, "stopped": False, "reason": "not_running"}
     try:
-        os.killpg(pid, signal.SIGTERM)
+        os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
         pass
     deadline = _time_mod.time() + 5
@@ -386,7 +511,7 @@ def _stop_service(name: str) -> dict:
         _time_mod.sleep(0.1)
     if _pid_alive(pid):
         try:
-            os.killpg(pid, signal.SIGKILL)
+            os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
     services.pop(name, None)
@@ -401,6 +526,17 @@ def _now_utc_z() -> str:
 
 
 def _service_statuses() -> dict:
+    status = _supervisor_status()
+    services = status.get("services")
+    if isinstance(services, dict) and services:
+        return {
+            name: {
+                **record,
+                "running": bool(record.get("running")) and _pid_alive(int(record.get("pid") or 0)),
+            }
+            for name, record in services.items()
+            if isinstance(record, dict)
+        }
     statuses = {}
     for name, record in _load_services().items():
         if isinstance(record, dict):
@@ -451,6 +587,53 @@ def _clear_degraded() -> None:
         _sync_degraded_path().unlink()
     except FileNotFoundError:
         pass
+
+
+def _profile_path_for_shell(shell_path: str | None = None, home: Path | None = None) -> Path | None:
+    shell = Path(shell_path or os.environ.get("SHELL", "")).name
+    home_dir = home or Path.home()
+    if shell == "zsh":
+        return home_dir / ".zshrc"
+    if shell == "bash":
+        bash_profile = home_dir / ".bash_profile"
+        return bash_profile if bash_profile.exists() else home_dir / ".bashrc"
+    return None
+
+
+def _add_anthropic_base_url_to_profile(profile_path: Path) -> dict:
+    line = "export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic"
+    marker = "# Atested proxy endpoint"
+    existing = ""
+    try:
+        existing = profile_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+    if "ANTHROPIC_BASE_URL=http://localhost:8080/anthropic" in existing:
+        return {"updated": False, "profile": str(profile_path), "reason": "already_present"}
+    prefix = "" if not existing or existing.endswith("\n") else "\n"
+    with open(profile_path, "a", encoding="utf-8") as fh:
+        fh.write(f"{prefix}{marker}\n{line}\n")
+    return {"updated": True, "profile": str(profile_path)}
+
+
+def _offer_shell_profile_update(args) -> dict:
+    if getattr(args, "no_shell_profile", False):
+        return {"offered": False, "updated": False, "reason": "disabled_by_flag"}
+    profile_path = _profile_path_for_shell()
+    if profile_path is None:
+        return {"offered": False, "updated": False, "reason": "unsupported_shell"}
+    if getattr(args, "yes_shell_profile", False):
+        result = _add_anthropic_base_url_to_profile(profile_path)
+        result["offered"] = True
+        return result
+    if not sys.stdin.isatty():
+        return {"offered": False, "updated": False, "reason": "non_interactive"}
+    answer = input(f"Add ANTHROPIC_BASE_URL to {profile_path}? [y/N] ").strip().lower()
+    if answer not in {"y", "yes"}:
+        return {"offered": True, "updated": False, "profile": str(profile_path), "reason": "operator_declined"}
+    result = _add_anthropic_base_url_to_profile(profile_path)
+    result["offered"] = True
+    return result
 
 
 def _read_chain_records() -> list[dict]:
@@ -591,6 +774,7 @@ def cmd_status(args) -> int:
         "identity": identity,
         "role": (identity or {}).get("machine_role"),
         "runtime": str(_runtime()),
+        "supervisor": _supervisor_status().get("supervisor", {}),
         "services": _service_statuses(),
         "sync": {
             "config": sync_config,
@@ -833,6 +1017,14 @@ def cmd_init(args) -> int:
     print("     python3 dashboard/server.py")
     print("     http://localhost:9700")
     print("")
+    profile_result = _offer_shell_profile_update(args)
+    if profile_result.get("updated"):
+        print(f"Added ANTHROPIC_BASE_URL to {profile_result.get('profile')}.")
+    elif profile_result.get("offered") and profile_result.get("reason") == "operator_declined":
+        print("Shell profile unchanged.")
+    elif profile_result.get("reason") == "non_interactive":
+        print("Shell profile unchanged. Run `atested init --yes-shell-profile` to persist ANTHROPIC_BASE_URL.")
+    print("")
     return 0
 
 
@@ -868,28 +1060,10 @@ def cmd_start(args) -> int:
     sync_config = _set_sync_config(sync_config)
     _clear_degraded()
 
+    supervisor = {}
     if not args.no_services:
-        if role == "primary":
-            services["proxy"] = _start_service("proxy", [sys.executable, "-m", "proxy.server"])
-            services["dashboard"] = _start_service("dashboard", [sys.executable, "dashboard/server.py"])
-            services["sync_service"] = _start_service(
-                "sync_service",
-                [sys.executable, "scripts/sync_service.py", "--host", args.sync_host, "--port", str(args.sync_port)],
-            )
-        else:
-            services["proxy"] = _start_service("proxy", [sys.executable, "-m", "proxy.server"])
-            # The v1 remote client is event/manual driven. This lifecycle marker
-            # lets status/stop treat it as enabled without requiring a polling daemon.
-            services["sync_client"] = {
-                "name": "sync_client",
-                "pid": None,
-                "running": False,
-                "mode": "manual_or_triggered",
-                "started_utc": _now_utc_z(),
-            }
-            saved = _load_services()
-            saved["sync_client"] = services["sync_client"]
-            _save_services(saved)
+        supervisor = _start_supervisor(role, sync_host=args.sync_host, sync_port=int(args.sync_port))
+        services = _service_statuses()
 
     _emit(args, {
         "started": True,
@@ -899,6 +1073,7 @@ def cmd_start(args) -> int:
         "public_key_fingerprint": bootstrap["public_key_fingerprint"],
         "public_key_pem": bootstrap["public_key_pem"],
         "sync_config": sync_config,
+        "supervisor": supervisor or _supervisor_status().get("supervisor", {}),
         "services": services or _service_statuses(),
         "operator_action_required": (
             "confirm this remote on the primary with atested machine add"
@@ -915,11 +1090,15 @@ def cmd_stop(args) -> int:
         identity = load_machine_identity(REPO)
     except Exception:
         identity = None
+    supervisor = _stop_supervisor()
     names = list(_load_services().keys())
-    stopped = [_stop_service(name) for name in names]
+    stopped = []
+    if not supervisor.get("stopped"):
+        stopped = [_stop_service(name) for name in names]
     _emit(args, {
         "stopped": True,
         "role": (identity or {}).get("machine_role"),
+        "supervisor": supervisor,
         "services": stopped,
     })
     return 0
@@ -1095,6 +1274,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--dirs", nargs="*", metavar="DIR",
                         help="Working directories for your AI agent (default: current directory)")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing configuration")
+    p_init.add_argument("--yes-shell-profile", action="store_true", help="Add ANTHROPIC_BASE_URL to the detected shell profile")
+    p_init.add_argument("--no-shell-profile", action="store_true", help="Do not offer to edit the shell profile")
     p_init.set_defaults(func=cmd_init)
 
     p_start = sub.add_parser("start", help="Start Atested governance services")

@@ -246,6 +246,7 @@ def test_package_manifest_fields():
     assert manifest["range_end_sequence"] == 12
     assert manifest["record_count"] == 3
     assert manifest["intended_recipient"] == "auditor@example.com"
+    assert "public_key_pem" in manifest
 
     enc = manifest["encryption"]
     assert enc["algorithm"] == "AES-256-GCM"
@@ -585,6 +586,8 @@ def test_viewer_has_ed25519_verification():
     assert "Ed25519" in viewer
     assert "verifyEd25519Signature" in viewer or "verifySignature" in viewer
     assert "isEd25519Available" in viewer
+    assert "publicKeyInfo" in viewer
+    assert "state.manifest.public_key_pem" in viewer
 
 
 def test_viewer_has_verification_levels():

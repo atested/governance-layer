@@ -18,6 +18,9 @@ for _p in (str(SCRIPTS_DIR), str(MCP_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import atested_cli  # noqa: E402
+import process_supervisor  # noqa: E402
+
 
 def _run_cli(args, env_overrides=None):
     """Run the CLI as a subprocess and return (rc, stdout, stderr)."""
@@ -201,6 +204,31 @@ def test_start_primary_lifecycle_no_services():
         assert status["machine"]["role"] == "primary"
         assert status["machine"]["registry"]["registry_present"] is True
     print("PASS: test_start_primary_lifecycle_no_services")
+
+
+def test_supervisor_status_paths_and_service_specs():
+    primary_specs = process_supervisor.build_service_specs("primary", "127.0.0.1", 8765)
+    remote_specs = process_supervisor.build_service_specs("remote", "127.0.0.1", 8765)
+    assert [spec["name"] for spec in primary_specs] == ["proxy", "dashboard", "sync_service"]
+    assert [spec["name"] for spec in remote_specs] == ["proxy", "dashboard"]
+    assert any("scripts/sync_service.py" in part for part in primary_specs[-1]["argv"])
+    print("PASS: test_supervisor_status_paths_and_service_specs")
+
+
+def test_shell_profile_helpers_add_anthropic_base_url(tmp_path):
+    profile = tmp_path / ".zshrc"
+    result = atested_cli._add_anthropic_base_url_to_profile(profile)
+    assert result["updated"] is True
+    text = profile.read_text(encoding="utf-8")
+    assert "ANTHROPIC_BASE_URL=http://localhost:8080/anthropic" in text
+
+    second = atested_cli._add_anthropic_base_url_to_profile(profile)
+    assert second["updated"] is False
+    assert profile.read_text(encoding="utf-8").count("ANTHROPIC_BASE_URL=") == 1
+
+    assert atested_cli._profile_path_for_shell("/bin/zsh", tmp_path) == tmp_path / ".zshrc"
+    assert atested_cli._profile_path_for_shell("/bin/fish", tmp_path) is None
+    print("PASS: test_shell_profile_helpers_add_anthropic_base_url")
 
 
 def test_restore_verify_primary_runtime():
