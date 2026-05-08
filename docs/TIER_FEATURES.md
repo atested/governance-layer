@@ -44,9 +44,10 @@ Controls how many machines can share a single license.
 | Team | Unlimited |
 | Institution | Unlimited |
 
-Peer-to-peer sharing (adding additional machines) is available starting at
-Personal Plus. The sharing machine runs a temporary HTTP server; the joining
-machine connects via IP or UDP auto-discovery.
+Multi-machine governance is available starting at Personal Plus. The first
+machine is the primary. Additional machines join as remotes after license
+authorization and local primary-side confirmation. Remotes govern locally,
+write their own signed chains, and sync verified records to the primary.
 
 ## Communications Slots
 
@@ -88,7 +89,7 @@ All tiers include:
 - Evidence package export
 
 Features that vary by tier:
-- **Personal Plus and above**: Multi-machine support, peer sharing
-- **Crew and above**: Shared governance chain, multi-user governance, team activity view
+- **Personal Plus and above**: Multi-machine support and machine-scoped reporting
+- **Crew and above**: Unlimited machines, multi-user governance, team activity view
 - **Team and above**: Role-based governance, advanced reporting, access control
 - **Institution**: Custom integrations, compliance reporting, enterprise analytics, dedicated support

@@ -19,7 +19,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'What happened in the selected period',
     accent: 'green',
     defaultRange: '7d',
-    groups: ['decision', 'tool', 'rule'],
+    groups: ['decision', 'tool', 'rule', 'machine'],
   },
   {
     id: 'denial-patterns',
@@ -27,7 +27,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Where policy is stopping risky activity',
     accent: 'amber',
     defaultRange: '30d',
-    groups: ['tool', 'rule', 'user'],
+    groups: ['tool', 'rule', 'user', 'machine'],
   },
   {
     id: 'operator-comparison',
@@ -35,7 +35,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Compare activity by user or agent identity',
     accent: 'blue',
     defaultRange: '30d',
-    groups: ['user', 'decision', 'tool', 'rule'],
+    groups: ['user', 'decision', 'tool', 'rule', 'machine'],
   },
   {
     id: 'audit-evidence',
@@ -43,7 +43,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Evidence summary for external review',
     accent: 'purple',
     defaultRange: 'all',
-    groups: ['decision', 'action_type', 'tool', 'rule'],
+    groups: ['decision', 'action_type', 'tool', 'rule', 'machine'],
   },
   {
     id: 'unusual-activity',
@@ -51,7 +51,7 @@ const REPORT_TEMPLATES = [
     subtitle: 'Events outside normal operating patterns',
     accent: 'red',
     defaultRange: '7d',
-    groups: ['tool', 'hour', 'user'],
+    groups: ['tool', 'hour', 'user', 'machine'],
   },
   {
     id: 'telemetry-summary',
@@ -126,6 +126,7 @@ export function openReportsWindow(trigger) {
     data: null,
     tier: 'personal',
     includeArchives: false,
+    machineFilter: '',
   };
 
   _buildUI(state);
@@ -153,6 +154,7 @@ function _applyStaticTooltips(state) {
     ['#rp-stat-allow', 'Allowed operations in the report range.'],
     ['#rp-stat-deny', 'Denied operations in the report range.'],
     ['#rp-stat-rate', 'Denied records divided by total records.'],
+    ['#rp-machine-filter', 'Filter reports by originating machine.'],
   ]);
   state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
     setTooltip(btn, `Set the report range to ${btn.textContent.trim()}.`);
@@ -219,6 +221,12 @@ function _buildUI(state) {
               <button class="rp-dtoggle" data-source="all">+ Archives</button>
             </div>
           </div>
+          <label class="rp-fp-label rp-machine-option">
+            Machine
+            <select class="rp-select" id="rp-machine-filter">
+              <option value="">All machines</option>
+            </select>
+          </label>
           <div class="rp-fp-actions">
             <span class="rp-fp-mini-label" style="margin:0 4px;align-self:center;text-transform:none;font-size:0.72rem">Export:</span>
             <button class="rp-btn rp-btn-export rp-export-btn" data-format="pdf" disabled>PDF</button>
@@ -321,6 +329,11 @@ function _wireControls(state) {
     _loadReport(state);
   });
 
+  el.querySelector('#rp-machine-filter').addEventListener('change', (e) => {
+    state.machineFilter = e.target.value;
+    _loadReport(state);
+  });
+
   // Export format buttons
   el.querySelectorAll('.rp-export-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -328,6 +341,43 @@ function _wireControls(state) {
       _exportReport(state);
     });
   });
+}
+
+function _applyMachineParams(params, machineFilter) {
+  if (!machineFilter) return;
+  if (machineFilter === '__primary__') params.machine_scope = 'primary';
+  else params.machine_ids = machineFilter;
+}
+
+function _populateMachineSelector(state, reportData) {
+  const select = state.el.querySelector('#rp-machine-filter');
+  if (!select) return;
+  const current = state.machineFilter || '';
+  const machines = new Map();
+  const registryMachines = reportData?.unified_view?.machine_registry?.machines || [];
+  for (const machine of registryMachines) {
+    if (!machine?.machine_id) continue;
+    machines.set(machine.machine_id, _machineLabel(machine));
+  }
+  const opts = [
+    '<option value="">All machines</option>',
+    '<option value="__primary__">Primary only</option>',
+  ];
+  for (const [machineId, label] of [...machines.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+    const sel = machineId === current ? ' selected' : '';
+    opts.push(`<option value="${_escAttr(machineId)}"${sel}>${_esc(label)}</option>`);
+  }
+  select.innerHTML = opts.join('');
+}
+
+function _machineLabel(machine) {
+  const id = machine?.machine_id || '';
+  if (!id) return 'unknown';
+  const name = machine?.display_name || machine?.machine_name || '';
+  const role = machine?.role || machine?.machine_role || '';
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...` : id;
+  if (name && name !== id) return `${name} (${role || shortId})`;
+  return role ? `${role}:${shortId}` : shortId;
 }
 
 function _readTimeFilters(state) {
@@ -458,6 +508,7 @@ async function _loadReport(state) {
   if (state.startTime) params.start_time = state.startTime;
   if (state.endTime) params.end_time = state.endTime;
   if (state.includeArchives) params.include_archives = '1';
+  _applyMachineParams(params, state.machineFilter);
 
   if (template.id === 'telemetry-summary') {
     await flushTelemetrySummary();
@@ -497,6 +548,7 @@ async function _loadReport(state) {
   for (const [group, res] of results) grouped[group] = res.data;
 
   const base = grouped[groupKeys[0]] || {};
+  _populateMachineSelector(state, base);
   state.data = _composeReportData(template, grouped, base, params);
 
   // Fetch supplemental data for specific reports
@@ -558,6 +610,8 @@ function _composeReportData(template, grouped, base, params) {
     total_records: total,
     decision_summary: summary,
     deny_rate: denyRate,
+    machine_scope: base.machine_scope || params.machine_scope || 'all',
+    machine_ids: base.machine_ids || (params.machine_ids ? [params.machine_ids] : []),
     groups: grouped,
     findings: _buildFindings(template.id, grouped, { total, allow, deny, denyRate }),
   };
@@ -709,6 +763,7 @@ function _renderReportView(state) {
 
   if (d.report_id === 'governance-summary') {
     body.appendChild(_section('Decision mix', _barList(state, (d.groups.decision?.groups || []).filter(g => g.key === 'ALLOW' || g.key === 'DENY'), 'decision')));
+    body.appendChild(_section('Machine activity', _barList(state, d.groups.machine?.groups || [], 'machine')));
     body.appendChild(_section('Most active actions', _barList(state, d.groups.tool?.groups || [], 'tool')));
     body.appendChild(_section('Most active rules', _barList(state, d.groups.rule?.groups || [], 'rule')));
   } else if (d.report_id === 'denial-patterns') {
@@ -719,6 +774,7 @@ function _renderReportView(state) {
     body.appendChild(_section('User activity', _compactTable(d.groups.user?.groups || [], ['User', 'Records', 'DENY', 'Deny rate'])));
     body.appendChild(_section('Decision balance', _barList(state, d.groups.decision?.groups || [], 'decision')));
     body.appendChild(_section('Action distribution', _barList(state, d.groups.tool?.groups || [], 'tool')));
+    body.appendChild(_section('Machine distribution', _barList(state, d.groups.machine?.groups || [], 'machine')));
     body.appendChild(_section('Rules triggered', _barList(state, d.groups.rule?.groups || [], 'rule')));
     if (d.activityEntries) {
       body.appendChild(_section('User detail', _userDetailSection(d.activityEntries)));
@@ -730,6 +786,7 @@ function _renderReportView(state) {
     // Item 3: Action breakdown by action_type with allow/deny counts
     body.appendChild(_section('Action breakdown', _actionBreakdownTable(d.groups.action_type?.groups || [])));
     body.appendChild(_section('Rules summary', _compactTable(d.groups.rule?.groups || [], ['Rule', 'Records', 'DENY'])));
+    body.appendChild(_section('Machine scope', _compactTable(d.groups.machine?.groups || [], ['Machine', 'Records', 'DENY'])));
     if (d.approvals) {
       body.appendChild(_section('Active approvals', _approvalsSection(d.approvals)));
     }
@@ -766,6 +823,7 @@ function _buildFindings(reportId, grouped, totals) {
   const topUser = _topGroup(grouped.user);
   const topCategory = _topGroup(grouped.category);
   const topRule = _topGroup(grouped.rule);
+  const machineCount = (grouped.machine?.groups || []).length;
   const denyPct = (totals.denyRate * 100).toFixed(1) + '%';
 
   if (reportId === 'denial-patterns') {
@@ -805,9 +863,9 @@ function _buildFindings(reportId, grouped, totals) {
   }
   return [
     { label: 'Records in scope', value: _fmtNum(totals.total), tone: 'green', detail: 'Total records in the selected timeframe.' },
+    { label: 'Machines', value: _fmtNum(machineCount), tone: 'blue', detail: 'Distinct machines represented in this report.' },
     { label: 'ALLOW', value: _fmtNum(totals.allow), tone: 'green', detail: 'Operations allowed by policy.' },
     { label: 'DENY', value: _fmtNum(totals.deny), tone: totals.deny ? 'amber' : 'green', detail: `${denyPct} deny rate.` },
-    { label: 'Top action', value: topTool?.key || 'N/A', tone: 'blue', detail: topTool ? `${_fmtNum(topTool.count || 0)} records.` : 'No action data available.' },
   ];
 }
 
@@ -1442,6 +1500,8 @@ function _navigateToActivity(state, groupBy, groupKey) {
     opts.eventTypeFilter = groupKey;
   } else if (groupBy === 'decision') {
     opts.decisionFilter = groupKey;
+  } else if (groupBy === 'machine') {
+    opts.machineFilter = groupKey;
   } else if (groupBy === 'hour') {
     // Hour grouping: set time range to that specific hour
     // groupKey is like "14:00"
@@ -1485,6 +1545,8 @@ async function _exportReport(state) {
     report_title: state.data.report_title,
     generated_at: state.data.generated_at,
     time_range: state.data.time_range,
+    machine_scope: state.data.machine_scope,
+    machine_ids: state.data.machine_ids,
     summary: {
       total_records: state.data.total_records,
       decision_summary: state.data.decision_summary,
@@ -1514,6 +1576,8 @@ async function _exportReport(state) {
       start_time: state.startTime,
       end_time: state.endTime,
       active_range: state.activeRange,
+      machine_scope: state.data.machine_scope || 'all',
+      machine_ids: state.data.machine_ids || [],
     },
     record_count: state.data.total_records || 0,
     chain_source: 'live',

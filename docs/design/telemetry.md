@@ -96,6 +96,10 @@ implementation detail.
 
 One payload per install per day.
 
+For multi-machine installs, the "install" sender is the primary. Remotes never
+transmit telemetry externally. They sync local summary counters to the primary,
+and the primary builds one aggregate payload for the installation.
+
 ### Format
 
 JSON. Published schema on atested.com with a version field. v1 is the first
@@ -118,6 +122,7 @@ version.
 | `category_distribution` | object | Tool-call categories (from the classifier's category system — e.g., `file_read`, `file_write`, `network`, `command_execution`) mapped to counts. No specific tool names, no paths |
 | `confidence_tier_distribution` | object | Classifier confidence tiers (`Tier 1` through `Tier 4`) mapped to counts |
 | `rule_hit_distribution` | object | Policy rule identifiers (stable IDs from `capabilities/policy-rules.json`) mapped to counts. No rule content, just which rules fired and how often |
+| `machine_coverage` | object | Aggregate machine coverage counts for multi-machine installs: total machines, reporting machines, stale/offline machines, and primary/remote counts. No hostnames or machine names |
 
 ### Excluded fields
 
@@ -130,6 +135,9 @@ The following are explicitly absent from the payload:
 - Content of denied operations
 - Timestamps with resolution finer than one day
 - Any free-text fields
+
+Machine IDs are local governance identifiers. They are not included in external
+telemetry payloads; telemetry uses counts only.
 
 The aggregation layer is responsible for enforcing these exclusions. A telemetry
 payload that contains a field not listed in the v1 schema is a schema violation
@@ -154,6 +162,7 @@ the inputs plus a fingerprint of the formatted output.
 | `schema_version` | Matching the payload |
 | `aggregated_inputs` | The full set of numerical inputs fed to the formatter: counts, distributions, version info — everything the payload was computed from |
 | `payload_fingerprint` | SHA-256 of the exact bytes of the formatted outgoing JSON payload |
+| `machine_coverage` | Machine coverage counts included in the outgoing payload |
 | `http_status` | HTTP response status code from the telemetry endpoint |
 | `http_response_fingerprint` | SHA-256 of the response body (proves what was received back, including any embedded notifications) |
 

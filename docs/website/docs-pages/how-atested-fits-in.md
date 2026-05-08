@@ -39,3 +39,16 @@ An agent running through Atested behaves normally for allowed operations. Tool c
 For denied operations, the agent receives a text block where the tool call would have been. The text says the operation was denied, names the policy rule, and gives the reason. The model reads this denial, understands the operation wasn't permitted, and adapts. Most agents handle denials gracefully. They try an alternative approach or ask the operator for guidance.
 
 The agent never calls a special governance API. It never imports a governance library. It uses its normal tools (Read, Write, Bash, Grep, whatever) and the proxy handles governance transparently at the transport layer.
+
+## Multi-machine governance
+
+Every machine runs the same local governance boundary. A remote machine does
+not ask the primary before making ALLOW or DENY decisions. It writes its own
+signed local chain using its own machine ID and signing key.
+
+The primary is the only machine that talks to Atested servers. Remotes sync
+signed chain segments to the primary. The primary verifies the remote material,
+stores it as a sidecar, and appends an import envelope to its own chain. The
+dashboard's unified view merges primary-local records and verified remote
+records for operations, reports, and evidence export without rewriting remote
+history.

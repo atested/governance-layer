@@ -139,6 +139,7 @@ export function renderMainPage() {
     <div class="mp-title-pane">
       <div class="mp-title-accent"></div>
       <h1 class="mp-page-title">Atested Operations Dashboard</h1>
+      <div class="mp-machine-status" id="mp-machine-status">Machine role loading</div>
     </div>
     <div class="mp-top-panes">
       <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">
@@ -388,6 +389,21 @@ export async function loadMainPageData() {
 
     const approved = s.approval_snapshot?.active_approvals ?? 0;
     _setMetric('mv-approved', _fmtNum(approved));
+
+    const machine = s.machine || {};
+    const role = machine.role === 'remote' ? 'Remote' : 'Primary';
+    const statusEl = _page.querySelector('#mp-machine-status');
+    if (statusEl) {
+      if (machine.role === 'remote') {
+        const pending = machine.sync?.pending_records ?? 0;
+        const last = machine.sync?.last_successful_sync_utc ? _formatTime24(machine.sync.last_successful_sync_utc) : 'never synced';
+        statusEl.textContent = `${role} · ${_fmtNum(pending)} pending · ${last}`;
+        statusEl.classList.toggle('mp-machine-warning', !!pending || machine.sync?.degraded);
+      } else {
+        statusEl.textContent = `${role} · ${_fmtNum(machine.connected_remote_count ?? 0)} connected remotes`;
+        statusEl.classList.toggle('mp-machine-warning', (machine.version_warnings || []).length > 0);
+      }
+    }
   }
 
   // Recent Activity feed
@@ -642,6 +658,17 @@ mpStyles.textContent = `
     text-align: center;
     margin: 0;
     padding: 18px 20px;
+  }
+  .mp-machine-status {
+    border-top: 1px dashed rgba(255,255,255,0.08);
+    color: #9cc9ff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    text-align: center;
+    padding: 0 20px 14px;
+  }
+  .mp-machine-warning {
+    color: #d29922;
   }
 
   /* ---- Top display panes ---- */

@@ -558,6 +558,107 @@ def _json_response(handler, data, status=200):
     handler.wfile.write(body)
 
 
+def _line_count(path: Path) -> int:
+    try:
+        return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+    except OSError:
+        return 0
+
+
+def _sync_freshness_summary() -> dict:
+    try:
+        from approval_store import approval_store_hash
+        from policy_eval_v2 import compute_policy_rules_hash
+
+        bundle = _read_json_file(RUNTIME / "sync" / "state_bundle.json", {})
+        policy_rules = _read_json_file(REPO / "capabilities" / "policy-rules.json", {})
+        if not isinstance(bundle, dict):
+            bundle = {}
+        if not isinstance(policy_rules, dict):
+            policy_rules = {}
+        return {
+            "local_approval_store_hash": approval_store_hash(_get_approval_store()),
+            "local_policy_rules_hash": compute_policy_rules_hash(policy_rules),
+            "received_approval_store_hash": bundle.get("approval_store_hash"),
+            "received_policy_rules_hash": bundle.get("policy_rules_hash"),
+            "received_at_utc": bundle.get("received_at_utc"),
+        }
+    except Exception:
+        return {}
+
+
+def _machine_status_snapshot() -> dict:
+    try:
+        from machine_identity import load_machine_identity, load_machine_registry
+
+        identity = load_machine_identity(REPO) or {}
+        role = identity.get("machine_role") or "primary"
+        registry = load_machine_registry(REPO) or {}
+        sync_dir = RUNTIME / "sync"
+        sync_config = _read_json_file(sync_dir / "config.json", {})
+        sync_state = _read_json_file(sync_dir / "client_state.json", {})
+        degraded = _read_json_file(sync_dir / "degraded.json", {})
+        pending_triggers = _read_json_file(sync_dir / "pending_triggers.json", {})
+        if not isinstance(sync_config, dict):
+            sync_config = {}
+        if not isinstance(sync_state, dict):
+            sync_state = {}
+        if not isinstance(degraded, dict):
+            degraded = {}
+        if not isinstance(pending_triggers, dict):
+            pending_triggers = {}
+
+        synced_count = int(sync_state.get("last_synced_line_count") or 0)
+        chain_count = _line_count(CHAIN)
+        if synced_count < 0 or synced_count > chain_count:
+            synced_count = 0
+        pending_records = max(0, chain_count - synced_count)
+
+        machines = registry.get("machines", []) if isinstance(registry, dict) else []
+        remotes = [m for m in machines if m.get("role") == "remote"]
+        connected_remotes = [m for m in remotes if m.get("last_sync_utc")]
+        version_warnings = [
+            {
+                "machine_id": m.get("machine_id"),
+                "display_name": m.get("display_name"),
+                "product_version": m.get("product_version"),
+                "sync_protocol_version": m.get("sync_protocol_version"),
+                "version_status": m.get("version_status"),
+                "minimum_supported_version": m.get("minimum_supported_version"),
+            }
+            for m in remotes
+            if m.get("version_status") in {"stale", "stale_update_required", "protocol_incompatible"}
+        ]
+
+        return {
+            "identity": identity,
+            "role": role,
+            "is_primary": role == "primary",
+            "is_remote": role == "remote",
+            "registry": registry,
+            "registry_hash": registry.get("registry_hash") if isinstance(registry, dict) else None,
+            "remotes": remotes,
+            "remote_count": len(remotes),
+            "connected_remote_count": len(connected_remotes),
+            "version_warnings": version_warnings,
+            "sync": {
+                "enabled": bool(sync_config.get("sync_enabled", role == "remote")),
+                "primary_url": sync_config.get("primary_url"),
+                "join_status": sync_config.get("join_status"),
+                "pending_records": pending_records,
+                "pending_trigger_count": len(pending_triggers.get("pending", [])),
+                "last_successful_sync_utc": sync_state.get("last_successful_sync_utc"),
+                "last_synced_record_hash": sync_state.get("last_synced_record_hash"),
+                "degraded": bool(degraded.get("degraded")),
+                "degraded_reason": degraded.get("reason"),
+                "degraded_detail": degraded.get("detail"),
+                "freshness": _sync_freshness_summary() if role == "remote" else {},
+            },
+        }
+    except Exception as exc:
+        return {"role": "primary", "error": str(exc), "remotes": [], "sync": {}}
+
+
 import threading
 import time as _time_mod
 
@@ -4523,6 +4624,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 CHAIN, _get_verification_tracker(), _get_approval_store(),
                 window=window,
             )
+            data["machine"] = _machine_status_snapshot()
             _json_response(self, data)
 
         elif path == "/api/activity":
@@ -4706,6 +4808,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
             chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
             data = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
+            data["machine"] = _machine_status_snapshot()
             _json_response(self, data)
             _maybe_trigger_archive()
 
@@ -5064,6 +5167,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "signing": signing_info,
                     "proxy": proxy_info,
                     "license_posture": posture,
+                    "machine": _machine_status_snapshot(),
                 })
             except Exception as exc:
                 _json_response(self, {"error": str(exc)}, 500)

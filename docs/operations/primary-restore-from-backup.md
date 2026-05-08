@@ -12,8 +12,11 @@ The backup must include these `gov_runtime` contents:
 
 - `LOGS/decision-chain.jsonl`
 - `machines/registry.json`
+- `machine.json` or equivalent local machine identity file
 - `.atested-signing-key.pem`
 - `imports/` when remote material has been imported
+- sync state files that track last imported remote tails, segment IDs, and
+  replay protection
 - `LOGS/archives/` and archive manifests when chain archiving has run
 - `LOGS/telemetry/` for primary and aggregated telemetry continuity
 - `LOGS/update_notifications.jsonl` and Communications logs
@@ -54,7 +57,9 @@ re-paired. A changed primary key is treated as a new trust relationship.
 
 - required runtime files exist
 - machine registry hash verifies
+- local machine identity matches the primary registry entry
 - governance chain integrity verifies
+- import sidecars and manifests match hashes recorded by import envelopes
 - optional restore components are present or reported absent
 
 The command exits `0` only when the restored runtime is usable as a primary.

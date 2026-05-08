@@ -30,6 +30,8 @@ The export scope is determined by the current view state:
 - **Range**: the time window or sequence range currently selected
 - **Filters**: any active filters (report ID, user, tool, decision type)
 - **Chain source**: live chain or an archived chain segment
+- **Machine scope**: all machines, primary only, one machine, or selected
+  machines when the unified multi-machine view is used
 
 ### Download
 
@@ -50,17 +52,26 @@ Evidence packages are encrypted archives for sharing with external parties.
    - Encrypted chain data (AES-256-GCM)
    - A self-contained HTML viewer for decryption and verification
    - Integrity metadata (predecessor hash, operator identity)
+   - Machine registry snapshot when machine scope is used
+   - Relevant import envelopes and sidecar hashes for imported remote records
 
 ### Package Sources
 
 Evidence packages can be built from:
 - The live governance chain
 - An archived chain segment (produced by size-based auto-archiving)
+- Verified imported remote sidecars selected through the unified view
 
 Archived chains are available as package sources because auto-archiving
 preserves the full hash-linked record. An evidence package from an archive
 covers the same time period the archive represents and carries the same
 integrity guarantees as a live-chain package.
+
+In multi-machine exports, the primary-local records and imported remote records
+retain their original machine attribution. Remote-originated records include
+`machine_id`, `event_timestamp_utc`, and `primary_import_timestamp_utc`. The
+package includes the import evidence needed to tie remote records back to the
+material the primary verified.
 
 ### Verification
 

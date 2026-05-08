@@ -100,6 +100,21 @@ function _buildContent(data, recordId) {
   subtitle.innerHTML = `<span class="rd-subtitle-id">${_esc(recordId)}</span>`;
   el.appendChild(subtitle);
 
+  if ((chain.machine_role || '').toLowerCase() === 'remote' || chain.primary_import_timestamp_utc) {
+    const machine = document.createElement('div');
+    machine.className = 'rd-machine-banner';
+    machine.innerHTML = `
+      <div class="rd-machine-title">Remote machine record</div>
+      <div class="rd-machine-grid">
+        <span>Machine</span><code>${_esc(chain.machine_id || 'unknown')}</code>
+        <span>Event time</span><code>${_esc(chain.event_timestamp_utc || chain.timestamp_utc || '\u2014')}</code>
+        <span>Primary import</span><code>${_esc(chain.primary_import_timestamp_utc || '\u2014')}</code>
+      </div>
+    `;
+    setTooltip(machine, 'This record originated on a remote machine and was accepted by the primary during sync.');
+    el.appendChild(machine);
+  }
+
   // Record pane — context card with kv fields
   const recordPane = document.createElement('div');
   recordPane.className = 'rd-pane';
@@ -199,6 +214,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
       { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014', tooltip: 'Classifier evidence confidence used during policy evaluation.' },
       { key: 'Action Type', value: rec.action_type || rec.event_type || '\u2014', tooltip: 'Evidence-based operation category.' },
       { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014', tooltip: 'Governance family or policy scope for the record.' },
+      { key: 'Machine', value: _machineLabel(chain || rec), variant: 'code', tooltip: 'Machine that produced the governance record.' },
     ];
     if (decision === 'DENY') {
       items.push({ key: 'Denial Reason', value: rec.denial_reason || rec.deny_reason || 'Policy denied', variant: 'danger', tooltip: 'Evidence or policy reason Atested used to deny the operation.' });
@@ -206,7 +222,10 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     items.push({ key: 'Verification State', value: rec.verification_state || '\u2014', variant: rec.verification_state === 'verified' ? 'success' : undefined, tooltip: 'Whether this record has been independently verified.' });
     items.push({ key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' });
     items.push({ key: 'Signature Status', value: (chain.signature || rec.signature) ? 'Signed' : 'Unsigned', tooltip: 'Whether this chain record carries an Ed25519 signature.' });
-    items.push({ key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' });
+    items.push({ key: 'Event Time', value: _formatTimestamp(rec.event_timestamp_utc || chain.event_timestamp_utc || rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp claimed by the originating machine.' });
+    if (chain.primary_import_timestamp_utc) {
+      items.push({ key: 'Primary Import', value: _formatTimestamp(chain.primary_import_timestamp_utc), tooltip: 'Timestamp when the primary accepted this remote record.' });
+    }
     kv.items = items;
     frag.appendChild(kv);
 
@@ -221,6 +240,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
       { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014', tooltip: 'Observed operation type outside the mediation boundary.' },
       { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Observed path, command, URL, or artifact.' },
       { key: 'Source', value: rec.source || '\u2014', tooltip: 'Runtime source that reported the observation.' },
+      { key: 'Machine', value: _machineLabel(chain || rec), variant: 'code', tooltip: 'Machine that produced the governance record.' },
       { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
@@ -238,6 +258,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
       { key: 'Operator', value: rec.operator_identity || rec.approving_operator || rec.operator || '\u2014', tooltip: 'Operator who approved or revoked the exception.' },
       { key: 'Scope', value: rec.governed_family || rec.scope || '\u2014', tooltip: 'Governance family the approval applies to.' },
       { key: 'Context', value: rec.deployment_context || rec.context || '\u2014', tooltip: 'Deployment context for this approval event.' },
+      { key: 'Machine', value: _machineLabel(chain || rec), variant: 'code', tooltip: 'Machine that produced the governance record.' },
       { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
@@ -254,6 +275,7 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
       { key: 'Surface', value: rec.governed_family || '\u2014', tooltip: 'Governance surface whose verification state changed.' },
       { key: 'Previous State', value: rec.previous_state || '\u2014', tooltip: 'Verification state before this event.' },
       { key: 'New State', value: rec.new_state || rec.current_state || '\u2014', tooltip: 'Verification state after this event.' },
+      { key: 'Machine', value: _machineLabel(chain || rec), variant: 'code', tooltip: 'Machine that produced the governance record.' },
       { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },
     ];
@@ -343,6 +365,14 @@ function _formatTimestamp(iso) {
   } catch { return iso; }
 }
 
+function _machineLabel(record) {
+  const id = record?.machine_id || '';
+  if (!id) return 'unknown';
+  const role = record?.machine_role || '';
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...` : id;
+  return role ? `${role}:${shortId}` : shortId;
+}
+
 function _resolvedRecordId(data, fallback) {
   const chain = data?.chain_record || {};
   const sidecar = data?.sidecar_record || {};
@@ -396,6 +426,38 @@ rdStyles.textContent = `
     font-family: "JetBrains Mono", monospace;
     font-size: 0.75rem;
     color: #6b7280;
+    word-break: break-all;
+  }
+
+  .rd-machine-banner {
+    border: 1px solid rgba(102,153,204,0.28);
+    background: rgba(102,153,204,0.08);
+    border-radius: 2px;
+    padding: 12px 14px;
+    margin: 0 0 16px;
+  }
+  .rd-machine-title {
+    color: #9cc9ff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rd-machine-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 12px;
+    align-items: start;
+  }
+  .rd-machine-grid span {
+    color: #8b919a;
+    font-size: 0.76rem;
+  }
+  .rd-machine-grid code {
+    color: #e4e6eb;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.76rem;
     word-break: break-all;
   }
 

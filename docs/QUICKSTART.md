@@ -69,6 +69,39 @@ python3 -m proxy.server --upstream https://api.openai.com
 python3 -m proxy.server --user-identity "dev-machine-1"
 ```
 
+For the integrated lifecycle command:
+
+```bash
+./atested start
+```
+
+On a new runtime, first start creates the local machine identity and primary
+registry. A single-machine install continues to behave like the existing local
+product, with the extra machine fields included in new records.
+
+### Multi-machine setup
+
+Personal tier is single-machine. Personal Plus and higher can add remotes.
+Every machine governs locally; remotes sync verified signed records to the
+primary.
+
+Start the primary:
+
+```bash
+./atested start --role primary
+```
+
+Join a remote:
+
+```bash
+./atested start --role remote --primary http://PRIMARY_HOST:PORT
+```
+
+The remote creates its own machine identity and sends a signed join request.
+The primary requires local operator confirmation before adding the remote to
+the machine registry. After that, sync returns approvals, policy state,
+Communications messages, and version information to the remote.
+
 ---
 
 ## 4. Point your agent at the proxy

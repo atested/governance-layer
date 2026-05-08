@@ -93,6 +93,30 @@ Options:
 - `--host 0.0.0.0` to bind to all interfaces
 - `--user-identity "my-dev-machine"` to label this install in the chain (or set `ATESTED_USER_LABEL` in your environment)
 
+## Multi-machine setup
+
+The first machine in an installation is the primary. Additional licensed
+machines join as remotes. Every machine governs locally and writes its own
+signed chain; remotes sync verified records to the primary.
+
+Start the primary:
+
+```bash
+./atested start --role primary
+```
+
+Join a remote:
+
+```bash
+./atested start --role remote --primary http://PRIMARY_HOST:PORT
+```
+
+The remote creates its own machine identity and sends a signed join request.
+The primary requires local operator confirmation before adding the remote to
+the machine registry. Personal tier is single-machine. Personal Plus supports
+up to three machines. Crew, Team, and Institution support multi-machine
+deployments according to license terms.
+
 ## Point your agent at the proxy
 
 This is the one configuration change. Tell your agent to send API traffic through Atested instead of directly to the model provider.

@@ -987,13 +987,19 @@ def audit_record_detail(
 
     Returns the full chain record plus any matching sidecar record.
     """
-    rows = load_chain_rows(chain_path)
+    from unified_readout import load_unified_records
+
+    try:
+        rows, _unified_context = load_unified_records(REPO, chain_path)
+    except Exception:
+        rows = load_chain_rows(chain_path)
     match: Optional[dict] = None
     for rec in rows:
         if record_id in (
             rec.get("request_id", ""),
             rec.get("event_id", ""),
             rec.get("record_hash", ""),
+            rec.get("import_envelope_hash", ""),
         ):
             match = rec
             break
@@ -1124,6 +1130,9 @@ def audit_report(
                 key = ts[11:13] + ":00" if len(ts) >= 13 else "Unknown"
             else:
                 key = "Unknown"
+
+        elif group_by == "machine":
+            key = rec.get("machine_id") or "unknown"
 
         groups[key] += 1
         if pd == "DENY":

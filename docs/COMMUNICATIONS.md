@@ -39,6 +39,17 @@ After submission, requests progress through these states:
 Status updates arrive through the telemetry notification channel. Each status
 change is recorded as a `notification_received` event in the chain.
 
+## Multi-Machine Relay
+
+In a multi-machine install, only the primary talks to Atested servers. The
+primary receives Communications messages and stores them with stable message
+IDs. Remotes receive pending messages during sync and deduplicate by message
+ID.
+
+Remote dashboards show relayed messages locally, but remotes do not contact
+Atested servers for Communications. If a remote is offline, it receives pending
+messages the next time sync succeeds.
+
 ## Submitting a Request
 
 1. Open the Communications window.

@@ -8,7 +8,7 @@ The dashboard launches alongside the proxy. Once running, open `http://localhost
 
 ## The main page
 
-The main page is what you see between workflows. It shows governance state at a glance: chain health, activity counts, transparency metrics, verification state, and a feed of recent events.
+The main page is what you see between workflows. It shows governance state at a glance: chain health, activity counts, transparency metrics, verification state, machine role, and a feed of recent events. On a primary, it also shows connected remotes and version warnings. On a remote, it shows sync status, pending records, and approval/policy freshness.
 
 **Chain health** shows the event count and chain integrity status. If the chain is intact, this is a green indicator. If a break has been detected, the indicator turns red and tells you where.
 
@@ -22,11 +22,11 @@ The main page is what you see between workflows. It shows governance state at a 
 
 ## Activity
 
-Activity is the chronological feed. Every governed event appears here: mediated decisions, ungoverned observations, approvals, revocations, verification changes.
+Activity is the chronological feed. Every governed event appears here: mediated decisions, ungoverned observations, approvals, revocations, verification changes, and imported remote records.
 
-The table has seven columns: sequence number, timestamp, event type, decision, summary, category, and a detail link. DENY rows get a red-tinted background. Ungoverned observations get amber.
+The table includes sequence number, timestamp, machine, event type, decision, summary, category, and a detail link. DENY rows get a red-tinted background. Ungoverned observations get amber.
 
-Controls: date range filter (from/to inputs), column sorting (click any header), and pagination. Click any row to open the full record detail.
+Controls: date range filter, machine filter, column sorting, and pagination. Click any row to open the full record detail.
 
 ## Approvals
 
@@ -40,7 +40,7 @@ When you encounter a DENY decision that you want to override, the Record Detail 
 
 ## Audit
 
-Audit is for searching the governance chain. Six filters: start time, end time, user identity, tool name, decision (ALLOW/DENY), and event category (mediated decision, verification change, operation approval, file revocation, invocation decision, boundary observation).
+Audit is for searching the governance chain and verified imported remote sidecars. Filters include start time, end time, user identity, tool name, decision (ALLOW/DENY), event category, and machine.
 
 Set your filters and click Search. Results appear in a table with sequence, time, event type, summary, user, and a detail link. Click any row to view the full record.
 
@@ -48,7 +48,7 @@ The Export JSON button at the bottom fetches up to 10,000 matching records and d
 
 ## Record Detail
 
-Record Detail shows the full context of a single governance chain record. You reach it by clicking a row in Activity or Audit.
+Record Detail shows the full context of a single governance chain record. You reach it by clicking a row in Activity or Audit. Remote-originated records show a machine indicator with machine ID, event timestamp, and primary import timestamp.
 
 The view adapts to the record type:
 
@@ -64,7 +64,7 @@ Below the human-readable summary, the full chain record is displayed as JSON wit
 
 ## Reports
 
-Reports generates aggregate views of governance activity. Set a time range and a grouping dimension (tool, user, decision, or category), then click Generate.
+Reports generates aggregate views of governance activity. Set a time range, machine scope, and grouping dimension (tool, user, machine, decision, or category), then click Generate.
 
 The decision summary shows counts for each decision type. Below that, a horizontal bar chart breaks down the results by your chosen grouping. Each bar shows the label, a proportional fill, and the count.
 
@@ -86,17 +86,21 @@ Health shows infrastructure status for the governance system itself.
 
 **License** shows the current license status, tier, trial days remaining (highlighted if under 7 days), and expiration timestamp.
 
+**Machines** shows primary or remote role, connected remotes, per-remote sync status, version, pending records, and approval/policy freshness.
+
 **Recent health events** lists stability log entries: auto-repairs, checkpoints, break detections.
 
 ## Configuration
 
-Configuration lets you view and edit the capability registry.
+Configuration lets you view and edit the capability registry and machine registry.
 
 In view mode, you see the registry hash, integrity status, last verification time, and governed tool count. Below that, a table shows each governed tool with its risk level, allowed directories, and constraint flags (deny hidden paths, deny overwrite, deny executable outputs) plus hard caps.
 
 To edit, enter your license key in the Unlock Editing form. After verification, the table becomes editable. You can add or remove directories for each tool, toggle constraint flags, and adjust hard caps. Save writes the changes. Cancel discards them.
 
 Edit mode requires a valid license key. During the trial period, editing is restricted to paid license holders.
+
+The machine registry shows the local machine ID, registry hash, authorized machines, license status, last sync time, and version for each remote.
 
 ## Feedback
 

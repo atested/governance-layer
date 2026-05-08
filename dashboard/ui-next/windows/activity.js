@@ -17,6 +17,7 @@ import { setTitleMessage } from '../window-messaging.js';
 const COLUMNS = [
   { key: 'sequence_position', label: '#',       width: '50px'  },
   { key: 'timestamp_utc', label: 'Time',       width: '120px' },
+  { key: 'machine_id', label: 'Machine',       width: '120px' },
   { key: 'user_identity', label: 'User',       width: '120px' },
   { key: 'event_category', label: 'Event',     width: '110px' },
   { key: 'policy_decision', label: 'Decision', width: '80px'  },
@@ -29,6 +30,7 @@ const COLUMNS = [
 
 const COLUMN_TOOLTIPS = {
   timestamp_utc: 'When the chain record was written.',
+  machine_id: 'Machine that produced the governance record.',
   event_category: 'The kind of chain event: mediated action, approval, revocation, or observation.',
   policy_decision: 'The policy outcome recorded for this operation.',
   tool_name: 'The governed action name observed by Atested.',
@@ -65,6 +67,7 @@ export function openActivityWindow(trigger, opts = {}) {
     toolFilter: opts.toolFilter || '',
     ruleFilter: '',
     userFilter: '',
+    machineFilter: opts.machineFilter || '',
     // Pagination
     currentPage: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -232,6 +235,12 @@ function _buildUI(state) {
                 <option value="">All users</option>
               </select>
             </label>
+            <label class="aw-fp-label">
+              Machine
+              <select class="aw-select" id="aw-machine-filter">
+                <option value="">All machines</option>
+              </select>
+            </label>
           </div>
           <div class="aw-fp-actions">
             <button class="aw-btn aw-btn-primary" id="aw-apply">Apply</button>
@@ -312,6 +321,7 @@ function _applyStaticTooltips(state) {
     ['#aw-tool-filter', 'Filter by governed action name.'],
     ['#aw-rule-filter', 'Filter by the policy rule that matched.'],
     ['#aw-user-filter', 'Filter by user or agent identity.'],
+    ['#aw-machine-filter', 'Filter by the machine that produced the record.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
     ['#aw-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
@@ -451,6 +461,7 @@ function _readFilters(state) {
   state.toolFilter = el.querySelector('#aw-tool-filter').value;
   state.ruleFilter = el.querySelector('#aw-rule-filter').value;
   state.userFilter = el.querySelector('#aw-user-filter').value;
+  state.machineFilter = el.querySelector('#aw-machine-filter').value;
 }
 
 // ---------- Data loading ----------
@@ -468,6 +479,7 @@ async function _loadData(state) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  _applyMachineParams(params, state.machineFilter);
   if (state.includeArchives) params.include_archives = '1';
 
   const res = await api.getActivity(params);
@@ -477,6 +489,7 @@ async function _loadData(state) {
   }
 
   state.data = res.data.entries || [];
+  state.lastResponse = res.data || {};
   state.totalMatching = res.data.total_matching || state.data.length;
   state.summary = res.data.summary || { allow_count: 0, deny_count: 0, tool_categories: 0 };
 
@@ -506,17 +519,23 @@ function _populateFilterDropdowns(state) {
   const data = state.data;
 
   // Collect unique values from loaded data
-  const actions = new Set(), rules = new Set(), users = new Set();
+  const actions = new Set(), rules = new Set(), users = new Set(), machines = new Map();
   for (const entry of data) {
     const detail = entry.detail || {};
     if (detail.tool_name) actions.add(detail.tool_name);
     if (detail.matched_rule) rules.add(detail.matched_rule);
     if (entry.user_identity) users.add(entry.user_identity);
+    if (entry.machine_id) machines.set(entry.machine_id, _machineLabel(entry));
+  }
+  const registryMachines = state.lastResponse?.unified_view?.machine_registry?.machines || [];
+  for (const machine of registryMachines) {
+    if (machine?.machine_id) machines.set(machine.machine_id, _machineLabel(machine));
   }
 
   _fillSelect(el.querySelector('#aw-tool-filter'), 'All actions', actions, state.toolFilter);
   _fillSelect(el.querySelector('#aw-rule-filter'), 'All rules', rules, state.ruleFilter);
   _fillSelect(el.querySelector('#aw-user-filter'), 'All users', users, state.userFilter);
+  _fillMachineSelect(el.querySelector('#aw-machine-filter'), machines, state.machineFilter);
 }
 
 function _fillSelect(select, defaultLabel, values, currentValue) {
@@ -526,6 +545,19 @@ function _fillSelect(select, defaultLabel, values, currentValue) {
   for (const v of sorted) {
     const sel = v === currentValue ? ' selected' : '';
     opts.push(`<option value="${_escAttr(v)}"${sel}>${_esc(v)}</option>`);
+  }
+  select.innerHTML = opts.join('');
+}
+
+function _fillMachineSelect(select, machines, currentValue) {
+  if (!select) return;
+  const opts = [
+    '<option value="">All machines</option>',
+    '<option value="__primary__">Primary only</option>',
+  ];
+  for (const [machineId, label] of [...machines.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+    const sel = machineId === currentValue ? ' selected' : '';
+    opts.push(`<option value="${_escAttr(machineId)}"${sel}>${_esc(label)}</option>`);
   }
   select.innerHTML = opts.join('');
 }
@@ -657,6 +689,9 @@ function _renderCell(key, entry, detail) {
     case 'timestamp_utc':
       return `<span class="aw-cell-time">${_esc(_formatTime24(entry.timestamp_utc))}</span>`;
 
+    case 'machine_id':
+      return `<span class="aw-cell-tool">${_esc(_machineLabel(entry))}</span>`;
+
     case 'event_category': {
       const cat = entry.event_category || '';
       const display = _EVENT_LABELS[cat] || cat || '\u2014';
@@ -718,6 +753,7 @@ function _rowTooltip(entry, detail) {
   const parts = [];
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
   if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
+  if (entry.machine_id) parts.push(`Machine: ${_machineLabel(entry)}`);
   if (detail.action_type) parts.push(`Category: ${detail.action_type}`);
   if (detail.matched_rule) parts.push(`Rule: ${detail.matched_rule}`);
   if (entry.event_category) parts.push(`Event: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
@@ -803,6 +839,7 @@ async function _exportActivity(state) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  _applyMachineParams(params, state.machineFilter);
 
   const format = state.el.querySelector('#aw-export-format')?.value || 'json';
   const auth = await authorizeExport({
@@ -845,6 +882,7 @@ async function _exportActivity(state) {
 function _getCellValue(key, entry, detail) {
   switch (key) {
     case 'timestamp_utc': return entry.timestamp_utc || '';
+    case 'machine_id': return _machineLabel(entry);
     case 'event_category': return entry.event_category || '';
     case 'policy_decision': return detail.policy_decision || '';
     case 'tool_name': return detail.tool_name || '';
@@ -856,6 +894,22 @@ function _getCellValue(key, entry, detail) {
     case 'matched_rule': return detail.matched_rule || '';
     default: return '';
   }
+}
+
+function _applyMachineParams(params, machineFilter) {
+  if (!machineFilter) return;
+  if (machineFilter === '__primary__') params.machine_scope = 'primary';
+  else params.machine_ids = machineFilter;
+}
+
+function _machineLabel(entry) {
+  const id = entry?.machine_id || '';
+  if (!id) return 'unknown';
+  const name = entry?.display_name || entry?.machine_name || '';
+  const role = entry?.machine_role || entry?.role || '';
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...` : id;
+  if (name && name !== id) return `${name} (${role || shortId})`;
+  return role ? `${role}:${shortId}` : shortId;
 }
 
 function _recordIdForEntry(entry) {

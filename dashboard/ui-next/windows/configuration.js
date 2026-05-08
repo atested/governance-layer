@@ -54,6 +54,8 @@ function _renderAll(state) {
   const mappings = cfg.learned_mappings || {};
   const mappingCount = Object.keys(mappings).length;
   const signing = cfg.signing || {};
+  const machine = cfg.machine || {};
+  const machineRole = machine.role || machine.identity?.machine_role || 'primary';
 
   // Summary stat cards
   const stats = document.createElement('div');
@@ -75,6 +77,10 @@ function _renderAll(state) {
       <span class="cf-stat-label">Signing</span>
       <span class="cf-stat-value ${signing.active ? 'cf-val-green' : 'cf-val-amber'}">${signing.active ? 'Active' : 'Inactive'}</span>
     </div>
+    <div class="cf-stat-card">
+      <span class="cf-stat-label">Machine Role</span>
+      <span class="cf-stat-value ${machineRole === 'remote' ? 'cf-val-amber' : 'cf-val-green'}">${_esc(machineRole === 'remote' ? 'Remote' : 'Primary')}</span>
+    </div>
   `;
   el.appendChild(stats);
 
@@ -93,6 +99,8 @@ function _renderAll(state) {
   bottomRow.appendChild(_buildDiscoveredToolsPane(state, mappings));
   bottomRow.appendChild(_buildSigningProxyPane(state, signing, cfg.proxy || {}));
   el.appendChild(bottomRow);
+
+  el.appendChild(_buildMachineRegistryPane(state, machine));
 }
 
 // ---------- Edit mode pane ----------
@@ -322,6 +330,53 @@ function _buildSigningProxyPane(state, signing, proxy) {
   });
 
   return pane;
+}
+
+function _buildMachineRegistryPane(state, machine) {
+  const registry = machine.registry || {};
+  const machines = registry.machines || [];
+  const remotes = machines.filter(m => m.role === 'remote');
+  const role = machine.role || machine.identity?.machine_role || 'primary';
+  const pane = document.createElement('div');
+  pane.className = 'cf-pane';
+  pane.innerHTML = `
+    <div class="cf-pane-accent ${role === 'remote' ? 'cf-accent-amber' : 'cf-accent-green'}"></div>
+    <div class="cf-pane-header-row">
+      <span class="cf-pane-header">Machine registry</span>
+      <span class="cf-pane-meta">${_esc(role)} · ${machines.length || 1} machine${(machines.length || 1) === 1 ? '' : 's'}</span>
+    </div>
+    <div class="cf-pane-body">
+      <div class="cf-kv-list">
+        <div class="cf-kv"><span class="cf-kv-label">This machine</span><span class="cf-kv-value cf-kv-mono">${_esc(machine.identity?.machine_id || 'unknown')}</span></div>
+        <div class="cf-kv"><span class="cf-kv-label">Registry hash</span><span class="cf-kv-value cf-kv-mono">${_esc(_shortHash(machine.registry_hash || registry.registry_hash || 'N/A'))}</span></div>
+        <div class="cf-kv"><span class="cf-kv-label">Remotes</span><span class="cf-kv-value">${_esc(String(remotes.length))}</span></div>
+      </div>
+      <div class="cf-machine-list">
+        ${machines.length ? machines.map(m => _machineRegistryRow(m)).join('') : '<div class="cf-empty">No registry entries yet.</div>'}
+      </div>
+    </div>
+  `;
+  setTooltip(pane, 'Machine identity, role, sync authorization, and remote version status.');
+  return pane;
+}
+
+function _machineRegistryRow(machine) {
+  const status = machine.license_status || 'unknown';
+  const version = machine.product_version || 'not reported';
+  const lastSync = machine.last_sync_utc || 'never';
+  return `
+    <div class="cf-machine-row">
+      <div>
+        <div class="cf-machine-name">${_esc(machine.display_name || machine.machine_id || 'unknown')}</div>
+        <div class="cf-machine-meta">${_esc(machine.role || 'unknown')} · ${_esc(machine.machine_id || '')}</div>
+      </div>
+      <div class="cf-machine-state">
+        <span>${_esc(status)}</span>
+        <span>${_esc(version)}</span>
+        <span>${_esc(lastSync)}</span>
+      </div>
+    </div>
+  `;
 }
 
 function _applyStaticTooltips(state) {
@@ -635,6 +690,11 @@ function _escAttr(str) {
   return (str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function _shortHash(hash) {
+  if (!hash || hash === 'N/A') return 'N/A';
+  return hash.length > 22 ? `${hash.slice(0, 14)}...${hash.slice(-6)}` : hash;
+}
+
 // ---------- Styles ----------
 
 const cfStyles = document.createElement('style');
@@ -647,7 +707,7 @@ cfStyles.textContent = `
   /* ---- Stat cards ---- */
   .cf-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
     margin-bottom: 20px;
   }
@@ -1071,6 +1131,40 @@ cfStyles.textContent = `
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
+  }
+  .cf-machine-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .cf-machine-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .cf-machine-name {
+    color: #e4e6eb;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+  .cf-machine-meta {
+    color: #8b919a;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    margin-top: 3px;
+    word-break: break-all;
+  }
+  .cf-machine-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    color: #8b919a;
+    font-size: 0.74rem;
+    gap: 3px;
+    min-width: 120px;
   }
 
   /* ---- Grandchild ---- */

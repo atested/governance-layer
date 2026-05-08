@@ -74,6 +74,7 @@ function _renderAll(state) {
   grid.appendChild(_buildStoragePane(h));
   grid.appendChild(_buildUsersPane(h));
   grid.appendChild(_buildLicensePane(h));
+  grid.appendChild(_buildMachinePane(h));
 
   el.appendChild(grid);
 
@@ -221,6 +222,28 @@ function _buildLicensePane(h) {
   }
   if (lic.tier) {
     body.appendChild(_kvRow('Tier', lic.tier));
+  }
+
+  return pane;
+}
+
+function _buildMachinePane(h) {
+  const machine = h.machine || {};
+  const sync = machine.sync || {};
+  const role = machine.role || machine.identity?.machine_role || 'primary';
+  const pane = _pane(role === 'remote' ? 'blue' : 'green', 'Machine status', false);
+  const body = pane.querySelector('.hw-pane-body');
+
+  body.appendChild(_kvRow('Role', role === 'remote' ? 'Remote' : 'Primary', role === 'remote' ? 'blue' : 'green'));
+  if (role === 'primary') {
+    body.appendChild(_kvRow('Connected remotes', _fmtNum(machine.connected_remote_count ?? 0)));
+    body.appendChild(_kvRow('Registered remotes', _fmtNum(machine.remote_count ?? 0)));
+    body.appendChild(_kvRow('Version warnings', _fmtNum((machine.version_warnings || []).length), (machine.version_warnings || []).length ? 'amber' : 'green'));
+  } else {
+    body.appendChild(_kvRow('Sync', sync.degraded ? 'Degraded' : sync.enabled ? 'Enabled' : 'Disabled', sync.degraded ? 'amber' : sync.enabled ? 'green' : 'amber'));
+    body.appendChild(_kvRow('Pending records', _fmtNum(sync.pending_records ?? 0), sync.pending_records ? 'amber' : 'green'));
+    body.appendChild(_kvRow('Last sync', sync.last_successful_sync_utc ? _shortTime(sync.last_successful_sync_utc) : 'Never', sync.last_successful_sync_utc ? 'green' : 'amber'));
+    body.appendChild(_kvRow('Freshness', _freshnessLabel(sync.freshness), _freshnessLabel(sync.freshness) === 'Current' ? 'green' : 'amber'));
   }
 
   return pane;
@@ -675,6 +698,19 @@ function _formatHumanDate(isoStr) {
 
 function _fmtNum(n) {
   return typeof n === 'number' ? n.toLocaleString() : String(n);
+}
+
+function _shortTime(isoStr) {
+  return _formatHumanDate(isoStr);
+}
+
+function _freshnessLabel(freshness) {
+  if (!freshness || !freshness.received_at_utc) return 'No bundle';
+  const approvalsCurrent = !freshness.received_approval_store_hash
+    || freshness.received_approval_store_hash === freshness.local_approval_store_hash;
+  const policyCurrent = !freshness.received_policy_rules_hash
+    || freshness.received_policy_rules_hash === freshness.local_policy_rules_hash;
+  return approvalsCurrent && policyCurrent ? 'Current' : 'Stale';
 }
 
 function _truncHash(hash) {

@@ -14,6 +14,7 @@ import { authorizeExport, showPackagePasswordDialog } from '../export-utils.js';
 
 const COLUMNS = [
   { key: 'timestamp_utc',   label: 'Time',      standard: true,  width: '90px'  },
+  { key: 'machine_id',      label: 'Machine',   standard: true,  width: '120px' },
   { key: 'tool_name',       label: 'Action',    standard: true  },
   { key: 'action_type',     label: 'Action Type', standard: true, width: '100px' },
   { key: 'target',          label: 'Target',    standard: true  },
@@ -28,6 +29,7 @@ const COLUMNS = [
 
 const COLUMN_TOOLTIPS = {
   timestamp_utc: 'When this chain record was written.',
+  machine_id: 'Machine that produced the governance record.',
   tool_name: 'The governed action recorded in the audit trail.',
   action_type: 'The classifier action family used for policy evaluation.',
   target: 'The target path, command, URL, or artifact recorded for this event.',
@@ -70,6 +72,7 @@ export function openAuditWindow(trigger, opts = {}) {
     tierFilter: '',
     decisionFilter: '',
     categoryFilter: '',
+    machineFilter: '',
     // Pagination
     currentPage: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -247,6 +250,12 @@ function _buildUI(state) {
                 <option value="4">Tier 4</option>
               </select>
             </label>
+            <label class="au-fp-label">
+              Machine
+              <select class="au-select" id="au-machine">
+                <option value="">All machines</option>
+              </select>
+            </label>
           </div>
           <div class="au-fp-actions">
             <button class="au-btn au-btn-primary" id="au-search">Apply</button>
@@ -386,6 +395,7 @@ function _applyStaticTooltips(state) {
     ['#au-category', 'Filter audit results by chain event category.'],
     ['#au-action-type', 'Filter audit results by classifier action type.'],
     ['#au-tier', 'Filter audit results by classifier confidence tier.'],
+    ['#au-machine', 'Filter audit results by originating machine.'],
     ['#au-search', 'Apply the selected audit filters.'],
     ['#au-clear', 'Clear all audit filters.'],
     ['#au-export-format', 'Choose JSON, CSV, or Excel-compatible export format.'],
@@ -472,6 +482,7 @@ function _wireControls(state) {
     el.querySelector('#au-category').value = '';
     el.querySelector('#au-action-type').value = '';
     el.querySelector('#au-tier').value = '';
+    el.querySelector('#au-machine').value = '';
     el.querySelectorAll('.au-dtoggle').forEach(b => b.classList.remove('au-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('au-dtoggle-active');
     state.startTime = '';
@@ -482,6 +493,7 @@ function _wireControls(state) {
     state.tierFilter = '';
     state.decisionFilter = '';
     state.categoryFilter = '';
+    state.machineFilter = '';
     state.currentPage = 1;
     _loadData(state);
   });
@@ -563,6 +575,7 @@ function _readFilters(state) {
   state.actionTypeFilter = el.querySelector('#au-action-type').value;
   state.tierFilter = el.querySelector('#au-tier').value;
   state.categoryFilter = el.querySelector('#au-category').value;
+  state.machineFilter = el.querySelector('#au-machine').value;
 }
 
 function _setMode(state, mode) {
@@ -609,6 +622,7 @@ async function _loadData(state) {
   if (state.tierFilter) params.confidence_tier = state.tierFilter;
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
+  _applyMachineParams(params, state.machineFilter);
 
   const res = await api.getAuditQuery(params);
   if (!res.ok) {
@@ -617,6 +631,7 @@ async function _loadData(state) {
   }
 
   state.data = res.data.entries || [];
+  state.lastResponse = res.data || {};
   state.totalMatching = res.data.total_matching || state.data.length;
   state.summary = res.data.summary || { allow_count: 0, deny_count: 0, tool_categories: 0 };
   state.verification = res.data.verification || { status: 'unknown', checked: false, break_count: 0 };
@@ -624,6 +639,7 @@ async function _loadData(state) {
 
   _updateVerificationPane(state);
   _updateResultsBar(state);
+  _populateMachineDropdown(state);
   _renderTable(state);
   _renderPagination(state);
   if (state.mode === 'walker') {
@@ -708,6 +724,7 @@ function _walkerParams(state) {
   if (state.tierFilter) params.confidence_tier = state.tierFilter;
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
+  _applyMachineParams(params, state.machineFilter);
   return params;
 }
 
@@ -1023,6 +1040,8 @@ function _renderCell(key, entry, detail) {
   switch (key) {
     case 'timestamp_utc':
       return `<span class="au-cell-time">${_esc(_formatHumanDate(entry.timestamp_utc))}</span>`;
+    case 'machine_id':
+      return `<span class="au-cell-tool">${_esc(_machineLabel(entry))}</span>`;
     case 'tool_name': {
       const tool = detail.tool_name || '';
       return tool ? `<span class="au-cell-tool">${_esc(tool)}</span>` : '<span class="au-cell-muted">\u2014</span>';
@@ -1079,6 +1098,7 @@ const _EVENT_LABELS = {
 function _rowTooltip(entry, detail) {
   const parts = [];
   if (entry.timestamp_utc) parts.push(_formatHumanDate(entry.timestamp_utc));
+  if (entry.machine_id) parts.push(`Machine: ${_machineLabel(entry)}`);
   if (detail.policy_decision) parts.push(`Decision: ${detail.policy_decision}`);
   if (detail.tool_name) parts.push(`Action: ${detail.tool_name}`);
   if (detail.matched_rule) parts.push(`Rule: ${detail.matched_rule}`);
@@ -1235,6 +1255,8 @@ async function _createEvidencePackage(state) {
   _stopPlayback(state, 'Paused.');
 
   // Step 1: Authorize export
+  const machineScope = state.machineFilter === '__primary__' ? 'primary' : 'all';
+  const machineIds = state.machineFilter && state.machineFilter !== '__primary__' ? [state.machineFilter] : [];
   const auth = await authorizeExport({
     surface: 'audit',
     format: 'encrypted_package',
@@ -1242,6 +1264,9 @@ async function _createEvidencePackage(state) {
     chain_source: state.walker.source || 'live',
     archive_id: state.walker.archiveId || '',
     range: { start_sequence: start, end_sequence: end },
+    filters: { machine_scope: machineScope, machine_ids: machineIds },
+    machine_scope: machineScope,
+    machine_ids: machineIds,
     record_count: end - start + 1,
   });
   if (!auth.ok) return;
@@ -1261,6 +1286,8 @@ async function _createEvidencePackage(state) {
     end_sequence: end,
     chain_source: state.walker.source || 'live',
     archive_id: state.walker.archiveId || '',
+    machine_scope: machineScope,
+    machine_ids: machineIds,
     intended_recipient: pwResult.intended_recipient || '',
   });
 
@@ -1294,6 +1321,7 @@ function _exportParams(state) {
   if (state.tierFilter) params.confidence_tier = state.tierFilter;
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.categoryFilter) params.event_category = state.categoryFilter;
+  _applyMachineParams(params, state.machineFilter);
   return params;
 }
 
@@ -1384,6 +1412,7 @@ function _exportExcel(entries, totalMatching) {
 function _getCellValue(key, entry, detail) {
   switch (key) {
     case 'timestamp_utc': return entry.timestamp_utc || '';
+    case 'machine_id': return _machineLabel(entry);
     case 'tool_name': return detail.tool_name || '';
     case 'action_type': return detail.action_type || '';
     case 'target': return detail.target || '';
@@ -1396,6 +1425,44 @@ function _getCellValue(key, entry, detail) {
     case 'matched_rule': return detail.matched_rule || '';
     default: return '';
   }
+}
+
+function _populateMachineDropdown(state) {
+  const select = state.el.querySelector('#au-machine');
+  if (!select) return;
+  const machines = new Map();
+  for (const entry of state.data || []) {
+    if (entry.machine_id) machines.set(entry.machine_id, _machineLabel(entry));
+  }
+  const registryMachines = state.lastResponse?.unified_view?.machine_registry?.machines || [];
+  for (const machine of registryMachines) {
+    if (machine?.machine_id) machines.set(machine.machine_id, _machineLabel(machine));
+  }
+  const opts = [
+    '<option value="">All machines</option>',
+    '<option value="__primary__">Primary only</option>',
+  ];
+  for (const [machineId, label] of [...machines.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+    const sel = machineId === state.machineFilter ? ' selected' : '';
+    opts.push(`<option value="${_escAttr(machineId)}"${sel}>${_esc(label)}</option>`);
+  }
+  select.innerHTML = opts.join('');
+}
+
+function _applyMachineParams(params, machineFilter) {
+  if (!machineFilter) return;
+  if (machineFilter === '__primary__') params.machine_scope = 'primary';
+  else params.machine_ids = machineFilter;
+}
+
+function _machineLabel(entry) {
+  const id = entry?.machine_id || '';
+  if (!id) return 'unknown';
+  const name = entry?.display_name || entry?.machine_name || '';
+  const role = entry?.machine_role || entry?.role || '';
+  const shortId = id.length > 12 ? `${id.slice(0, 8)}...` : id;
+  if (name && name !== id) return `${name} (${role || shortId})`;
+  return role ? `${role}:${shortId}` : shortId;
 }
 
 function _downloadFile(content, mime, filename) {
