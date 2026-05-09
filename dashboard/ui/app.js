@@ -571,7 +571,13 @@ async function renderApprovals() {
   clearCache();
   const data = await api("approvals");
   const ctx = getContext();
-  const prefill = ctx.params.get("file") || "";
+  const prefill = (
+    ctx.params.get("file")
+    || ctx.params.get("target")
+    || ctx.params.get("record_hash")
+    || ctx.params.get("operation")
+    || ""
+  );
 
   return `
     <section class="page">
@@ -828,10 +834,15 @@ function _renderGovernedRecord(rec) {
     ? (typeof denyReasons[0].detail === "object" ? denyReasons[0].detail.reason : denyReasons[0].detail)
     : "";
 
-  // For denied operations, determine the best identifier to pre-fill in the approval form
-  const approveTarget = tool || target || "";
+  // For denied operations, prefer the concrete target/hash over the tool name.
+  const approveTarget = target || rec.artifact_identity || rec.record_hash || tool || "";
   const approveHref = isDeny && approveTarget
-    ? navHref("/approvals", { file: approveTarget })
+    ? navHref("/approvals", {
+        file: approveTarget,
+        operation: tool,
+        target,
+        record_hash: rec.record_hash || "",
+      })
     : "";
 
   return `
@@ -1710,6 +1721,26 @@ async function render() {
   _attachConfigListeners();
   _attachFeedbackListeners();
   _attachCopyListeners();
+  _syncActivityAutoRefresh(context.path);
+}
+
+let _activityAutoRefreshTimer = null;
+
+function _syncActivityAutoRefresh(path) {
+  if (_activityAutoRefreshTimer) {
+    clearInterval(_activityAutoRefreshTimer);
+    _activityAutoRefreshTimer = null;
+  }
+  if (path !== "/activity") return;
+  _activityAutoRefreshTimer = setInterval(() => {
+    if (getContext().path !== "/activity") {
+      clearInterval(_activityAutoRefreshTimer);
+      _activityAutoRefreshTimer = null;
+      return;
+    }
+    clearCache();
+    render();
+  }, 5000);
 }
 
 // ---------------------------------------------------------------------------

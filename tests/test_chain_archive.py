@@ -115,3 +115,8 @@ def test_chain_started_after_archive_event_type_is_buildable():
 
     assert event["event_type"] == "chain_started_after_archive"
     assert event["archive_id"] == "archive-1"
+    assert event["machine_id"]
+    assert event["machine_role"]
+    assert event["event_timestamp_utc"]
+    assert event["approval_store_hash"].startswith("sha256:")
+    assert event["policy_rules_hash"].startswith("sha256:")

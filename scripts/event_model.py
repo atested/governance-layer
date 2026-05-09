@@ -29,9 +29,9 @@ from typing import Optional
 import uuid
 
 try:
-    from machine_identity import add_machine_identity_fields
+    from machine_identity import add_machine_identity_fields, add_record_freshness_fields
 except ImportError:  # pragma: no cover - package import path
-    from scripts.machine_identity import add_machine_identity_fields
+    from scripts.machine_identity import add_machine_identity_fields, add_record_freshness_fields
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -425,6 +425,15 @@ def _validate_version_check_performed(event: dict) -> tuple[bool, Optional[str]]
     ))
 
 
+def _validate_policy_rules_changed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("previous_policy_rules_hash", "sha256"),
+        ("current_policy_rules_hash", "sha256"),
+        ("policy_path", "str"),
+        ("response", "str"),
+    ))
+
+
 def _validate_trouble_or_telemetry_submitted(event: dict) -> tuple[bool, Optional[str]]:
     return _validate_fields(event, (
         ("destination", "str"),
@@ -491,6 +500,7 @@ _EVENT_TYPE_VALIDATORS = {
     "machine_key_rotated": _validate_machine_key_rotated,
     "machine_license_status_changed": _validate_machine_license_status_changed,
     "version_check_performed": _validate_version_check_performed,
+    "policy_rules_changed": _validate_policy_rules_changed,
     "trouble_report_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_opt_in_changed": _validate_telemetry_opt_in_changed,
@@ -627,6 +637,7 @@ def build_non_action_event(
     }
     event.update(payload)
     add_machine_identity_fields(event, REPO_ROOT)
+    add_record_freshness_fields(event, REPO_ROOT)
 
     if compound_metadata is not None:
         event["compound_metadata"] = compound_metadata

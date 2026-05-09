@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -11,7 +12,7 @@ for p in (REPO / "proxy", REPO / "scripts"):
         sys.path.insert(0, str(p))
 
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
-from proxy.server import ChainRecorder, mediate_decision, record_startup_integrity_events
+from proxy.server import ChainRecorder, GovernanceProxy, mediate_decision, record_startup_integrity_events
 
 
 def _record(label: str) -> dict:
@@ -125,6 +126,46 @@ def test_policy_rules_change_records_event_and_denies(tmp_path):
     ]
     assert rows[0]["event_type"] == "policy_rules_changed"
     assert rows[1]["record_type"] == "mediated_decision"
+
+
+def test_proxy_request_denies_immediately_after_runtime_policy_change(tmp_path):
+    chain_path = tmp_path / "decision-chain.jsonl"
+    policy_path = tmp_path / "policy-rules.json"
+    policy_path.write_text('{"rules":[],"default_decision":"ALLOW"}\n', encoding="utf-8")
+    monitor = _monitor(tmp_path, chain_path, policy_path)
+    monitor.verify_startup_chain()
+    monitor.startup_hashes()
+    recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+    proxy = GovernanceProxy(
+        upstream_base="http://upstream.invalid",
+        policy={"rules": [], "default_decision": "ALLOW"},
+        chain_recorder=recorder,
+        chain_path=chain_path,
+        integrity_monitor=monitor,
+    )
+
+    policy_path.write_text('{"rules":[],"default_decision":"DENY"}\n', encoding="utf-8")
+    loop = asyncio.new_event_loop()
+    try:
+        status, headers, body = loop.run_until_complete(proxy.handle_request(
+            "POST",
+            "/v1/messages",
+            {},
+            b'{"model":"x","messages":[]}',
+        ))
+    finally:
+        loop.close()
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+    assert status == 423
+    assert headers["content-type"] == "application/json"
+    assert b"policy_rules_changed" in body
+    rows = [
+        json.loads(line)
+        for line in chain_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert rows[0]["event_type"] == "policy_rules_changed"
 
 
 def test_proxy_code_hash_recorded_on_startup(tmp_path):

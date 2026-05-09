@@ -176,7 +176,7 @@ def test_status_command():
         runtime = _make_isolated_runtime(tmp)
         env = {"GOV_RUNTIME_DIR": str(runtime)}
         _run_cli(["approve", "sha256:zzz", "--operator", "op"], env_overrides=env)
-        rc, out, err = _run_cli(["status"], env_overrides=env)
+        rc, out, err = _run_cli(["--json", "status"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         data = json.loads(out)
         assert "chain_event_count" in data
@@ -189,7 +189,7 @@ def test_start_primary_lifecycle_no_services():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
         env = {"GOV_RUNTIME_DIR": str(runtime)}
-        rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=env)
+        rc, out, err = _run_cli(["--json", "start", "--role", "primary", "--no-services"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         data = json.loads(out)
         assert data["started"] is True
@@ -200,7 +200,7 @@ def test_start_primary_lifecycle_no_services():
         assert (runtime / "machines" / "registry.json").exists()
         assert (runtime / "sync" / "config.json").exists()
 
-        rc, out, err = _run_cli(["status"], env_overrides=env)
+        rc, out, err = _run_cli(["--json", "status"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         status = json.loads(out)
         assert status["machine"]["role"] == "primary"
@@ -240,6 +240,39 @@ def test_supervisor_pid_record_requires_matching_runtime_and_token(tmp_path, mon
     monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: True)
 
     assert atested_cli._supervisor_record_valid(atested_cli._read_supervisor_pid_record()) is False
+
+
+def test_supervisor_status_ignores_stale_service_snapshot(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps({
+        "pid": os.getpid(),
+        "token": "new-token",
+        "runtime": str(runtime),
+        "created_utc": "2026-05-09T01:00:00Z",
+    }), encoding="utf-8")
+    (supervisor_dir / "status.json").write_text(json.dumps({
+        "supervisor": {
+            "pid": 999999,
+            "token": "old-token",
+            "runtime": str(runtime),
+            "running": False,
+            "uptime_seconds": 0,
+        },
+        "services": {
+            "proxy": {"pid": 111111, "running": False, "uptime_seconds": 0},
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_alive", lambda pid: pid == os.getpid())
+    monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: token == "new-token")
+
+    status = atested_cli._supervisor_status()
+
+    assert status["supervisor"]["pid"] == os.getpid()
+    assert status["supervisor"]["running"] is True
+    assert status.get("services") == {}
 
 
 def test_stop_supervisor_refuses_identity_mismatch(tmp_path, monkeypatch):
@@ -299,7 +332,7 @@ def test_remote_start_manual_sync_no_pending():
         env = {"GOV_RUNTIME_DIR": str(runtime)}
         rc, out, err = _run_cli(
             [
-                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--json", "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
                 "--primary-public-key-pem", _TEST_PRIMARY_PUBLIC_KEY_PEM,
                 "--no-services",
             ],
@@ -327,12 +360,12 @@ def test_remote_join_primary_confirmation_and_removal_events():
         primary_env = {"GOV_RUNTIME_DIR": str(primary_runtime)}
         remote_env = {"GOV_RUNTIME_DIR": str(remote_runtime)}
 
-        rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=primary_env)
+        rc, out, err = _run_cli(["--json", "start", "--role", "primary", "--no-services"], env_overrides=primary_env)
         assert rc == 0, f"stderr: {err}"
         primary = json.loads(out)
         rc, out, err = _run_cli(
             [
-                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--json", "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
                 "--primary-public-key-pem", primary["public_key_pem"],
                 "--no-services",
             ],
@@ -388,7 +421,7 @@ def test_remote_status_degraded_when_received_registry_removes_machine():
         env = {"GOV_RUNTIME_DIR": str(runtime)}
         rc, out, err = _run_cli(
             [
-                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--json", "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
                 "--primary-public-key-pem", _TEST_PRIMARY_PUBLIC_KEY_PEM,
                 "--no-services",
             ],
@@ -409,7 +442,7 @@ def test_remote_status_degraded_when_received_registry_removes_machine():
         }
         (sync_dir / "state_bundle.json").write_text(json.dumps(state_bundle), encoding="utf-8")
 
-        rc, out, err = _run_cli(["status"], env_overrides=env)
+        rc, out, err = _run_cli(["--json", "status"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         status = json.loads(out)
         assert status["machine"]["degraded_mode"]["degraded"] is True
@@ -429,12 +462,12 @@ def test_cli_remote_sync_imports_pending_records_to_primary():
         primary_env = {"GOV_RUNTIME_DIR": str(primary_runtime)}
         remote_env = {"GOV_RUNTIME_DIR": str(remote_runtime)}
 
-        rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=primary_env)
+        rc, out, err = _run_cli(["--json", "start", "--role", "primary", "--no-services"], env_overrides=primary_env)
         assert rc == 0, f"stderr: {err}"
         primary = json.loads(out)
         rc, out, err = _run_cli(
             [
-                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:1",
+                "--json", "start", "--role", "remote", "--primary-url", "http://127.0.0.1:1",
                 "--primary-public-key-pem", primary["public_key_pem"],
                 "--no-services",
             ],

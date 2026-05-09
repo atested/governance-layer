@@ -141,7 +141,18 @@ function _buildContent(data, recordId) {
     btn.textContent = 'Approve this operation';
     setTooltip(btn, 'Open Approvals with this denied operation prefilled.');
     btn.addEventListener('click', () => {
-      const operation = sidecar?.target || chain.target || sidecar?.tool_name || chain.tool || '';
+      const targets = chain.classification?.targets;
+      const operation = (
+        sidecar?.target
+        || (Array.isArray(targets) && targets.length ? targets[0] : '')
+        || chain.target
+        || chain.artifact_identity
+        || chain.record_hash
+        || sidecar?.tool_name
+        || chain.original_tool
+        || chain.tool
+        || ''
+      );
       modalManager.closeAll();
       setTimeout(() => {
         import('./approvals.js').then(mod => {

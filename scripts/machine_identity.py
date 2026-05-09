@@ -150,6 +150,31 @@ def add_machine_identity_fields(record: dict, repo_root: Path) -> dict:
     return record
 
 
+def add_record_freshness_fields(record: dict, repo_root: Path) -> dict:
+    """Ensure a governance record carries freshness hashes.
+
+    Decision records normally set these from the active approval store and
+    loaded policy. Non-action events do not have decision context, so this
+    helper adds the current local policy hash and an empty approval-store hash
+    only when the caller did not already provide values.
+    """
+    if not record.get("approval_store_hash"):
+        try:
+            from approval_store import approval_store_hash
+            record["approval_store_hash"] = approval_store_hash(None)
+        except Exception:
+            record["approval_store_hash"] = "sha256:" + ("0" * 64)
+    if not record.get("policy_rules_hash"):
+        try:
+            from policy_eval_v2 import compute_policy_rules_hash, load_policy_rules
+            policy_path = os.environ.get("GOV_POLICY_RULES_PATH", "").strip()
+            policy = load_policy_rules(Path(policy_path) if policy_path else None)
+            record["policy_rules_hash"] = compute_policy_rules_hash(policy)
+        except Exception:
+            record["policy_rules_hash"] = "sha256:" + ("0" * 64)
+    return record
+
+
 def _registry_hash(registry: dict) -> str:
     body = dict(registry)
     body["registry_hash"] = None

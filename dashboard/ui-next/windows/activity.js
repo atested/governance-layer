@@ -133,6 +133,13 @@ export function openActivityWindow(trigger, opts = {}) {
   }
 
   _loadData(state);
+  state.refreshTimer = setInterval(() => {
+    if (!document.body.contains(state.el)) {
+      clearInterval(state.refreshTimer);
+      return;
+    }
+    _loadData(state, { silent: true });
+  }, 5000);
 }
 
 // ---------- Build UI ----------
@@ -466,9 +473,11 @@ function _readFilters(state) {
 
 // ---------- Data loading ----------
 
-async function _loadData(state) {
+async function _loadData(state, options = {}) {
   const wrap = state.el.querySelector('#aw-table-wrap');
-  wrap.innerHTML = '<div class="aw-loading">Loading events...</div>';
+  if (!options.silent) {
+    wrap.innerHTML = '<div class="aw-loading">Loading events...</div>';
+  }
 
   const params = {
     limit: state.pageSize,

@@ -507,6 +507,39 @@ class TestSidecarEventTriggers:
         assert "archive_id" in terminal[0]
         assert terminal[0].get("reason") == "chain_file_missing"
 
+    def test_fresh_chain_after_tamper_archive_accepts_subsequent_writes(self, tmp_path):
+        """After a tampered chain is archived, metadata is reset for a fresh chain."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+        recorder.append_atomic(_record("one"))
+        recorder.append_atomic(_record("two"))
+
+        rows = _read_chain(chain_path)
+        rows[-1]["policy_decision"] = "DENY"
+        chain_path.write_text(
+            "\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(IntegrityViolation):
+            recorder.append_atomic(_record("tamper-detected"))
+
+        metadata = monitor.load_metadata()
+        assert metadata["chain_existed"] is False
+        assert metadata["expected_record_count"] == 0
+        assert not chain_path.exists()
+
+        for i in range(20):
+            recorder.append_atomic(_record(f"fresh-{i}"))
+
+        fresh_rows = _read_chain(chain_path)
+        assert len(fresh_rows) == 20
+        assert fresh_rows[-1]["policy_decision"] == "ALLOW"
+        side_events = _read_sidecar_events(monitor.events_path)
+        assert not any(e["event_type"] == "chain_file_missing" for e in side_events)
+
 
 # ===========================================================================
 # SCOPE 5 — chain_integrity_violation chain event (G-07)

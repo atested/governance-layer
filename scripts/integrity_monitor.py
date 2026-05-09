@@ -313,7 +313,12 @@ class IntegrityMonitor:
 
     def verify_chain_writable(self) -> ChainSummary:
         metadata = self.load_metadata() or self._empty_metadata()
-        summary = self.summarize_chain()
+        try:
+            summary = self.summarize_chain()
+        except IntegrityViolation as exc:
+            self._block_chain("chain_integrity_invalid", {
+                "error": str(exc),
+            })
         expected_count = int(metadata.get("expected_record_count") or 0)
         expected_hash = metadata.get("expected_last_record_hash")
 
@@ -345,6 +350,7 @@ class IntegrityMonitor:
 
     def _block_chain(self, reason: str, payload: dict) -> None:
         self.record_side_event(reason, payload)
+        archived = False
         try:
             from chain_archive import archive_chain
             archive_chain(
@@ -353,12 +359,23 @@ class IntegrityMonitor:
                 payload=payload,
                 sidecar_events_path=self.events_path,
             )
+            archived = True
         except Exception as exc:
             self.record_side_event("chain_archive_failed", {
                 "reason": reason,
                 "error": str(exc),
             })
-        self.save_metadata({"blocked_reason": reason})
+        if archived:
+            self.save_metadata({
+                "chain_path": str(self.chain_path),
+                "chain_existed": False,
+                "expected_record_count": 0,
+                "expected_last_record_hash": None,
+                "expected_chain_size_bytes": 0,
+                "blocked_reason": reason,
+            })
+        else:
+            self.save_metadata({"blocked_reason": reason})
         raise IntegrityViolation(f"chain integrity violation: {reason}")
 
     def save_chain_summary(self, summary: ChainSummary) -> dict:

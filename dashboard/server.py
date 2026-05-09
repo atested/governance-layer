@@ -751,7 +751,7 @@ def _append_chain_record_atomic(event):
     Signs the event with Ed25519 if a signing key is loaded.
     """
     from event_model import _compute_event_record_hash, sign_non_action_event
-    from machine_identity import add_machine_identity_fields
+    from machine_identity import add_machine_identity_fields, add_record_freshness_fields
     import stat as _stat
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
@@ -760,6 +760,7 @@ def _append_chain_record_atomic(event):
         try:
             # Read head hash INSIDE the lock
             add_machine_identity_fields(event, REPO)
+            add_record_freshness_fields(event, REPO)
             event["prev_record_hash"] = _get_chain_head_hash()
             # Ensure signature fields exist before hash computation
             if "signature" not in event:
@@ -904,6 +905,7 @@ def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
     """Merge live activity entries with archive SQLite data."""
     from chain_archive import list_archives, archive_root_for
     from archive_artifacts import get_or_regenerate_sqlite
+    from readout import _normalize_activity_entry
 
     archives = list_archives(CHAIN)
     if not archives:
@@ -929,7 +931,7 @@ def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row
             try:
-                query = "SELECT timestamp_utc, event_type, user_identity, tool_name, policy_decision, action_type, record_hash FROM records"
+                query = "SELECT id, timestamp_utc, raw_json FROM records"
                 conditions = []
                 params = []
                 if start_time:
@@ -943,17 +945,16 @@ def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
                 query += " ORDER BY timestamp_utc DESC"
 
                 for row in conn.execute(query, params):
-                    all_entries.append({
-                        "timestamp_utc": row["timestamp_utc"],
-                        "event_type": row["event_type"],
-                        "user_identity": row["user_identity"],
-                        "tool_name": row["tool_name"],
-                        "policy_decision": row["policy_decision"],
-                        "action_type": row["action_type"],
-                        "record_hash": row["record_hash"],
-                        "_source": "archive",
-                        "_archive_id": archive_id,
-                    })
+                    try:
+                        record = json.loads(row["raw_json"])
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    entry = _normalize_activity_entry(record, sequence_position=int(row["id"]))
+                    if entry is None:
+                        continue
+                    entry["_source"] = "archive"
+                    entry["_archive_id"] = archive_id
+                    all_entries.append(entry)
             finally:
                 conn.close()
         except Exception:
@@ -966,6 +967,7 @@ def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
     result = dict(live_data)
     result["entries"] = all_entries[offset:offset + limit] if limit else all_entries
     result["total"] = len(all_entries)
+    result["total_matching"] = len(all_entries)
     result["include_archives"] = True
     result["archive_count"] = len(archives)
     return result
@@ -1039,6 +1041,7 @@ def _merge_audit_query_with_archives(live_data, start_time=None, end_time=None,
     """Merge live audit query entries with archive SQLite data."""
     from chain_archive import list_archives, archive_root_for
     from archive_artifacts import get_or_regenerate_sqlite
+    from readout import _normalize_activity_entry
 
     archives = list_archives(CHAIN)
     if not archives:
@@ -1096,22 +1099,16 @@ def _merge_audit_query_with_archives(live_data, start_time=None, end_time=None,
                 query += " ORDER BY timestamp_utc DESC"
 
                 for row in conn.execute(query, params):
-                    archive_entries.append({
-                        "timestamp_utc": row["timestamp_utc"],
-                        "event_type": row["event_type"],
-                        "event_category": row["event_type"],
-                        "user_identity": row["user_identity"],
-                        "detail": {
-                            "tool_name": row["tool_name"],
-                            "policy_decision": row["policy_decision"],
-                            "action_type": row["action_type"],
-                            "confidence_tier": row["confidence_tier"],
-                            "matched_rule": row["matched_rule"],
-                        },
-                        "record_hash": row["record_hash"],
-                        "_source": "archive",
-                        "_archive_id": archive_id,
-                    })
+                    try:
+                        record = json.loads(row["raw_json"])
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    entry = _normalize_activity_entry(record, sequence_position=int(row["id"]))
+                    if entry is None:
+                        continue
+                    entry["_source"] = "archive"
+                    entry["_archive_id"] = archive_id
+                    archive_entries.append(entry)
             finally:
                 conn.close()
         except Exception:

@@ -26,6 +26,7 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import secrets
@@ -56,6 +57,7 @@ SYNC_CONFIG_NAME = "config.json"
 SYNC_CLIENT_STATE_NAME = "client_state.json"
 SYNC_DEGRADED_NAME = "degraded.json"
 SUPERVISOR_DIR_NAME = "supervisor"
+OPERATOR_CONFIG_NAME = "operator.json"
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +155,14 @@ def _get_chain_head_hash():
 def _append_chain_record_atomic(event: dict) -> dict:
     """Atomically append a non-action event to the chain."""
     from event_model import _compute_event_record_hash
-    from machine_identity import add_machine_identity_fields
+    from machine_identity import add_machine_identity_fields, add_record_freshness_fields
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
     with _chain_lock:
         lockdir = _acquire_chain_file_lock()
         try:
             add_machine_identity_fields(event, REPO)
+            add_record_freshness_fields(event, REPO)
             event["prev_record_hash"] = _get_chain_head_hash()
             event["record_hash"] = _compute_event_record_hash(event)
             line = json.dumps(
@@ -229,6 +232,10 @@ def _sync_degraded_path() -> Path:
     return _sync_dir() / SYNC_DEGRADED_NAME
 
 
+def _operator_config_path() -> Path:
+    return _runtime() / OPERATOR_CONFIG_NAME
+
+
 def _supervisor_dir() -> Path:
     return _runtime() / SUPERVISOR_DIR_NAME
 
@@ -259,6 +266,43 @@ def _read_json_file(path: Path, default=None):
         return default
 
 
+def _default_operator_identity() -> str:
+    return (
+        str(os.environ.get("ATESTED_USER_LABEL", "")).strip()
+        or getpass.getuser()
+        or os.environ.get("USER", "")
+        or "operator"
+    )
+
+
+def _load_operator_config() -> dict:
+    data = _read_json_file(_operator_config_path(), {})
+    return data if isinstance(data, dict) else {}
+
+
+def _save_operator_config(user_identity: str) -> dict:
+    config = {
+        "user_identity": user_identity,
+        "updated_utc": _now_utc_z(),
+    }
+    _write_json_file(_operator_config_path(), config)
+    return config
+
+
+def _configured_operator_identity(args=None) -> str:
+    from_args = str(getattr(args, "user_identity", "") or "").strip() if args is not None else ""
+    if from_args:
+        return from_args
+    existing = str(_load_operator_config().get("user_identity") or "").strip()
+    if existing:
+        return existing
+    return _default_operator_identity()
+
+
+def _runtime_initialized() -> bool:
+    return (_runtime() / SIGNING_KEY_NAME).exists()
+
+
 def _load_private_key():
     from receipt_signing import _read_private_key
 
@@ -275,7 +319,7 @@ def _public_key_pem(private_key, serialization) -> str:
     ).decode("utf-8")
 
 
-def _ensure_runtime_initialized(role: str, *, force: bool = False) -> dict:
+def _ensure_runtime_initialized(role: str, *, force: bool = False, display_name: str | None = None) -> dict:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives import serialization
     from machine_identity import ensure_machine_identity, ensure_primary_machine_registry
@@ -302,7 +346,7 @@ def _ensure_runtime_initialized(role: str, *, force: bool = False) -> dict:
         private_key, serialization, _ = _load_private_key()
 
     key_id = _public_key_fingerprint(private_key.public_key(), serialization)
-    identity = ensure_machine_identity(REPO, role=role, signing_key_id=key_id)
+    identity = ensure_machine_identity(REPO, role=role, display_name=display_name, signing_key_id=key_id)
     if identity.get("machine_role") != role:
         raise ValueError(f"machine already initialized as {identity.get('machine_role')}, not {role}")
     public_pem = _public_key_pem(private_key, serialization)
@@ -404,14 +448,14 @@ def _supervisor_record_valid(record: dict | None) -> bool:
     status = _read_json_file(_supervisor_status_path(), {})
     supervisor = status.get("supervisor") if isinstance(status, dict) else None
     if isinstance(supervisor, dict) and supervisor:
-        if int(supervisor.get("pid") or 0) not in (0, pid):
-            return False
-        status_token = str(supervisor.get("token") or "")
-        if status_token and status_token != token:
-            return False
-        status_runtime = str(supervisor.get("runtime") or "")
-        if status_runtime and Path(status_runtime).expanduser().resolve() != _runtime().resolve():
-            return False
+        status_pid = int(supervisor.get("pid") or 0)
+        if status_pid in (0, pid):
+            status_token = str(supervisor.get("token") or "")
+            if status_token and status_token != token:
+                return False
+            status_runtime = str(supervisor.get("runtime") or "")
+            if status_runtime and Path(status_runtime).expanduser().resolve() != _runtime().resolve():
+                return False
 
     return _pid_command_matches(pid, token)
 
@@ -424,8 +468,13 @@ def _supervisor_status() -> dict:
     if not isinstance(supervisor_data, dict):
         supervisor_data = {}
     pid_record = _read_supervisor_pid_record()
-    pid = int(supervisor_data.get("pid") or (pid_record or {}).get("pid") or 0)
+    pid_record_pid = int((pid_record or {}).get("pid") or 0)
+    status_pid = int(supervisor_data.get("pid") or 0)
+    if pid_record_pid and status_pid and status_pid != pid_record_pid:
+        supervisor_data = {}
+        status["services"] = {}
     running = _supervisor_record_valid(pid_record)
+    pid = int(supervisor_data.get("pid") or pid_record_pid or 0)
     supervisor = dict(supervisor_data)
     if pid:
         supervisor["pid"] = pid
@@ -460,11 +509,15 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
     token = secrets.token_urlsafe(32)
     log_dir = _supervisor_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    _write_json_file(_services_path(), {})
     out = open(log_dir / "supervisor.out.log", "ab")
     err = open(log_dir / "supervisor.err.log", "ab")
     env = os.environ.copy()
     env["GOV_RUNTIME_DIR"] = str(_runtime())
     env.setdefault("GOV_SIGNING_KEY_PATH", str(_runtime() / SIGNING_KEY_NAME))
+    operator = _load_operator_config()
+    if operator.get("user_identity"):
+        env["ATESTED_USER_LABEL"] = str(operator["user_identity"])
     argv = [
         sys.executable,
         "scripts/process_supervisor.py",
@@ -499,6 +552,35 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
         "created_utc": _now_utc_z(),
     }
     _write_json_file(_supervisor_pid_path(), pid_record)
+    _write_json_file(_supervisor_status_path(), {
+        "supervisor": {
+            "pid": proc.pid,
+            "token": token,
+            "runtime": str(_runtime()),
+            "running": True,
+            "role": role,
+            "started_utc": pid_record["created_utc"],
+            "uptime_seconds": 0,
+            "pid_file": str(_supervisor_pid_path()),
+            "status_path": str(_supervisor_status_path()),
+            "log_dir": str(log_dir),
+        },
+        "services": {},
+        "updated_utc": pid_record["created_utc"],
+    })
+    deadline = _time_mod.time() + 2.0
+    while _time_mod.time() < deadline:
+        status = _read_json_file(_supervisor_status_path(), {})
+        supervisor = status.get("supervisor") if isinstance(status, dict) else {}
+        services = status.get("services") if isinstance(status, dict) else {}
+        if (
+            isinstance(supervisor, dict)
+            and int(supervisor.get("pid") or 0) == proc.pid
+            and isinstance(services, dict)
+            and services
+        ):
+            break
+        _time_mod.sleep(0.1)
     return {
         "pid": proc.pid,
         "running": True,
@@ -624,7 +706,8 @@ def _now_utc_z() -> str:
 def _service_statuses() -> dict:
     status = _supervisor_status()
     services = status.get("services")
-    if isinstance(services, dict) and services:
+    supervisor = status.get("supervisor") if isinstance(status, dict) else {}
+    if isinstance(services, dict) and services and isinstance(supervisor, dict) and supervisor.get("running"):
         return {
             name: {
                 **record,
@@ -789,6 +872,93 @@ def _offer_shell_profile_update(args) -> dict:
     return result
 
 
+def _collect_base_dirs(args) -> list[str]:
+    base_dirs = ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
+    dirs_arg = getattr(args, "dirs", None)
+    if dirs_arg:
+        candidates = dirs_arg
+    elif sys.stdin.isatty():
+        raw = input(f"Working directories to govern [default: {Path.cwd().resolve()}]: ").strip()
+        candidates = [part.strip() for part in raw.split(",") if part.strip()] if raw else [str(Path.cwd().resolve())]
+    else:
+        candidates = [str(Path.cwd().resolve())]
+    for directory in candidates:
+        resolved = str(Path(directory).expanduser().resolve())
+        if resolved != str(REPO.resolve()) and resolved not in base_dirs:
+            base_dirs.append(resolved)
+    return base_dirs
+
+
+def _collect_operator_identity(args) -> str:
+    provided = str(getattr(args, "user_identity", "") or "").strip()
+    if provided:
+        return provided
+    default_identity = _configured_operator_identity()
+    if sys.stdin.isatty():
+        answer = input(f"Operator identity [{default_identity}]: ").strip()
+        return answer or default_identity
+    return default_identity
+
+
+def _configure_policy_base_dirs(base_dirs: list[str]) -> None:
+    policy_data = json.loads(POLICY_RULES_PATH.read_text(encoding="utf-8"))
+    if policy_data.get("base_dirs") == base_dirs:
+        return
+    policy_data["base_dirs"] = base_dirs
+    POLICY_RULES_PATH.write_text(
+        json.dumps(policy_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _print_first_run_guidance() -> None:
+    print("")
+    print("What happens next:")
+    print("")
+    print("  1. Point your AI agent at the proxy:")
+    print("     export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic")
+    print("")
+    print("  2. Use your agent normally.")
+    print("")
+    print("How governance works:")
+    print("")
+    print("  The proxy evaluates every tool call against policy before it")
+    print("  executes. Operations within your working directories are allowed")
+    print("  by policy. Operations outside that scope — or opaque commands")
+    print("  the proxy cannot inspect — are denied until you approve them.")
+    print("")
+    print("  Open the dashboard to see governance in action:")
+    print("     http://localhost:9700")
+    print("")
+
+
+def _print_status_summary(data: dict) -> None:
+    machine = data.get("machine", {}) if isinstance(data, dict) else {}
+    supervisor = machine.get("supervisor", {}) if isinstance(machine, dict) else {}
+    services = machine.get("services", {}) if isinstance(machine, dict) else {}
+    sync = machine.get("sync", {}) if isinstance(machine, dict) else {}
+    chain_health = data.get("chain_integrity", "unknown")
+    if isinstance(chain_health, dict):
+        chain_health = f"broken at {chain_health.get('broken_at', '?')}"
+    print("Atested status")
+    print(f"  Role:       {machine.get('role') or 'uninitialized'}")
+    print(f"  Runtime:    {machine.get('runtime') or _runtime()}")
+    print(f"  Supervisor: {'running' if supervisor.get('running') else 'stopped'}"
+          f"{' pid ' + str(supervisor.get('pid')) if supervisor.get('pid') else ''}")
+    print(f"  Chain:      {chain_health} ({data.get('chain_event_count', 0)} records)")
+    if services:
+        print("  Services:")
+        for name, record in sorted(services.items()):
+            status = "running" if record.get("running") else "stopped"
+            pid = f" pid {record.get('pid')}" if record.get("pid") else ""
+            uptime = int(record.get("uptime_seconds") or 0)
+            print(f"    {name}: {status}{pid} uptime {uptime}s")
+    pending = sync.get("pending_records", 0) if isinstance(sync, dict) else 0
+    last_sync = sync.get("last_successful_sync_utc") if isinstance(sync, dict) else None
+    print(f"  Sync:       {pending} pending"
+          f"{' last ' + str(last_sync) if last_sync else ''}")
+
+
 def _read_chain_records() -> list[dict]:
     path = _chain_path()
     if not path.exists():
@@ -941,7 +1111,10 @@ def cmd_status(args) -> int:
     if (identity or {}).get("machine_role") == "primary":
         machine["registry"] = _machine_registry_summary()
     data["machine"] = machine
-    _emit(args, data)
+    if getattr(args, "json", False):
+        _emit(args, data)
+    else:
+        _print_status_summary(data)
     return 0
 
 
@@ -1099,42 +1272,36 @@ def cmd_init(args) -> int:
     os.chmod(str(signing_key_path), 0o600)
     print(f"  Generated signing key:    {signing_key_path}")
 
+    operator_identity = _collect_operator_identity(args)
+    _save_operator_config(operator_identity)
+
     # 3. Create persistent machine identity and primary registry.
     try:
         from receipt_signing import _public_key_fingerprint
         from machine_identity import ensure_machine_identity, ensure_primary_machine_registry
         key_id = _public_key_fingerprint(private_key.public_key(), serialization)
         public_key_pem = _public_key_pem(private_key, serialization)
-        identity = ensure_machine_identity(REPO, role="primary", signing_key_id=key_id)
+        identity = ensure_machine_identity(
+            REPO,
+            role="primary",
+            display_name=operator_identity,
+            signing_key_id=key_id,
+        )
         ensure_primary_machine_registry(REPO, identity=identity, public_key_fingerprint=key_id, public_key_pem=public_key_pem)
         print(f"  Assigned machine ID:      {identity['machine_id']}")
         print("  Machine role:             primary")
+        print(f"  Operator identity:        {operator_identity}")
     except Exception as exc:
         print(f"error: failed to create machine identity: {exc}", file=sys.stderr)
         return 1
 
     # 4. Ask for working directories (or use defaults)
-    base_dirs = ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
-    dirs_arg = getattr(args, "dirs", None)
-    if dirs_arg:
-        for d in dirs_arg:
-            resolved = str(Path(d).resolve())
-            if resolved not in base_dirs:
-                base_dirs.append(resolved)
-    else:
-        # Default: current working directory
-        cwd = str(Path.cwd().resolve())
-        if cwd != str(REPO.resolve()):
-            base_dirs.append(cwd)
-            print(f"  Added working directory:  {cwd}")
+    base_dirs = _collect_base_dirs(args)
+    for d in base_dirs[2:]:
+        print(f"  Added working directory:  {d}")
 
     # 5. Configure policy-rules.json base_dirs
-    policy_data = json.loads(POLICY_RULES_PATH.read_text(encoding="utf-8"))
-    policy_data["base_dirs"] = base_dirs
-    POLICY_RULES_PATH.write_text(
-        json.dumps(policy_data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    _configure_policy_base_dirs(base_dirs)
     print(f"  Configured policy rules:  {POLICY_RULES_PATH}")
     if len(base_dirs) > 2:
         for d in base_dirs[2:]:
@@ -1144,32 +1311,7 @@ def cmd_init(args) -> int:
     print("")
     print("Atested is initialized.")
     print("")
-    print("What happens next:")
-    print("")
-    print("  1. Start the proxy:")
-    print(f"     python3 -m proxy.server")
-    print("")
-    print("  2. Point your AI agent at the proxy:")
-    print("     export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic")
-    print("")
-    print("  3. Use your agent normally.")
-    print("")
-    print("How governance works:")
-    print("")
-    print("  The proxy evaluates every tool call against policy before it")
-    print("  executes. Operations within your working directories are allowed")
-    print("  by policy. Operations outside that scope — or opaque commands")
-    print("  the proxy cannot inspect — are denied until you approve them.")
-    print("")
-    print("  Your first session will have the most approval prompts as the")
-    print("  proxy encounters new tools and paths. After that, approvals")
-    print("  should be rare. Each approval is you deciding what is acceptable")
-    print("  in your environment.")
-    print("")
-    print("  Open the dashboard to see governance in action:")
-    print("     python3 dashboard/server.py")
-    print("     http://localhost:9700")
-    print("")
+    _print_first_run_guidance()
     profile_result = _offer_shell_profile_update(args)
     if profile_result.get("updated"):
         print(f"Added ANTHROPIC_BASE_URL to {profile_result.get('profile')}.")
@@ -1197,8 +1339,30 @@ def cmd_start(args) -> int:
         if not primary_public_key_pem:
             print("error: remote start requires --primary-public-key-pem or --primary-public-key-pem-file", file=sys.stderr)
             return 2
+    first_run = bool(args.force) or not _runtime_initialized()
+    operator_identity = _configured_operator_identity(args)
+    configured_base_dirs: list[str] = []
+    profile_result: dict = {}
+    if first_run:
+        if not getattr(args, "json", False):
+            print("Atested first-run setup")
+        operator_identity = _collect_operator_identity(args)
+        _save_operator_config(operator_identity)
+        configured_base_dirs = _collect_base_dirs(args)
+        try:
+            _configure_policy_base_dirs(configured_base_dirs)
+        except Exception as exc:
+            print(f"error: failed to configure policy rules: {exc}", file=sys.stderr)
+            return 1
+    elif getattr(args, "user_identity", None):
+        _save_operator_config(operator_identity)
+
     try:
-        bootstrap = _ensure_runtime_initialized(role, force=bool(args.force))
+        bootstrap = _ensure_runtime_initialized(
+            role,
+            force=bool(args.force),
+            display_name=operator_identity,
+        )
     except Exception as exc:
         print(f"error: failed to initialize runtime: {exc}", file=sys.stderr)
         return 1
@@ -1227,13 +1391,20 @@ def cmd_start(args) -> int:
         supervisor = _start_supervisor(role, sync_host=args.sync_host, sync_port=int(args.sync_port))
         services = _service_statuses()
 
-    _emit(args, {
+    if first_run:
+        profile_result = _offer_shell_profile_update(args)
+
+    payload = {
         "started": True,
+        "first_run": first_run,
         "role": role,
         "runtime": str(_runtime()),
         "machine_id": identity.get("machine_id"),
+        "operator_identity": operator_identity,
         "public_key_fingerprint": bootstrap["public_key_fingerprint"],
         "public_key_pem": bootstrap["public_key_pem"],
+        "configured_base_dirs": configured_base_dirs,
+        "shell_profile": profile_result,
         "sync_config": sync_config,
         "supervisor": supervisor or _supervisor_status().get("supervisor", {}),
         "services": services or _service_statuses(),
@@ -1241,7 +1412,38 @@ def cmd_start(args) -> int:
             "confirm this remote on the primary with atested machine add"
             if role == "remote" else None
         ),
-    })
+    }
+    if getattr(args, "json", False):
+        _emit(args, payload)
+    else:
+        if first_run:
+            print("Atested is initialized.")
+            if configured_base_dirs:
+                print(f"  Operator identity: {operator_identity}")
+                for d in configured_base_dirs[2:]:
+                    print(f"  Working directory: {d}")
+            if profile_result.get("updated"):
+                print(f"  Added ANTHROPIC_BASE_URL to {profile_result.get('profile')}.")
+            elif profile_result.get("offered") and profile_result.get("reason") == "operator_declined":
+                print("  Shell profile unchanged.")
+            elif profile_result.get("reason") == "non_interactive":
+                print("  Shell profile unchanged. Run `atested init --yes-shell-profile` to persist ANTHROPIC_BASE_URL.")
+            _print_first_run_guidance()
+        print("Atested started.")
+        print(f"  Role:    {role}")
+        print(f"  Runtime: {_runtime()}")
+        print(f"  Machine: {identity.get('machine_id')}")
+        if supervisor:
+            print(f"  Supervisor: running pid {supervisor.get('pid')}")
+        current_services = services or _service_statuses()
+        if current_services:
+            print("  Services:")
+            for name, record in sorted(current_services.items()):
+                state = "running" if record.get("running") else "starting"
+                pid = f" pid {record.get('pid')}" if record.get("pid") else ""
+                print(f"    {name}: {state}{pid}")
+        if payload.get("operator_action_required"):
+            print(f"  Action required: {payload['operator_action_required']}")
     return 0
 
 
@@ -1548,7 +1750,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit JSON output (currently always JSON; reserved for future formats)",
+        help="Emit full JSON output",
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1556,6 +1758,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init", help="First-run setup (create runtime, generate key, configure policy)")
     p_init.add_argument("--dirs", nargs="*", metavar="DIR",
                         help="Working directories for your AI agent (default: current directory)")
+    p_init.add_argument("--user-identity", default=None, help="Operator identity recorded on governance events")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing configuration")
     p_init.add_argument("--yes-shell-profile", action="store_true", help="Add ANTHROPIC_BASE_URL to the detected shell profile")
     p_init.add_argument("--no-shell-profile", action="store_true", help="Do not offer to edit the shell profile")
@@ -1569,6 +1772,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--sync-host", default="127.0.0.1")
     p_start.add_argument("--sync-port", type=int, default=8765)
     p_start.add_argument("--sync-interval", type=int, default=300)
+    p_start.add_argument("--dirs", nargs="*", metavar="DIR",
+                         help="Working directories for first-run setup")
+    p_start.add_argument("--user-identity", default=None, help="Operator identity recorded on governance events")
+    p_start.add_argument("--yes-shell-profile", action="store_true", help="Add ANTHROPIC_BASE_URL to the detected shell profile on first run")
+    p_start.add_argument("--no-shell-profile", action="store_true", help="Do not offer to edit the shell profile on first run")
     p_start.add_argument("--force", action="store_true", help="Regenerate local runtime key during start")
     p_start.add_argument("--no-services", action="store_true", help="Initialize lifecycle state without launching background services")
     p_start.set_defaults(func=cmd_start)

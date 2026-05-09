@@ -248,6 +248,13 @@ def main(argv=None) -> int:
     env = os.environ.copy()
     env["GOV_RUNTIME_DIR"] = str(runtime)
     env.setdefault("GOV_SIGNING_KEY_PATH", str(runtime / SIGNING_KEY_NAME))
+    operator_path = runtime / "operator.json"
+    try:
+        operator = json.loads(operator_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        operator = {}
+    if isinstance(operator, dict) and operator.get("user_identity"):
+        env["ATESTED_USER_LABEL"] = str(operator["user_identity"])
 
     signal.signal(signal.SIGTERM, handle_stop)
     signal.signal(signal.SIGINT, handle_stop)

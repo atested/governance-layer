@@ -624,6 +624,54 @@ class TestArchiveArtifacts:
         finally:
             conn.close()
 
+    def test_generate_sqlite_preserves_v2_governance_fields(self, tmp_path):
+        """Archive SQLite normalizes current v2 decision fields for display."""
+        from scripts.archive_artifacts import generate_sqlite
+
+        archive = tmp_path / "v2.jsonl"
+        record = {
+            "record_version": "2.0",
+            "record_type": "mediated_decision",
+            "timestamp_utc": "2026-05-09T10:00:00Z",
+            "event_timestamp_utc": "2026-05-09T10:00:00Z",
+            "user_identity": "operator@example.com",
+            "original_tool": "Write",
+            "classification": {
+                "action_type": "write",
+                "targets": ["/tmp/example.txt"],
+                "scope": "filesystem",
+                "confidence_tier": 2,
+            },
+            "policy_decision": "DENY",
+            "matched_rule": "deny-outside-base-dir",
+            "record_hash": "sha256:" + "a" * 64,
+        }
+        _write_chain(archive, [record])
+        db_path = tmp_path / "v2.sqlite"
+
+        generate_sqlite(archive, db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute(
+                "SELECT timestamp_utc, event_type, user_identity, tool_name, "
+                "policy_decision, action_type, confidence_tier, matched_rule, target "
+                "FROM records"
+            ).fetchone()
+            assert row == (
+                "2026-05-09T10:00:00Z",
+                "action_decision",
+                "operator@example.com",
+                "Write",
+                "DENY",
+                "write",
+                "2",
+                "deny-outside-base-dir",
+                "/tmp/example.txt",
+            )
+        finally:
+            conn.close()
+
     def test_generate_sqlite_metadata_has_integrity_hash(self, tmp_path):
         """SQLite metadata.source_sha256 matches the archive JSONL hash."""
         from scripts.archive_artifacts import generate_sqlite, _sha256_file

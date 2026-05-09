@@ -51,7 +51,12 @@ from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash
 from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_chain
 from event_model import build_non_action_event
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
-from machine_identity import add_machine_identity_fields, ensure_machine_identity, ensure_primary_machine_registry
+from machine_identity import (
+    add_machine_identity_fields,
+    add_record_freshness_fields,
+    ensure_machine_identity,
+    ensure_primary_machine_registry,
+)
 
 # Storage contract for chain path
 from storage_contract import runtime_root
@@ -186,6 +191,7 @@ class ChainRecorder:
                 if self._integrity_monitor is not None:
                     self._integrity_monitor.verify_chain_writable()
                 add_machine_identity_fields(record, REPO)
+                add_record_freshness_fields(record, REPO)
                 record["prev_record_hash"] = self._last_hash()
                 # Set signature fields to null BEFORE hashing so they're
                 # included in the canonical form (stable hash regardless
@@ -841,6 +847,70 @@ class GovernanceProxy:
                 pass
         return upstream_url, forward_headers, is_messages, is_streaming
 
+    @staticmethod
+    def _forward_response_headers(headers, body: bytes) -> dict:
+        forwarded = {
+            k: v for k, v in dict(headers).items()
+            if k.lower() not in {
+                "content-encoding",
+                "content-length",
+                "transfer-encoding",
+                "connection",
+            }
+        }
+        forwarded["content-length"] = str(len(body))
+        return forwarded
+
+    def _policy_change_denial_response(self) -> Optional[tuple[int, dict, bytes]]:
+        if self._integrity_monitor is None:
+            return None
+        policy_change = self._integrity_monitor.check_policy_rules_unchanged()
+        if policy_change is None:
+            return None
+        current_hash = policy_change["current_policy_rules_hash"]
+        if self._chain_recorder is not None and not policy_change.get("event_already_recorded"):
+            try:
+                self._chain_recorder.append_integrity_event(
+                    "policy_rules_changed",
+                    {
+                        "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
+                        "current_policy_rules_hash": current_hash,
+                        "policy_path": policy_change["policy_path"],
+                        "response": "deny_all_until_acknowledged",
+                    },
+                )
+                self._integrity_monitor.mark_policy_change_event_recorded(current_hash)
+            except Exception:
+                logger.exception("Failed to record policy_rules_changed event")
+        body = json.dumps({
+            "error": {
+                "type": "policy_rules_changed",
+                "message": (
+                    "Policy rules changed during proxy runtime; all operations "
+                    "are denied until the operator acknowledges the change."
+                ),
+            },
+            "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
+            "current_policy_rules_hash": current_hash,
+        }, sort_keys=True).encode("utf-8")
+        return 423, {
+            "content-type": "application/json",
+            "content-length": str(len(body)),
+        }, body
+
+    async def _write_policy_change_denial(
+        self,
+        writer: asyncio.StreamWriter,
+        response: tuple[int, dict, bytes],
+    ) -> None:
+        status, headers, body = response
+        writer.write(f"HTTP/1.1 {status} Policy Rules Changed\r\n".encode("ascii"))
+        for key, value in headers.items():
+            writer.write(f"{key}: {value}\r\n".encode("utf-8"))
+        writer.write(b"\r\n")
+        writer.write(body)
+        await writer.drain()
+
     async def handle_request(self, method: str, path: str, headers: dict,
                              body: bytes,
                              provider: Optional[BaseProvider] = None,
@@ -859,6 +929,10 @@ class GovernanceProxy:
         url, fwd_headers, is_messages, is_streaming = self._prepare_request(
             method, path, headers, body
         )
+        if is_messages:
+            denial = self._policy_change_denial_response()
+            if denial is not None:
+                return denial
 
         if is_messages and is_streaming:
             return await self._handle_streaming_buffered(
@@ -877,6 +951,10 @@ class GovernanceProxy:
         url, fwd_headers, is_tool_ep, is_streaming = self._prepare_request_with_provider(
             method, path, headers, body, provider
         )
+        if is_tool_ep:
+            denial = self._policy_change_denial_response()
+            if denial is not None:
+                return denial
 
         if is_tool_ep and is_streaming:
             return await self._handle_streaming_buffered_provider(
@@ -907,6 +985,11 @@ class GovernanceProxy:
         url, fwd_headers, is_messages, _ = self._prepare_request(
             "POST", path, headers, body
         )
+        if is_messages:
+            denial = self._policy_change_denial_response()
+            if denial is not None:
+                await self._write_policy_change_denial(writer, denial)
+                return
 
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
@@ -1023,9 +1106,14 @@ class GovernanceProxy:
         provider: BaseProvider,
     ) -> None:
         """Handle streaming with provider interface."""
-        url, fwd_headers, _, _ = self._prepare_request_with_provider(
+        url, fwd_headers, is_tool_ep, _ = self._prepare_request_with_provider(
             "POST", path, headers, body, provider
         )
+        if is_tool_ep:
+            denial = self._policy_change_denial_response()
+            if denial is not None:
+                await self._write_policy_change_denial(writer, denial)
+                return
 
         collector = provider.create_streaming_collector()
         _tool_call_count = 0
@@ -1146,8 +1234,8 @@ class GovernanceProxy:
                 method, url, headers=headers, content=body,
             )
 
-        resp_headers = dict(resp.headers)
         resp_body = resp.content
+        resp_headers = self._forward_response_headers(resp.headers, resp_body)
 
         logger.info("Non-streaming response: status=%d is_messages=%s", resp.status_code, is_messages)
         if not is_messages or resp.status_code != 200:
@@ -1198,7 +1286,7 @@ class GovernanceProxy:
             if not remaining_tool_use and data.get("stop_reason") == "tool_use":
                 data["stop_reason"] = "end_turn"
             resp_body = json.dumps(data).encode()
-            resp_headers["content-length"] = str(len(resp_body))
+            resp_headers = self._forward_response_headers(resp_headers, resp_body)
 
         return resp.status_code, resp_headers, resp_body
 
@@ -1212,8 +1300,8 @@ class GovernanceProxy:
                 method, url, headers=headers, content=body,
             )
 
-        resp_headers = dict(resp.headers)
         resp_body = resp.content
+        resp_headers = self._forward_response_headers(resp.headers, resp_body)
 
         logger.info("Non-streaming response (%s): status=%d is_tool_ep=%s",
                      provider.name, resp.status_code, is_tool_ep)
@@ -1252,7 +1340,7 @@ class GovernanceProxy:
         if denials:
             data = provider.apply_denials(data, denials)
             resp_body = json.dumps(data).encode()
-            resp_headers["content-length"] = str(len(resp_body))
+            resp_headers = self._forward_response_headers(resp_headers, resp_body)
 
         return resp.status_code, resp_headers, resp_body
 
@@ -1281,7 +1369,7 @@ class GovernanceProxy:
 
                 if resp_status != 200:
                     content = await resp.aread()
-                    return resp_status, resp_headers, content
+                    return resp_status, self._forward_response_headers(resp_headers, content), content
 
                 current_event_type = ""
                 async for raw_line in resp.aiter_lines():
@@ -1371,7 +1459,7 @@ class GovernanceProxy:
 
                 if resp_status != 200:
                     content = await resp.aread()
-                    return resp_status, resp_headers, content
+                    return resp_status, self._forward_response_headers(resp_headers, content), content
 
                 current_event_type = ""
                 async for raw_line in resp.aiter_lines():

@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+ARCHIVE_SQLITE_SCHEMA_VERSION = 2
+
 
 def _sha256_file(path: Path) -> str:
     """Compute SHA-256 hex digest of a file."""
@@ -46,6 +48,51 @@ def _parse_archive_rows(archive_path: Path) -> list[dict]:
     return rows
 
 
+def _first_target(record: dict) -> str:
+    classification = record.get("classification")
+    if isinstance(classification, dict):
+        targets = classification.get("targets")
+        if isinstance(targets, list) and targets:
+            return str(targets[0])
+    for key in ("target", "artifact_identity"):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def _archive_record_fields(record: dict) -> dict:
+    """Return normalized columns for both legacy and v2 archive records."""
+    classification = record.get("classification")
+    if not isinstance(classification, dict):
+        classification = {}
+    return {
+        "timestamp_utc": (
+            record.get("event_timestamp_utc")
+            or record.get("timestamp_utc")
+            or record.get("primary_import_timestamp_utc")
+            or ""
+        ),
+        "event_type": record.get("event_type") or (
+            "action_decision" if record.get("record_type") == "mediated_decision" else ""
+        ),
+        "user_identity": record.get("user_identity") or record.get("actor") or "",
+        "tool_name": (
+            record.get("tool_name")
+            or record.get("original_tool")
+            or record.get("tool")
+            or record.get("capability_class")
+            or ""
+        ),
+        "policy_decision": record.get("policy_decision") or "",
+        "action_type": record.get("action_type") or classification.get("action_type") or "",
+        "confidence_tier": str(record.get("confidence_tier") or classification.get("confidence_tier") or ""),
+        "matched_rule": record.get("matched_rule") or "",
+        "record_hash": record.get("record_hash") or "",
+        "target": _first_target(record),
+    }
+
+
 def generate_summary(archive_jsonl_path: Path, output_path: Path) -> dict:
     """Parse archive JSONL and write a pre-computed summary JSON.
 
@@ -63,16 +110,19 @@ def generate_summary(archive_jsonl_path: Path, output_path: Path) -> dict:
         decision = rec.get("policy_decision", "")
         if decision:
             by_decision[decision] += 1
-        tool = rec.get("tool_name", "")
+        fields = _archive_record_fields(rec)
+        tool = fields.get("tool_name", "")
         if tool:
             by_tool[tool] += 1
         user = rec.get("user_identity") or rec.get("actor", "")
         if user:
             by_user[user] += 1
         cat = rec.get("event_category") or rec.get("event_type", "")
+        if not cat and rec.get("record_type") == "mediated_decision":
+            cat = "action_decision"
         if cat:
             by_category[cat] += 1
-        ts = rec.get("timestamp_utc", "")
+        ts = fields.get("timestamp_utc", "")
         if ts:
             timestamps.append(ts)
 
@@ -112,6 +162,7 @@ CREATE TABLE IF NOT EXISTS records (
     action_type TEXT,
     confidence_tier TEXT,
     matched_rule TEXT,
+    target TEXT,
     record_hash TEXT,
     raw_json TEXT
 );
@@ -148,23 +199,25 @@ def generate_sqlite(archive_jsonl_path: Path, output_path: Path) -> Path:
             INSERT INTO records
                 (id, timestamp_utc, event_type, user_identity, tool_name,
                  policy_decision, action_type, confidence_tier, matched_rule,
-                 record_hash, raw_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 target, record_hash, raw_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         batch: list[tuple] = []
         for i, rec in enumerate(rows):
+            fields = _archive_record_fields(rec)
             batch.append((
                 i + 1,
-                rec.get("timestamp_utc", ""),
-                rec.get("event_type", ""),
-                rec.get("user_identity") or rec.get("actor", ""),
-                rec.get("tool_name", ""),
-                rec.get("policy_decision", ""),
-                rec.get("action_type", ""),
-                rec.get("confidence_tier", ""),
-                rec.get("matched_rule", ""),
-                rec.get("record_hash", ""),
+                fields["timestamp_utc"],
+                fields["event_type"],
+                fields["user_identity"],
+                fields["tool_name"],
+                fields["policy_decision"],
+                fields["action_type"],
+                fields["confidence_tier"],
+                fields["matched_rule"],
+                fields["target"],
+                fields["record_hash"],
                 json.dumps(rec, sort_keys=True, separators=(",", ":")),
             ))
             if len(batch) >= 1000:
@@ -178,6 +231,10 @@ def generate_sqlite(archive_jsonl_path: Path, output_path: Path) -> Path:
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
             ("source_sha256", source_hash),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+            ("schema_version", str(ARCHIVE_SQLITE_SCHEMA_VERSION)),
         )
         conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
@@ -211,19 +268,23 @@ def verify_sqlite_integrity(archive_jsonl_path: Path, sqlite_path: Path) -> bool
     try:
         conn = sqlite3.connect(str(sqlite_path))
         try:
-            cur = conn.execute(
+            source_row = conn.execute(
                 "SELECT value FROM metadata WHERE key = 'source_sha256'"
-            )
-            row = cur.fetchone()
+            ).fetchone()
+            schema_row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'schema_version'"
+            ).fetchone()
         finally:
             conn.close()
     except (sqlite3.Error, OSError):
         return False
 
-    if row is None:
+    if source_row is None or schema_row is None:
+        return False
+    if str(schema_row[0]) != str(ARCHIVE_SQLITE_SCHEMA_VERSION):
         return False
 
-    stored_hash = row[0]
+    stored_hash = source_row[0]
     actual_hash = _sha256_file(archive_jsonl_path)
     return stored_hash == actual_hash
 

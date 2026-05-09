@@ -505,6 +505,41 @@ class TestNonStreamingProxy(unittest.TestCase):
         self.assertEqual(data["content"][0]["type"], "tool_use")
         self.assertEqual(data["stop_reason"], "tool_use")
 
+    def test_forwarded_buffered_response_strips_content_encoding(self):
+        proxy = self._make_proxy()
+        response_body = json.dumps({
+            "id": "msg_1",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "ok"}],
+            "stop_reason": "end_turn",
+        }).encode()
+
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "content-length": "999",
+            }
+            mock_resp.content = response_body
+            mock_client = AsyncMock()
+            mock_client.request = AsyncMock(return_value=mock_resp)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            status, headers, body = _run(proxy.handle_request(
+                "POST", "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": False}).encode(),
+            ))
+
+        self.assertEqual(status, 200)
+        normalized = {k.lower(): v for k, v in headers.items()}
+        self.assertNotIn("content-encoding", normalized)
+        self.assertEqual(normalized["content-length"], str(len(body)))
+
     def test_deny_replaces_tool_use(self):
         proxy = self._make_proxy()
 
