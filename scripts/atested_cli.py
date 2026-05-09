@@ -14,6 +14,13 @@ Subcommands:
   policy        List policy rules
   chain         Chain operations (verify)
   verification  Show surface verification states
+  init          First-run setup
+  start         Start governance services
+  stop          Stop governance services
+  sync          Run or request sync
+  machine       Machine registry operations
+  restore       Primary restore operations
+  uninstall     Remove Atested from this machine
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import signal
 import stat as _stat
 import subprocess
@@ -327,6 +335,87 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+def _read_supervisor_pid_record() -> dict | None:
+    try:
+        raw = _supervisor_pid_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            return {"pid": int(raw), "token": "", "runtime": ""}
+        except ValueError:
+            return None
+    if not isinstance(data, dict):
+        return None
+    pid = data.get("pid")
+    if not isinstance(pid, int):
+        return None
+    return data
+
+
+def _read_supervisor_pid() -> int | None:
+    record = _read_supervisor_pid_record()
+    if not record:
+        return None
+    return int(record.get("pid") or 0) or None
+
+
+def _pid_command_matches(pid: int, token: str) -> bool:
+    if os.name == "nt":
+        return True
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    command = (result.stdout or "").strip()
+    if result.returncode != 0 or not command:
+        return False
+    return (
+        "process_supervisor.py" in command
+        and str(_runtime()) in command
+        and token in command
+    )
+
+
+def _supervisor_record_valid(record: dict | None) -> bool:
+    if not isinstance(record, dict):
+        return False
+    pid = int(record.get("pid") or 0)
+    token = str(record.get("token") or "")
+    runtime = str(record.get("runtime") or "")
+    if not pid or not token or not runtime:
+        return False
+    try:
+        if Path(runtime).expanduser().resolve() != _runtime().resolve():
+            return False
+    except OSError:
+        return False
+    if not _pid_alive(pid):
+        return False
+
+    status = _read_json_file(_supervisor_status_path(), {})
+    supervisor = status.get("supervisor") if isinstance(status, dict) else None
+    if isinstance(supervisor, dict) and supervisor:
+        if int(supervisor.get("pid") or 0) not in (0, pid):
+            return False
+        status_token = str(supervisor.get("token") or "")
+        if status_token and status_token != token:
+            return False
+        status_runtime = str(supervisor.get("runtime") or "")
+        if status_runtime and Path(status_runtime).expanduser().resolve() != _runtime().resolve():
+            return False
+
+    return _pid_command_matches(pid, token)
+
+
 def _supervisor_status() -> dict:
     status = _read_json_file(_supervisor_status_path(), {})
     if not isinstance(status, dict):
@@ -334,11 +423,13 @@ def _supervisor_status() -> dict:
     supervisor_data = status.get("supervisor")
     if not isinstance(supervisor_data, dict):
         supervisor_data = {}
-    pid = int(supervisor_data.get("pid") or _read_supervisor_pid() or 0)
-    running = _pid_alive(pid)
+    pid_record = _read_supervisor_pid_record()
+    pid = int(supervisor_data.get("pid") or (pid_record or {}).get("pid") or 0)
+    running = _supervisor_record_valid(pid_record)
     supervisor = dict(supervisor_data)
     if pid:
         supervisor["pid"] = pid
+    supervisor.pop("token", None)
     supervisor["running"] = running
     supervisor.setdefault("pid_file", str(_supervisor_pid_path()))
     supervisor.setdefault("status_path", str(_supervisor_status_path()))
@@ -346,15 +437,8 @@ def _supervisor_status() -> dict:
     return status
 
 
-def _read_supervisor_pid() -> int | None:
-    try:
-        return int(_supervisor_pid_path().read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
-        return None
-
-
 def _supervisor_running() -> bool:
-    return _pid_alive(int(_read_supervisor_pid() or 0))
+    return _supervisor_record_valid(_read_supervisor_pid_record())
 
 
 def _detach_popen_kwargs() -> dict:
@@ -373,6 +457,7 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
         supervisor["already_running"] = True
         return supervisor
 
+    token = secrets.token_urlsafe(32)
     log_dir = _supervisor_dir() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     out = open(log_dir / "supervisor.out.log", "ab")
@@ -391,6 +476,8 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
         sync_host,
         "--sync-port",
         str(sync_port),
+        "--token",
+        token,
     ]
     try:
         proc = subprocess.Popen(
@@ -405,7 +492,13 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
     finally:
         out.close()
         err.close()
-    _supervisor_pid_path().write_text(str(proc.pid), encoding="utf-8")
+    pid_record = {
+        "pid": proc.pid,
+        "token": token,
+        "runtime": str(_runtime()),
+        "created_utc": _now_utc_z(),
+    }
+    _write_json_file(_supervisor_pid_path(), pid_record)
     return {
         "pid": proc.pid,
         "running": True,
@@ -420,13 +513,16 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
 
 
 def _stop_supervisor() -> dict:
-    pid = _read_supervisor_pid()
+    record = _read_supervisor_pid_record()
+    pid = int(record.get("pid") or 0) if record else None
     if not pid or not _pid_alive(pid):
         try:
             _supervisor_pid_path().unlink()
         except FileNotFoundError:
             pass
         return {"stopped": False, "reason": "not_running", "pid": pid}
+    if not _supervisor_record_valid(record):
+        return {"stopped": False, "reason": "supervisor_identity_mismatch", "pid": pid}
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -614,6 +710,63 @@ def _add_anthropic_base_url_to_profile(profile_path: Path) -> dict:
     with open(profile_path, "a", encoding="utf-8") as fh:
         fh.write(f"{prefix}{marker}\n{line}\n")
     return {"updated": True, "profile": str(profile_path)}
+
+
+def _remove_shell_profile_entry(profile_path: Path) -> dict:
+    """Remove the ANTHROPIC_BASE_URL line added by ``atested init``."""
+    marker = "# Atested proxy endpoint"
+    try:
+        text = profile_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"removed": False, "reason": "profile_not_found"}
+    lines = text.splitlines(keepends=True)
+    new_lines: list[str] = []
+    i = 0
+    found = False
+    while i < len(lines):
+        stripped = lines[i].rstrip("\n")
+        if stripped == marker:
+            found = True
+            # Skip marker line and the export line immediately after it
+            i += 1
+            if i < len(lines) and "ANTHROPIC_BASE_URL" in lines[i]:
+                i += 1
+            continue
+        new_lines.append(lines[i])
+        i += 1
+    if not found:
+        return {"removed": False, "profile": str(profile_path), "reason": "marker_not_found"}
+    profile_path.write_text("".join(new_lines), encoding="utf-8")
+    return {"removed": True, "profile": str(profile_path)}
+
+
+def _clean_runtime_ephemeral(runtime: Path) -> list[str]:
+    """Remove transient artifacts from *runtime* while preserving chain data and keys."""
+    import shutil as _shutil
+
+    ephemeral = [
+        runtime / "supervisor",
+        runtime / "tmp",
+    ]
+    # Lock directories under LOGS
+    logs = runtime / "LOGS"
+    if logs.is_dir():
+        for child in logs.iterdir():
+            if child.name.endswith(".lock.d"):
+                ephemeral.append(child)
+    cleaned: list[str] = []
+    for p in ephemeral:
+        if not p.exists():
+            continue
+        try:
+            if p.is_dir():
+                _shutil.rmtree(str(p))
+            else:
+                p.unlink()
+            cleaned.append(str(p))
+        except OSError:
+            pass
+    return cleaned
 
 
 def _offer_shell_profile_update(args) -> dict:
@@ -1036,6 +1189,14 @@ def cmd_start(args) -> int:
     if role == "remote" and not args.primary_url:
         print("error: remote start requires --primary-url", file=sys.stderr)
         return 2
+    primary_public_key_pem = ""
+    if role == "remote":
+        primary_public_key_pem = str(args.primary_public_key_pem or "").strip()
+        if args.primary_public_key_pem_file:
+            primary_public_key_pem = Path(args.primary_public_key_pem_file).read_text(encoding="utf-8").strip()
+        if not primary_public_key_pem:
+            print("error: remote start requires --primary-public-key-pem or --primary-public-key-pem-file", file=sys.stderr)
+            return 2
     try:
         bootstrap = _ensure_runtime_initialized(role, force=bool(args.force))
     except Exception as exc:
@@ -1054,6 +1215,7 @@ def cmd_start(args) -> int:
         sync_config["join_status"] = "pending_primary_confirmation"
         sync_config["remote_public_key_fingerprint"] = bootstrap["public_key_fingerprint"]
         sync_config["remote_public_key_pem"] = bootstrap["public_key_pem"]
+        sync_config["primary_public_key_pem"] = primary_public_key_pem
     else:
         sync_config["sync_service_host"] = args.sync_host
         sync_config["sync_service_port"] = int(args.sync_port)
@@ -1252,6 +1414,127 @@ def cmd_restore_verify(args) -> int:
     return 0 if result.get("restore_runtime_valid") else 1
 
 
+def cmd_uninstall(args) -> int:
+    """Remove Atested from this machine."""
+    import shutil as _shutil
+
+    runtime = _runtime()
+    result: dict = {"uninstalled": False, "steps": {}}
+    errors: list[dict] = []
+
+    # --- Resolve runtime action early so we can fail before doing anything ---
+    keep_rt = getattr(args, "keep_runtime", False)
+    move_rt = getattr(args, "move_runtime", None)
+    delete_rt = getattr(args, "delete_runtime", False)
+    flag_count = sum([keep_rt, bool(move_rt), delete_rt])
+    if flag_count > 1:
+        _emit(args, {"uninstalled": False, "error": "mutually_exclusive_runtime_flags",
+                      "message": "Specify at most one of --keep-runtime, --move-runtime, --delete-runtime."})
+        return 1
+
+    if flag_count == 0:
+        if getattr(args, "yes", False) or not sys.stdin.isatty():
+            _emit(args, {"uninstalled": False, "error": "runtime_action_required",
+                          "message": "Specify --keep-runtime, --move-runtime PATH, or --delete-runtime."})
+            return 1
+        # Interactive prompt
+        print(f"Runtime directory: {runtime}")
+        answer = input("  [k]eep  /  [m]ove  /  [d]elete runtime data? ").strip().lower()
+        if answer in ("k", "keep"):
+            keep_rt = True
+        elif answer in ("m", "move"):
+            move_rt = input("  Move to: ").strip()
+            if not move_rt:
+                _emit(args, {"uninstalled": False, "error": "no_move_destination"})
+                return 1
+        elif answer in ("d", "delete"):
+            delete_rt = True
+        else:
+            _emit(args, {"uninstalled": False, "reason": "operator_cancelled"})
+            return 1
+
+    # Conflict: keeping runtime that lives inside repo while deleting repo
+    keep_repo = getattr(args, "keep_repo", False)
+    if keep_rt and not keep_repo:
+        try:
+            runtime.resolve().relative_to(REPO.resolve())
+            _emit(args, {"uninstalled": False, "error": "runtime_inside_repo",
+                          "message": f"Runtime is inside the repo. Use --move-runtime PATH to relocate it, or add --keep-repo."})
+            return 1
+        except ValueError:
+            pass  # runtime is outside repo — no conflict
+
+    # --- Confirmation ---
+    if not getattr(args, "yes", False):
+        if not sys.stdin.isatty():
+            _emit(args, {"uninstalled": False, "error": "non_interactive_requires_yes"})
+            return 1
+        confirm = input(f"Uninstall Atested from {REPO}? [y/N] ").strip().lower()
+        if confirm not in ("y", "yes"):
+            _emit(args, {"uninstalled": False, "reason": "operator_cancelled"})
+            return 1
+
+    # --- Step 1: Stop services ---
+    try:
+        stop_result = _stop_supervisor()
+        result["steps"]["stop"] = stop_result
+    except Exception as exc:
+        errors.append({"step": "stop", "error": str(exc)})
+        result["steps"]["stop"] = {"error": str(exc)}
+
+    # --- Step 2: Remove shell profile entry ---
+    try:
+        profile_path = _profile_path_for_shell()
+        if profile_path is not None:
+            profile_result = _remove_shell_profile_entry(profile_path)
+        else:
+            profile_result = {"removed": False, "reason": "unsupported_shell"}
+        result["steps"]["shell_profile"] = profile_result
+    except Exception as exc:
+        errors.append({"step": "shell_profile", "error": str(exc)})
+        result["steps"]["shell_profile"] = {"error": str(exc)}
+
+    # --- Step 3: Handle gov_runtime ---
+    try:
+        if not runtime.exists():
+            result["steps"]["runtime"] = {"action": "skip", "reason": "runtime_not_found"}
+        elif keep_rt:
+            cleaned = _clean_runtime_ephemeral(runtime)
+            result["steps"]["runtime"] = {"action": "keep", "path": str(runtime),
+                                          "ephemeral_cleaned": cleaned}
+        elif move_rt:
+            dest = Path(move_rt).expanduser().resolve()
+            cleaned = _clean_runtime_ephemeral(runtime)
+            _shutil.move(str(runtime), str(dest))
+            result["steps"]["runtime"] = {"action": "move", "from": str(runtime),
+                                          "to": str(dest), "ephemeral_cleaned": cleaned}
+        elif delete_rt:
+            _shutil.rmtree(str(runtime), ignore_errors=True)
+            result["steps"]["runtime"] = {"action": "delete", "path": str(runtime)}
+    except Exception as exc:
+        errors.append({"step": "runtime", "error": str(exc)})
+        result["steps"]["runtime"] = {"error": str(exc)}
+
+    # --- Step 4: Remove repo ---
+    try:
+        if keep_repo:
+            result["steps"]["repo"] = {"action": "keep", "path": str(REPO)}
+        else:
+            home = str(Path.home())
+            os.chdir(home)
+            _shutil.rmtree(str(REPO), ignore_errors=True)
+            result["steps"]["repo"] = {"action": "delete", "path": str(REPO)}
+    except Exception as exc:
+        errors.append({"step": "repo", "error": str(exc)})
+        result["steps"]["repo"] = {"error": str(exc)}
+
+    result["uninstalled"] = len(errors) == 0
+    if errors:
+        result["errors"] = errors
+    _emit(args, result)
+    return 0 if not errors else 1
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
@@ -1281,6 +1564,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_start = sub.add_parser("start", help="Start Atested governance services")
     p_start.add_argument("--role", choices=["primary", "remote"], default="primary")
     p_start.add_argument("--primary-url", default=None, help="Primary sync service URL for remote role")
+    p_start.add_argument("--primary-public-key-pem", default=None, help="Primary Ed25519 public key PEM for remote response verification")
+    p_start.add_argument("--primary-public-key-pem-file", default=None, help="File containing the primary Ed25519 public key PEM")
     p_start.add_argument("--sync-host", default="127.0.0.1")
     p_start.add_argument("--sync-port", type=int, default=8765)
     p_start.add_argument("--sync-interval", type=int, default=300)
@@ -1360,6 +1645,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore_verify = restore_sub.add_parser("verify", help="Validate a restored primary gov_runtime")
     p_restore_verify.add_argument("--runtime", default=None, help="Runtime directory to validate (default: configured gov_runtime)")
     p_restore_verify.set_defaults(func=cmd_restore_verify)
+
+    p_uninstall = sub.add_parser("uninstall", help="Remove Atested from this machine")
+    p_uninstall.add_argument("--keep-runtime", action="store_true",
+                             help="Keep gov_runtime data in place")
+    p_uninstall.add_argument("--move-runtime", metavar="PATH",
+                             help="Move gov_runtime to specified path")
+    p_uninstall.add_argument("--delete-runtime", action="store_true",
+                             help="Delete gov_runtime and all data")
+    p_uninstall.add_argument("--keep-repo", action="store_true",
+                             help="Keep the governance-layer repository")
+    p_uninstall.add_argument("--yes", action="store_true",
+                             help="Skip confirmation prompts")
+    p_uninstall.set_defaults(func=cmd_uninstall)
 
     return parser
 

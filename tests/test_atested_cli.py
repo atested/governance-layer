@@ -21,6 +21,8 @@ for _p in (str(SCRIPTS_DIR), str(MCP_DIR)):
 import atested_cli  # noqa: E402
 import process_supervisor  # noqa: E402
 
+_TEST_PRIMARY_PUBLIC_KEY_PEM = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo=\n-----END PUBLIC KEY-----"
+
 
 def _run_cli(args, env_overrides=None):
     """Run the CLI as a subprocess and return (rc, stdout, stderr)."""
@@ -215,6 +217,49 @@ def test_supervisor_status_paths_and_service_specs():
     print("PASS: test_supervisor_status_paths_and_service_specs")
 
 
+def test_supervisor_pid_record_requires_matching_runtime_and_token(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+
+    record = {
+        "pid": os.getpid(),
+        "token": "test-token",
+        "runtime": str(runtime),
+        "created_utc": "2026-05-09T00:00:00Z",
+    }
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps(record), encoding="utf-8")
+    (supervisor_dir / "status.json").write_text(json.dumps({
+        "supervisor": {
+            "pid": os.getpid(),
+            "token": "different-token",
+            "runtime": str(runtime),
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: True)
+
+    assert atested_cli._supervisor_record_valid(atested_cli._read_supervisor_pid_record()) is False
+
+
+def test_stop_supervisor_refuses_identity_mismatch(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps({
+        "pid": os.getpid(),
+        "token": "test-token",
+        "runtime": str(runtime),
+        "created_utc": "2026-05-09T00:00:00Z",
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: False)
+
+    result = atested_cli._stop_supervisor()
+    assert result["stopped"] is False
+    assert result["reason"] == "supervisor_identity_mismatch"
+
+
 def test_shell_profile_helpers_add_anthropic_base_url(tmp_path):
     profile = tmp_path / ".zshrc"
     result = atested_cli._add_anthropic_base_url_to_profile(profile)
@@ -253,7 +298,11 @@ def test_remote_start_manual_sync_no_pending():
         runtime = _make_isolated_runtime(tmp)
         env = {"GOV_RUNTIME_DIR": str(runtime)}
         rc, out, err = _run_cli(
-            ["start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765", "--no-services"],
+            [
+                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--primary-public-key-pem", _TEST_PRIMARY_PUBLIC_KEY_PEM,
+                "--no-services",
+            ],
             env_overrides=env,
         )
         assert rc == 0, f"stderr: {err}"
@@ -280,8 +329,13 @@ def test_remote_join_primary_confirmation_and_removal_events():
 
         rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=primary_env)
         assert rc == 0, f"stderr: {err}"
+        primary = json.loads(out)
         rc, out, err = _run_cli(
-            ["start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765", "--no-services"],
+            [
+                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--primary-public-key-pem", primary["public_key_pem"],
+                "--no-services",
+            ],
             env_overrides=remote_env,
         )
         assert rc == 0, f"stderr: {err}"
@@ -333,7 +387,11 @@ def test_remote_status_degraded_when_received_registry_removes_machine():
         runtime = _make_isolated_runtime(tmp)
         env = {"GOV_RUNTIME_DIR": str(runtime)}
         rc, out, err = _run_cli(
-            ["start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765", "--no-services"],
+            [
+                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:8765",
+                "--primary-public-key-pem", _TEST_PRIMARY_PUBLIC_KEY_PEM,
+                "--no-services",
+            ],
             env_overrides=env,
         )
         assert rc == 0, f"stderr: {err}"
@@ -373,8 +431,13 @@ def test_cli_remote_sync_imports_pending_records_to_primary():
 
         rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=primary_env)
         assert rc == 0, f"stderr: {err}"
+        primary = json.loads(out)
         rc, out, err = _run_cli(
-            ["start", "--role", "remote", "--primary-url", "http://127.0.0.1:1", "--no-services"],
+            [
+                "start", "--role", "remote", "--primary-url", "http://127.0.0.1:1",
+                "--primary-public-key-pem", primary["public_key_pem"],
+                "--no-services",
+            ],
             env_overrides=remote_env,
         )
         assert rc == 0, f"stderr: {err}"
@@ -465,6 +528,152 @@ def test_wrapper_script_executable():
     ).returncode
     assert rc == 0
     print("PASS: test_wrapper_script_executable")
+
+
+# ---------------------------------------------------------------------------
+# Uninstall command tests (D-237)
+# ---------------------------------------------------------------------------
+
+
+def test_uninstall_help():
+    rc, out, err = _run_cli(["uninstall", "--help"])
+    assert rc == 0
+    for flag in ("--keep-runtime", "--move-runtime", "--delete-runtime", "--keep-repo", "--yes"):
+        assert flag in out, f"Missing {flag} in help output"
+    print("PASS: test_uninstall_help")
+
+
+def test_uninstall_delete_runtime():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        chain = runtime / "LOGS" / "decision-chain.jsonl"
+        chain.write_text('{"test": true}\n', encoding="utf-8")
+        rc, out, err = _run_cli(
+            ["uninstall", "--delete-runtime", "--keep-repo", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 0, f"stderr: {err}"
+        data = json.loads(out)
+        assert data["uninstalled"] is True
+        assert data["steps"]["runtime"]["action"] == "delete"
+        assert not runtime.exists()
+        assert data["steps"]["repo"]["action"] == "keep"
+    print("PASS: test_uninstall_delete_runtime")
+
+
+def test_uninstall_keep_runtime():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        chain = runtime / "LOGS" / "decision-chain.jsonl"
+        chain.write_text('{"test": true}\n', encoding="utf-8")
+        (runtime / "supervisor").mkdir()
+        (runtime / "supervisor" / "supervisor.pid").write_text("99999")
+        (runtime / "tmp").mkdir()
+        rc, out, err = _run_cli(
+            ["uninstall", "--keep-runtime", "--keep-repo", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 0, f"stderr: {err}"
+        data = json.loads(out)
+        assert data["uninstalled"] is True
+        assert data["steps"]["runtime"]["action"] == "keep"
+        # Chain preserved
+        assert chain.exists()
+        assert chain.read_text(encoding="utf-8").strip() == '{"test": true}'
+        # Ephemeral cleaned
+        assert not (runtime / "supervisor").exists()
+        assert not (runtime / "tmp").exists()
+    print("PASS: test_uninstall_keep_runtime")
+
+
+def test_uninstall_move_runtime():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        chain = runtime / "LOGS" / "decision-chain.jsonl"
+        chain.write_text('{"moved": true}\n', encoding="utf-8")
+        (runtime / "supervisor").mkdir()
+        (runtime / "supervisor" / "status.json").write_text("{}")
+        dest = Path(tmp) / "relocated"
+        rc, out, err = _run_cli(
+            ["uninstall", "--move-runtime", str(dest), "--keep-repo", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 0, f"stderr: {err}"
+        data = json.loads(out)
+        assert data["steps"]["runtime"]["action"] == "move"
+        assert not runtime.exists()
+        assert (dest / "LOGS" / "decision-chain.jsonl").exists()
+        # Supervisor dir cleaned before move
+        assert not (dest / "supervisor").exists()
+    print("PASS: test_uninstall_move_runtime")
+
+
+def test_uninstall_shell_profile_removal():
+    """Unit test of _remove_shell_profile_entry."""
+    with tempfile.TemporaryDirectory() as tmp:
+        profile = Path(tmp) / ".zshrc"
+        profile.write_text(
+            "# existing stuff\nPATH=/usr/bin\n"
+            "# Atested proxy endpoint\n"
+            "export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic\n"
+            "# more stuff\n",
+            encoding="utf-8",
+        )
+        result = atested_cli._remove_shell_profile_entry(profile)
+        assert result["removed"] is True
+        text = profile.read_text(encoding="utf-8")
+        assert "ANTHROPIC_BASE_URL" not in text
+        assert "Atested proxy endpoint" not in text
+        assert "existing stuff" in text
+        assert "more stuff" in text
+        # Second call — already removed
+        result2 = atested_cli._remove_shell_profile_entry(profile)
+        assert result2["removed"] is False
+        assert result2["reason"] == "marker_not_found"
+    print("PASS: test_uninstall_shell_profile_removal")
+
+
+def test_uninstall_non_interactive_requires_flags():
+    """Non-interactive mode (subprocess) without --yes and runtime flag errors."""
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        # No --yes, no runtime flag → should error (subprocess stdin is not a tty)
+        rc, out, err = _run_cli(
+            ["uninstall"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 1
+        data = json.loads(out)
+        assert "runtime_action_required" in json.dumps(data)
+    print("PASS: test_uninstall_non_interactive_requires_flags")
+
+
+def test_uninstall_mutual_exclusivity():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        rc, out, err = _run_cli(
+            ["uninstall", "--keep-runtime", "--delete-runtime", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 1
+        data = json.loads(out)
+        assert "mutually_exclusive" in data.get("error", "")
+    print("PASS: test_uninstall_mutual_exclusivity")
+
+
+def test_uninstall_services_not_running():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        rc, out, err = _run_cli(
+            ["uninstall", "--delete-runtime", "--keep-repo", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 0, f"stderr: {err}"
+        data = json.loads(out)
+        assert data["uninstalled"] is True
+        stop_step = data["steps"]["stop"]
+        assert stop_step.get("reason") == "not_running" or stop_step.get("stopped") is False
+    print("PASS: test_uninstall_services_not_running")
 
 
 def main():
