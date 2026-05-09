@@ -107,6 +107,24 @@ def segment_request_preimage(method: str, path: str, payload: dict, nonce: str) 
     })
 
 
+def session_start_preimage(method: str, path: str, payload: dict) -> str:
+    return canonical_json({
+        "method": method.upper(),
+        "path": path,
+        "source_machine_id": payload.get("source_machine_id"),
+        "source_machine_key_id": payload.get("source_machine_key_id"),
+        "protocol_version": payload.get("protocol_version"),
+        "product_version": payload.get("product_version"),
+        "timestamp_utc": payload.get("timestamp_utc"),
+    })
+
+
+def sign_session_start(method: str, path: str, payload: dict, private_key) -> dict:
+    signed = dict(payload)
+    signed["remote_signature"] = sign_preimage(session_start_preimage(method, path, signed), private_key)
+    return signed
+
+
 def sign_segment_request(method: str, path: str, payload: dict, nonce: str, private_key) -> dict:
     signed = dict(payload)
     signed["remote_signature"] = sign_preimage(segment_request_preimage(method, path, signed, nonce), private_key)

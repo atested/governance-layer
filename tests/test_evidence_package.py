@@ -590,6 +590,16 @@ def test_viewer_has_ed25519_verification():
     assert "state.manifest.public_key_pem" in viewer
 
 
+def test_viewer_enforces_public_key_fingerprint_match():
+    """Viewer must fail closed if the manifest fingerprint does not match the PEM."""
+    from evidence_package import _load_viewer_html
+    viewer = _load_viewer_html()
+    assert "ed25519Fingerprint" in viewer
+    assert "computedPublicKeyFingerprint" in viewer
+    assert "keyFingerprintMatches" in viewer
+    assert "signature_key_mismatch" in viewer
+
+
 def test_viewer_has_verification_levels():
     """Viewer must distinguish verification levels (hash+sig, hash-only, failed)."""
     from evidence_package import _load_viewer_html

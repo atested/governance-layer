@@ -261,8 +261,9 @@ def import_remote_segment(
                     ("SEGMENT_ID_BODY_CONFLICT",),
                 )
             manifest = _read_json(manifest_path)
-            envelope_hash = manifest.get("import_envelope_hash") if isinstance(manifest, dict) else None
-            return ImportResult(True, True, segment_id, envelope_hash, None, manifest, tuple())
+            if _duplicate_import_is_bound(repo_root, source_machine_id, segment_id, stored_segment_sha256, manifest):
+                envelope_hash = manifest.get("import_envelope_hash") if isinstance(manifest, dict) else None
+                return ImportResult(True, True, segment_id, envelope_hash, None, manifest, tuple())
 
     previous_tail = previous_imported_tail_hash(repo_root, source_machine_id)
     verification = verify_remote_segment(
@@ -308,8 +309,9 @@ def import_remote_segment(
                 ("SEGMENT_ID_BODY_CONFLICT",),
             )
         manifest = _read_json(manifest_path)
-        envelope_hash = manifest.get("import_envelope_hash") if isinstance(manifest, dict) else None
-        return ImportResult(True, True, final_segment_id, envelope_hash, None, manifest, tuple())
+        if _duplicate_import_is_bound(repo_root, source_machine_id, final_segment_id, stored_segment_sha256, manifest):
+            envelope_hash = manifest.get("import_envelope_hash") if isinstance(manifest, dict) else None
+            return ImportResult(True, True, final_segment_id, envelope_hash, None, manifest, tuple())
 
     import_sequence = next_import_sequence(repo_root)
     primary_import_timestamp_utc = _now_utc_z()
@@ -408,6 +410,48 @@ def verify_stored_segment_binding(repo_root: Path, envelope: dict) -> tuple[bool
     if actual != expected:
         return False, f"STORED_SEGMENT_SHA256_MISMATCH expected={expected} actual={actual}"
     return True, None
+
+
+def _duplicate_import_is_bound(
+    repo_root: Path,
+    source_machine_id: str,
+    segment_id: str,
+    stored_segment_sha256: str,
+    manifest: Optional[dict],
+) -> bool:
+    if not isinstance(manifest, dict):
+        return False
+    if manifest.get("source_machine_id") != source_machine_id:
+        return False
+    if manifest.get("segment_id") != segment_id:
+        return False
+    if manifest.get("stored_segment_sha256") != stored_segment_sha256:
+        return False
+    envelope_hash = manifest.get("import_envelope_hash")
+    if not isinstance(envelope_hash, str) or not envelope_hash.startswith("sha256:"):
+        return False
+    chain = runtime_root(repo_root) / "LOGS" / "decision-chain.jsonl"
+    try:
+        lines = chain.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            record.get("event_type") == "remote_chain_import"
+            and record.get("record_hash") == envelope_hash
+            and record.get("source_machine_id") == source_machine_id
+            and record.get("segment_id") == segment_id
+            and record.get("stored_segment_sha256") == stored_segment_sha256
+            and record.get("verification_result") == "PASS"
+        ):
+            return True
+    return False
 
 
 def _compute_remote_record_hash(record: dict) -> str:

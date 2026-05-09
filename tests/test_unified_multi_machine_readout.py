@@ -21,6 +21,13 @@ from sync_protocol import private_key_fingerprint, private_key_public_pem  # noq
 from unified_readout import load_unified_records, selected_import_context  # noqa: E402
 
 
+def _append_event_to_chain(chain: Path, event: dict) -> dict:
+    chain.parent.mkdir(parents=True, exist_ok=True)
+    with chain.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+    return event
+
+
 def _setup_imported_remote(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
@@ -35,6 +42,7 @@ def _setup_imported_remote(tmp_path, monkeypatch):
         public_key_fingerprint=primary_id,
         public_key_pem=private_key_public_pem(primary_key),
     )
+    chain = runtime / "LOGS" / "decision-chain.jsonl"
     add_machine_to_registry(
         REPO,
         machine_id="remote-e-1",
@@ -43,6 +51,7 @@ def _setup_imported_remote(tmp_path, monkeypatch):
         public_key_fingerprint=remote_key_id,
         public_key_pem=private_key_public_pem(remote_key),
         operator_confirmation_event_id="confirm-e-1",
+        append_event=lambda event: _append_event_to_chain(chain, event),
     )
 
     primary_event = build_non_action_event(
@@ -55,9 +64,7 @@ def _setup_imported_remote(tmp_path, monkeypatch):
         signing_key=primary_key,
         signing_key_id=primary_id,
     )
-    chain = runtime / "LOGS" / "decision-chain.jsonl"
-    chain.parent.mkdir(parents=True, exist_ok=True)
-    chain.write_text(json.dumps(primary_event, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    _append_event_to_chain(chain, primary_event)
 
     remote_event = build_non_action_event(
         "usage_attestation",

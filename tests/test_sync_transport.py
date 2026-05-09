@@ -30,10 +30,18 @@ from sync_protocol import (  # noqa: E402
     now_utc_z,
     sha256_bytes,
     sign_segment_request,
+    sign_session_start,
     sign_response,
     verify_response_signature,
 )
 from sync_service import SyncHTTPRequestHandler, SyncService, _SyncHTTPServer  # noqa: E402
+
+
+def _append_event_to_chain(tmp_path, event):
+    chain = tmp_path / "runtime" / "LOGS" / "decision-chain.jsonl"
+    chain.parent.mkdir(parents=True, exist_ok=True)
+    with chain.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
 
 
 @pytest.fixture
@@ -63,6 +71,7 @@ def _setup_primary(monkeypatch, tmp_path, primary_keypair, remote_keypair, *, re
         public_key_fingerprint=remote_key_id,
         public_key_pem=remote_pem,
         operator_confirmation_event_id="confirm-sync-1",
+        append_event=lambda event: _append_event_to_chain(tmp_path, event),
     )
     logs = tmp_path / "runtime" / "LOGS"
     logs.mkdir(parents=True, exist_ok=True)
@@ -117,13 +126,14 @@ def _jsonl(records):
 
 
 def _session_payload(machine_id: str, remote_private_key) -> dict:
-    return {
+    payload = {
         "source_machine_id": machine_id,
         "source_machine_key_id": private_key_fingerprint(remote_private_key),
         "protocol_version": SYNC_PROTOCOL_VERSION,
         "product_version": "1.0.0",
         "timestamp_utc": now_utc_z(),
     }
+    return sign_session_start("POST", "/sync/v1/session/start", payload, remote_private_key)
 
 
 def test_client_handshake_segment_sync_and_state_bundle(sync_server, tmp_path, monkeypatch):
@@ -161,7 +171,7 @@ def test_client_handshake_segment_sync_and_state_bundle(sync_server, tmp_path, m
     assert len(comms) == 1
 
 
-def test_unknown_machine_rejects_segment(monkeypatch, tmp_path, keypair):
+def test_unknown_machine_rejects_session(monkeypatch, tmp_path, keypair):
     primary_keypair = keypair
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -171,15 +181,11 @@ def test_unknown_machine_rejects_segment(monkeypatch, tmp_path, keypair):
     ensure_primary_machine_registry(REPO, identity=ensure_machine_identity(REPO, role="primary", signing_key_id=primary_key_id))
     service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
     status, session = service.start_session(_session_payload("unknown-remote", remote_priv))
-    assert status == 200
-    record = _remote_event(remote_priv, "unknown", machine_id="unknown-remote")
-    payload = _signed_segment_payload(session, remote_priv, "unknown-remote", _jsonl([record]))
-    status, response = service.receive_segment(payload)
     assert status == 403
-    assert response["error"] == "MACHINE_NOT_AUTHORIZED"
+    assert session["error"] == "MACHINE_NOT_AUTHORIZED"
 
 
-def test_removed_machine_rejects_segment(monkeypatch, tmp_path, keypair):
+def test_removed_machine_rejects_session(monkeypatch, tmp_path, keypair):
     primary_keypair = keypair
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -188,10 +194,7 @@ def test_removed_machine_rejects_segment(monkeypatch, tmp_path, keypair):
     primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, primary_keypair, remote_keypair)
     remove_machine_from_registry(REPO, "remote-sync-1")
     service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
-    _, session = service.start_session(_session_payload("remote-sync-1", remote_priv))
-    record = _remote_event(remote_priv, "removed")
-    payload = _signed_segment_payload(session, remote_priv, "remote-sync-1", _jsonl([record]))
-    status, response = service.receive_segment(payload)
+    status, response = service.start_session(_session_payload("remote-sync-1", remote_priv))
     assert status == 403
     assert response["error"] == "MACHINE_NOT_AUTHORIZED"
 
@@ -261,6 +264,44 @@ def test_client_rejects_tampered_primary_response(sync_server):
     )
     with pytest.raises(SyncClientError, match="PRIMARY_SIGNATURE_INVALID"):
         client.start_session()
+
+
+def test_client_requires_pinned_primary_key(sync_server):
+    client = SyncClient(
+        REPO,
+        sync_server["url"],
+        remote_private_key=sync_server["remote_private_key"],
+        source_machine_id=sync_server["remote_machine_id"],
+    )
+    with pytest.raises(SyncClientError, match="PRIMARY_PUBLIC_KEY_REQUIRED"):
+        client.start_session()
+
+
+def test_client_rejects_unsigned_primary_error_response(monkeypatch, tmp_path, keypair):
+    client = SyncClient(
+        REPO,
+        "http://primary.invalid",
+        remote_private_key=keypair[0],
+        source_machine_id="remote-sync-1",
+        primary_public_key_pem=keypair[2],
+    )
+    monkeypatch.setattr(client, "_post", lambda path, payload: {"accepted": False, "error": "MACHINE_NOT_AUTHORIZED"})
+    with pytest.raises(SyncClientError, match="PRIMARY_SIGNATURE_INVALID"):
+        client.start_session()
+
+
+def test_session_start_requires_registered_key_before_mutating_registry(monkeypatch, tmp_path, keypair):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    remote_priv = Ed25519PrivateKey.generate()
+    remote_keypair = (remote_priv, private_key_fingerprint(remote_priv), private_key_public_pem(remote_priv))
+    primary_priv, primary_key_id, _ = _setup_primary(monkeypatch, tmp_path, keypair, remote_keypair)
+    attacker_priv = Ed25519PrivateKey.generate()
+    service = SyncService(REPO, primary_private_key=primary_priv, primary_signing_key_id=primary_key_id)
+    payload = _session_payload("remote-sync-1", attacker_priv)
+    status, response = service.start_session(payload)
+    assert status == 403
+    assert response["error"] == "MACHINE_NOT_AUTHORIZED"
 
 
 def test_incompatible_protocol_rejected_with_update_required(monkeypatch, tmp_path, keypair):

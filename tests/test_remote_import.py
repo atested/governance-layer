@@ -25,6 +25,13 @@ from remote_import import (  # noqa: E402
 )
 
 
+def _append_event_to_chain(tmp_path, event):
+    chain = tmp_path / "runtime" / "LOGS" / "decision-chain.jsonl"
+    chain.parent.mkdir(parents=True, exist_ok=True)
+    with chain.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+
+
 @pytest.fixture
 def remote_keypair():
     from cryptography.hazmat.primitives import serialization
@@ -52,6 +59,7 @@ def _setup_registry(monkeypatch, tmp_path, remote_keypair):
         public_key_fingerprint=key_id,
         public_key_pem=public_pem,
         operator_confirmation_event_id="confirm-remote-machine-1",
+        append_event=lambda event: _append_event_to_chain(tmp_path, event),
     )
 
 
@@ -189,6 +197,28 @@ def test_duplicate_retry_is_idempotent_and_body_conflict_rejects(tmp_path, monke
     assert retry.import_envelope_hash == first.import_envelope_hash
     assert not conflict.accepted
     assert conflict.errors == ("SEGMENT_ID_BODY_CONFLICT",)
+
+
+def test_orphan_sidecar_without_envelope_is_not_accepted_as_duplicate(tmp_path, monkeypatch, remote_keypair):
+    _setup_registry(monkeypatch, tmp_path, remote_keypair)
+    raw = b'{"record_hash":"sha256:not-real"}\n'
+    segment_id = "sha256:" + "a" * 64
+    sidecar_path, manifest_path = segment_paths(REPO, "remote-machine-1", segment_id)
+    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    sidecar_path.write_bytes(raw)
+
+    result = import_remote_segment(
+        REPO,
+        source_machine_id="remote-machine-1",
+        segment_kind=CURRENT_CHAIN_SEGMENT,
+        records_jsonl=raw,
+        sync_session_id="sync-orphan",
+        segment_id=segment_id,
+    )
+
+    assert not result.accepted
+    assert not result.duplicate
+    assert not manifest_path.exists()
 
 
 def test_sidecar_tamper_is_detected(tmp_path, monkeypatch, remote_keypair):

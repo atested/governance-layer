@@ -32,6 +32,7 @@ try:
         b64decode,
         canonical_json,
         now_utc_z,
+        session_start_preimage,
         segment_request_preimage,
         sign_response,
         verify_preimage_signature,
@@ -54,6 +55,7 @@ except ImportError:  # pragma: no cover - package import path
         b64decode,
         canonical_json,
         now_utc_z,
+        session_start_preimage,
         segment_request_preimage,
         sign_response,
         verify_preimage_signature,
@@ -106,6 +108,23 @@ class SyncService:
             return 400, {"accepted": False, "error": "MACHINE_ID_AND_KEY_REQUIRED"}
         protocol_version = str(payload.get("protocol_version") or "").strip()
         product_version_value = str(payload.get("product_version") or "").strip() or "0.0.0"
+        machine = authorized_machine_lookup(
+            self.repo_root,
+            source_machine_id,
+            source_machine_key_id,
+            at_utc=payload.get("timestamp_utc"),
+        )
+        if machine is None:
+            return 403, {"accepted": False, "error": "MACHINE_NOT_AUTHORIZED"}
+        public_key_pem = _public_key_pem_for(machine, source_machine_key_id)
+        if not public_key_pem:
+            return 403, {"accepted": False, "error": "PUBLIC_KEY_MISSING"}
+        signature = payload.get("remote_signature")
+        if not isinstance(signature, str) or not signature:
+            return 401, {"accepted": False, "error": "REMOTE_SIGNATURE_REQUIRED"}
+        preimage = session_start_preimage("POST", "/sync/v1/session/start", payload)
+        if not verify_preimage_signature(preimage, signature, public_key_pem):
+            return 401, {"accepted": False, "error": "REMOTE_SIGNATURE_INVALID"}
         update_machine_version_report(
             self.repo_root,
             source_machine_id,

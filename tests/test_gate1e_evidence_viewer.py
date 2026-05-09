@@ -398,6 +398,13 @@ class TestViewerContentVerification:
         # Verify it has the actual verification function
         assert "verifyEd25519Signature" in self.viewer
 
+    def test_ed25519_public_key_fingerprint_enforced(self):
+        """Viewer treats a manifest/PEM fingerprint mismatch as verification failure."""
+        assert "ed25519Fingerprint" in self.viewer
+        assert "manifestPublicKeyFingerprint" in self.viewer
+        assert "keyMismatch" in self.viewer
+        assert "signature_key_mismatch" in self.viewer
+
     def test_no_unencrypted_reexport(self):
         """Viewer explicitly does not provide unencrypted re-export."""
         assert "does not provide an unencrypted re-export" in self.viewer.lower()

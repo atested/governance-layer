@@ -568,6 +568,11 @@ function pemToRawEd25519(pem) {
   }
 }
 
+async function ed25519Fingerprint(publicKeyRaw) {
+  if (!publicKeyRaw) return '';
+  return 'ed25519:sha256:' + await sha256hex(publicKeyRaw);
+}
+
 function publicKeyInfo() {
   if (state.publicKey && state.publicKey.public_key_pem) {
     return state.publicKey;
@@ -590,18 +595,31 @@ async function verifyChain(records, predecessorHash) {
     return {
       status: 'empty', verified: 0, breaks: 0, hashVerified: 0, hashFailed: 0,
       sigVerified: 0, sigFailed: 0, sigUnchecked: 0, signed: 0, unsigned: 0,
-      total: 0, breakDetails: [], sigAvailable: false
+      total: 0, breakDetails: [], sigAvailable: false,
+      computedPublicKeyFingerprint: '', manifestPublicKeyFingerprint: '',
+      keyFingerprintMatches: null, keyMismatch: false
     };
   }
 
   // Attempt to load public key for signature verification
   let publicKeyRaw = null;
   let sigAvailable = false;
+  let computedPublicKeyFingerprint = '';
+  const manifestPublicKeyFingerprint = state.manifest?.public_key_fingerprint || '';
+  let keyFingerprintMatches = null;
+  let keyMismatch = false;
   const ed25519Ok = await isEd25519Available();
   const pk = publicKeyInfo();
   if (ed25519Ok && pk && pk.public_key_pem) {
     publicKeyRaw = pemToRawEd25519(pk.public_key_pem);
-    if (publicKeyRaw) sigAvailable = true;
+    if (publicKeyRaw) {
+      computedPublicKeyFingerprint = await ed25519Fingerprint(publicKeyRaw);
+      if (manifestPublicKeyFingerprint) {
+        keyFingerprintMatches = computedPublicKeyFingerprint === manifestPublicKeyFingerprint;
+        keyMismatch = !keyFingerprintMatches;
+      }
+      if (!keyMismatch) sigAvailable = true;
+    }
   }
 
   let verified = 0;  // linkage checks passed
@@ -631,7 +649,15 @@ async function verifyChain(records, predecessorHash) {
     // 2. Verify Ed25519 signature if present
     if (rec.signature && rec.signing_key_id) {
       signed++;
-      if (sigAvailable) {
+      if (keyMismatch) {
+        sigFailed++;
+        breakDetails.push({
+          index: i,
+          type: 'signature_key_mismatch',
+          expected: manifestPublicKeyFingerprint,
+          got: computedPublicKeyFingerprint || 'unavailable'
+        });
+      } else if (sigAvailable) {
         const sigOk = await verifyEd25519Signature(rec, publicKeyRaw);
         if (sigOk) sigVerified++;
         else {
@@ -676,7 +702,7 @@ async function verifyChain(records, predecessorHash) {
 
   // Determine status — fail closed
   let status;
-  if (breaks > 0 || hashFailed > 0 || sigFailed > 0) {
+  if (breaks > 0 || hashFailed > 0 || sigFailed > 0 || keyMismatch) {
     status = 'failed';
   } else if (sigAvailable && signed > 0 && sigVerified === signed && hashVerified === records.length) {
     status = 'hash_and_sig_verified';
@@ -697,14 +723,16 @@ async function verifyChain(records, predecessorHash) {
   for (let i = 0; i < records.length; i++) {
     const rec = records[i];
     const hashOk = !breakDetails.some(d => d.index === i && d.type === 'hash_mismatch');
-    const sigOk = !breakDetails.some(d => d.index === i && d.type === 'signature_invalid');
+    const sigOk = !breakDetails.some(d => d.index === i && (d.type === 'signature_invalid' || d.type === 'signature_key_mismatch'));
     perRecord.push({ hashOk, sigOk });
   }
 
   return {
     status, verified, breaks, hashVerified, hashFailed,
     sigVerified, sigFailed, sigUnchecked, signed, unsigned,
-    total: records.length, breakDetails, sigAvailable, perRecord
+    total: records.length, breakDetails, sigAvailable, perRecord,
+    computedPublicKeyFingerprint, manifestPublicKeyFingerprint,
+    keyFingerprintMatches, keyMismatch
   };
 }
 
@@ -763,6 +791,7 @@ function renderNonTechnical() {
     badgeIcon = '\u2717';
     badgeTitle = 'Verification Failed';
     const parts = [];
+    if (v.keyMismatch) parts.push('public key fingerprint mismatch');
     if (v.hashFailed > 0) parts.push(`${v.hashFailed} record hash${v.hashFailed !== 1 ? 'es' : ''} failed recomputation`);
     if (v.breaks > 0) parts.push(`${v.breaks} chain linkage break${v.breaks !== 1 ? 's' : ''}`);
     if (v.sigFailed > 0) parts.push(`${v.sigFailed} invalid signature${v.sigFailed !== 1 ? 's' : ''}`);
@@ -951,11 +980,16 @@ function renderTechnical() {
   // Public key
   const pk = publicKeyInfo();
   if (pk) {
+    const fingerprintMatch = v.keyFingerprintMatches === true
+      ? '<span style="color:var(--green)">Yes</span>'
+      : (v.keyFingerprintMatches === false
+        ? '<span style="color:var(--red)">Mismatch</span>'
+        : '<span style="color:var(--muted)">not checked</span>');
     html += `<div class="tech-section"><h2>Public Key</h2>
     <table class="tech-table">
-      ${techRow('Fingerprint', pk.fingerprint || m.public_key_fingerprint || 'unknown', true)}
-      ${techRow('Manifest fingerprint', m.public_key_fingerprint || 'unknown', true)}
-      ${techRow('Match', (pk.fingerprint || m.public_key_fingerprint) === m.public_key_fingerprint ? '<span style="color:var(--green)">Yes</span>' : '<span style="color:var(--red)">Mismatch</span>', false, true)}
+      ${techRow('Computed fingerprint', v.computedPublicKeyFingerprint || 'unknown', true)}
+      ${techRow('Manifest fingerprint', v.manifestPublicKeyFingerprint || 'unknown', true)}
+      ${techRow('Match', fingerprintMatch, false, true)}
     </table>
     ${pk.public_key_pem ? `<pre style="background:var(--bg);border:1px solid var(--border);padding:10px;font-size:0.7rem;overflow-x:auto;margin-top:8px;color:var(--muted)">${esc(pk.public_key_pem)}</pre>` : ''}
     </div>`;

@@ -312,12 +312,196 @@ def _validate_ungoverned_operation_observed(event: dict) -> tuple[bool, Optional
     return True, None
 
 
+def _require_str(event: dict, event_type: str, field: str, *, sha256: bool = False) -> Optional[str]:
+    value = event.get(field)
+    if not isinstance(value, str) or not value:
+        return f"{event_type}: {field} must be a non-empty string"
+    if sha256 and not value.startswith("sha256:"):
+        return f"{event_type}: {field} must be a sha256-prefixed string"
+    return None
+
+
+def _require_int(event: dict, event_type: str, field: str) -> Optional[str]:
+    if not isinstance(event.get(field), int):
+        return f"{event_type}: {field} must be an integer"
+    return None
+
+
+def _require_bool(event: dict, event_type: str, field: str) -> Optional[str]:
+    if not isinstance(event.get(field), bool):
+        return f"{event_type}: {field} must be a boolean"
+    return None
+
+
+def _validate_fields(event: dict, required: tuple[tuple[str, str], ...]) -> tuple[bool, Optional[str]]:
+    event_type = str(event.get("event_type"))
+    for field, kind in required:
+        if kind == "str":
+            err = _require_str(event, event_type, field)
+        elif kind == "sha256":
+            err = _require_str(event, event_type, field, sha256=True)
+        elif kind == "int":
+            err = _require_int(event, event_type, field)
+        elif kind == "bool":
+            err = _require_bool(event, event_type, field)
+        else:
+            err = f"{event_type}: unsupported validator kind for {field}"
+        if err:
+            return False, err
+    return True, None
+
+
+def _validate_remote_chain_import(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("source_machine_id", "str"),
+        ("source_machine_key_id", "str"),
+        ("segment_id", "sha256"),
+        ("segment_kind", "str"),
+        ("stored_segment_sha256", "sha256"),
+        ("remote_first_record_hash", "sha256"),
+        ("remote_last_record_hash", "sha256"),
+        ("remote_record_count", "int"),
+        ("import_sequence", "int"),
+        ("sync_session_id", "str"),
+        ("primary_import_timestamp_utc", "str"),
+        ("verification_result", "str"),
+    ))
+
+
+def _validate_machine_added(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("subject_machine_id", "str"),
+        ("subject_machine_role", "str"),
+        ("public_key_fingerprint", "str"),
+        ("operator_confirmation_event_id", "str"),
+        ("license_status", "str"),
+        ("sync_authorized", "bool"),
+        ("registry_hash_after", "sha256"),
+    ))
+
+
+def _validate_machine_removed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("subject_machine_id", "str"),
+        ("license_status", "str"),
+        ("sync_authorized", "bool"),
+        ("registry_hash_after", "sha256"),
+    ))
+
+
+def _validate_machine_role_changed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("subject_machine_id", "str"),
+        ("from_role", "str"),
+        ("to_role", "str"),
+        ("registry_hash_after", "sha256"),
+    ))
+
+
+def _validate_machine_key_rotated(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("subject_machine_id", "str"),
+        ("old_public_key_fingerprint", "str"),
+        ("new_public_key_fingerprint", "str"),
+        ("registry_hash_after", "sha256"),
+    ))
+
+
+def _validate_machine_license_status_changed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("subject_machine_id", "str"),
+        ("from_license_status", "str"),
+        ("to_license_status", "str"),
+        ("sync_authorized", "bool"),
+        ("registry_hash_after", "sha256"),
+    ))
+
+
+def _validate_version_check_performed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("current_version", "str"),
+        ("latest_version", "str"),
+        ("update_available", "bool"),
+    ))
+
+
+def _validate_trouble_or_telemetry_submitted(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("destination", "str"),
+        ("payload_hash", "sha256"),
+        ("payload_size", "int"),
+    ))
+
+
+def _validate_report_exported(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("report_name", "str"),
+        ("format", "str"),
+        ("record_count", "int"),
+    ))
+
+
+def _validate_dashboard_config_unlocked(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("operator_label", "str"), ("tier", "str")))
+
+
+def _validate_failed_authentication_attempt(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("endpoint", "str"), ("failure_reason", "str")))
+
+
+def _validate_license_validation_attempted(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("result", "str"), ("endpoint", "str")))
+
+
+def _validate_notification_received(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("notification_id", "str"), ("notification_type", "str")))
+
+
+def _validate_telemetry_opt_in_changed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("previous_state", "str"), ("new_state", "str")))
+
+
+def _validate_registry_config_change(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("new_registry_hash", "sha256"), ("tools_count", "int"), ("licensed", "bool")))
+
+
+def _validate_chain_export_created(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (("record_count", "int"),))
+
+
+def _validate_encrypted_evidence_package_created(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("package_id", "str"),
+        ("operator_identity", "str"),
+        ("record_count", "int"),
+        ("password_recorded", "bool"),
+    ))
+
+
 _EVENT_TYPE_VALIDATORS = {
     "verification_state_transition": _validate_verification_state_transition,
     "opaque_artifact_approval": _validate_opaque_artifact_approval,
     "opaque_artifact_revocation": _validate_opaque_artifact_revocation,
     "opaque_invocation_decision": _validate_opaque_invocation_decision,
     "ungoverned_operation_observed": _validate_ungoverned_operation_observed,
+    "remote_chain_import": _validate_remote_chain_import,
+    "machine_added": _validate_machine_added,
+    "machine_removed": _validate_machine_removed,
+    "machine_role_changed": _validate_machine_role_changed,
+    "machine_key_rotated": _validate_machine_key_rotated,
+    "machine_license_status_changed": _validate_machine_license_status_changed,
+    "version_check_performed": _validate_version_check_performed,
+    "trouble_report_submitted": _validate_trouble_or_telemetry_submitted,
+    "telemetry_submitted": _validate_trouble_or_telemetry_submitted,
+    "telemetry_opt_in_changed": _validate_telemetry_opt_in_changed,
+    "license_validation_attempted": _validate_license_validation_attempted,
+    "failed_authentication_attempt": _validate_failed_authentication_attempt,
+    "dashboard_config_unlocked": _validate_dashboard_config_unlocked,
+    "notification_received": _validate_notification_received,
+    "registry_config_change": _validate_registry_config_change,
+    "report_exported": _validate_report_exported,
+    "chain_export_created": _validate_chain_export_created,
+    "encrypted_evidence_package_created": _validate_encrypted_evidence_package_created,
 }
 
 

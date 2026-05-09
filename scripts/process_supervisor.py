@@ -35,11 +35,28 @@ def write_json_atomic(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
-def read_pid(path: Path) -> int | None:
+def read_pid_record(path: Path) -> dict | None:
     try:
-        return int(path.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
+        raw = path.read_text(encoding="utf-8").strip()
+    except OSError:
         return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            return {"pid": int(raw), "token": "", "runtime": ""}
+        except ValueError:
+            return None
+    if not isinstance(data, dict) or not isinstance(data.get("pid"), int):
+        return None
+    return data
+
+
+def read_pid(path: Path) -> int | None:
+    record = read_pid_record(path)
+    if not record:
+        return None
+    return int(record.get("pid") or 0) or None
 
 
 def pid_alive(pid: int | None) -> bool:
@@ -204,6 +221,7 @@ def main(argv=None) -> int:
     parser.add_argument("--role", choices=["primary", "remote"], required=True)
     parser.add_argument("--sync-host", default="127.0.0.1")
     parser.add_argument("--sync-port", type=int, default=8765)
+    parser.add_argument("--token", required=True)
     args = parser.parse_args(argv)
 
     runtime = Path(args.runtime).expanduser().resolve()
@@ -214,11 +232,18 @@ def main(argv=None) -> int:
     log_dir = supervisor_dir / "logs"
     supervisor_dir.mkdir(parents=True, exist_ok=True)
 
-    existing_pid = read_pid(pid_path)
+    existing = read_pid_record(pid_path)
+    existing_pid = int((existing or {}).get("pid") or 0)
+    existing_token = str((existing or {}).get("token") or "")
     if existing_pid and existing_pid != os.getpid() and pid_alive(existing_pid):
-        return 0
+        return 0 if existing_token == args.token else 1
 
-    pid_path.write_text(str(os.getpid()), encoding="utf-8")
+    write_json_atomic(pid_path, {
+        "pid": os.getpid(),
+        "token": args.token,
+        "runtime": str(runtime),
+        "created_utc": now_utc_z(),
+    })
 
     env = os.environ.copy()
     env["GOV_RUNTIME_DIR"] = str(runtime)
@@ -244,6 +269,8 @@ def main(argv=None) -> int:
             payload = {
                 "supervisor": {
                     "pid": os.getpid(),
+                    "token": args.token,
+                    "runtime": str(runtime),
                     "running": True,
                     "role": args.role,
                     "started_utc": started_utc,
@@ -270,6 +297,8 @@ def main(argv=None) -> int:
         payload = {
             "supervisor": {
                 "pid": os.getpid(),
+                "token": args.token,
+                "runtime": str(runtime),
                 "running": False,
                 "role": args.role,
                 "started_utc": started_utc,

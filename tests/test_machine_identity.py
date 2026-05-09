@@ -26,6 +26,13 @@ from machine_identity import (  # noqa: E402
 )
 
 
+def _append_event_to_chain(tmp_path, event):
+    chain = tmp_path / "runtime" / "LOGS" / "decision-chain.jsonl"
+    chain.parent.mkdir(parents=True, exist_ok=True)
+    with chain.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+
+
 def test_machine_identity_created_and_stable(tmp_path, monkeypatch):
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(tmp_path / "runtime"))
     identity = ensure_machine_identity(REPO, role="primary", signing_key_id="ed25519:test")
@@ -93,6 +100,7 @@ def test_registry_add_remove_and_license_events(tmp_path, monkeypatch):
         operator_confirmation_event_id="confirm-1",
         append_event=events.append,
     )
+    _append_event_to_chain(tmp_path, events[-1])
     assert event is None
     assert events[-1]["event_type"] == "machine_added"
     assert events[-1]["subject_machine_id"] == "remote-1"
@@ -106,10 +114,12 @@ def test_registry_add_remove_and_license_events(tmp_path, monkeypatch):
         sync_authorized=False,
         append_event=events.append,
     )
+    _append_event_to_chain(tmp_path, events[-1])
     assert events[-1]["event_type"] == "machine_license_status_changed"
     assert authorized_machine_lookup(REPO, "remote-1", "ed25519:remote1") is None
 
     registry, event = remove_machine_from_registry(REPO, "remote-1", reason="operator removal", append_event=events.append)
+    _append_event_to_chain(tmp_path, events[-1])
     assert events[-1]["event_type"] == "machine_removed"
     assert events[-1]["license_status"] == "removed"
 
@@ -126,9 +136,11 @@ def test_registry_role_change_and_key_rotation_events(tmp_path, monkeypatch):
         public_key_fingerprint="ed25519:old",
         public_key_pem="old pem",
         operator_confirmation_event_id="confirm-2",
+        append_event=lambda event: _append_event_to_chain(tmp_path, event),
     )
 
     change_machine_role(REPO, "remote-2", "primary", append_event=events.append)
+    _append_event_to_chain(tmp_path, events[-1])
     assert events[-1]["event_type"] == "machine_role_changed"
     assert events[-1]["from_role"] == "remote"
     assert events[-1]["to_role"] == "primary"
@@ -140,6 +152,38 @@ def test_registry_role_change_and_key_rotation_events(tmp_path, monkeypatch):
         new_public_key_pem="new pem",
         append_event=events.append,
     )
+    _append_event_to_chain(tmp_path, events[-1])
     assert events[-1]["event_type"] == "machine_key_rotated"
     assert authorized_machine_lookup(REPO, "remote-2", "ed25519:new") is not None
     assert authorized_machine_lookup(REPO, "remote-2", "ed25519:old") is None
+
+
+def test_forged_registry_without_chain_event_is_not_authorized(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(tmp_path / "runtime"))
+    registry = {
+        "registry_version": 1,
+        "installation_id": "install-x",
+        "machines": [{
+            "machine_id": "evil-remote",
+            "role": "remote",
+            "display_name": "Evil",
+            "public_key_fingerprint": "ed25519:evil",
+            "license_status": "active",
+            "sync_authorized": True,
+            "operator_confirmed_utc": "2026-05-09T00:00:00Z",
+            "operator_confirmation_event_id": "not-in-chain",
+            "first_seen_utc": "2026-05-09T00:00:00Z",
+            "last_sync_utc": None,
+            "keys": [{
+                "public_key_fingerprint": "ed25519:evil",
+                "public_key_pem": "pem",
+                "valid_from_utc": "2026-05-09T00:00:00Z",
+                "valid_until_utc": None,
+                "revoked_utc": None,
+            }],
+        }],
+        "registry_hash": None,
+    }
+    from machine_identity import save_machine_registry
+    save_machine_registry(REPO, registry)
+    assert authorized_machine_lookup(REPO, "evil-remote", "ed25519:evil") is None

@@ -23,6 +23,7 @@ try:
         private_key_public_pem,
         sha256_bytes,
         sign_segment_request,
+        sign_session_start,
         verify_response_signature,
     )
 except ImportError:  # pragma: no cover - package import path
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - package import path
         private_key_public_pem,
         sha256_bytes,
         sign_segment_request,
+        sign_session_start,
         verify_response_signature,
     )
 
@@ -78,10 +80,11 @@ class SyncClient:
             "product_version": _current_version(self.repo_root),
             "timestamp_utc": now_utc_z(),
         }
-        response = self._post("/sync/v1/session/start", payload)
+        signed = sign_session_start("POST", "/sync/v1/session/start", payload, self.remote_private_key)
+        response = self._post("/sync/v1/session/start", signed)
+        self._verify_response("/sync/v1/session/start", response)
         if not response.get("accepted"):
             raise SyncClientError(str(response.get("error") or "SESSION_REJECTED"))
-        self._verify_response("/sync/v1/session/start", response)
         self.session = response
         self.request_number = 0
         return response
@@ -128,9 +131,9 @@ class SyncClient:
             self.remote_private_key,
         )
         response = self._post("/sync/v1/segment", signed)
+        self._verify_response("/sync/v1/segment", response)
         if not response.get("accepted"):
             raise SyncClientError(str(response.get("error") or response.get("errors") or "SEGMENT_REJECTED"))
-        self._verify_response("/sync/v1/segment", response)
         store_state_bundle(self.repo_root, response)
         return response
 
@@ -164,7 +167,9 @@ class SyncClient:
         return parsed
 
     def _verify_response(self, path: str, response: dict) -> None:
-        if self.primary_public_key_pem and not verify_response_signature(path, response, self.primary_public_key_pem):
+        if not self.primary_public_key_pem:
+            raise SyncClientError("PRIMARY_PUBLIC_KEY_REQUIRED")
+        if not verify_response_signature(path, response, self.primary_public_key_pem):
             raise SyncClientError("PRIMARY_SIGNATURE_INVALID")
 
     def _source_machine_id(self, key_id: str) -> str:

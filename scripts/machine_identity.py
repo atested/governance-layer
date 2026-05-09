@@ -285,6 +285,8 @@ def authorized_machine_lookup(
             return None
         if not machine.get("operator_confirmed_utc") or not machine.get("operator_confirmation_event_id"):
             return None
+        if not _chain_authorizes_machine_key(repo_root, machine, public_key_fingerprint):
+            return None
         for key in machine.get("keys", []):
             if key.get("public_key_fingerprint") != public_key_fingerprint:
                 continue
@@ -292,6 +294,50 @@ def authorized_machine_lookup(
                 return None
             return machine
     return None
+
+
+def _chain_authorizes_machine_key(repo_root: Path, machine: dict, public_key_fingerprint: str) -> bool:
+    if machine.get("operator_confirmation_event_id") == "primary-bootstrap" and machine.get("role") == "primary":
+        return True
+    machine_id = machine.get("machine_id")
+    chain = runtime_root(repo_root) / "LOGS" / "decision-chain.jsonl"
+    try:
+        lines = chain.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    authorized_keys: set[str] = set()
+    sync_authorized = False
+    license_active = False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("subject_machine_id") != machine_id:
+            continue
+        event_type = event.get("event_type")
+        if event_type == "machine_added":
+            key_id = event.get("public_key_fingerprint")
+            if isinstance(key_id, str) and key_id:
+                authorized_keys.add(key_id)
+            sync_authorized = bool(event.get("sync_authorized"))
+            license_active = event.get("license_status") == ACTIVE_LICENSE_STATUS
+        elif event_type == "machine_key_rotated":
+            old_key = event.get("old_public_key_fingerprint")
+            new_key = event.get("new_public_key_fingerprint")
+            if isinstance(old_key, str):
+                authorized_keys.discard(old_key)
+            if isinstance(new_key, str) and new_key:
+                authorized_keys.add(new_key)
+        elif event_type == "machine_license_status_changed":
+            sync_authorized = bool(event.get("sync_authorized"))
+            license_active = event.get("to_license_status") == ACTIVE_LICENSE_STATUS
+        elif event_type == "machine_removed":
+            sync_authorized = False
+            license_active = False
+    return sync_authorized and license_active and public_key_fingerprint in authorized_keys
 
 
 def _machine_row(registry: dict, machine_id: str) -> Optional[dict]:
