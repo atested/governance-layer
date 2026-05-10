@@ -267,41 +267,29 @@ class IntegrityMonitor:
             self.save_chain_summary(summary)
             return summary
 
-        expected_count = int(metadata.get("expected_record_count") or 0)
-        expected_hash = metadata.get("expected_last_record_hash")
-        expected_existed = bool(metadata.get("chain_existed")) or expected_count > 0
-
-        if expected_existed and not summary.exists:
+        previous = self._previous_summary(metadata)
+        violation = self._checkpoint_violation(previous, summary)
+        if violation == "chain_file_missing":
             self.record_side_event("chain_file_missing", {
-                "expected_record_count": expected_count,
-                "expected_last_record_hash": expected_hash,
+                "expected_record_count": previous.record_count,
+                "expected_last_record_hash": previous.last_record_hash,
             })
             raise IntegrityViolation(
                 f"chain file missing after previous existence: {self.chain_path}"
             )
-        if summary.record_count < expected_count:
+        if violation == "chain_file_truncated":
             self.record_side_event("chain_file_truncated", {
-                "expected_record_count": expected_count,
+                "expected_record_count": previous.record_count,
                 "actual_record_count": summary.record_count,
-                "expected_last_record_hash": expected_hash,
+                "expected_last_record_hash": previous.last_record_hash,
                 "actual_last_record_hash": summary.last_record_hash,
             })
             raise IntegrityViolation(
-                f"chain truncated: expected at least {expected_count} records, got {summary.record_count}"
+                f"chain truncated: expected at least {previous.record_count} records, got {summary.record_count}"
             )
-        if summary.record_count > expected_count:
-            self.record_side_event("chain_record_count_mismatch", {
-                "expected_record_count": expected_count,
-                "actual_record_count": summary.record_count,
-                "expected_last_record_hash": expected_hash,
-                "actual_last_record_hash": summary.last_record_hash,
-            })
-            raise IntegrityViolation(
-                f"chain record count mismatch: expected {expected_count} records, got {summary.record_count}"
-            )
-        if summary.record_count == expected_count and expected_hash != summary.last_record_hash:
+        if violation == "chain_tail_hash_mismatch":
             self.record_side_event("chain_tail_hash_mismatch", {
-                "expected_last_record_hash": expected_hash,
+                "expected_last_record_hash": previous.last_record_hash,
                 "actual_last_record_hash": summary.last_record_hash,
             })
             raise IntegrityViolation("chain last record hash differs from integrity metadata")
@@ -312,41 +300,74 @@ class IntegrityMonitor:
         return summary
 
     def verify_chain_writable(self) -> ChainSummary:
-        metadata = self.load_metadata() or self._empty_metadata()
+        metadata = self.load_metadata()
+        if metadata is None and self.sentinel_path.exists():
+            self._block_chain("integrity_metadata_missing", {
+                "sentinel_exists": True,
+                "chain_exists": self.chain_path.exists(),
+            })
+        metadata = metadata or self._empty_metadata()
         try:
             summary = self.summarize_chain()
         except IntegrityViolation as exc:
             self._block_chain("chain_integrity_invalid", {
                 "error": str(exc),
             })
-        expected_count = int(metadata.get("expected_record_count") or 0)
-        expected_hash = metadata.get("expected_last_record_hash")
+        previous = self._previous_summary(metadata)
+        violation = self._checkpoint_violation(previous, summary)
 
-        if (metadata.get("chain_existed") or expected_count > 0) and not summary.exists:
+        if violation == "chain_file_missing":
             self._block_chain("chain_file_missing", {
-                "expected_record_count": expected_count,
-                "expected_last_record_hash": expected_hash,
+                "expected_record_count": previous.record_count,
+                "expected_last_record_hash": previous.last_record_hash,
             })
-        if summary.record_count < expected_count:
+        if violation == "chain_file_truncated":
             self._block_chain("chain_file_truncated", {
-                "expected_record_count": expected_count,
+                "expected_record_count": previous.record_count,
                 "actual_record_count": summary.record_count,
-                "expected_last_record_hash": expected_hash,
+                "expected_last_record_hash": previous.last_record_hash,
                 "actual_last_record_hash": summary.last_record_hash,
             })
-        if summary.record_count > expected_count:
-            self._block_chain("chain_record_count_mismatch", {
-                "expected_record_count": expected_count,
-                "actual_record_count": summary.record_count,
-                "expected_last_record_hash": expected_hash,
-                "actual_last_record_hash": summary.last_record_hash,
-            })
-        if summary.record_count == expected_count and expected_hash != summary.last_record_hash:
+        if violation == "chain_tail_hash_mismatch":
             self._block_chain("chain_tail_hash_mismatch", {
-                "expected_last_record_hash": expected_hash,
+                "expected_last_record_hash": previous.last_record_hash,
                 "actual_last_record_hash": summary.last_record_hash,
             })
+        if summary.record_count > previous.record_count:
+            self.save_chain_summary(summary)
         return summary
+
+    def _previous_summary(self, metadata: dict) -> ChainSummary:
+        count = int(metadata.get("expected_record_count") or 0)
+        return ChainSummary(
+            exists=bool(metadata.get("chain_existed")) or count > 0,
+            record_count=count,
+            last_record_hash=metadata.get("expected_last_record_hash"),
+            size_bytes=int(metadata.get("expected_chain_size_bytes") or 0),
+        )
+
+    def _checkpoint_violation(
+        self,
+        previous: ChainSummary,
+        current: ChainSummary,
+    ) -> Optional[str]:
+        """Compare current chain to the last trusted checkpoint.
+
+        The sidecar is a high-water tamper checkpoint, not an exact mirror.
+        Valid forward progress can happen through another writer before this
+        process refreshes metadata, so count increases are accepted after the
+        chain's own hashes/linkage validate in summarize_chain().
+        """
+        if previous.exists and not current.exists:
+            return "chain_file_missing"
+        if current.record_count < previous.record_count:
+            return "chain_file_truncated"
+        if (
+            current.record_count == previous.record_count
+            and previous.last_record_hash != current.last_record_hash
+        ):
+            return "chain_tail_hash_mismatch"
+        return None
 
     def _block_chain(self, reason: str, payload: dict) -> None:
         self.record_side_event(reason, payload)

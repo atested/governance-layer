@@ -122,6 +122,7 @@ const ACTIVITY_TOOLTIPS = {
 
 /** DOM references populated during render */
 let _page = null;
+let _refreshTimer = null;
 
 /** Cached state for dynamic accent colors */
 let _healthState = 'unknown';  // 'healthy', 'degraded', 'critical', 'unknown'
@@ -129,6 +130,10 @@ let _licenseState = 'amber';   // 'green' or 'amber'
 let _licenseTier = 'personal';
 
 export function renderMainPage() {
+  if (_refreshTimer) {
+    clearInterval(_refreshTimer);
+    _refreshTimer = null;
+  }
   // Guard: remove any existing main page to prevent duplicates
   const existing = document.getElementById('main-page');
   if (existing) existing.remove();
@@ -302,6 +307,14 @@ export function renderMainPage() {
   }
 
   installWindowTooltips(_page);
+  _refreshTimer = setInterval(() => {
+    if (!_page || !document.body.contains(_page)) {
+      clearInterval(_refreshTimer);
+      _refreshTimer = null;
+      return;
+    }
+    loadMainPageData();
+  }, 5000);
 
   return _page;
 }

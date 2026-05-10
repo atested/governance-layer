@@ -1356,6 +1356,29 @@ class TestApprovalOverride(unittest.TestCase):
         self.assertEqual(record_allow["policy_decision"], "ALLOW")
         self.assertEqual(record_allow["matched_rule"], "approved_lookup")
 
+    def test_tool_name_approval_is_case_insensitive(self):
+        """Approval for bash matches the Bash tool name recorded by the proxy."""
+        from approval_store import ApprovalStore
+
+        policy = _make_policy(base_dirs=[_REPO_STR])
+        store = ApprovalStore()
+        store.ingest_approval({
+            "artifact_identity": "bash",
+            "approving_operator": "test_operator",
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+        })
+
+        record = mediate_decision(
+            "Bash", {"command": "rm -rf /"},
+            policy=policy,
+            approval_store=store,
+        )
+
+        self.assertEqual(record["policy_decision"], "ALLOW")
+        self.assertEqual(record["matched_rule"], "approved_lookup")
+
     def test_denied_not_overridden_without_matching_approval(self):
         """Approval for a different tool does not override denial."""
         from approval_store import ApprovalStore

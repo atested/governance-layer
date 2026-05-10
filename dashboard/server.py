@@ -5245,15 +5245,23 @@ def main():
     port = int(os.environ.get("DASHBOARD_PORT", "9700"))
     _DASHBOARD_PORT = port
 
-    # Generate a random bearer token for this session
-    token = secrets.token_hex(32)
+    # Persist the browser bearer token across dashboard restarts so a
+    # stop/start cycle does not strand an open browser session with 401s.
+    runtime_dir = os.environ.get("GOV_RUNTIME_DIR", "")
+    token_path = Path(runtime_dir) / "dashboard_token" if runtime_dir else None
+    token = ""
+    if token_path is not None:
+        try:
+            token = token_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            token = ""
+    if not token:
+        token = secrets.token_hex(32)
     _DASHBOARD_TOKEN = token
     print(f"Dashboard auth token: {token}", file=sys.stderr)
 
     # Write token to runtime dir so callers (e.g. MCP tool) can retrieve it
-    runtime_dir = os.environ.get("GOV_RUNTIME_DIR", "")
     if runtime_dir:
-        token_path = Path(runtime_dir) / "dashboard_token"
         try:
             token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(token, encoding="utf-8")

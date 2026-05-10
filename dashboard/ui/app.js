@@ -39,6 +39,10 @@ async function api(endpoint, params = {}) {
   }
   const url = `${API}/api/${endpoint}${qs.toString() ? "?" + qs : ""}`;
   const resp = await fetch(url, { headers: _authHeaders() });
+  if (resp.status === 401) {
+    window.location.reload();
+    throw new Error("Dashboard session refreshed. Reconnecting...");
+  }
   if (!resp.ok) throw new Error(`API ${resp.status}: ${endpoint}`);
   return resp.json();
 }
@@ -834,13 +838,13 @@ function _renderGovernedRecord(rec) {
     ? (typeof denyReasons[0].detail === "object" ? denyReasons[0].detail.reason : denyReasons[0].detail)
     : "";
 
-  // For denied operations, prefer the concrete target/hash over the tool name.
-  const approveTarget = target || rec.artifact_identity || rec.record_hash || tool || "";
+  // Approvals match operation/tool names; keep command arguments out of prefill.
+  const approveTarget = tool || rec.artifact_identity || rec.record_hash || "";
   const approveHref = isDeny && approveTarget
     ? navHref("/approvals", {
         file: approveTarget,
         operation: tool,
-        target,
+        target: approveTarget,
         record_hash: rec.record_hash || "",
       })
     : "";

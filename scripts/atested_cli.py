@@ -200,11 +200,10 @@ def _load_verification_tracker():
 
 
 def _emit(args, data) -> None:
-    """Print result as JSON (default) or pretty text if --pretty."""
+    """Print result as JSON when requested."""
     if getattr(args, "json", False):
         print(json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False))
     else:
-        # Default: also JSON for machine-readable; matches dashboard payloads.
         print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
 
 
@@ -864,7 +863,8 @@ def _offer_shell_profile_update(args) -> dict:
         return result
     if not sys.stdin.isatty():
         return {"offered": False, "updated": False, "reason": "non_interactive"}
-    answer = input(f"Add ANTHROPIC_BASE_URL to {profile_path}? [y/N] ").strip().lower()
+    print(f"Add ANTHROPIC_BASE_URL to {profile_path}? [y/N] ", end="", flush=True)
+    answer = input().strip().lower()
     if answer not in {"y", "yes"}:
         return {"offered": True, "updated": False, "profile": str(profile_path), "reason": "operator_declined"}
     result = _add_anthropic_base_url_to_profile(profile_path)
@@ -878,7 +878,8 @@ def _collect_base_dirs(args) -> list[str]:
     if dirs_arg:
         candidates = dirs_arg
     elif sys.stdin.isatty():
-        raw = input(f"Working directories to govern [default: {Path.cwd().resolve()}]: ").strip()
+        print(f"Working directories to govern [default: {Path.cwd().resolve()}]: ", end="", flush=True)
+        raw = input().strip()
         candidates = [part.strip() for part in raw.split(",") if part.strip()] if raw else [str(Path.cwd().resolve())]
     else:
         candidates = [str(Path.cwd().resolve())]
@@ -895,7 +896,8 @@ def _collect_operator_identity(args) -> str:
         return provided
     default_identity = _configured_operator_identity()
     if sys.stdin.isatty():
-        answer = input(f"Operator identity [{default_identity}]: ").strip()
+        print(f"Operator identity [{default_identity}]: ", end="", flush=True)
+        answer = input().strip()
         return answer or default_identity
     return default_identity
 
@@ -1345,7 +1347,7 @@ def cmd_start(args) -> int:
     profile_result: dict = {}
     if first_run:
         if not getattr(args, "json", False):
-            print("Atested first-run setup")
+            print("Atested first-run setup", flush=True)
         operator_identity = _collect_operator_identity(args)
         _save_operator_config(operator_identity)
         configured_base_dirs = _collect_base_dirs(args)
@@ -1459,12 +1461,27 @@ def cmd_stop(args) -> int:
     stopped = []
     if not supervisor.get("stopped"):
         stopped = [_stop_service(name) for name in names]
-    _emit(args, {
+    payload = {
         "stopped": True,
         "role": (identity or {}).get("machine_role"),
         "supervisor": supervisor,
         "services": stopped,
-    })
+    }
+    if getattr(args, "json", False):
+        _emit(args, payload)
+    else:
+        role = payload.get("role") or "uninitialized"
+        print("Atested stopped.")
+        print(f"  Role:       {role}")
+        print(f"  Supervisor: {'stopped' if supervisor.get('stopped') else supervisor.get('reason', 'not_running')}")
+        if supervisor.get("pid"):
+            print(f"  PID:        {supervisor.get('pid')}")
+        if stopped:
+            print("  Services:")
+            for record in stopped:
+                name = record.get("name", "service")
+                state = "stopped" if record.get("stopped") else record.get("reason", "not_running")
+                print(f"    {name}: {state}")
     return 0
 
 

@@ -43,6 +43,10 @@ def _canonical_json(obj) -> str:
     )
 
 
+def _normalize_artifact_identity(value: str) -> str:
+    return str(value or "").strip().casefold()
+
+
 def approval_store_hash(store: Optional["ApprovalStore"] = None) -> str:
     """Hash the active approval-store snapshot used for a decision."""
     approvals = [] if store is None else store.all_approvals()
@@ -167,7 +171,12 @@ class ApprovalStore:
         policy_version conjunctively, with approving_operator stored
         in the record). Returns None if no matching approval exists.
         """
-        key = (artifact_identity, governed_family, deployment_context, policy_version)
+        key = (
+            _normalize_artifact_identity(artifact_identity),
+            governed_family,
+            deployment_context,
+            policy_version,
+        )
         return self._approvals.get(key)
 
     def all_approvals(self) -> list[dict]:
@@ -176,7 +185,7 @@ class ApprovalStore:
 
     def _scope_key(self, event: dict) -> tuple:
         return (
-            event["artifact_identity"],
+            _normalize_artifact_identity(event["artifact_identity"]),
             event["governed_family"],
             event["deployment_context"],
             event["policy_version"],

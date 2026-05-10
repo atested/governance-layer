@@ -36,7 +36,7 @@ const styles = `
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Child window: 90% viewport width, max 1300px, 85% viewport height */
+/* Child window: give operator workflows enough vertical room on small displays. */
 :host([depth="1"]) {
   inset: 0;
   padding-top: calc(var(--chrome-height) + 6px);
@@ -44,19 +44,19 @@ const styles = `
 :host([depth="1"]) .frame {
   width: 90vw;
   max-width: 1300px;
-  height: 85vh;
+  height: 90vh;
 }
 
 
-/* Grandchild window: 80% of child dimensions */
+/* Grandchild window: nearly full child height for record review + approvals. */
 :host([depth="2"]) {
   inset: 0;
   padding-top: calc(var(--chrome-height) + 6px);
 }
 :host([depth="2"]) .frame {
-  width: calc(90vw * 0.8);
-  max-width: calc(1300px * 0.8);
-  height: calc(85vh * 0.8);
+  width: 88vw;
+  max-width: 1180px;
+  height: 86vh;
 }
 
 :host([depth="2"]) .title-bar {

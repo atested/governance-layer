@@ -256,8 +256,8 @@ class TestMixedChainVerification:
         with pytest.raises(IntegrityViolation, match="chain truncated"):
             restarted.verify_startup_chain()
 
-    def test_extra_records_detected(self, tmp_path):
-        """More records than expected triggers count mismatch."""
+    def test_extra_valid_records_rebaseline_stale_metadata(self, tmp_path):
+        """More valid records than expected rebaseline stale metadata."""
         chain_path = tmp_path / "decision-chain.jsonl"
         monitor = _monitor(tmp_path, chain_path)
         monitor.verify_startup_chain()
@@ -272,8 +272,10 @@ class TestMixedChainVerification:
         monitor.metadata_path.write_text(_canonical(metadata) + "\n", encoding="utf-8")
 
         restarted = _monitor(tmp_path, chain_path)
-        with pytest.raises(IntegrityViolation, match="record count mismatch"):
-            restarted.verify_startup_chain()
+        summary = restarted.verify_startup_chain()
+
+        assert summary.record_count == 2
+        assert (restarted.load_metadata() or {})["expected_record_count"] == 2
 
 
 # ===========================================================================
@@ -386,10 +388,8 @@ class TestConcurrentAppends:
 class TestSidecarEventTriggers:
     """G-06: Verify each sidecar event is triggered with correct content."""
 
-    def test_chain_record_count_mismatch_sidecar(self, tmp_path):
-        """4a: Create chain with N records, set metadata to expect N-1,
-        confirm sidecar event written with details.
-        """
+    def test_sidecar_lagging_valid_chain_rebaselines_on_startup(self, tmp_path):
+        """4a: A sidecar behind a valid chain is a stale cache, not tamper."""
         chain_path = tmp_path / "decision-chain.jsonl"
         monitor = _monitor(tmp_path, chain_path)
         monitor.verify_startup_chain()
@@ -397,7 +397,7 @@ class TestSidecarEventTriggers:
         recorder.append_atomic(_record("one"))
         recorder.append_atomic(_record("two"))
 
-        # Tamper metadata: expect 1 but chain has 2
+        # Simulate stale metadata: expect 1 but chain has validly advanced to 2.
         metadata = json.loads(monitor.metadata_path.read_text(encoding="utf-8"))
         metadata["expected_record_count"] = 1
         metadata["expected_last_record_hash"] = "sha256:wrong"
@@ -405,15 +405,12 @@ class TestSidecarEventTriggers:
         monitor.metadata_path.write_text(_canonical(metadata) + "\n", encoding="utf-8")
 
         restarted = _monitor(tmp_path, chain_path)
-        with pytest.raises(IntegrityViolation):
-            restarted.verify_startup_chain()
+        summary = restarted.verify_startup_chain()
 
+        assert summary.record_count == 2
+        assert (restarted.load_metadata() or {})["expected_record_count"] == 2
         events = _read_sidecar_events(restarted.events_path)
-        count_events = [e for e in events if e["event_type"] == "chain_record_count_mismatch"]
-        assert len(count_events) >= 1
-        evt = count_events[0]
-        assert evt["expected_record_count"] == 1
-        assert evt["actual_record_count"] == 2
+        assert "chain_record_count_mismatch" not in [e["event_type"] for e in events]
 
     def test_chain_tail_hash_mismatch_sidecar(self, tmp_path):
         """4b: Create valid chain, modify stored tail hash, confirm event."""
@@ -539,6 +536,42 @@ class TestSidecarEventTriggers:
         assert fresh_rows[-1]["policy_decision"] == "ALLOW"
         side_events = _read_sidecar_events(monitor.events_path)
         assert not any(e["event_type"] == "chain_file_missing" for e in side_events)
+
+    def test_valid_forward_progress_rebaselines_stale_sidecar(self, tmp_path):
+        """A stale sidecar behind a valid chain is refreshed, not blocked."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+        recorder.append_atomic(_record("one"))
+
+        # Simulate a legitimate writer that appended under the chain lock but
+        # crashed before refreshing the sidecar. The chain itself remains valid.
+        stale_count = (monitor.load_metadata() or {})["expected_record_count"]
+        blind_recorder = ChainRecorder(chain_path, integrity_monitor=None)
+        blind_recorder.append_atomic(_record("two"))
+        assert len(_read_chain(chain_path)) == stale_count + 1
+
+        recorder.append_atomic(_record("three"))
+
+        metadata = monitor.load_metadata()
+        assert metadata["expected_record_count"] == 3
+        assert len(_read_chain(chain_path)) == 3
+        side_events = _read_sidecar_events(monitor.events_path)
+        assert "chain_record_count_mismatch" not in [e["event_type"] for e in side_events]
+
+    def test_fifty_consecutive_appends_keep_sidecar_in_sync(self, tmp_path):
+        chain_path = tmp_path / "decision-chain.jsonl"
+        monitor = _monitor(tmp_path, chain_path)
+        monitor.verify_startup_chain()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        for i in range(50):
+            recorder.append_atomic(_record(f"append-{i}"))
+
+        metadata = monitor.load_metadata()
+        assert metadata["expected_record_count"] == 50
+        assert len(_read_chain(chain_path)) == 50
 
 
 # ===========================================================================
@@ -1025,8 +1058,8 @@ class TestDashboardChainWriteSync:
             "signing_key_id": None,
         }
 
-    def test_dashboard_write_without_refresh_causes_mismatch(self, tmp_path):
-        """Without metadata refresh, dashboard writes cause count mismatch."""
+    def test_dashboard_write_without_refresh_rebaselines(self, tmp_path):
+        """A valid dashboard write without sidecar refresh no longer blocks."""
         chain_path = tmp_path / "decision-chain.jsonl"
         monitor = _monitor(tmp_path, chain_path)
         monitor.verify_startup_chain()
@@ -1039,9 +1072,11 @@ class TestDashboardChainWriteSync:
         self._dashboard_append(chain_path, self._dashboard_event("dash-1"))
         # Metadata still says count=1, but chain has count=2
 
-        # Proxy's next verify_chain_writable should see the mismatch
-        with pytest.raises(IntegrityViolation, match="chain_record_count_mismatch"):
-            monitor.verify_chain_writable()
+        # Proxy's next check should accept the valid chain and refresh metadata.
+        summary = monitor.verify_chain_writable()
+
+        assert summary.record_count == 2
+        assert (monitor.load_metadata() or {})["expected_record_count"] == 2
 
     def test_dashboard_write_with_refresh_no_mismatch(self, tmp_path):
         """With metadata refresh after write, no integrity violation."""

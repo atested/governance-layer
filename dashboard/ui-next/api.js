@@ -57,6 +57,10 @@ async function _request(method, path, { params, body } = {}) {
   try {
     const res = await fetch(url, opts);
     if (!res.ok) {
+      if (res.status === 401) {
+        window.location.reload();
+        return { ok: false, error: 'Dashboard session refreshed. Reconnecting...' };
+      }
       const text = await res.text().catch(() => '');
       return { ok: false, error: `${res.status}: ${text || res.statusText}` };
     }

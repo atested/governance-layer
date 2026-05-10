@@ -111,8 +111,6 @@ def check_chain_integrity(chain_path: Path) -> dict:
     if not chain_path.exists():
         return {"status": "ok", "checked": False, "chain_event_count": 0}
 
-    import os as _os
-
     try:
         st = chain_path.stat()
         mtime, size = st.st_mtime, st.st_size
@@ -126,7 +124,8 @@ def check_chain_integrity(chain_path: Path) -> dict:
     ):
         return _integrity_cache["result"]
 
-    verify_record_mod = _load_verify_record_module()
+    from integrity_monitor import _record_hash_for_integrity
+
     prev_hash: Optional[str] = None
     line_no = 0
     breaks: list[dict] = []
@@ -138,43 +137,38 @@ def check_chain_integrity(chain_path: Path) -> dict:
             "reason": reason,
         })
 
-    # Temporarily allow unsigned records during integrity verification.
-    # This function checks hash linkage, not signing compliance.
-    old_dev = _os.environ.get("GOV_SIGNING_DEV_MODE")
-    _os.environ["GOV_SIGNING_DEV_MODE"] = "1"
-    try:
-        with open(chain_path, "r", encoding="utf-8") as fh:
-            for raw_line in fh:
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                line_no += 1
-                try:
-                    rec = json.loads(stripped)
-                except json.JSONDecodeError:
-                    _record_break(None, "invalid_json")
-                    # Reset linkage; can't continue from an unparseable record.
-                    prev_hash = None
-                    continue
+    with open(chain_path, "r", encoding="utf-8") as fh:
+        for raw_line in fh:
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            line_no += 1
+            try:
+                rec = json.loads(stripped)
+            except json.JSONDecodeError:
+                _record_break(None, "invalid_json")
+                prev_hash = None
+                continue
 
-                rc, lines = verify_record_mod.verify_record_dict(rec)
-                if rc != 0:
-                    _record_break(rec, lines[0].replace("FAIL: ", "") if lines else "record_verification_failed")
-                    prev_hash = rec.get("record_hash")
-                    continue
+            record_hash = rec.get("record_hash")
+            if not isinstance(record_hash, str) or not record_hash.startswith("sha256:"):
+                _record_break(rec, "record_hash_missing")
+                prev_hash = record_hash
+                continue
 
-                link = rec.get("prev_record_hash")
-                if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
-                    _record_break(rec, "prev_record_hash_mismatch")
-                    prev_hash = rec.get("record_hash")
-                    continue
+            recomputed = _record_hash_for_integrity(rec)
+            if recomputed is not None and recomputed != record_hash:
+                _record_break(rec, "record_hash mismatch")
+                prev_hash = record_hash
+                continue
 
-                prev_hash = rec.get("record_hash")
-    finally:
-        if old_dev is None:
-            _os.environ.pop("GOV_SIGNING_DEV_MODE", None)
-        else:
-            _os.environ["GOV_SIGNING_DEV_MODE"] = old_dev
+            link = rec.get("prev_record_hash")
+            if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
+                _record_break(rec, "prev_record_hash_mismatch")
+                prev_hash = record_hash
+                continue
+
+            prev_hash = record_hash
 
     if breaks:
         first = breaks[0]
