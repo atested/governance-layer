@@ -465,6 +465,17 @@ def _invalidate_approval_store():
     _approval_store = None
 
 
+def _configured_operator_identity(default: str = "dashboard_operator") -> str:
+    try:
+        data = json.loads((RUNTIME / "operator.json").read_text(encoding="utf-8"))
+        value = str(data.get("user_identity") or "").strip()
+        if value:
+            return value
+    except (OSError, json.JSONDecodeError):
+        pass
+    return default
+
+
 # ---------------------------------------------------------------------------
 # Source file auto-reload
 # ---------------------------------------------------------------------------
@@ -1483,7 +1494,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         artifact_identity = str(data.get("artifact_identity", "")).strip()
-        operator = str(data.get("operator", "")).strip() or "dashboard_operator"
+        operator = str(data.get("operator", "")).strip() or _configured_operator_identity()
         if not artifact_identity:
             _json_response(self, {"error": "artifact_identity is required"}, 400)
             return
@@ -1493,6 +1504,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             payload = {
                 "artifact_identity": artifact_identity,
                 "approving_operator": operator,
+                "user_identity": operator,
                 "governed_family": _governed_family(),
                 "deployment_context": _deployment_context(),
                 "policy_version": _policy_version(),
@@ -1526,7 +1538,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         artifact_identity = str(data.get("artifact_identity", "")).strip()
-        operator = str(data.get("operator", "")).strip() or "dashboard_operator"
+        operator = str(data.get("operator", "")).strip() or _configured_operator_identity()
         if not artifact_identity:
             _json_response(self, {"error": "artifact_identity is required"}, 400)
             return
@@ -1536,6 +1548,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             payload = {
                 "artifact_identity": artifact_identity,
                 "revoking_operator": operator,
+                "user_identity": operator,
                 "governed_family": _governed_family(),
                 "deployment_context": _deployment_context(),
                 "policy_version": _policy_version(),

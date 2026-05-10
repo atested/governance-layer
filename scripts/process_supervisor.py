@@ -79,8 +79,9 @@ def detach_kwargs() -> dict:
 
 
 def build_service_specs(role: str, sync_host: str, sync_port: int) -> list[dict]:
+    proxy_port = os.environ.get("GOV_PROXY_PORT", "8080")
     specs = [
-        {"name": "proxy", "argv": [sys.executable, "-m", "proxy.server"]},
+        {"name": "proxy", "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port]},
         {"name": "dashboard", "argv": [sys.executable, "dashboard/server.py"]},
     ]
     if role == "primary":
@@ -180,6 +181,10 @@ class ManagedService:
         try:
             self.proc.kill()
         except OSError:
+            pass
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
             pass
 
     def status(self) -> dict:

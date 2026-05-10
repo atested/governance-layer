@@ -308,6 +308,33 @@ def test_chain_health_healthy_chain():
         chain_path.unlink()
 
 
+def test_collect_health_ignores_stale_break_events_for_healthy_chain():
+    """Old stability break events must not make a currently intact chain critical."""
+    from chain_health import append_stability_event, collect_health_signals
+    from event_model import build_non_action_event
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        chain_path = tmp / "chain.jsonl"
+        stability = tmp / "stability.jsonl"
+        meta = tmp / "chain_meta.json"
+        e1 = build_non_action_event("usage_attestation", {
+            "attestation_type": "test", "attestation_scope": "unit",
+        })
+        chain_path.write_text(json.dumps(e1, sort_keys=True, separators=(",", ":")) + "\n")
+        for i in range(4):
+            append_stability_event(stability, "break_detected", {
+                "break_at_line": i + 1,
+                "reason": "historical_test_break",
+            })
+
+        result = collect_health_signals(chain_path, stability, meta, tmp)
+
+        assert result["chain"]["status"] == "healthy"
+        assert result["overall_status"] != "critical"
+        assert not any(alert.get("message") == "Repeated chain breaks detected. Possible attack or system failure." for alert in result["alerts"])
+
+
 def test_dashboard_health_page_registered():
     """app.js has Health tab and renderHealth function."""
     js = (REPO / "dashboard" / "ui" / "app.js").read_text()

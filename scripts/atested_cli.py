@@ -37,6 +37,7 @@ import sys
 import threading
 import time as _time_mod
 from pathlib import Path
+from typing import Optional
 
 # Resolve the repository root and ensure scripts/ + mcp/ are importable.
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -373,9 +374,25 @@ def _pid_alive(pid: int) -> bool:
         return False
     try:
         os.kill(pid, 0)
-        return True
     except OSError:
         return False
+    if os.name != "nt":
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "stat="],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode != 0:
+                return True
+            state = (result.stdout or "").strip()
+            if state.startswith("Z"):
+                return False
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return True
 
 
 def _read_supervisor_pid_record() -> dict | None:
@@ -408,24 +425,59 @@ def _read_supervisor_pid() -> int | None:
 def _pid_command_matches(pid: int, token: str) -> bool:
     if os.name == "nt":
         return True
+    ps_failed = False
     try:
         result = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "command="],
+            ["ps", "-ww", "-p", str(pid), "-o", "command="],
             check=False,
             capture_output=True,
             text=True,
             timeout=2,
         )
     except (OSError, subprocess.TimeoutExpired):
+        ps_failed = True
+        result = None
+    if result is not None:
+        command = (result.stdout or "").strip()
+        if result.returncode == 0 and command:
+            return (
+                "process_supervisor.py" in command
+                and str(_runtime()) in command
+                and token in command
+            )
+        ps_failed = True
+    if not ps_failed:
         return False
-    command = (result.stdout or "").strip()
-    if result.returncode != 0 or not command:
+    # Some locked-down macOS/Python environments cannot read process command
+    # lines. Fall back to the supervisor heartbeat only when the pid, token,
+    # runtime, and heartbeat freshness all agree.
+    status = _read_json_file(_supervisor_status_path(), {})
+    supervisor = status.get("supervisor") if isinstance(status, dict) else {}
+    if not isinstance(supervisor, dict):
         return False
-    return (
-        "process_supervisor.py" in command
-        and str(_runtime()) in command
-        and token in command
-    )
+    if int(supervisor.get("pid") or 0) != pid:
+        return False
+    if str(supervisor.get("token") or "") != token:
+        return False
+    runtime = str(supervisor.get("runtime") or "")
+    try:
+        if Path(runtime).expanduser().resolve() != _runtime().resolve():
+            return False
+    except OSError:
+        return False
+    updated = _parse_utc_epoch(str(status.get("updated_utc") or ""))
+    return updated is not None and (_time_mod.time() - updated) <= 15
+
+
+def _parse_utc_epoch(value: str) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt.astimezone(timezone.utc).timestamp()
+    except ValueError:
+        return None
 
 
 def _supervisor_record_valid(record: dict | None) -> bool:
@@ -621,6 +673,31 @@ def _stop_supervisor() -> dict:
     return {"stopped": not _pid_alive(pid), "pid": pid}
 
 
+def _terminate_pid(pid: int, *, timeout: float = 5.0) -> bool:
+    if not pid or not _pid_alive(pid):
+        return True
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    deadline = _time_mod.time() + timeout
+    while _time_mod.time() < deadline:
+        if not _pid_alive(pid):
+            return True
+        _time_mod.sleep(0.1)
+    if _pid_alive(pid) and hasattr(signal, "SIGKILL"):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return True
+    deadline = _time_mod.time() + 2.0
+    while _time_mod.time() < deadline:
+        if not _pid_alive(pid):
+            return True
+        _time_mod.sleep(0.1)
+    return not _pid_alive(pid)
+
+
 def _load_services() -> dict:
     data = _read_json_file(_services_path(), {})
     return data if isinstance(data, dict) else {}
@@ -677,23 +754,37 @@ def _stop_service(name: str) -> dict:
         services.pop(name, None)
         _save_services(services)
         return {"name": name, "stopped": False, "reason": "not_running"}
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    deadline = _time_mod.time() + 5
-    while _time_mod.time() < deadline:
-        if not _pid_alive(pid):
-            break
-        _time_mod.sleep(0.1)
-    if _pid_alive(pid):
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    stopped = _terminate_pid(pid)
     services.pop(name, None)
     _save_services(services)
-    return {"name": name, "stopped": True, "pid": pid}
+    return {"name": name, "stopped": stopped, "pid": pid}
+
+
+def _collect_recorded_services() -> dict:
+    collected: dict[str, dict] = {}
+    for source in (_load_services(), (_read_json_file(_supervisor_status_path(), {}) or {}).get("services", {})):
+        if not isinstance(source, dict):
+            continue
+        for name, record in source.items():
+            if isinstance(record, dict):
+                collected[str(name)] = dict(record)
+    return collected
+
+
+def _stop_recorded_services(records: Optional[dict] = None) -> list[dict]:
+    records = records if isinstance(records, dict) else _collect_recorded_services()
+    stopped: list[dict] = []
+    for name, record in sorted(records.items()):
+        if not isinstance(record, dict):
+            continue
+        pid = int(record.get("pid") or 0)
+        stopped.append({
+            "name": name,
+            "pid": pid,
+            "stopped": _terminate_pid(pid) if pid else True,
+        })
+    _save_services({})
+    return stopped
 
 
 def _now_utc_z() -> str:
@@ -710,7 +801,7 @@ def _service_statuses() -> dict:
         return {
             name: {
                 **record,
-                "running": bool(record.get("running")) and _pid_alive(int(record.get("pid") or 0)),
+                "running": _pid_alive(int(record.get("pid") or 0)),
             }
             for name, record in services.items()
             if isinstance(record, dict)
@@ -801,13 +892,38 @@ def _profile_display_path(profile_path: Path) -> str:
 
 def _write_prompt(prompt: str) -> str:
     """Write prompts immediately, even in terminals that buffer stdout oddly."""
-    data = prompt.encode("utf-8", errors="replace")
+    _write_terminal(prompt)
+    return sys.stdin.readline().strip()
+
+
+def _write_terminal(text: str) -> None:
+    data = text.encode("utf-8", errors="replace")
+    wrote = False
+    if os.name != "nt":
+        try:
+            fd = os.open("/dev/tty", os.O_WRONLY)
+            try:
+                os.write(fd, data)
+                wrote = True
+            finally:
+                os.close(fd)
+        except OSError:
+            wrote = False
+    if wrote:
+        try:
+            sys.stdout.flush()
+        except OSError:
+            pass
+        return
     try:
         os.write(sys.stdout.fileno(), data)
     except OSError:
-        sys.stdout.write(prompt)
+        sys.stdout.write(text)
         sys.stdout.flush()
-    return sys.stdin.readline().strip()
+
+
+def _write_terminal_line(text: str) -> None:
+    _write_terminal(text.rstrip("\n") + "\n")
 
 
 def _configure_provider_base_urls(profile_path: Path) -> dict:
@@ -1241,11 +1357,12 @@ def cmd_approve(args) -> int:
     if not artifact_identity:
         print("error: artifact_identity is required", file=sys.stderr)
         return 2
-    operator = (args.operator or "cli_operator").strip()
+    operator = (args.operator or _configured_operator_identity()).strip()
 
     payload = {
         "artifact_identity": artifact_identity,
         "approving_operator": operator,
+        "user_identity": operator,
         "governed_family": _governed_family(),
         "deployment_context": _deployment_context(),
         "policy_version": _policy_version(),
@@ -1269,11 +1386,12 @@ def cmd_revoke(args) -> int:
     if not artifact_identity:
         print("error: artifact_identity is required", file=sys.stderr)
         return 2
-    operator = (args.operator or "cli_operator").strip()
+    operator = (args.operator or _configured_operator_identity()).strip()
 
     payload = {
         "artifact_identity": artifact_identity,
         "revoking_operator": operator,
+        "user_identity": operator,
         "governed_family": _governed_family(),
         "deployment_context": _deployment_context(),
         "policy_version": _policy_version(),
@@ -1431,7 +1549,7 @@ def cmd_start(args) -> int:
     profile_result: dict = {}
     if first_run:
         if not getattr(args, "json", False):
-            print("Atested first-run setup", flush=True)
+            _write_terminal_line("Atested first-run setup")
         operator_identity = _collect_operator_identity(args)
         _save_operator_config(operator_identity)
         configured_base_dirs = _collect_base_dirs(args)
@@ -1535,11 +1653,17 @@ def cmd_stop(args) -> int:
         identity = load_machine_identity(REPO)
     except Exception:
         identity = None
+    service_records = _collect_recorded_services()
     supervisor = _stop_supervisor()
-    names = list(_load_services().keys())
-    stopped = []
+    stopped = _stop_recorded_services(service_records)
     if not supervisor.get("stopped"):
-        stopped = [_stop_service(name) for name in names]
+        # If the supervisor did not exit cleanly, kill it after child cleanup so
+        # it cannot respawn services onto occupied ports.
+        pid = int(supervisor.get("pid") or 0)
+        if pid:
+            supervisor["stopped"] = _terminate_pid(pid, timeout=2.0)
+            if supervisor["stopped"]:
+                supervisor.pop("reason", None)
     payload = {
         "stopped": True,
         "role": (identity or {}).get("machine_role"),
@@ -1904,12 +2028,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_approve = sub.add_parser("approve", help="Approve an artifact (record approval event)")
     p_approve.add_argument("artifact_identity", help="Artifact identity (sha256:... or content hash)")
-    p_approve.add_argument("--operator", default="cli_operator", help="Approving operator name")
+    p_approve.add_argument("--operator", default=None, help="Approving operator name")
     p_approve.set_defaults(func=cmd_approve)
 
     p_revoke = sub.add_parser("revoke", help="Revoke an existing approval")
     p_revoke.add_argument("artifact_identity", help="Artifact identity to revoke")
-    p_revoke.add_argument("--operator", default="cli_operator", help="Revoking operator name")
+    p_revoke.add_argument("--operator", default=None, help="Revoking operator name")
     p_revoke.set_defaults(func=cmd_revoke)
 
     p_policy = sub.add_parser("policy", help="Policy operations")

@@ -275,6 +275,55 @@ def test_supervisor_status_ignores_stale_service_snapshot(tmp_path, monkeypatch)
     assert status.get("services") == {}
 
 
+def test_service_status_uses_live_pid_over_stale_running_flag(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps({
+        "pid": os.getpid(),
+        "token": "live-token",
+        "runtime": str(runtime),
+        "created_utc": "2026-05-10T00:00:00Z",
+    }), encoding="utf-8")
+    (supervisor_dir / "status.json").write_text(json.dumps({
+        "supervisor": {
+            "pid": os.getpid(),
+            "token": "live-token",
+            "runtime": str(runtime),
+            "running": True,
+        },
+        "services": {
+            "proxy": {"pid": 12345, "running": False, "uptime_seconds": 0},
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: token == "live-token")
+    monkeypatch.setattr(atested_cli, "_pid_alive", lambda pid: pid in {os.getpid(), 12345})
+
+    services = atested_cli._service_statuses()
+
+    assert services["proxy"]["running"] is True
+
+
+def test_stop_recorded_services_kills_stale_service_pids(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "services.json").write_text(json.dumps({
+        "proxy": {"pid": 111},
+        "dashboard": {"pid": 222},
+    }), encoding="utf-8")
+    killed = []
+    monkeypatch.setattr(atested_cli, "_terminate_pid", lambda pid, timeout=5.0: killed.append(pid) or True)
+
+    stopped = atested_cli._stop_recorded_services()
+
+    assert [row["name"] for row in stopped] == ["dashboard", "proxy"]
+    assert sorted(killed) == [111, 222]
+    assert json.loads((supervisor_dir / "services.json").read_text(encoding="utf-8")) == {}
+
+
 def test_stop_supervisor_refuses_identity_mismatch(tmp_path, monkeypatch):
     runtime = _make_isolated_runtime(tmp_path)
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))

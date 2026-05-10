@@ -538,72 +538,61 @@ def check_chain_health(
     ):
         return _chain_health_cache["result"]
 
-    import importlib.util
-    verify_record_path = Path(__file__).resolve().parent / "verify-record.py"
-    spec = importlib.util.spec_from_file_location("verify_record_impl", verify_record_path)
-    if spec is None or spec.loader is None:
-        return {
-            "status": HEALTH_ATTENTION,
-            "chain_event_count": 0,
-            "checked": False,
-            "break_info": {"reason": "unable to load verification module"},
-            "repair_info": None,
-            "pattern_alert": None,
-            "recent_stability_events": [],
-        }
-    verify_mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(verify_mod)
+    from integrity_monitor import _record_hash_for_integrity
 
-    # Run integrity check with signing bypass (structural check only)
-    old_dev = os.environ.get("GOV_SIGNING_DEV_MODE")
-    os.environ["GOV_SIGNING_DEV_MODE"] = "1"
+    # Structural chain health must not depend on a signing key being available
+    # to the dashboard process. Signature verification belongs to evidence
+    # verification; Health's Critical state is reserved for current hash/linkage
+    # integrity failures in the chain file itself.
     prev_hash: Optional[str] = None
     line_no = 0
     break_info = None
     breaks: list[dict] = []
 
-    try:
-        with open(chain_path, "r", encoding="utf-8") as fh:
-            for raw_line in fh:
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                line_no += 1
-                try:
-                    rec = json.loads(stripped)
-                except json.JSONDecodeError:
-                    b = {"break_at_line": line_no, "reason": "invalid_json"}
-                    if break_info is None:
-                        break_info = b
-                    breaks.append(b)
-                    prev_hash = None
-                    continue
+    with open(chain_path, "r", encoding="utf-8") as fh:
+        for raw_line in fh:
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            line_no += 1
+            try:
+                rec = json.loads(stripped)
+            except json.JSONDecodeError:
+                b = {"break_at_line": line_no, "reason": "invalid_json"}
+                if break_info is None:
+                    break_info = b
+                breaks.append(b)
+                prev_hash = None
+                continue
 
-                rc, lines = verify_mod.verify_record_dict(rec)
-                if rc != 0:
-                    reason = lines[0].replace("FAIL: ", "") if lines else "record_verification_failed"
-                    b = {"break_at_line": line_no, "reason": reason}
-                    if break_info is None:
-                        break_info = b
-                    breaks.append(b)
-                    prev_hash = rec.get("record_hash")
-                    continue
+            record_hash = rec.get("record_hash")
+            if not isinstance(record_hash, str) or not record_hash.startswith("sha256:"):
+                b = {"break_at_line": line_no, "reason": "record_hash_missing"}
+                if break_info is None:
+                    break_info = b
+                breaks.append(b)
+                prev_hash = record_hash
+                continue
 
-                link = rec.get("prev_record_hash")
-                if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
-                    b = {"break_at_line": line_no, "reason": "prev_record_hash_mismatch"}
-                    if break_info is None:
-                        break_info = b
-                    breaks.append(b)
-                    prev_hash = rec.get("record_hash")
-                    continue
+            recomputed_hash = _record_hash_for_integrity(rec)
+            if recomputed_hash is not None and recomputed_hash != record_hash:
+                b = {"break_at_line": line_no, "reason": "record_hash_mismatch"}
+                if break_info is None:
+                    break_info = b
+                breaks.append(b)
+                prev_hash = record_hash
+                continue
 
-                prev_hash = rec.get("record_hash")
-    finally:
-        if old_dev is None:
-            os.environ.pop("GOV_SIGNING_DEV_MODE", None)
-        else:
-            os.environ["GOV_SIGNING_DEV_MODE"] = old_dev
+            link = rec.get("prev_record_hash")
+            if line_no > 1 and "prev_record_hash" in rec and link != prev_hash:
+                b = {"break_at_line": line_no, "reason": "prev_record_hash_mismatch"}
+                if break_info is None:
+                    break_info = b
+                breaks.append(b)
+                prev_hash = record_hash
+                continue
+
+            prev_hash = record_hash
 
     recent_events = read_stability_log(stability_log_path, limit=10) if stability_log_path else []
 
