@@ -756,6 +756,7 @@ const _EVENT_LABELS = {
   verification_transition: 'Verification',
   opaque_approval: 'Approval',
   opaque_revocation: 'Revocation',
+  policy_rules_changed: 'Policy Change',
 };
 
 function _rowTooltip(entry, detail) {
@@ -765,6 +766,7 @@ function _rowTooltip(entry, detail) {
   if (entry.machine_id) parts.push(`Machine: ${_machineLabel(entry)}`);
   if (detail.action_type) parts.push(`Category: ${detail.action_type}`);
   if (detail.matched_rule) parts.push(`Rule: ${detail.matched_rule}`);
+  if (detail.response) parts.push(`Response: ${detail.response}`);
   if (entry.event_category) parts.push(`Event: ${_EVENT_LABELS[entry.event_category] || entry.event_category}`);
   return parts.join(' | ') || 'Open this chain record.';
 }

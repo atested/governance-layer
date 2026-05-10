@@ -1573,13 +1573,28 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": "source required"}, 400)
             return
 
+        policy_acknowledged = False
+        if alert_source == "policy_rules_changed":
+            try:
+                from integrity_monitor import IntegrityMonitor
+                monitor = IntegrityMonitor(CHAIN)
+                monitor.acknowledge_policy_rules_change(operator=str(data.get("operator") or "dashboard"))
+                policy_acknowledged = True
+            except Exception as exc:
+                _json_response(self, {"error": f"policy acknowledgement failed: {exc}"}, 500)
+                return
+
         from chain_health import append_stability_event
         stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
         evt = append_stability_event(stability_log, "alert_acknowledged", {
             "source": alert_source,
             "message": str(data.get("message", "")),
         })
-        _json_response(self, {"acknowledged": True, "event_id": evt["stability_event_id"]})
+        _json_response(self, {
+            "acknowledged": True,
+            "policy_acknowledged": policy_acknowledged,
+            "event_id": evt["stability_event_id"],
+        })
 
     def _handle_config_update(self):
         """POST /api/config/update — validate and write an updated capability registry.
@@ -2702,6 +2717,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "title": "Observation Gap Detected",
                     "message": "No ungoverned operation observations received recently. Check hook configuration.",
                     "persistent": False,
+                })
+
+            if h.get("integrity", {}).get("policy_rules_status") == "changed":
+                notifications.append({
+                    "id": "policy_rules_changed",
+                    "severity": "critical",
+                    "title": "Policy Rules Changed",
+                    "message": "Atested is denying all governed operations until the policy change is acknowledged.",
+                    "persistent": True,
                 })
 
             # License expiry warning

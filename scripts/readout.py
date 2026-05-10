@@ -354,6 +354,7 @@ EVENT_CATEGORIES = frozenset([
     "opaque_revocation",
     "opaque_invocation_decision",
     "ungoverned_observation",
+    "policy_rules_changed",
 ])
 
 _EVENT_TYPE_TO_CATEGORY = {
@@ -364,6 +365,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "ungoverned_operation_observed": "ungoverned_observation",
     "usage_attestation": "usage_attestation",
     "remote_chain_import": "remote_chain_import",
+    "policy_rules_changed": "policy_rules_changed",
 }
 
 
@@ -508,6 +510,20 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "operation_type": op_type,
             "target": target,
             "source": source,
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "policy_rules_changed":
+        governed_family = rec.get("governed_family", "")
+        summary = "Policy rules changed: deny-all until acknowledged"
+        detail = {
+            "previous_policy_rules_hash": rec.get("previous_policy_rules_hash", ""),
+            "current_policy_rules_hash": rec.get("current_policy_rules_hash", ""),
+            "policy_path": rec.get("policy_path", ""),
+            "response": rec.get("response", ""),
         }
         evidence = {
             "event_id": rec.get("event_id", ""),

@@ -293,20 +293,35 @@ def test_stop_supervisor_refuses_identity_mismatch(tmp_path, monkeypatch):
     assert result["reason"] == "supervisor_identity_mismatch"
 
 
-def test_shell_profile_helpers_add_anthropic_base_url(tmp_path):
+def test_shell_profile_helpers_configure_provider_base_urls(tmp_path):
     profile = tmp_path / ".zshrc"
-    result = atested_cli._add_anthropic_base_url_to_profile(profile)
+    result = atested_cli._configure_provider_base_urls(profile)
     assert result["updated"] is True
     text = profile.read_text(encoding="utf-8")
     assert "ANTHROPIC_BASE_URL=http://localhost:8080/anthropic" in text
+    assert "OPENAI_BASE_URL=http://localhost:8080/openai" in text
+    assert "GEMINI_BASE_URL=http://localhost:8080/gemini" in text
 
-    second = atested_cli._add_anthropic_base_url_to_profile(profile)
+    second = atested_cli._configure_provider_base_urls(profile)
     assert second["updated"] is False
     assert profile.read_text(encoding="utf-8").count("ANTHROPIC_BASE_URL=") == 1
+    assert profile.read_text(encoding="utf-8").count("OPENAI_BASE_URL=") == 1
+    assert profile.read_text(encoding="utf-8").count("GEMINI_BASE_URL=") == 1
 
     assert atested_cli._profile_path_for_shell("/bin/zsh", tmp_path) == tmp_path / ".zshrc"
+    assert atested_cli._profile_path_for_shell("/bin/bash", tmp_path) == tmp_path / ".bash_profile"
     assert atested_cli._profile_path_for_shell("/bin/fish", tmp_path) is None
-    print("PASS: test_shell_profile_helpers_add_anthropic_base_url")
+    print("PASS: test_shell_profile_helpers_configure_provider_base_urls")
+
+
+def test_collect_base_dirs_defaults_to_repo_root_noninteractive(monkeypatch):
+    monkeypatch.setattr(atested_cli.sys.stdin, "isatty", lambda: False)
+    args = type("Args", (), {"dirs": None})()
+
+    base_dirs = atested_cli._collect_base_dirs(args)
+
+    assert base_dirs == ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
+    print("PASS: test_collect_base_dirs_defaults_to_repo_root_noninteractive")
 
 
 def test_restore_verify_primary_runtime():
@@ -649,6 +664,8 @@ def test_uninstall_shell_profile_removal():
             "# existing stuff\nPATH=/usr/bin\n"
             "# Atested proxy endpoint\n"
             "export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic\n"
+            "export OPENAI_BASE_URL=http://localhost:8080/openai\n"
+            "export GEMINI_BASE_URL=http://localhost:8080/gemini\n"
             "# more stuff\n",
             encoding="utf-8",
         )
@@ -656,6 +673,8 @@ def test_uninstall_shell_profile_removal():
         assert result["removed"] is True
         text = profile.read_text(encoding="utf-8")
         assert "ANTHROPIC_BASE_URL" not in text
+        assert "OPENAI_BASE_URL" not in text
+        assert "GEMINI_BASE_URL" not in text
         assert "Atested proxy endpoint" not in text
         assert "existing stuff" in text
         assert "more stuff" in text

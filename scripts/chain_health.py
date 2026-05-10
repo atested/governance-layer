@@ -1021,6 +1021,16 @@ def collect_health_signals(
             "guidance": "Review user activity for unusual patterns.",
         })
 
+    if integrity.get("policy_rules_status") == "changed":
+        if overall == HEALTH_HEALTHY or overall == HEALTH_HEALTHY_REPAIRED:
+            overall = HEALTH_ATTENTION
+        alerts.append({
+            "severity": "attention",
+            "source": "policy_rules_changed",
+            "message": "Policy rules changed while the proxy was running. Atested is denying all governed operations until this is acknowledged.",
+            "guidance": "Review the policy change, then acknowledge it to resume normal policy evaluation.",
+        })
+
     if background_verification.get("status") in {"broken", "error"}:
         if overall == HEALTH_HEALTHY or overall == HEALTH_HEALTHY_REPAIRED:
             overall = HEALTH_ATTENTION

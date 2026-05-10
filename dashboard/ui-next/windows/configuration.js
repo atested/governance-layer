@@ -646,12 +646,14 @@ function _openProxyDetail(state, proxy) {
     <div class="cf-gc-section">
       <div class="cf-gc-sub-header">Setup</div>
       <p class="cf-gc-explain">Point your AI application at the proxy instead of the provider directly:</p>
-      <pre class="cf-code-block">ANTHROPIC_BASE_URL=http://localhost:${proxy.port || 8080}/anthropic</pre>
+      <pre class="cf-code-block">ANTHROPIC_BASE_URL=http://localhost:${proxy.port || 8080}/anthropic
+OPENAI_BASE_URL=http://localhost:${proxy.port || 8080}/openai
+GEMINI_BASE_URL=http://localhost:${proxy.port || 8080}/gemini</pre>
       <p class="cf-gc-explain">The proxy handles authentication forwarding. Your API key is passed through to the upstream provider.</p>
     </div>
     <div class="cf-gc-section">
       <div class="cf-gc-sub-header">Supported providers</div>
-      <p class="cf-gc-explain">Anthropic is the primary supported provider. The proxy architecture supports additional providers through route mapping. Each provider gets its own path prefix (e.g., <code>/anthropic</code>) to keep API routing clean.</p>
+      <p class="cf-gc-explain">Anthropic, OpenAI, and Gemini are routed through provider-specific proxy prefixes. Each provider gets its own path prefix to keep API routing clean.</p>
     </div>
     <div class="cf-gc-section">
       <div class="cf-gc-sub-header">Security</div>

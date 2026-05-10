@@ -161,7 +161,10 @@ class IntegrityMonitor:
         return metadata
 
     def save_metadata(self, updates: Optional[dict] = None) -> dict:
-        metadata = dict(self._metadata or self._empty_metadata())
+        base = self._metadata
+        if base is None and self.metadata_path.exists():
+            base = self.load_metadata()
+        metadata = dict(base or self._empty_metadata())
         if updates:
             metadata.update(updates)
         metadata["last_updated_utc"] = now_utc_z()

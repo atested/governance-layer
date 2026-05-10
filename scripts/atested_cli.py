@@ -773,30 +773,113 @@ def _profile_path_for_shell(shell_path: str | None = None, home: Path | None = N
     if shell == "zsh":
         return home_dir / ".zshrc"
     if shell == "bash":
-        bash_profile = home_dir / ".bash_profile"
-        return bash_profile if bash_profile.exists() else home_dir / ".bashrc"
+        return home_dir / ".bash_profile"
     return None
 
 
-def _add_anthropic_base_url_to_profile(profile_path: Path) -> dict:
-    line = "export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic"
-    marker = "# Atested proxy endpoint"
+PROXY_ROUTE_EXPORTS = (
+    ("ANTHROPIC_BASE_URL", "http://localhost:8080/anthropic"),
+    ("OPENAI_BASE_URL", "http://localhost:8080/openai"),
+    ("GEMINI_BASE_URL", "http://localhost:8080/gemini"),
+)
+
+
+def _proxy_route_lines() -> list[str]:
+    return [f"export {name}={value}" for name, value in PROXY_ROUTE_EXPORTS]
+
+
+def _profile_display_path(profile_path: Path) -> str:
+    try:
+        home = Path.home().resolve()
+        resolved = profile_path.resolve()
+        if resolved.parent == home:
+            return f"~/{resolved.name}"
+    except OSError:
+        pass
+    return str(profile_path)
+
+
+def _write_prompt(prompt: str) -> str:
+    """Write prompts immediately, even in terminals that buffer stdout oddly."""
+    data = prompt.encode("utf-8", errors="replace")
+    try:
+        os.write(sys.stdout.fileno(), data)
+    except OSError:
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+    return sys.stdin.readline().strip()
+
+
+def _configure_provider_base_urls(profile_path: Path) -> dict:
+    begin_marker = "# Atested proxy endpoints"
+    old_marker = "# Atested proxy endpoint"
+    route_lines = _proxy_route_lines()
     existing = ""
     try:
         existing = profile_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         profile_path.parent.mkdir(parents=True, exist_ok=True)
-    if "ANTHROPIC_BASE_URL=http://localhost:8080/anthropic" in existing:
-        return {"updated": False, "profile": str(profile_path), "reason": "already_present"}
-    prefix = "" if not existing or existing.endswith("\n") else "\n"
-    with open(profile_path, "a", encoding="utf-8") as fh:
-        fh.write(f"{prefix}{marker}\n{line}\n")
-    return {"updated": True, "profile": str(profile_path)}
+
+    lines = existing.splitlines()
+    cleaned: list[str] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped in {begin_marker, old_marker}:
+            i += 1
+            while i < len(lines) and (
+                lines[i].strip().startswith("export ANTHROPIC_BASE_URL=")
+                or lines[i].strip().startswith("export OPENAI_BASE_URL=")
+                or lines[i].strip().startswith("export GEMINI_BASE_URL=")
+            ):
+                i += 1
+            continue
+        if (
+            stripped.startswith("export ANTHROPIC_BASE_URL=")
+            or stripped.startswith("export OPENAI_BASE_URL=")
+            or stripped.startswith("export GEMINI_BASE_URL=")
+        ):
+            i += 1
+            continue
+        cleaned.append(lines[i])
+        i += 1
+
+    block = [begin_marker, *route_lines]
+    new_lines = cleaned
+    if new_lines and new_lines[-1].strip():
+        new_lines.append("")
+    new_lines.extend(block)
+    new_text = "\n".join(new_lines).rstrip() + "\n"
+    if new_text == existing:
+        return {
+            "updated": False,
+            "profile": str(profile_path),
+            "profile_display": _profile_display_path(profile_path),
+            "reason": "already_present",
+            "routes": dict(PROXY_ROUTE_EXPORTS),
+        }
+    try:
+        profile_path.write_text(new_text, encoding="utf-8")
+    except OSError as exc:
+        return {
+            "updated": False,
+            "profile": str(profile_path),
+            "profile_display": _profile_display_path(profile_path),
+            "reason": "write_failed",
+            "error": str(exc),
+            "routes": dict(PROXY_ROUTE_EXPORTS),
+        }
+    return {
+        "updated": True,
+        "profile": str(profile_path),
+        "profile_display": _profile_display_path(profile_path),
+        "routes": dict(PROXY_ROUTE_EXPORTS),
+    }
 
 
 def _remove_shell_profile_entry(profile_path: Path) -> dict:
-    """Remove the ANTHROPIC_BASE_URL line added by ``atested init``."""
-    marker = "# Atested proxy endpoint"
+    """Remove provider base URL lines added by ``atested init``."""
+    markers = {"# Atested proxy endpoint", "# Atested proxy endpoints"}
     try:
         text = profile_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -807,11 +890,14 @@ def _remove_shell_profile_entry(profile_path: Path) -> dict:
     found = False
     while i < len(lines):
         stripped = lines[i].rstrip("\n")
-        if stripped == marker:
+        if stripped in markers:
             found = True
-            # Skip marker line and the export line immediately after it
             i += 1
-            if i < len(lines) and "ANTHROPIC_BASE_URL" in lines[i]:
+            while i < len(lines) and (
+                "ANTHROPIC_BASE_URL" in lines[i]
+                or "OPENAI_BASE_URL" in lines[i]
+                or "GEMINI_BASE_URL" in lines[i]
+            ):
                 i += 1
             continue
         new_lines.append(lines[i])
@@ -851,23 +937,13 @@ def _clean_runtime_ephemeral(runtime: Path) -> list[str]:
     return cleaned
 
 
-def _offer_shell_profile_update(args) -> dict:
+def _configure_shell_profile(args) -> dict:
     if getattr(args, "no_shell_profile", False):
         return {"offered": False, "updated": False, "reason": "disabled_by_flag"}
     profile_path = _profile_path_for_shell()
     if profile_path is None:
         return {"offered": False, "updated": False, "reason": "unsupported_shell"}
-    if getattr(args, "yes_shell_profile", False):
-        result = _add_anthropic_base_url_to_profile(profile_path)
-        result["offered"] = True
-        return result
-    if not sys.stdin.isatty():
-        return {"offered": False, "updated": False, "reason": "non_interactive"}
-    print(f"Add ANTHROPIC_BASE_URL to {profile_path}? [y/N] ", end="", flush=True)
-    answer = input().strip().lower()
-    if answer not in {"y", "yes"}:
-        return {"offered": True, "updated": False, "profile": str(profile_path), "reason": "operator_declined"}
-    result = _add_anthropic_base_url_to_profile(profile_path)
+    result = _configure_provider_base_urls(profile_path)
     result["offered"] = True
     return result
 
@@ -875,14 +951,14 @@ def _offer_shell_profile_update(args) -> dict:
 def _collect_base_dirs(args) -> list[str]:
     base_dirs = ["__GOV_CANONICAL_REPO_PATH__", "__GOV_RUNTIME_PATH__"]
     dirs_arg = getattr(args, "dirs", None)
+    repo_default = str(REPO.resolve())
     if dirs_arg:
         candidates = dirs_arg
     elif sys.stdin.isatty():
-        print(f"Working directories to govern [default: {Path.cwd().resolve()}]: ", end="", flush=True)
-        raw = input().strip()
-        candidates = [part.strip() for part in raw.split(",") if part.strip()] if raw else [str(Path.cwd().resolve())]
+        raw = _write_prompt(f"Working directories to govern [default: {repo_default}]: ")
+        candidates = [part.strip() for part in raw.split(",") if part.strip()] if raw else [repo_default]
     else:
-        candidates = [str(Path.cwd().resolve())]
+        candidates = [repo_default]
     for directory in candidates:
         resolved = str(Path(directory).expanduser().resolve())
         if resolved != str(REPO.resolve()) and resolved not in base_dirs:
@@ -896,8 +972,7 @@ def _collect_operator_identity(args) -> str:
         return provided
     default_identity = _configured_operator_identity()
     if sys.stdin.isatty():
-        print(f"Operator identity [{default_identity}]: ", end="", flush=True)
-        answer = input().strip()
+        answer = _write_prompt(f"Operator identity [{default_identity}]: ")
         return answer or default_identity
     return default_identity
 
@@ -917,8 +992,7 @@ def _print_first_run_guidance() -> None:
     print("")
     print("What happens next:")
     print("")
-    print("  1. Point your AI agent at the proxy:")
-    print("     export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic")
+    print("  1. Restart your terminal or source your shell profile.")
     print("")
     print("  2. Use your agent normally.")
     print("")
@@ -931,6 +1005,21 @@ def _print_first_run_guidance() -> None:
     print("")
     print("  Open the dashboard to see governance in action:")
     print("     http://localhost:9700")
+    print("")
+
+
+def _print_proxy_routes(profile_result: dict) -> None:
+    if profile_result.get("reason") in {"unsupported_shell", "disabled_by_flag"}:
+        return
+    print("Configured proxy routes:")
+    for name, value in PROXY_ROUTE_EXPORTS:
+        print(f"  {name}={value}")
+    profile = profile_result.get("profile_display") or profile_result.get("profile")
+    if profile:
+        if profile_result.get("reason") == "write_failed":
+            print(f"  Could not add to {profile}: {profile_result.get('error')}")
+        else:
+            print(f"  Added to {profile}")
     print("")
 
 
@@ -1313,14 +1402,9 @@ def cmd_init(args) -> int:
     print("")
     print("Atested is initialized.")
     print("")
+    profile_result = _configure_shell_profile(args)
+    _print_proxy_routes(profile_result)
     _print_first_run_guidance()
-    profile_result = _offer_shell_profile_update(args)
-    if profile_result.get("updated"):
-        print(f"Added ANTHROPIC_BASE_URL to {profile_result.get('profile')}.")
-    elif profile_result.get("offered") and profile_result.get("reason") == "operator_declined":
-        print("Shell profile unchanged.")
-    elif profile_result.get("reason") == "non_interactive":
-        print("Shell profile unchanged. Run `atested init --yes-shell-profile` to persist ANTHROPIC_BASE_URL.")
     print("")
     return 0
 
@@ -1394,7 +1478,7 @@ def cmd_start(args) -> int:
         services = _service_statuses()
 
     if first_run:
-        profile_result = _offer_shell_profile_update(args)
+        profile_result = _configure_shell_profile(args)
 
     payload = {
         "started": True,
@@ -1424,12 +1508,7 @@ def cmd_start(args) -> int:
                 print(f"  Operator identity: {operator_identity}")
                 for d in configured_base_dirs[2:]:
                     print(f"  Working directory: {d}")
-            if profile_result.get("updated"):
-                print(f"  Added ANTHROPIC_BASE_URL to {profile_result.get('profile')}.")
-            elif profile_result.get("offered") and profile_result.get("reason") == "operator_declined":
-                print("  Shell profile unchanged.")
-            elif profile_result.get("reason") == "non_interactive":
-                print("  Shell profile unchanged. Run `atested init --yes-shell-profile` to persist ANTHROPIC_BASE_URL.")
+            _print_proxy_routes(profile_result)
             _print_first_run_guidance()
         print("Atested started.")
         print(f"  Role:    {role}")
@@ -1777,8 +1856,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Working directories for your AI agent (default: current directory)")
     p_init.add_argument("--user-identity", default=None, help="Operator identity recorded on governance events")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing configuration")
-    p_init.add_argument("--yes-shell-profile", action="store_true", help="Add ANTHROPIC_BASE_URL to the detected shell profile")
-    p_init.add_argument("--no-shell-profile", action="store_true", help="Do not offer to edit the shell profile")
+    p_init.add_argument("--yes-shell-profile", action="store_true", help=argparse.SUPPRESS)
+    p_init.add_argument("--no-shell-profile", action="store_true", help=argparse.SUPPRESS)
     p_init.set_defaults(func=cmd_init)
 
     p_start = sub.add_parser("start", help="Start Atested governance services")
@@ -1792,8 +1871,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--dirs", nargs="*", metavar="DIR",
                          help="Working directories for first-run setup")
     p_start.add_argument("--user-identity", default=None, help="Operator identity recorded on governance events")
-    p_start.add_argument("--yes-shell-profile", action="store_true", help="Add ANTHROPIC_BASE_URL to the detected shell profile on first run")
-    p_start.add_argument("--no-shell-profile", action="store_true", help="Do not offer to edit the shell profile on first run")
+    p_start.add_argument("--yes-shell-profile", action="store_true", help=argparse.SUPPRESS)
+    p_start.add_argument("--no-shell-profile", action="store_true", help=argparse.SUPPRESS)
     p_start.add_argument("--force", action="store_true", help="Regenerate local runtime key during start")
     p_start.add_argument("--no-services", action="store_true", help="Initialize lifecycle state without launching background services")
     p_start.set_defaults(func=cmd_start)

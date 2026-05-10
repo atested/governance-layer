@@ -102,8 +102,13 @@ function _renderAlertPane(state, alerts) {
 
     const ackBtn = document.createElement('button');
     ackBtn.className = 'hw-alert-ack';
-    ackBtn.textContent = 'Acknowledge';
-    setTooltip(ackBtn, 'Records that you have seen this health alert.');
+    ackBtn.textContent = alert.source === 'policy_rules_changed' ? 'Acknowledge policy change' : 'Acknowledge';
+    setTooltip(
+      ackBtn,
+      alert.source === 'policy_rules_changed'
+        ? 'Acknowledge the policy rules change and resume normal policy evaluation.'
+        : 'Records that you have seen this health alert.'
+    );
     ackBtn.addEventListener('click', async () => {
       const res = await api.postHealthAcknowledge({ source: alert.source, message: alert.message });
       if (res.ok) _loadData(state);
@@ -173,6 +178,9 @@ function _buildIntegrityPane(h) {
   body.appendChild(_kvRow('Proxy code hash', _truncHash(integrity.proxy_code_hash)));
   const policyStatus = integrity.policy_rules_status === 'changed' ? 'Changed' : 'Verified';
   body.appendChild(_kvRow('Policy rules hash', `${_truncHash(integrity.policy_rules_hash)} (${policyStatus})`, policyStatus === 'Changed' ? 'amber' : 'green'));
+  if (policyStatus === 'Changed') {
+    body.appendChild(_kvRow('Policy response', 'Deny-all until acknowledged', 'amber'));
+  }
   const chainStatus = _chainFileStatusLabel(integrity.chain_file_status);
   const chainColor = chainStatus === 'Intact' ? 'green' : chainStatus === 'Not available' ? 'amber' : 'red';
   body.appendChild(_kvRow('Chain file status', chainStatus, chainColor));

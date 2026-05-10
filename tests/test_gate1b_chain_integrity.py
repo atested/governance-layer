@@ -860,6 +860,31 @@ class TestRuntimePolicyChangeIntegrity:
         assert change2 is not None
         assert change2["current_policy_rules_hash"] != change1["current_policy_rules_hash"]
 
+    def test_policy_acknowledge_with_fresh_monitor_preserves_chain_checkpoint(self, tmp_path):
+        """Dashboard-style acknowledgement must not reset sidecar counts."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        policy_path = tmp_path / "policy-rules.json"
+        policy_path.write_text('{"rules":[],"v":1}\n', encoding="utf-8")
+        monitor = _monitor(tmp_path, chain_path, policy_path)
+        monitor.verify_startup_chain()
+        monitor.startup_hashes()
+        recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+        recorder.append_atomic(_record("before-policy-change"))
+        metadata_before = monitor.load_metadata()
+        assert metadata_before["expected_record_count"] == 1
+
+        policy_path.write_text('{"rules":[],"v":2}\n', encoding="utf-8")
+        assert monitor.check_policy_rules_unchanged() is not None
+
+        fresh_monitor = _monitor(tmp_path, chain_path, policy_path)
+        fresh_monitor.acknowledge_policy_rules_change(operator="dashboard")
+
+        metadata_after = fresh_monitor.load_metadata()
+        assert metadata_after["expected_record_count"] == 1
+        assert metadata_after["expected_last_record_hash"] == metadata_before["expected_last_record_hash"]
+        assert metadata_after["blocked_reason"] is None
+
 
 # ===========================================================================
 # SCOPE 8 — INV-008 replay outcome verification (G-13)
