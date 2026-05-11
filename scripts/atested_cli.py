@@ -915,8 +915,12 @@ def _profile_display_path(profile_path: Path) -> str:
 
 
 def _write_prompt(prompt: str) -> str:
-    """Write prompts immediately, even in terminals that buffer stdout oddly."""
-    _write_terminal(prompt)
+    """Write prompt to stdout and read one line from stdin."""
+    try:
+        os.write(sys.stdout.fileno(), prompt.encode("utf-8", errors="replace"))
+    except OSError:
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
     return sys.stdin.readline().strip()
 
 
@@ -1556,6 +1560,15 @@ def cmd_init(args) -> int:
 
 
 def cmd_start(args) -> int:
+    # Immediate output as the very first operation — write directly to
+    # the stdout file descriptor to bypass Python's IO layer entirely.
+    # This guarantees the user sees output within milliseconds, regardless
+    # of buffering mode, reconfigure state, or readline side-effects.
+    if not getattr(args, "json", False):
+        try:
+            os.write(sys.stdout.fileno(), b"Starting Atested...\n")
+        except OSError:
+            print("Starting Atested...", flush=True)
     role = str(args.role or "primary").strip().lower()
     if role not in {"primary", "remote"}:
         print("error: role must be primary or remote", file=sys.stderr)
@@ -1571,17 +1584,13 @@ def cmd_start(args) -> int:
         if not primary_public_key_pem:
             print("error: remote start requires --primary-public-key-pem or --primary-public-key-pem-file", file=sys.stderr)
             return 2
-    # Immediate output before any heavy operations (crypto imports,
-    # subprocess launch, polling) so the terminal is never blank.
-    if not getattr(args, "json", False):
-        print("Starting Atested...", flush=True)
     first_run = bool(args.force) or not _runtime_initialized()
     operator_identity = _configured_operator_identity(args)
     configured_base_dirs: list[str] = []
     profile_result: dict = {}
     if first_run:
         if not getattr(args, "json", False):
-            _write_terminal_line("Atested first-run setup")
+            print("Atested first-run setup", flush=True)
         operator_identity = _collect_operator_identity(args)
         _save_operator_config(operator_identity)
         configured_base_dirs = _collect_base_dirs(args)
