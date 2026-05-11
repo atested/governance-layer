@@ -26,7 +26,6 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import secrets
@@ -267,9 +266,11 @@ def _read_json_file(path: Path, default=None):
 
 
 def _default_operator_identity() -> str:
+    import getpass as _getpass
+
     return (
         str(os.environ.get("ATESTED_USER_LABEL", "")).strip()
-        or getpass.getuser()
+        or _getpass.getuser()
         or os.environ.get("USER", "")
         or "operator"
     )
@@ -507,6 +508,16 @@ def _supervisor_record_valid(record: dict | None) -> bool:
             status_runtime = str(supervisor.get("runtime") or "")
             if status_runtime and Path(status_runtime).expanduser().resolve() != _runtime().resolve():
                 return False
+        # Accept a fresh heartbeat as proof the supervisor is ours,
+        # even when ps-based command-line matching is unavailable.
+        if (
+            status_pid == pid
+            and str(supervisor.get("token") or "") == token
+            and supervisor.get("running")
+        ):
+            updated = _parse_utc_epoch(str(status.get("updated_utc") or ""))
+            if updated is not None and (_time_mod.time() - updated) <= 15:
+                return True
 
     return _pid_command_matches(pid, token)
 
@@ -645,6 +656,16 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
     }
 
 
+def _clear_supervisor_status_files() -> None:
+    """Remove stale status and services files so the next ``status``
+    command does not report PIDs or uptime from a previous session."""
+    for path in (_supervisor_status_path(), _services_path()):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _stop_supervisor() -> dict:
     record = _read_supervisor_pid_record()
     pid = int(record.get("pid") or 0) if record else None
@@ -653,12 +674,16 @@ def _stop_supervisor() -> dict:
             _supervisor_pid_path().unlink()
         except FileNotFoundError:
             pass
+        # Clear stale status so a subsequent ``status`` command does not
+        # report old PIDs or impossible uptime values.
+        _clear_supervisor_status_files()
         return {"stopped": False, "reason": "not_running", "pid": pid}
     if not _supervisor_record_valid(record):
         return {"stopped": False, "reason": "supervisor_identity_mismatch", "pid": pid}
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
+        _clear_supervisor_status_files()
         return {"stopped": False, "reason": "not_running", "pid": pid}
     deadline = _time_mod.time() + 10
     while _time_mod.time() < deadline:
@@ -670,7 +695,10 @@ def _stop_supervisor() -> dict:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-    return {"stopped": not _pid_alive(pid), "pid": pid}
+    stopped = not _pid_alive(pid)
+    if stopped:
+        _clear_supervisor_status_files()
+    return {"stopped": stopped, "pid": pid}
 
 
 def _terminate_pid(pid: int, *, timeout: float = 5.0) -> bool:
@@ -795,23 +823,19 @@ def _now_utc_z() -> str:
 
 def _service_statuses() -> dict:
     status = _supervisor_status()
+    # Prefer services from the status file (written by the running
+    # supervisor). Fall back to the standalone services.json only when
+    # the status file has no service entries at all.
     services = status.get("services")
-    supervisor = status.get("supervisor") if isinstance(status, dict) else {}
-    if isinstance(services, dict) and services and isinstance(supervisor, dict) and supervisor.get("running"):
-        return {
-            name: {
-                **record,
-                "running": _pid_alive(int(record.get("pid") or 0)),
-            }
-            for name, record in services.items()
-            if isinstance(record, dict)
-        }
+    if not isinstance(services, dict) or not services:
+        services = _load_services()
     statuses = {}
-    for name, record in _load_services().items():
+    for name, record in services.items():
         if isinstance(record, dict):
+            pid = int(record.get("pid") or 0)
             statuses[name] = {
                 **record,
-                "running": _pid_alive(int(record.get("pid") or 0)),
+                "running": _pid_alive(pid) if pid else False,
             }
     return statuses
 
@@ -1156,10 +1180,14 @@ def _print_status_summary(data: dict) -> None:
     if services:
         print("  Services:")
         for name, record in sorted(services.items()):
-            status = "running" if record.get("running") else "stopped"
+            svc_status = "running" if record.get("running") else "stopped"
             pid = f" pid {record.get('pid')}" if record.get("pid") else ""
+            # Compute live uptime from started_utc when possible.
             uptime = int(record.get("uptime_seconds") or 0)
-            print(f"    {name}: {status}{pid} uptime {uptime}s")
+            started = _parse_utc_epoch(str(record.get("started_utc") or ""))
+            if started is not None and record.get("running"):
+                uptime = max(0, int(_time_mod.time() - started))
+            print(f"    {name}: {svc_status}{pid} uptime {uptime}s")
     pending = sync.get("pending_records", 0) if isinstance(sync, dict) else 0
     last_sync = sync.get("last_successful_sync_utc") if isinstance(sync, dict) else None
     print(f"  Sync:       {pending} pending"
@@ -1543,6 +1571,10 @@ def cmd_start(args) -> int:
         if not primary_public_key_pem:
             print("error: remote start requires --primary-public-key-pem or --primary-public-key-pem-file", file=sys.stderr)
             return 2
+    # Immediate output before any heavy operations (crypto imports,
+    # subprocess launch, polling) so the terminal is never blank.
+    if not getattr(args, "json", False):
+        print("Starting Atested...", flush=True)
     first_run = bool(args.force) or not _runtime_initialized()
     operator_identity = _configured_operator_identity(args)
     configured_base_dirs: list[str] = []
@@ -2091,6 +2123,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
+    # Force line-buffered stdout so output appears immediately on all
+    # platforms, even when Python detects block-buffered mode.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass  # Python < 3.7 or non-reconfigurable stream
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

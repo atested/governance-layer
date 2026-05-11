@@ -777,6 +777,148 @@ def test_uninstall_services_not_running():
     print("PASS: test_uninstall_services_not_running")
 
 
+def test_start_prints_immediate_output():
+    """D-244: start must print output before heavy operations."""
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        rc, out, err = _run_cli(
+            ["start", "--no-services"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        # The first non-empty line must be the immediate status message.
+        lines = [ln for ln in out.splitlines() if ln.strip()]
+        assert lines, "start produced no output"
+        assert lines[0].strip() == "Starting Atested..."
+    print("PASS: test_start_prints_immediate_output")
+
+
+def test_getpass_not_imported_at_module_level():
+    """D-244: getpass must not be imported at module level (readline trigger)."""
+    import importlib
+    # Ensure getpass is NOT in atested_cli's module-level namespace
+    spec = importlib.util.find_spec("atested_cli")
+    assert spec is not None
+    # Check the source for 'import getpass' at module level
+    source = Path(spec.origin).read_text(encoding="utf-8")
+    # Module-level imports are before the first function def.  Any
+    # 'import getpass' must appear inside a function body (indented).
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("def ") or stripped.startswith("class "):
+            break
+        assert stripped != "import getpass", (
+            "getpass imported at module level — move inside function"
+        )
+    print("PASS: test_getpass_not_imported_at_module_level")
+
+
+def test_clear_supervisor_status_files():
+    """D-244: _clear_supervisor_status_files removes stale status."""
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = Path(tmp) / "runtime"
+        supervisor_dir = runtime / "supervisor"
+        supervisor_dir.mkdir(parents=True)
+        status_path = supervisor_dir / "status.json"
+        services_path = supervisor_dir / "services.json"
+        status_path.write_text('{"supervisor":{"pid":999}}', encoding="utf-8")
+        services_path.write_text('{"proxy":{"pid":1000}}', encoding="utf-8")
+        assert status_path.exists()
+        assert services_path.exists()
+
+        # Monkeypatch _supervisor_dir and _services_path
+        orig_supervisor_dir = atested_cli._supervisor_dir
+        orig_supervisor_status_path = atested_cli._supervisor_status_path
+        orig_services_path = atested_cli._services_path
+        atested_cli._supervisor_dir = lambda: supervisor_dir
+        atested_cli._supervisor_status_path = lambda: status_path
+        atested_cli._services_path = lambda: services_path
+        try:
+            atested_cli._clear_supervisor_status_files()
+        finally:
+            atested_cli._supervisor_dir = orig_supervisor_dir
+            atested_cli._supervisor_status_path = orig_supervisor_status_path
+            atested_cli._services_path = orig_services_path
+
+        assert not status_path.exists(), "status.json not deleted"
+        assert not services_path.exists(), "services.json not deleted"
+    print("PASS: test_clear_supervisor_status_files")
+
+
+def test_service_statuses_uses_status_file():
+    """D-244: _service_statuses should prefer status file over services.json."""
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = Path(tmp) / "runtime"
+        supervisor_dir = runtime / "supervisor"
+        supervisor_dir.mkdir(parents=True)
+
+        # Write a status file with service data
+        import time as _t
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        status_data = {
+            "supervisor": {
+                "pid": 0,
+                "token": "test-token",
+                "runtime": str(runtime),
+                "running": False,
+            },
+            "services": {
+                "proxy": {"pid": 0, "running": False, "name": "proxy",
+                          "started_utc": now_utc, "uptime_seconds": 5},
+            },
+            "updated_utc": now_utc,
+        }
+        (supervisor_dir / "status.json").write_text(
+            json.dumps(status_data), encoding="utf-8"
+        )
+        # Write DIFFERENT data to services.json (stale)
+        (supervisor_dir / "services.json").write_text(
+            json.dumps({"proxy": {"pid": 0, "running": True, "name": "proxy-stale"}}),
+            encoding="utf-8",
+        )
+        # Write a dummy pid record
+        (supervisor_dir / "supervisor.pid").write_text(
+            json.dumps({"pid": 0, "token": "test-token", "runtime": str(runtime)}),
+            encoding="utf-8",
+        )
+
+        orig_runtime = atested_cli._runtime
+        orig_supervisor_dir = atested_cli._supervisor_dir
+        orig_supervisor_status_path = atested_cli._supervisor_status_path
+        orig_services_path = atested_cli._services_path
+        orig_supervisor_pid_path = atested_cli._supervisor_pid_path
+        atested_cli._runtime = lambda: runtime
+        atested_cli._supervisor_dir = lambda: supervisor_dir
+        atested_cli._supervisor_status_path = lambda: supervisor_dir / "status.json"
+        atested_cli._services_path = lambda: supervisor_dir / "services.json"
+        atested_cli._supervisor_pid_path = lambda: supervisor_dir / "supervisor.pid"
+        try:
+            result = atested_cli._service_statuses()
+        finally:
+            atested_cli._runtime = orig_runtime
+            atested_cli._supervisor_dir = orig_supervisor_dir
+            atested_cli._supervisor_status_path = orig_supervisor_status_path
+            atested_cli._services_path = orig_services_path
+            atested_cli._supervisor_pid_path = orig_supervisor_pid_path
+
+        # Should use status file data, not services.json
+        assert "proxy" in result
+        assert result["proxy"]["name"] == "proxy", (
+            f"Expected status file data, got: {result['proxy']}"
+        )
+    print("PASS: test_service_statuses_uses_status_file")
+
+
+def test_main_reconfigures_stdout():
+    """D-244: main() must call sys.stdout.reconfigure for line buffering."""
+    rc, out, err = _run_cli(["--help"])
+    assert rc == 0
+    # Verify the reconfigure call exists in source
+    source = Path(atested_cli.__file__).read_text(encoding="utf-8")
+    assert "reconfigure(line_buffering=True)" in source
+    print("PASS: test_main_reconfigures_stdout")
+
+
 def main():
     test_help()
     test_policy_list()
