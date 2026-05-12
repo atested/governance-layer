@@ -925,24 +925,13 @@ def _write_prompt(prompt: str) -> str:
 
 
 def _write_terminal(text: str) -> None:
+    """Write text to stdout immediately.
+
+    The start path must be observable through redirected stdout as well as an
+    interactive terminal, so this helper intentionally avoids terminal-device
+    side channels.
+    """
     data = text.encode("utf-8", errors="replace")
-    wrote = False
-    if os.name != "nt":
-        try:
-            fd = os.open("/dev/tty", os.O_WRONLY)
-            try:
-                os.write(fd, data)
-                wrote = True
-            finally:
-                os.close(fd)
-        except OSError:
-            wrote = False
-    if wrote:
-        try:
-            sys.stdout.flush()
-        except OSError:
-            pass
-        return
     try:
         os.write(sys.stdout.fileno(), data)
     except OSError:
@@ -1560,15 +1549,6 @@ def cmd_init(args) -> int:
 
 
 def cmd_start(args) -> int:
-    # Immediate output as the very first operation — write directly to
-    # the stdout file descriptor to bypass Python's IO layer entirely.
-    # This guarantees the user sees output within milliseconds, regardless
-    # of buffering mode, reconfigure state, or readline side-effects.
-    if not getattr(args, "json", False):
-        try:
-            os.write(sys.stdout.fileno(), b"Starting Atested...\n")
-        except OSError:
-            print("Starting Atested...", flush=True)
     role = str(args.role or "primary").strip().lower()
     if role not in {"primary", "remote"}:
         print("error: role must be primary or remote", file=sys.stderr)
@@ -2140,6 +2120,8 @@ def main(argv=None) -> int:
         pass  # Python < 3.7 or non-reconfigurable stream
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "func", None) is cmd_start and not getattr(args, "json", False):
+        _write_terminal_line("Starting Atested...")
     return args.func(args)
 
 

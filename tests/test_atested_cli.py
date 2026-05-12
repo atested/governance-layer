@@ -792,6 +792,37 @@ def test_start_prints_immediate_output():
     print("PASS: test_start_prints_immediate_output")
 
 
+def test_start_redirected_stdout_gets_immediate_output(tmp_path):
+    """D-246: redirected stdout must receive the start line without a keypress."""
+    runtime = _make_isolated_runtime(tmp_path)
+    out_path = tmp_path / "out.txt"
+    env = os.environ.copy()
+    env["GOV_RUNTIME_DIR"] = str(runtime)
+    with out_path.open("w", encoding="utf-8") as out:
+        proc = subprocess.Popen(
+            [sys.executable, str(CLI_PATH), "start", "--no-services"],
+            stdout=out,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+        )
+        try:
+            proc.wait(timeout=10)
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=5)
+
+    text = out_path.read_text(encoding="utf-8")
+    assert text.startswith("Starting Atested...\n"), text
+
+
+def test_atested_cli_never_writes_to_dev_tty():
+    """D-246: CLI output must remain visible when stdout is redirected."""
+    source = CLI_PATH.read_text(encoding="utf-8")
+    assert "/dev/tty" not in source
+
+
 def test_getpass_not_imported_at_module_level():
     """D-244: getpass must not be imported at module level (readline trigger)."""
     import importlib
