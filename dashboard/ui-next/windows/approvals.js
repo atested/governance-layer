@@ -367,7 +367,7 @@ function _confirmRevoke(state, approval) {
   dialog.addEventListener('dialog:confirm', async () => {
     const res = await api.postApprovalRevoke({
       artifact_identity: approval.artifact_identity,
-      operator: approval.approving_operator || 'dashboard_operator',
+      operator: approval.approving_operator || '',
     });
     if (res.ok) {
       _loadData(state);
@@ -392,7 +392,7 @@ function _confirmBulkRevoke(state) {
     for (const approval of stale) {
       await api.postApprovalRevoke({
         artifact_identity: approval.artifact_identity,
-        operator: approval.approving_operator || 'dashboard_operator',
+        operator: approval.approving_operator || '',
       });
     }
     _loadData(state);
@@ -415,7 +415,7 @@ async function _handleApprove(state) {
 
   const res = await api.postApprovalAdd({
     artifact_identity: operation,
-    operator: 'dashboard_operator',
+    operator: '',
   });
   if (res.ok) {
     _showFormResult(resultEl, `Approved: ${operation}`, 'success');

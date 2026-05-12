@@ -643,7 +643,7 @@ function _attachApprovalListeners() {
     const fd = new FormData(form);
     const body = {
       artifact_identity: fd.get("artifact_identity"),
-      operator: fd.get("operator") || "dashboard_operator",
+      operator: fd.get("operator") || "",
     };
     const resultEl = document.getElementById("approve-result");
     try {

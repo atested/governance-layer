@@ -646,7 +646,7 @@ def test_uninstall_delete_runtime():
         chain = runtime / "LOGS" / "decision-chain.jsonl"
         chain.write_text('{"test": true}\n', encoding="utf-8")
         rc, out, err = _run_cli(
-            ["uninstall", "--delete-runtime", "--keep-repo", "--yes"],
+            ["--json", "uninstall", "--delete-runtime", "--keep-repo", "--yes"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 0, f"stderr: {err}"
@@ -667,7 +667,7 @@ def test_uninstall_keep_runtime():
         (runtime / "supervisor" / "supervisor.pid").write_text("99999")
         (runtime / "tmp").mkdir()
         rc, out, err = _run_cli(
-            ["uninstall", "--keep-runtime", "--keep-repo", "--yes"],
+            ["--json", "uninstall", "--keep-runtime", "--keep-repo", "--yes"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 0, f"stderr: {err}"
@@ -692,7 +692,7 @@ def test_uninstall_move_runtime():
         (runtime / "supervisor" / "status.json").write_text("{}")
         dest = Path(tmp) / "relocated"
         rc, out, err = _run_cli(
-            ["uninstall", "--move-runtime", str(dest), "--keep-repo", "--yes"],
+            ["--json", "uninstall", "--move-runtime", str(dest), "--keep-repo", "--yes"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 0, f"stderr: {err}"
@@ -740,7 +740,7 @@ def test_uninstall_non_interactive_requires_flags():
         runtime = _make_isolated_runtime(tmp)
         # No --yes, no runtime flag → should error (subprocess stdin is not a tty)
         rc, out, err = _run_cli(
-            ["uninstall"],
+            ["--json", "uninstall"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 1
@@ -753,7 +753,7 @@ def test_uninstall_mutual_exclusivity():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
         rc, out, err = _run_cli(
-            ["uninstall", "--keep-runtime", "--delete-runtime", "--yes"],
+            ["--json", "uninstall", "--keep-runtime", "--delete-runtime", "--yes"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 1
@@ -766,7 +766,7 @@ def test_uninstall_services_not_running():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
         rc, out, err = _run_cli(
-            ["uninstall", "--delete-runtime", "--keep-repo", "--yes"],
+            ["--json", "uninstall", "--delete-runtime", "--keep-repo", "--yes"],
             env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
         )
         assert rc == 0, f"stderr: {err}"
@@ -775,6 +775,21 @@ def test_uninstall_services_not_running():
         stop_step = data["steps"]["stop"]
         assert stop_step.get("reason") == "not_running" or stop_step.get("stopped") is False
     print("PASS: test_uninstall_services_not_running")
+
+
+def test_uninstall_human_readable_output():
+    with tempfile.TemporaryDirectory() as tmp:
+        runtime = _make_isolated_runtime(tmp)
+        rc, out, err = _run_cli(
+            ["uninstall", "--delete-runtime", "--keep-repo", "--yes"],
+            env_overrides={"GOV_RUNTIME_DIR": str(runtime)},
+        )
+        assert rc == 0, f"stderr: {err}"
+        assert out.startswith("Atested uninstall\n")
+        assert "Status: complete" in out
+        assert "Runtime: deleted" in out
+        assert not out.lstrip().startswith("{")
+    print("PASS: test_uninstall_human_readable_output")
 
 
 def test_start_prints_immediate_output():

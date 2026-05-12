@@ -207,6 +207,14 @@ def _emit(args, data) -> None:
         print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
 
 
+def _flush_terminal_output() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except OSError:
+            pass
+
+
 def _runtime() -> Path:
     return runtime_root(REPO)
 
@@ -1306,6 +1314,64 @@ def _degraded_summary(identity: dict | None, sync_config: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _print_uninstall_summary(result: dict) -> None:
+    print("Atested uninstall")
+    print(f"  Status: {'complete' if result.get('uninstalled') else 'incomplete'}")
+    steps = result.get("steps", {}) if isinstance(result, dict) else {}
+
+    stop = steps.get("stop", {}) if isinstance(steps, dict) else {}
+    if stop:
+        if stop.get("stopped"):
+            stop_status = "stopped"
+        else:
+            stop_status = stop.get("reason") or "not_running"
+        pid = f" pid {stop.get('pid')}" if stop.get("pid") else ""
+        print(f"  Services: {stop_status}{pid}")
+
+    profile = steps.get("shell_profile", {}) if isinstance(steps, dict) else {}
+    if profile:
+        if profile.get("removed"):
+            profile_status = "removed"
+        else:
+            profile_status = profile.get("reason") or "unchanged"
+        path = profile.get("profile_display") or profile.get("profile") or ""
+        print(f"  Shell profile: {profile_status}{' (' + path + ')' if path else ''}")
+
+    runtime = steps.get("runtime", {}) if isinstance(steps, dict) else {}
+    if runtime:
+        action = runtime.get("action") or "unknown"
+        if action == "move":
+            print(f"  Runtime: moved from {runtime.get('from')} to {runtime.get('to')}")
+        elif action == "keep":
+            print(f"  Runtime: kept at {runtime.get('path')}")
+        elif action == "delete":
+            print(f"  Runtime: deleted {runtime.get('path')}")
+        else:
+            print(f"  Runtime: {action}")
+
+    repo = steps.get("repo", {}) if isinstance(steps, dict) else {}
+    if repo:
+        action = repo.get("action") or "unknown"
+        path = f" {repo.get('path')}" if repo.get("path") else ""
+        print(f"  Repo: {action}{path}")
+
+    for err in result.get("errors", []) or []:
+        print(f"  Error: {err.get('step')}: {err.get('error')}")
+
+
+def _emit_uninstall_result(args, result: dict) -> None:
+    if getattr(args, "json", False):
+        _emit(args, result)
+        return
+    if result.get("steps"):
+        _print_uninstall_summary(result)
+        return
+    print("Atested uninstall")
+    print("  Status: incomplete")
+    message = result.get("message") or result.get("error") or result.get("reason") or "uninstall did not complete"
+    print(f"  Error: {message}")
+
+
 def cmd_status(args) -> int:
     from readout import assemble_governance_status_record
     from machine_identity import load_machine_identity
@@ -1611,13 +1677,23 @@ def cmd_start(args) -> int:
     sync_config = _set_sync_config(sync_config)
     _clear_degraded()
 
+    if first_run:
+        profile_result = _configure_shell_profile(args)
+        if not getattr(args, "json", False):
+            print("Atested is initialized.")
+            if configured_base_dirs:
+                print(f"  Operator identity: {operator_identity}")
+                for d in configured_base_dirs[2:]:
+                    print(f"  Working directory: {d}")
+            _print_proxy_routes(profile_result)
+            _print_first_run_guidance()
+
+    _flush_terminal_output()
+
     supervisor = {}
     if not args.no_services:
         supervisor = _start_supervisor(role, sync_host=args.sync_host, sync_port=int(args.sync_port))
         services = _service_statuses()
-
-    if first_run:
-        profile_result = _configure_shell_profile(args)
 
     payload = {
         "started": True,
@@ -1641,14 +1717,6 @@ def cmd_start(args) -> int:
     if getattr(args, "json", False):
         _emit(args, payload)
     else:
-        if first_run:
-            print("Atested is initialized.")
-            if configured_base_dirs:
-                print(f"  Operator identity: {operator_identity}")
-                for d in configured_base_dirs[2:]:
-                    print(f"  Working directory: {d}")
-            _print_proxy_routes(profile_result)
-            _print_first_run_guidance()
         print("Atested started.")
         print(f"  Role:    {role}")
         print(f"  Runtime: {_runtime()}")
@@ -1871,14 +1939,14 @@ def cmd_uninstall(args) -> int:
     delete_rt = getattr(args, "delete_runtime", False)
     flag_count = sum([keep_rt, bool(move_rt), delete_rt])
     if flag_count > 1:
-        _emit(args, {"uninstalled": False, "error": "mutually_exclusive_runtime_flags",
-                      "message": "Specify at most one of --keep-runtime, --move-runtime, --delete-runtime."})
+        _emit_uninstall_result(args, {"uninstalled": False, "error": "mutually_exclusive_runtime_flags",
+                                      "message": "Specify at most one of --keep-runtime, --move-runtime, --delete-runtime."})
         return 1
 
     if flag_count == 0:
         if getattr(args, "yes", False) or not sys.stdin.isatty():
-            _emit(args, {"uninstalled": False, "error": "runtime_action_required",
-                          "message": "Specify --keep-runtime, --move-runtime PATH, or --delete-runtime."})
+            _emit_uninstall_result(args, {"uninstalled": False, "error": "runtime_action_required",
+                                          "message": "Specify --keep-runtime, --move-runtime PATH, or --delete-runtime."})
             return 1
         # Interactive prompt
         print(f"Runtime directory: {runtime}")
@@ -1888,12 +1956,12 @@ def cmd_uninstall(args) -> int:
         elif answer in ("m", "move"):
             move_rt = input("  Move to: ").strip()
             if not move_rt:
-                _emit(args, {"uninstalled": False, "error": "no_move_destination"})
+                _emit_uninstall_result(args, {"uninstalled": False, "error": "no_move_destination"})
                 return 1
         elif answer in ("d", "delete"):
             delete_rt = True
         else:
-            _emit(args, {"uninstalled": False, "reason": "operator_cancelled"})
+            _emit_uninstall_result(args, {"uninstalled": False, "reason": "operator_cancelled"})
             return 1
 
     # Conflict: keeping runtime that lives inside repo while deleting repo
@@ -1901,8 +1969,8 @@ def cmd_uninstall(args) -> int:
     if keep_rt and not keep_repo:
         try:
             runtime.resolve().relative_to(REPO.resolve())
-            _emit(args, {"uninstalled": False, "error": "runtime_inside_repo",
-                          "message": f"Runtime is inside the repo. Use --move-runtime PATH to relocate it, or add --keep-repo."})
+            _emit_uninstall_result(args, {"uninstalled": False, "error": "runtime_inside_repo",
+                                          "message": f"Runtime is inside the repo. Use --move-runtime PATH to relocate it, or add --keep-repo."})
             return 1
         except ValueError:
             pass  # runtime is outside repo — no conflict
@@ -1910,11 +1978,11 @@ def cmd_uninstall(args) -> int:
     # --- Confirmation ---
     if not getattr(args, "yes", False):
         if not sys.stdin.isatty():
-            _emit(args, {"uninstalled": False, "error": "non_interactive_requires_yes"})
+            _emit_uninstall_result(args, {"uninstalled": False, "error": "non_interactive_requires_yes"})
             return 1
         confirm = input(f"Uninstall Atested from {REPO}? [y/N] ").strip().lower()
         if confirm not in ("y", "yes"):
-            _emit(args, {"uninstalled": False, "reason": "operator_cancelled"})
+            _emit_uninstall_result(args, {"uninstalled": False, "reason": "operator_cancelled"})
             return 1
 
     # --- Step 1: Stop services ---
@@ -1974,7 +2042,7 @@ def cmd_uninstall(args) -> int:
     result["uninstalled"] = len(errors) == 0
     if errors:
         result["errors"] = errors
-    _emit(args, result)
+    _emit_uninstall_result(args, result)
     return 0 if not errors else 1
 
 

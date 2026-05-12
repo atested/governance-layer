@@ -324,6 +324,22 @@ class TestExportEndpointDepth:
         # Without key → 400
         assert '"license_key required"' in source or "'license_key required'" in source
 
+    def test_trial_feature_tier_is_highest_tier(self):
+        """Trial mode unlocks highest-tier feature gates."""
+        posture = {
+            "license_status": "trial",
+            "license_tier": "personal",
+            "license_expiry": "2026-06-01T00:00:00Z",
+        }
+        assert ds._effective_feature_tier(posture) == "institution"
+
+    def test_export_authorize_allows_trial_without_license_key(self):
+        """Trial export authorization bypasses license-key authentication."""
+        source = inspect.getsource(ds.DashboardHandler._handle_export_authorize)
+        assert "trial_authorized" in source
+        assert "_effective_feature_tier(posture)" in source
+        assert "license_expiry" in source
+
     def test_export_authorize_issues_scoped_token(self, dashboard_env, monkeypatch):
         """_issue_export_token creates a scoped, time-limited token."""
         now = 1000.0

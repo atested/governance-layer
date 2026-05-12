@@ -476,6 +476,21 @@ class IntegrityMonitor:
                 or self.current_policy_rules_hash()
             )
         current_hash = self.current_policy_rules_hash()
+
+        # A dashboard acknowledgement happens in a different process from the
+        # running proxy.  Treat clean metadata for the current hash as the
+        # cross-process resume signal and refresh this monitor's in-memory
+        # baseline before returning a deny-all state again.
+        metadata = self.load_metadata() or {}
+        if (
+            metadata.get("policy_rules_hash") == current_hash
+            and not metadata.get("policy_rules_blocked_hash")
+            and metadata.get("blocked_reason") != "policy_rules_changed"
+        ):
+            self._startup_policy_hash = current_hash
+            self._policy_change_event_recorded_for = None
+            return None
+
         if current_hash == self._startup_policy_hash:
             return None
         self.save_metadata({
@@ -496,6 +511,7 @@ class IntegrityMonitor:
     def acknowledge_policy_rules_change(self, operator: str = "") -> dict:
         current_hash = self.current_policy_rules_hash()
         self._startup_policy_hash = current_hash
+        self._policy_change_event_recorded_for = None
         return self.save_metadata({
             "policy_rules_hash": current_hash,
             "policy_rules_blocked_hash": None,

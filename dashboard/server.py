@@ -377,6 +377,13 @@ MACHINE_CAPS = {
 }
 
 
+def _effective_feature_tier(posture: dict) -> str:
+    """Return the tier used for feature gates."""
+    if (posture or {}).get("license_status") == "trial":
+        return "institution"
+    return (posture or {}).get("license_tier") or "personal"
+
+
 def _get_install_fingerprint():
     fp_file = RUNTIME / "install_fingerprint"
     if fp_file.exists():
@@ -1589,9 +1596,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         policy_acknowledged = False
         if alert_source == "policy_rules_changed":
             try:
+                operator = str(data.get("operator") or "").strip() or _configured_operator_identity()
                 from integrity_monitor import IntegrityMonitor
                 monitor = IntegrityMonitor(CHAIN)
-                monitor.acknowledge_policy_rules_change(operator=str(data.get("operator") or "dashboard"))
+                metadata = monitor.acknowledge_policy_rules_change(operator=operator)
+                from event_model import build_non_action_event
+                _append_chain_record_atomic(build_non_action_event(
+                    "policy_acknowledged",
+                    {
+                        "current_policy_rules_hash": metadata.get("policy_rules_hash"),
+                        "policy_path": str(monitor.policy_path),
+                        "operator_identity": operator,
+                        "user_identity": operator,
+                        "response": "resume_normal_policy_evaluation",
+                    },
+                    prev_record_hash=None,
+                ))
                 policy_acknowledged = True
             except Exception as exc:
                 _json_response(self, {"error": f"policy acknowledgement failed: {exc}"}, 500)
@@ -1613,10 +1633,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         """POST /api/config/update — validate and write an updated capability registry.
 
         Accepts JSON body: {"registry": {...}, "license_key": "..."}
-        If no license_key is provided (trial mode), enforces trial limits:
-          - max 3 additional allow_base_dirs beyond defaults per tool
-          - no cap field changes
-          - basic boolean toggles only
+        If no license_key is provided after trial, enforces Personal limits.
+        Trial installations receive highest-tier feature access for evaluation.
         """
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -1655,57 +1673,59 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": schema_error}, 400)
             return
 
-        # Trial-mode constraints
+        # Personal-mode constraints. Trial receives highest-tier feature access.
         if not licensed:
             posture = resolve_posture(RUNTIME)
-            if posture.get("license_status") not in ("trial", "personal"):
+            if posture.get("license_status") == "trial":
+                pass
+            elif posture.get("license_status") != "personal":
                 _json_response(self, {
                     "error": "license required for registry edits",
                     "license_status": posture.get("license_status"),
                 }, 403)
                 return
+            else:
+                # Load existing registry to compute diffs
+                registry_path = REPO / "capabilities" / "capability-registry.json"
+                existing = {}
+                if registry_path.exists():
+                    try:
+                        existing = json.loads(registry_path.read_text(encoding="utf-8"))
+                    except (json.JSONDecodeError, OSError):
+                        existing = {}
 
-            # Load existing registry to compute diffs
-            registry_path = REPO / "capabilities" / "capability-registry.json"
-            existing = {}
-            if registry_path.exists():
-                try:
-                    existing = json.loads(registry_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    existing = {}
+                existing_tools = {t["tool"]: t for t in existing.get("tools", []) if isinstance(t, dict)}
+                _DEFAULT_MAX_EXTRA_DIRS = 3
+                _CAP_FIELDS = {"max_bytes", "max_bytes_hard", "max_entries", "max_entries_hard"}
 
-            existing_tools = {t["tool"]: t for t in existing.get("tools", []) if isinstance(t, dict)}
-            _DEFAULT_MAX_EXTRA_DIRS = 3
-            _CAP_FIELDS = {"max_bytes", "max_bytes_hard", "max_entries", "max_entries_hard"}
+                for tool_entry in registry.get("tools", []):
+                    if not isinstance(tool_entry, dict):
+                        continue
+                    tool_name = tool_entry.get("tool", "")
+                    existing_entry = existing_tools.get(tool_name, {})
 
-            for tool_entry in registry.get("tools", []):
-                if not isinstance(tool_entry, dict):
-                    continue
-                tool_name = tool_entry.get("tool", "")
-                existing_entry = existing_tools.get(tool_name, {})
+                    # Check for cap field changes (not allowed on Personal)
+                    for cap_field in _CAP_FIELDS:
+                        if cap_field in tool_entry and tool_entry[cap_field] != existing_entry.get(cap_field):
+                            _json_response(self, {
+                                "error": f"personal: cap field '{cap_field}' changes require a license",
+                                "tool": tool_name,
+                            }, 403)
+                            return
 
-                # Check for cap field changes (not allowed on trial)
-                for cap_field in _CAP_FIELDS:
-                    if cap_field in tool_entry and tool_entry[cap_field] != existing_entry.get(cap_field):
+                    # Check extra allow_base_dirs
+                    new_dirs = set(tool_entry.get("allow_base_dirs", []))
+                    old_dirs = set(existing_entry.get("allow_base_dirs", []))
+                    extra_dirs = new_dirs - old_dirs
+                    if len(extra_dirs) > _DEFAULT_MAX_EXTRA_DIRS:
                         _json_response(self, {
-                            "error": f"trial: cap field '{cap_field}' changes require a license",
+                            "error": (
+                                f"personal: max {_DEFAULT_MAX_EXTRA_DIRS} additional directories "
+                                f"per tool; {len(extra_dirs)} requested for '{tool_name}'"
+                            ),
                             "tool": tool_name,
                         }, 403)
                         return
-
-                # Check extra allow_base_dirs
-                new_dirs = set(tool_entry.get("allow_base_dirs", []))
-                old_dirs = set(existing_entry.get("allow_base_dirs", []))
-                extra_dirs = new_dirs - old_dirs
-                if len(extra_dirs) > _DEFAULT_MAX_EXTRA_DIRS:
-                    _json_response(self, {
-                        "error": (
-                            f"trial: max {_DEFAULT_MAX_EXTRA_DIRS} additional directories "
-                            f"per tool; {len(extra_dirs)} requested for '{tool_name}'"
-                        ),
-                        "tool": tool_name,
-                    }, 403)
-                    return
 
         # Write the registry atomically
         registry_path = REPO / "capabilities" / "capability-registry.json"
@@ -1841,12 +1861,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return
 
         license_key = str(data.get("license_key", "")).strip()
-        if not license_key:
-            _json_response(self, {"error": "license_key required"}, 400)
-            return
-
-        from licensing import validate_license_key
-        info = validate_license_key(license_key)
+        info = None
+        trial_authorized = False
+        if license_key:
+            from licensing import validate_license_key
+            info = validate_license_key(license_key)
+        else:
+            try:
+                from licensing import resolve_posture
+                posture = resolve_posture(RUNTIME)
+                trial_authorized = posture.get("license_status") == "trial"
+                if trial_authorized:
+                    info = {
+                        "tier": _effective_feature_tier(posture),
+                        "expiry_iso": posture.get("license_expiry"),
+                    }
+            except Exception:
+                info = None
         if info is None:
             # Record failed authentication attempt
             try:
@@ -1854,11 +1885,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 _append_chain_record_atomic(build_non_action_event(
                     "failed_authentication_attempt", {
                         "endpoint": "/api/export/authorize",
-                        "failure_reason": "invalid_license_key",
+                        "failure_reason": "invalid_license_key" if license_key else "license_key_required",
                     }))
             except Exception:
                 pass
-            _json_response(self, {"error": "invalid license key"}, 403)
+            if not license_key:
+                _json_response(self, {"error": "license_key required"}, 400)
+            else:
+                _json_response(self, {"error": "invalid license key"}, 403)
             return
 
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
@@ -1897,7 +1931,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "export_level": str(metadata.get("export_level") or "raw"),
             "surface": surface,
             "format": export_format,
-            "operator_identity": _license_fingerprint(license_key),
+            "operator_identity": _configured_operator_identity() if trial_authorized else _license_fingerprint(license_key),
             "license_tier": info.get("tier"),
             "license_expiry": info.get("expiry_iso"),
             "chain_source": chain_source,
@@ -3798,7 +3832,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 _json_response(self, {"ok": False, "error": "No license found"}, 400)
                 return
             ld = json.loads(license_file.read_text(encoding="utf-8"))
-            tier = ld.get("license_tier", "personal")
+            from licensing import resolve_posture
+            tier = _effective_feature_tier(resolve_posture(RUNTIME))
             if tier == "personal":
                 _json_response(self, {"ok": False, "error": "Personal tier does not support sharing"}, 403)
                 return
@@ -3857,7 +3892,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             # Re-check capacity
             license_file = RUNTIME / "license.json"
             ld = json.loads(license_file.read_text(encoding="utf-8"))
-            tier = ld.get("license_tier", "personal")
+            from licensing import resolve_posture
+            tier = _effective_feature_tier(resolve_posture(RUNTIME))
             cap = MACHINE_CAPS.get(tier)
             if cap is not None:
                 count, _ = _count_active_machines_from_chain()
@@ -4794,8 +4830,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 try:
                     from licensing import resolve_posture
                     posture = resolve_posture(RUNTIME)
-                    tier = posture.get("license_tier", "personal")
-                    if tier in ("personal",):
+                    tier = _effective_feature_tier(posture)
+                    if tier == "personal":
                         from datetime import datetime, timezone
                         st = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                         now = datetime.now(timezone.utc)
@@ -4935,7 +4971,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 }
 
                 posture = resolve_posture(RUNTIME)
-                tier = (posture.get("tier") or "personal").lower().replace(" ", "_")
+                tier = _effective_feature_tier(posture).lower().replace(" ", "_")
                 alloc = _SLOT_ALLOC.get(tier, _SLOT_ALLOC["personal"])
 
                 # Load requests from JSONL log
@@ -5090,9 +5126,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 result["license_key"] = lic_data.get("license_key", "")
                 result["install_fingerprint"] = _get_install_fingerprint()
                 result["hostname"] = _get_hostname()
-                result["machine_cap"] = MACHINE_CAPS.get(
-                    result.get("license_tier", "personal"), 1
-                )
+                effective_tier = _effective_feature_tier(result)
+                result["effective_feature_tier"] = effective_tier
+                result["machine_cap"] = MACHINE_CAPS.get(effective_tier, 1)
 
                 # Trial completion detection: if status is "trial",
                 # check whether chain threshold has been met
@@ -5250,7 +5286,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 if license_file.exists():
                     try:
                         ld = json.loads(license_file.read_text(encoding="utf-8"))
-                        tier = ld.get("license_tier", "personal")
+                        from licensing import resolve_posture
+                        tier = _effective_feature_tier(resolve_posture(RUNTIME))
                     except (json.JSONDecodeError, OSError):
                         pass
                 cap = MACHINE_CAPS.get(tier, 1)

@@ -97,9 +97,8 @@ def _resolve_signing_key_path() -> str:
     2. Hidden dotfile in runtime directory (.atested-signing-key.pem)
     3. Legacy visible path in keys/ directory (migration fallback with warning)
     """
-    explicit = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
-    if explicit:
-        return explicit
+    if "GOV_SIGNING_KEY_PATH" in os.environ:
+        return os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
 
     # Check hidden path in runtime directory
     try:

@@ -138,8 +138,8 @@ export function openReportsWindow(trigger) {
   // Fetch tier, enforce range restrictions, then load
   api.getLicensingMode().then(res => {
     if (res.ok) {
-      state.tier = res.data.license_tier || 'personal';
       state._licensingStatus = res.data.license_status || '';
+      state.tier = _effectiveFeatureTier(res.data);
     }
     _enforceRangeTier(state);
     _loadReport(state);
@@ -440,6 +440,11 @@ const _TIER_RANGE_CONFIG = {
   personal:      { maxDays: 10, restricted: ['30d', 'all'], unlocksAt: 'Crew' },
   personal_plus: { maxDays: 30, restricted: ['all'],        unlocksAt: 'Crew' },
 };
+
+function _effectiveFeatureTier(modeData = {}) {
+  if (modeData.license_status === 'trial') return 'institution';
+  return modeData.license_tier || 'personal';
+}
 
 function _enforceRangeTier(state) {
   const config = _TIER_RANGE_CONFIG[state.tier];

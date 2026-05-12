@@ -1110,6 +1110,39 @@ class TestActivityEntryEnrichment(unittest.TestCase):
         self.assertNotIn("unknown", entry["summary"])
         self.assertEqual(entry["detail"]["tool_name"], "Write")
 
+    def test_non_action_activity_entries_have_display_labels(self):
+        """Policy and approval events expose labels for Recent Activity rows."""
+        sys.path.insert(0, str(SCRIPTS))
+        from readout import _normalize_activity_entry
+
+        policy = _normalize_activity_entry({
+            "record_type": "non_action_event",
+            "event_type": "policy_rules_changed",
+            "timestamp_utc": "2026-04-04T10:00:00Z",
+            "current_policy_rules_hash": "sha256:" + "a" * 64,
+            "previous_policy_rules_hash": "sha256:" + "b" * 64,
+            "policy_path": "/tmp/policy-rules.json",
+            "response": "deny_all_until_acknowledged",
+            "record_hash": "sha256:abc",
+        }, sequence_position=1)
+        approval = _normalize_activity_entry({
+            "record_type": "non_action_event",
+            "event_type": "opaque_artifact_approval",
+            "timestamp_utc": "2026-04-04T10:00:01Z",
+            "artifact_identity": "Bash",
+            "approving_operator": "gregkeeter",
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+            "record_hash": "sha256:def",
+        }, sequence_position=2)
+
+        self.assertEqual(policy["summary"], "Policy Changed")
+        self.assertEqual(policy["detail"]["tool_name"], "Policy Changed")
+        self.assertEqual(approval["summary"], "Bash Approved")
+        self.assertEqual(approval["detail"]["tool_name"], "Bash")
+        self.assertEqual(approval["detail"]["status"], "approved")
+
 
 class TestDeduplicateProxyAndHook(unittest.TestCase):
     """Deduplication of proxy mediated decisions and hook observations."""

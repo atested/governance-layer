@@ -355,6 +355,7 @@ EVENT_CATEGORIES = frozenset([
     "opaque_invocation_decision",
     "ungoverned_observation",
     "policy_rules_changed",
+    "policy_acknowledged",
 ])
 
 _EVENT_TYPE_TO_CATEGORY = {
@@ -366,6 +367,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "usage_attestation": "usage_attestation",
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
+    "policy_acknowledged": "policy_acknowledged",
 }
 
 
@@ -456,9 +458,12 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         artifact_identity = rec.get("artifact_identity", "")
         governed_family = rec.get("governed_family", "")
         prefix = _artifact_identity_prefix(artifact_identity)
-        summary = f"approve {prefix} for {governed_family}"
+        label = artifact_identity if artifact_identity and not artifact_identity.startswith("sha256:") else prefix
+        summary = f"{label} Approved" if label else "Operation Approved"
         detail = {
             "artifact_identity": artifact_identity,
+            "tool_name": label,
+            "status": "approved",
             "operator": rec.get("approving_operator", ""),
             "governed_family": governed_family,
             "deployment_context": rec.get("deployment_context", ""),
@@ -473,9 +478,12 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         artifact_identity = rec.get("artifact_identity", "")
         governed_family = rec.get("governed_family", "")
         prefix = _artifact_identity_prefix(artifact_identity)
-        summary = f"revoke {prefix} for {governed_family}"
+        label = artifact_identity if artifact_identity and not artifact_identity.startswith("sha256:") else prefix
+        summary = f"{label} Revoked" if label else "Operation Revoked"
         detail = {
             "artifact_identity": artifact_identity,
+            "tool_name": label,
+            "status": "revoked",
             "operator": rec.get("revoking_operator", ""),
             "governed_family": governed_family,
             "deployment_context": rec.get("deployment_context", ""),
@@ -518,12 +526,32 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
 
     elif category == "policy_rules_changed":
         governed_family = rec.get("governed_family", "")
-        summary = "Policy rules changed: deny-all until acknowledged"
+        summary = "Policy Changed"
         detail = {
             "previous_policy_rules_hash": rec.get("previous_policy_rules_hash", ""),
             "current_policy_rules_hash": rec.get("current_policy_rules_hash", ""),
             "policy_path": rec.get("policy_path", ""),
             "response": rec.get("response", ""),
+            "governed_family": governed_family,
+            "tool_name": "Policy Changed",
+            "status": "blocked",
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "policy_acknowledged":
+        governed_family = rec.get("governed_family", "")
+        operator = rec.get("operator_identity", "")
+        summary = "Policy Change Acknowledged"
+        detail = {
+            "current_policy_rules_hash": rec.get("current_policy_rules_hash", ""),
+            "policy_path": rec.get("policy_path", ""),
+            "operator_identity": operator,
+            "response": rec.get("response", ""),
+            "tool_name": "Policy Change Acknowledged",
+            "status": "acknowledged",
         }
         evidence = {
             "event_id": rec.get("event_id", ""),

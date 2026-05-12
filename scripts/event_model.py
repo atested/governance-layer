@@ -93,6 +93,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "proxy_code_hash_changed",
     "policy_rules_loaded",
     "policy_rules_changed",
+    "policy_acknowledged",
     "chain_started_after_archive",
     "chain_export_created",
     "encrypted_evidence_package_created",
@@ -434,6 +435,15 @@ def _validate_policy_rules_changed(event: dict) -> tuple[bool, Optional[str]]:
     ))
 
 
+def _validate_policy_acknowledged(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("current_policy_rules_hash", "sha256"),
+        ("policy_path", "str"),
+        ("operator_identity", "str"),
+        ("response", "str"),
+    ))
+
+
 def _validate_trouble_or_telemetry_submitted(event: dict) -> tuple[bool, Optional[str]]:
     return _validate_fields(event, (
         ("destination", "str"),
@@ -501,6 +511,7 @@ _EVENT_TYPE_VALIDATORS = {
     "machine_license_status_changed": _validate_machine_license_status_changed,
     "version_check_performed": _validate_version_check_performed,
     "policy_rules_changed": _validate_policy_rules_changed,
+    "policy_acknowledged": _validate_policy_acknowledged,
     "trouble_report_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_opt_in_changed": _validate_telemetry_opt_in_changed,

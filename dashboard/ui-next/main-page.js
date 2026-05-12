@@ -559,8 +559,9 @@ function _renderRecentActivity(result) {
 
     const time = _formatTime24(entry.timestamp_utc);
     const detail = entry.detail || {};
-    const tool = detail.tool_name || entry.tool || entry.event_type || '';
-    const target = detail.target || '';
+    const isAction = entry.event_category === 'action_decision' || detail.policy_decision;
+    const tool = detail.tool_name || entry.tool || (isAction ? entry.event_type : entry.summary) || entry.event_type || '';
+    const target = detail.target || detail.governed_family || detail.policy_path || detail.artifact_identity || '';
     const decision = detail.policy_decision || entry.policy_decision || entry.event_category || '';
 
     // Four columns: time, action, target, decision
@@ -569,6 +570,8 @@ function _renderRecentActivity(result) {
       decisionHtml = '<span class="mp-decision-allow">ALLOW</span>';
     } else if (decision === 'DENY') {
       decisionHtml = '<span class="mp-decision-deny">DENY</span>';
+    } else if (detail.status) {
+      decisionHtml = `<span class="mp-decision-muted">${_esc(String(detail.status).toUpperCase())}</span>`;
     } else {
       decisionHtml = '<span class="mp-decision-muted">\u2014</span>';
     }
