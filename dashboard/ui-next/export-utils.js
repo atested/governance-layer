@@ -8,6 +8,19 @@ const EXCEL_HEADER = `<?xml version="1.0"?>
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
 
 export async function authorizeExport(metadata = {}) {
+  const mode = await api.getLicensingMode().catch(() => null);
+  if (mode?.ok && mode.data?.license_status === 'trial') {
+    const res = await api.postExportAuthorize({ license_key: '', metadata });
+    if (!res.ok) {
+      _showExportAuthError(res.error || 'Export authorization failed.');
+      return res;
+    }
+    return {
+      ok: true,
+      data: res.data,
+      token: res.data?.export_token || '',
+    };
+  }
   const licenseKey = await _showExportAuthDialog(metadata);
   if (licenseKey == null) return { ok: false, cancelled: true };
   const res = await api.postExportAuthorize({ license_key: licenseKey, metadata });

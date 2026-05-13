@@ -1901,7 +1901,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": "invalid export surface"}, 400)
             return
         export_format = str(metadata.get("format") or data.get("format") or "json").strip().lower()
-        if export_format not in {"json", "csv", "excel", "xls"}:
+        if export_format not in {"json", "csv", "excel", "xls", "encrypted_package"}:
             _json_response(self, {"error": "invalid export format"}, 400)
             return
         if export_format == "xls":

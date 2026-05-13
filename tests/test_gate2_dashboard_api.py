@@ -339,6 +339,12 @@ class TestExportEndpointDepth:
         assert "trial_authorized" in source
         assert "_effective_feature_tier(posture)" in source
         assert "license_expiry" in source
+        assert "encrypted_package" in source
+
+        export_utils = (REPO / "dashboard" / "ui-next" / "export-utils.js").read_text(encoding="utf-8")
+        assert "api.getLicensingMode()" in export_utils
+        assert "license_status === 'trial'" in export_utils
+        assert "license_key: ''" in export_utils
 
     def test_export_authorize_issues_scoped_token(self, dashboard_env, monkeypatch):
         """_issue_export_token creates a scoped, time-limited token."""

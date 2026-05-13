@@ -162,7 +162,11 @@ class IntegrityMonitor:
 
     def save_metadata(self, updates: Optional[dict] = None) -> dict:
         base = self._metadata
-        if base is None and self.metadata_path.exists():
+        if self.metadata_path.exists():
+            # Metadata is shared by the proxy, dashboard, and maintenance
+            # commands.  Reload before every write so a stale in-process
+            # monitor cannot overwrite a newer cross-process acknowledgement
+            # or chain checkpoint with its cached copy.
             base = self.load_metadata()
         metadata = dict(base or self._empty_metadata())
         if updates:

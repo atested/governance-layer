@@ -902,6 +902,33 @@ class TestRuntimePolicyChangeIntegrity:
 
         assert proxy_monitor.check_policy_rules_unchanged() is None
 
+    def test_policy_acknowledge_survives_stale_dashboard_chain_refresh(self, tmp_path):
+        """A stale dashboard monitor must not restore deny-all after ack event append."""
+        chain_path = tmp_path / "decision-chain.jsonl"
+        policy_path = tmp_path / "policy-rules.json"
+        policy_path.write_text('{"rules":[],"v":1}\n', encoding="utf-8")
+        proxy_monitor = _monitor(tmp_path, chain_path, policy_path)
+        proxy_monitor.verify_startup_chain()
+        proxy_monitor.startup_hashes()
+
+        policy_path.write_text('{"rules":[],"v":2}\n', encoding="utf-8")
+        assert proxy_monitor.check_policy_rules_unchanged() is not None
+
+        stale_dashboard_monitor = _monitor(tmp_path, chain_path, policy_path)
+        stale_dashboard_monitor.load_metadata()
+        dashboard_monitor = _monitor(tmp_path, chain_path, policy_path)
+        dashboard_monitor.acknowledge_policy_rules_change(operator="dashboard")
+
+        ChainRecorder(
+            chain_path,
+            integrity_monitor=stale_dashboard_monitor,
+        ).append_atomic(_record("policy-acknowledged-event"))
+
+        metadata = proxy_monitor.load_metadata()
+        assert metadata["policy_rules_blocked_hash"] is None
+        assert metadata["blocked_reason"] is None
+        assert proxy_monitor.check_policy_rules_unchanged() is None
+
 
 # ===========================================================================
 # SCOPE 8 — INV-008 replay outcome verification (G-13)
