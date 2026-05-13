@@ -8,8 +8,7 @@ were audited and confirmed conformant in D-2026-0407-004. This test fails
 loudly if a new direct O_APPEND-on-CHAIN writer appears outside that
 allowlist, preventing regressions of the D-021 race condition.
 
-Reference: docs/INVARIANTS.md (INV-010),
-           docs/investigations/D-2026-0407-004-chain-writer-audit.md
+Reference: docs/INVARIANTS.md (INV-010)
 """
 
 import re
@@ -75,8 +74,7 @@ def test_inv010_no_unauthorized_chain_writers():
     assert not violations, (
         "INV-010 violation: direct chain writer found outside the allowlist.\n"
         "Each new chain writer must use the lock protocol (see "
-        "docs/INVARIANTS.md INV-010 and "
-        "docs/investigations/D-2026-0407-004-chain-writer-audit.md) and be "
+        "docs/INVARIANTS.md INV-010) and be "
         "added to ALLOWLIST in this test file.\n\nOffending lines:\n  "
         + "\n  ".join(violations)
     )

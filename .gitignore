@@ -6,10 +6,8 @@
 secrets/
 keys/
 
-# noisy logs and runtime artifacts
-LOGS/*
-!LOGS/.gitkeep
-!LOGS/report-*.md
+# runtime artifacts
+LOGS/
 logs/
 tmp/
 temp/
@@ -17,20 +15,20 @@ cache/
 caches/
 *.log
 *.jsonl
+gov_runtime/
+.gov_runtime/
+out/
 
 # OS/editor junk
 .DS_Store
 
-# decision chain (runtime evidence, do not commit by default)
-LOGS/decision-chain.jsonl
-mcp/.venv
+# Python
 venv/
+.venv/
+mcp/.venv
 __pycache__/
-gov_runtime/
-.gov_runtime/
-.mcp.json
-.claude/commands/
-.agent-workspaces/
 
-out/
+# tooling
 .claude/
+.mcp.json
+.agent-workspaces/

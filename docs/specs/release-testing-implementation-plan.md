@@ -111,8 +111,7 @@ Medium. Mostly read-only analysis with a test baseline run.
 
 - Invariants are documented in `docs/INVARIANTS.md` (INV-001 through INV-010).
 - The 27 skips and 2 pre-existing failures are Python 3.9 / MCP import
-  compatibility issues, documented in STATE_CURRENT.md. These are known and
-  not release-blocking.
+  compatibility issues. These are known and not release-blocking.
 
 ## Gate 0: Security Blocker Verification
 

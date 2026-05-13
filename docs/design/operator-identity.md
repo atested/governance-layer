@@ -34,10 +34,9 @@ audit annotation — it is an authoritative override of policy.
 
 Both the dashboard and the Atested CLI currently accept arbitrary operator
 strings with no authentication. The chain records `operator: <whatever was
-typed>` as if it were a real identity. Outstanding Issues 1 (per-agent approval
-scoping) and 2 (operator identity verification) in STATE_CURRENT.md identify
-this as a foundational gap that must be closed before the product can credibly
-market provable governance.
+typed>` as if it were a real identity. Per-agent approval scoping and operator
+identity verification are foundational gaps that must be closed before the
+product can credibly market provable governance.
 
 This design addresses Issue 2 directly. It specifies: identity establishment,
 cryptographic binding, credential storage, session management, chain schema,

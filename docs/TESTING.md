@@ -46,5 +46,5 @@ For a clean collection with zero errors, use the project venv:
 
 ### Current baseline
 
-Reported in `STATE_CURRENT.md` under "Test Baseline". Run the canonical
-command and compare against the recorded baseline to detect regressions.
+Run the canonical command and compare against the recorded baseline to detect
+regressions.

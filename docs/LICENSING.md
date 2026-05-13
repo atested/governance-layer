@@ -9,9 +9,9 @@ Atested is distributed under the **Business Source License 1.1** (BSL 1.1).
 | Term | Value |
 |---|---|
 | **License** | Business Source License 1.1 |
-| **Licensor** | Greg Keeter |
+| **Licensor** | AIEngageTech, LLC |
 | **Licensed Work** | Atested governance layer |
-| **Change Date** | March 30, 2030 |
+| **Change Date** | May 13, 2030 |
 | **Change License** | Apache License 2.0 |
 | **Additional Use Grant** | Personal and evaluation use |
 
@@ -42,9 +42,9 @@ If you use Atested in a commercial production environment (revenue-generating se
 
 Purchase at [atested.com/pricing.html](https://atested.com/pricing.html).
 
-### Change date — Apache 2.0 on March 30, 2030
+### Change date — Apache 2.0 on May 13, 2030
 
-On March 30, 2030, the entire codebase automatically converts to the **Apache License 2.0**. After that date, all use — including commercial production use — is free and unrestricted under Apache 2.0 terms.
+On May 13, 2030, the entire codebase automatically converts to the **Apache License 2.0**. After that date, all use — including commercial production use — is free and unrestricted under Apache 2.0 terms.
 
 ---
 

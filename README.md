@@ -1,10 +1,13 @@
 # Atested
 
+[![CI](https://github.com/atested/governance-layer/actions/workflows/ci.yml/badge.svg)](https://github.com/atested/governance-layer/actions/workflows/ci.yml)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+
 Governance infrastructure for AI operations. Atested is an API governance proxy that sits between your AI agents and their model providers. It intercepts every tool call before execution, classifies it by observable evidence, evaluates it against policy, and records the decision in a tamper-evident chain. One environment variable. Every tool call governed. The agent never knows governance is in the path.
 
-**Website**: [atested.com](https://atested.com) — pricing, documentation, and the business case for governance.
+**Website**: [atested.com](https://atested.com) | **Security**: [SECURITY.md](SECURITY.md)
 
-**License**: [Business Source License 1.1](LICENSE) — free for personal use, commercial use requires a paid license. Converts to Apache 2.0 on March 30, 2030.
+**License**: [Business Source License 1.1](LICENSE) — free for personal use, commercial use requires a paid license. Converts to Apache 2.0 on May 13, 2030.
 
 ---
 
@@ -115,7 +118,7 @@ The dashboard shows: chain health, mediated decisions, denied actions, operation
 
 **Model providers:** Anthropic API (native support). OpenAI-compatible APIs (with `--upstream`). Any provider using the standard tool call format.
 
-**MCP governance broker (archived):** The MCP broker was removed from the active product (D-203) because it creates an agent-discoverable path around the proxy chokepoint. Code preserved in `mcp/_archived/`.
+**MCP governance broker (archived):** The MCP broker was removed from the active product because it creates an agent-discoverable path around the proxy chokepoint. Code preserved in `mcp/_archived/`.
 
 ---
 
@@ -161,6 +164,6 @@ Atested is source-available under the [Business Source License 1.1](LICENSE).
 
 - **Personal use**: Free, no license key required.
 - **Commercial use**: Requires a paid license from [atested.com](https://atested.com/pricing.html).
-- **Change date**: March 30, 2030 — after this date, the code converts to Apache License 2.0.
+- **Change date**: May 13, 2030 — after this date, the code converts to Apache License 2.0.
 
 See [docs/LICENSING.md](docs/LICENSING.md) for full details.

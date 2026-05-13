@@ -65,8 +65,8 @@ AAT (Action Admissibility Testing) is a deterministic, profile-based validation 
 - **PASS** (2): core_generic, tool_exec
 - **FAIL** (8): k1_phantom_action, k2_undeclared_dependency, k3_constraint_unacknowledged, k4_method_forbidden, m1_schema_invalid, c1_contradiction, c2_evidence_not_in_im, c3_forbidden_claim
 
-#### Evidence Bundle (1)
-- `docs/dev/evidence/AAT_v0_GATE_A/` - Complete evidence bundle with test outputs and completion certificate
+#### Evidence
+Evidence bundles were produced during Gate A verification and archived separately.
 
 ---
 
@@ -316,7 +316,6 @@ system/tests/test_aat_*.sh (3 files)
 system/tests/generate_aat_golden_fixtures.sh (1 file)
 system/tests/fixtures/aat/golden_pass/* (2 directories)
 system/tests/fixtures/aat/golden_fail/* (8 directories)
-docs/dev/evidence/AAT_v0_GATE_A/* (7 files)
 docs/AAT_v0_IMPLEMENTATION_SUMMARY.md (1 file - this file)
 ```
 
