@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
+    from canonical_form import canonical_json as _canonical_form_json
     from storage_contract import runtime_root
 except ImportError:  # pragma: no cover - package import path
+    from scripts.canonical_form import canonical_json as _canonical_form_json
     from scripts.storage_contract import runtime_root
 
 
@@ -31,10 +33,7 @@ def now_utc_z() -> str:
 
 
 def canonical_json(obj: Any) -> str:
-    return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-        allow_nan=False,
-    )
+    return _canonical_form_json(obj)
 
 
 def sha256_prefixed_text(text: str) -> str:

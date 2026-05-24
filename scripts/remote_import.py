@@ -385,7 +385,7 @@ def append_import_envelope(
             envelope["record_hash"] = _compute_event_record_hash(envelope)
             if signing_key is not None:
                 sign_non_action_event(envelope, signing_key, signing_key_id)
-            line = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+            line = canonical_json(envelope)
             fd = os.open(str(chain), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
             try:
                 os.write(fd, (line + "\n").encode("utf-8"))

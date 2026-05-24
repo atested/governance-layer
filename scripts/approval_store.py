@@ -31,16 +31,18 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
+try:
+    from canonical_form import canonical_json as _canonical_form_json
+except ImportError:  # pragma: no cover - package import path
+    from scripts.canonical_form import canonical_json as _canonical_form_json
+
 logger = logging.getLogger("atested.approval_store")
 
 APPROVAL_STORE_VERSION = "0.1"
 
 
 def _canonical_json(obj) -> str:
-    return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-        allow_nan=False,
-    )
+    return _canonical_form_json(obj)
 
 
 def _normalize_artifact_identity(value: str) -> str:

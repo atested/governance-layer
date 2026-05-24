@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
-from event_model import is_non_action_event
+try:
+    from canonical_form import canonical_json as _canonical_form_json
+    from event_model import is_non_action_event
+except ImportError:  # pragma: no cover - package import path
+    from scripts.canonical_form import canonical_json as _canonical_form_json
+    from scripts.event_model import is_non_action_event
 
 
 INTEGRITY_SCHEMA_VERSION = 1
@@ -51,8 +56,7 @@ def sha256_files(paths: Iterable[Path]) -> str:
 
 
 def _canonical(obj: dict) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False, allow_nan=False)
+    return _canonical_form_json(obj)
 
 
 def _metadata_hash(metadata: dict) -> str:

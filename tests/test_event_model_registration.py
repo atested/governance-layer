@@ -96,6 +96,12 @@ def _payload_for(event_type):
             "record_count": 1,
             "password_recorded": False,
         },
+        "governance_integrity_error": {
+            "tool_name": "bash",
+            "condition_source": "qa_chain_staleness",
+            "condition_detail": "latest QA snapshot sequence has not advanced",
+            "action_taken": "integrity_error_returned",
+        },
     }
     return payloads.get(event_type, {"test": True})
 

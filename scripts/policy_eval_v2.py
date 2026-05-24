@@ -33,8 +33,10 @@ from policy_eval_shared import (
 )
 try:
     from machine_identity import add_machine_identity_fields
+    from canonical_form import canonical_json as _canonical_form_json
 except ImportError:  # pragma: no cover - package import path
     from scripts.machine_identity import add_machine_identity_fields
+    from scripts.canonical_form import canonical_json as _canonical_form_json
 
 
 # ---------------------------------------------------------------------------
@@ -236,10 +238,7 @@ def _now_utc_z() -> str:
 
 
 def _canonical_json(obj: Any) -> str:
-    return json.dumps(
-        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-        allow_nan=False,
-    )
+    return _canonical_form_json(obj)
 
 
 def compute_policy_rules_hash(policy: Optional[dict]) -> str:

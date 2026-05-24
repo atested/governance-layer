@@ -356,6 +356,7 @@ EVENT_CATEGORIES = frozenset([
     "ungoverned_observation",
     "policy_rules_changed",
     "policy_acknowledged",
+    "integrity",
 ])
 
 _EVENT_TYPE_TO_CATEGORY = {
@@ -368,6 +369,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
     "policy_acknowledged": "policy_acknowledged",
+    "governance_integrity_error": "integrity",
 }
 
 
@@ -556,6 +558,23 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         evidence = {
             "event_id": rec.get("event_id", ""),
             "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "integrity":
+        tool_name = rec.get("tool_name", "unknown")
+        condition_source = rec.get("condition_source", "")
+        summary = f"Integrity error: {tool_name}"
+        detail = {
+            "tool_name": tool_name,
+            "condition_source": condition_source,
+            "condition_detail": rec.get("condition_detail", ""),
+            "action_taken": rec.get("action_taken", ""),
+            "status": "integrity_error",
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+            "condition_source": condition_source,
         }
 
     entry = {

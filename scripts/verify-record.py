@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import base64
-import copy
 import importlib.util
 import json
 import os
@@ -22,6 +21,10 @@ from event_model import (
     validate_compound_metadata,
     validate_non_action_event,
     verify_non_action_event_hash,
+)
+from canonical_form import (
+    canonical_json as _canonical_form_json,
+    signing_preimage_payload as _canonical_signing_preimage_payload,
 )
 
 CAP_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "capabilities" / "capability-registry.json"
@@ -61,8 +64,7 @@ def compute_cap_registry_hash() -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 def canonical_json(obj) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False, allow_nan=False)
+    return _canonical_form_json(obj)
 
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
@@ -114,34 +116,7 @@ def _sanitize_expected_outputs_for_signing(expected_outputs):
 def signing_preimage_payload(rec: dict, exclude_set: frozenset = None) -> str:
     if exclude_set is None:
         exclude_set = SIGNING_EXCLUDE_TOP_LEVEL
-    unsigned = copy.deepcopy(rec)
-    for key in exclude_set:
-        unsigned.pop(key, None)
-
-    if isinstance(unsigned.get("policy_reasons"), list):
-        unsigned["policy_reasons"] = [
-            {"code": r.get("code")} if isinstance(r, dict) else r
-            for r in unsigned["policy_reasons"]
-        ]
-
-    if isinstance(unsigned.get("tool_args_redacted"), dict):
-        unsigned["tool_args_redacted"].pop("path", None)
-        unsigned["tool_args_redacted"].pop("canonical_path", None)
-
-    if isinstance(unsigned.get("policy_inputs"), dict):
-        unsigned["policy_inputs"].pop("canonical_path", None)
-        unsigned["policy_inputs"].pop("allow_base_dirs", None)
-
-    if isinstance(unsigned.get("normalized_args"), dict):
-        for key in ("canonical_path", "canonical_src_path", "canonical_dst_path"):
-            unsigned["normalized_args"].pop(key, None)
-
-    if isinstance(unsigned.get("intent"), dict):
-        unsigned["intent"]["expected_outputs"] = _sanitize_expected_outputs_for_signing(
-            unsigned["intent"].get("expected_outputs", [])
-        )
-
-    return canonical_json(unsigned)
+    return _canonical_signing_preimage_payload(rec, exclude_set=exclude_set)
 
 
 def legacy_record_hash_payload(rec: dict) -> str:
@@ -402,7 +377,7 @@ def _verify_v2_mediated_decision(rec: dict):
         hashable["signature"] = None
     if "signing_key_id" in hashable:
         hashable["signing_key_id"] = None
-    canonical = json.dumps(hashable, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = canonical_json(hashable)
     actual = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     if actual != expected:
         return 1, [

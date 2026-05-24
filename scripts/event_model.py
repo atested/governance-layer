@@ -30,8 +30,10 @@ import uuid
 
 try:
     from machine_identity import add_machine_identity_fields, add_record_freshness_fields
+    from canonical_form import canonical_json as _canonical_form_json
 except ImportError:  # pragma: no cover - package import path
     from scripts.machine_identity import add_machine_identity_fields, add_record_freshness_fields
+    from scripts.canonical_form import canonical_json as _canonical_form_json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +96,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "policy_rules_loaded",
     "policy_rules_changed",
     "policy_acknowledged",
+    "governance_integrity_error",
     "chain_started_after_archive",
     "chain_export_created",
     "encrypted_evidence_package_created",
@@ -121,14 +124,20 @@ OPAQUE_INVOCATION_RESOLUTIONS = frozenset([
     "denied",
 ])
 
+INTEGRITY_ERROR_CONDITION_SOURCES = frozenset([
+    "qa_chain_staleness",
+    "hash_mismatch",
+    "active_condition",
+    "qa_chain_absent",
+])
+
 
 # ---------------------------------------------------------------------------
 # Canonical JSON helpers  (match policy-eval / verify-record conventions)
 # ---------------------------------------------------------------------------
 
 def canonical_json(obj) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False, allow_nan=False)
+    return _canonical_form_json(obj)
 
 
 def sha256_hex(s: str) -> str:
@@ -444,6 +453,27 @@ def _validate_policy_acknowledged(event: dict) -> tuple[bool, Optional[str]]:
     ))
 
 
+def _validate_governance_integrity_error(event: dict) -> tuple[bool, Optional[str]]:
+    ok, err = _validate_fields(event, (
+        ("tool_name", "str"),
+        ("condition_source", "str"),
+        ("condition_detail", "str"),
+        ("action_taken", "str"),
+    ))
+    if not ok:
+        return ok, err
+
+    condition_source = event.get("condition_source")
+    if condition_source not in INTEGRITY_ERROR_CONDITION_SOURCES:
+        return False, (
+            f"governance_integrity_error: condition_source must be one of "
+            f"{sorted(INTEGRITY_ERROR_CONDITION_SOURCES)}, got: {condition_source!r}"
+        )
+    if event.get("action_taken") != "integrity_error_returned":
+        return False, "governance_integrity_error: action_taken must be 'integrity_error_returned'"
+    return True, None
+
+
 def _validate_trouble_or_telemetry_submitted(event: dict) -> tuple[bool, Optional[str]]:
     return _validate_fields(event, (
         ("destination", "str"),
@@ -512,6 +542,7 @@ _EVENT_TYPE_VALIDATORS = {
     "version_check_performed": _validate_version_check_performed,
     "policy_rules_changed": _validate_policy_rules_changed,
     "policy_acknowledged": _validate_policy_acknowledged,
+    "governance_integrity_error": _validate_governance_integrity_error,
     "trouble_report_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_opt_in_changed": _validate_telemetry_opt_in_changed,
