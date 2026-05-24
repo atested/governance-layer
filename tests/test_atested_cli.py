@@ -208,12 +208,47 @@ def test_start_primary_lifecycle_no_services():
     print("PASS: test_start_primary_lifecycle_no_services")
 
 
-def test_supervisor_status_paths_and_service_specs():
-    primary_specs = process_supervisor.build_service_specs("primary", "127.0.0.1", 8765)
-    remote_specs = process_supervisor.build_service_specs("remote", "127.0.0.1", 8765)
-    assert [spec["name"] for spec in primary_specs] == ["proxy", "dashboard", "sync_service"]
-    assert [spec["name"] for spec in remote_specs] == ["proxy", "dashboard"]
+def test_supervisor_status_paths_and_service_specs(tmp_path):
+    # QS-026 added quality_service to the spec list (4th positional arg
+    # `runtime` for the build directory). QS-033 reordered the list so
+    # `proxy` precedes `quality_service` — the proxy now writes a startup
+    # record with the current policy_rules_hash so the QS env gate sees a
+    # fresh chain tail before reading.
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    # Force the build path to fail with the rust-toolchain-missing reason
+    # so the test does not invoke cargo. The order of names is what we
+    # actually assert.
+    import shutil as _shutil
+    real_which = _shutil.which
+    _shutil.which = lambda name, *_a, **_k: None if name == "cargo" else real_which(name)
+    try:
+        primary_specs = process_supervisor.build_service_specs(
+            "primary", "127.0.0.1", 8765, runtime
+        )
+        remote_specs = process_supervisor.build_service_specs(
+            "remote", "127.0.0.1", 8765, runtime
+        )
+    finally:
+        _shutil.which = real_which
+    assert [spec["name"] for spec in primary_specs] == [
+        "proxy",
+        "quality_service",
+        "dashboard",
+        "sync_service",
+    ]
+    assert [spec["name"] for spec in remote_specs] == [
+        "proxy",
+        "quality_service",
+        "dashboard",
+    ]
     assert any("scripts/sync_service.py" in part for part in primary_specs[-1]["argv"])
+    # QS-033 A2: proxy spec gains a ready_file so the supervisor blocks on
+    # the proxy's startup record before launching quality_service.
+    proxy_spec = primary_specs[0]
+    assert proxy_spec["name"] == "proxy"
+    assert "ready_file" in proxy_spec
+    assert proxy_spec["ready_file"].endswith("proxy.ready")
     print("PASS: test_supervisor_status_paths_and_service_specs")
 
 

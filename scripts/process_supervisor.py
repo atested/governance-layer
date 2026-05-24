@@ -206,9 +206,26 @@ def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path
     if build_error is not None:
         quality_spec["disabled_at_start"] = True
         quality_spec["disabled_reason"] = build_error
+    # QS-033 A2: proxy must start before quality_service. The QS env gate
+    # (ENV-001/ENV-002) hashes the policy and capability registry files and
+    # compares against the LAST policy_rules_hash / capability_registry_hash
+    # in the decision chain. If the policy file changed while no proxy was
+    # running, the chain's tail still holds the stale hash and the gate fails
+    # critically. Starting the proxy first ensures it writes a startup record
+    # (policy_rules_loaded, extended in QS-033 to include policy_rules_hash
+    # and capability_registry_hash) so the chain's tail reflects the current
+    # policy state before the quality service reads it. The proxy's ready
+    # file is written AFTER the startup record is committed, so the
+    # supervisor's ready-file wait is the synchronization point.
+    proxy_ready_file = runtime / "supervisor" / "proxy.ready"
     specs = [
+        {
+            "name": "proxy",
+            "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port],
+            "ready_file": str(proxy_ready_file),
+            "startup_timeout_seconds": 30,
+        },
         quality_spec,
-        {"name": "proxy", "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port]},
         {"name": "dashboard", "argv": [sys.executable, "dashboard/server.py"]},
     ]
     if role == "primary":
@@ -381,10 +398,29 @@ def main(argv=None) -> int:
     })
 
     env = os.environ.copy()
+    # QS-033 A3: ATESTED_* names are canonical; GOV_* are kept as legacy
+    # aliases that the Rust crate accepts with a deprecation warning. Setting
+    # both keeps existing Python consumers (proxy, dashboard) working while
+    # any new consumer can read the canonical names. A follow-on dispatch
+    # migrates Python reads to ATESTED_*; see QS-033 Observations.
     env["GOV_RUNTIME_DIR"] = str(runtime)
+    env["ATESTED_RUNTIME_DIR"] = str(runtime)
     env.setdefault("GOV_SIGNING_KEY_PATH", str(runtime / SIGNING_KEY_NAME))
+    env.setdefault("ATESTED_SIGNING_KEY_PATH", env["GOV_SIGNING_KEY_PATH"])
     env.setdefault("ATESTED_QA_SIGNING_KEY_PATH", str(runtime / ".atested-qa-signing-key.pem"))
     env.setdefault("ATESTED_QS_READY_FILE", str(supervisor_dir / "quality-service.ready"))
+    # QS-033 A2: the proxy writes a startup record on launch and then signals
+    # readiness via this file. The quality_service spec waits for QS's own
+    # ready file; the proxy now does the same so the QS env gate sees a fresh
+    # policy_rules_loaded record (with policy_rules_hash) before it reads the
+    # decision chain tail.
+    env.setdefault("ATESTED_PROXY_READY_FILE", str(supervisor_dir / "proxy.ready"))
+    # QS-033 A2: the proxy writes a startup record on launch and then signals
+    # readiness via this file. The quality_service spec waits for QS's own
+    # ready file; the proxy now does the same so the QS env gate sees a fresh
+    # policy_rules_loaded record (with policy_rules_hash) before it reads the
+    # decision chain tail.
+    env.setdefault("ATESTED_PROXY_READY_FILE", str(supervisor_dir / "proxy.ready"))
     operator_path = runtime / "operator.json"
     try:
         operator = json.loads(operator_path.read_text(encoding="utf-8"))

@@ -133,6 +133,77 @@ fn startup_gate_aborts_on_critical_failure() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("startup gate failed"));
 }
 
+#[test]
+fn startup_gate_failure_writes_zero_qa_records() {
+    // QS-033 A1 trust-surface guarantee: a failed startup gate MUST NOT
+    // append any record to the QA chain. Prior to QS-033, post-hoc
+    // verification ran before the gate check and flooded the chain with
+    // thousands of records on every failed startup (the QS-031 burst
+    // observed by QS-032 produced 29,872 records this way).
+    let env = TestEnv::new();
+    // Force ENV-001 to fail: write a governance-chain record with a policy
+    // hash that does not match the policy file the service will hash on
+    // start. The presence of a non-matching last hash drives ENV-001 to
+    // critical fail; with QS-033's reorder, this must abort before any
+    // QA chain write occurs.
+    let stale_policy_hash = "sha256:".to_string() + &"0".repeat(64);
+    let cap_hash = format!(
+        "sha256:{:x}",
+        sha2::Sha256::digest(fs::read(&env.capability_path).unwrap())
+    );
+    let mut record = json!({
+        "event_type": "policy_rules_loaded",
+        "timestamp_utc": "2026-05-23T14:30:00Z",
+        "policy_rules_hash": stale_policy_hash,
+        "capability_registry_hash": cap_hash,
+        "prev_record_hash": null,
+        "record_hash": null,
+        "signature": null,
+        "signing_key_id": null
+    });
+    let hash = record_hash(&record).unwrap();
+    record["record_hash"] = Value::String(hash);
+    fs::write(
+        &env.governance_chain,
+        canonical_json(&record).unwrap() + "\n",
+    )
+    .unwrap();
+
+    // Pre-condition: the QA chain must not exist before the run.
+    assert!(!env.qa_chain.exists(), "QA chain should be absent at start");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_quality-service"))
+        .arg("--once")
+        .env("ATESTED_REPO_ROOT", repo_root())
+        .env("GOV_RUNTIME_DIR", env.runtime.path())
+        .env("ATESTED_QA_SIGNING_KEY_PATH", &env.qa_key)
+        .env("GOV_POLICY_RULES_PATH", &env.policy_path)
+        .env("GOV_CAPABILITY_REGISTRY_PATH", &env.capability_path)
+        .env("GOV_DECISION_CHAIN_PATH", &env.governance_chain)
+        .env("GOV_QA_CHAIN_PATH", &env.qa_chain)
+        .output()
+        .expect("run quality service once");
+
+    assert!(
+        !output.status.success(),
+        "expected non-zero exit on gate failure"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("startup gate failed"),
+        "stderr should announce the gate failure, got: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    // The trust-surface assertion: no QA records written.
+    let written = read_records(&env.qa_chain);
+    assert!(
+        written.is_empty(),
+        "QA chain must be empty after gate failure, but found {} records: {:?}",
+        written.len(),
+        written.iter().map(|r| r["event_type"].clone()).collect::<Vec<_>>(),
+    );
+}
+
 struct TestEnv {
     runtime: TempDir,
     qa_key: std::path::PathBuf,

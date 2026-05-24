@@ -18,18 +18,28 @@ pub fn run_once(config: &Config) -> Result<(), String> {
     let new_records = watcher.poll_new_records()?;
     let mut spc = SpcMonitor::new(config.spc_min_decisions, config.spc_baseline_path.clone());
     spc.initialize(watcher.records())?;
-    let mut post_hoc = PostHocVerifier::new(config.clone());
-    post_hoc.enqueue_records(new_records, &mut writer)?;
-    post_hoc.drain_queue(watcher.records(), &mut spc, &mut writer)?;
-    let snapshot = with_extra_conditions(run_all_checks(config), post_hoc.active_conditions());
-    let failures = critical_failures(&snapshot);
+
+    // Gate-before-write: run the environmental checks and abort BEFORE any
+    // writer.append_* call when the gate is critical. QS-033 split this out
+    // of the post-hoc path to stop a failed startup from flooding the QA
+    // chain with thousands of decision/backlog records before exiting.
+    let env_snapshot = run_all_checks(config);
+    let failures = critical_failures(&env_snapshot);
     if !failures.is_empty() {
         return Err(format!(
             "quality service startup gate failed: {}",
             failures.join("; ")
         ));
     }
-    writer.append_environmental_snapshot(&snapshot)?;
+    writer.append_environmental_snapshot(&env_snapshot)?;
+
+    let mut post_hoc = PostHocVerifier::new(config.clone());
+    post_hoc.enqueue_records(new_records, &mut writer)?;
+    post_hoc.drain_queue(watcher.records(), &mut spc, &mut writer)?;
+    if !post_hoc.active_conditions().is_empty() {
+        let snapshot = with_extra_conditions(run_all_checks(config), post_hoc.active_conditions());
+        writer.append_environmental_snapshot(&snapshot)?;
+    }
     run_behavioral_analysis(config, watcher.records(), &mut writer)?;
     let element = run_element_verification(config, watcher.records(), &mut writer)?;
     if !element.active_conditions().is_empty() {
@@ -50,18 +60,28 @@ pub fn run_loop(config: Config) -> Result<(), String> {
     let initial_records = chain_watcher.poll_new_records()?;
     let mut spc = SpcMonitor::new(config.spc_min_decisions, config.spc_baseline_path.clone());
     spc.initialize(chain_watcher.records())?;
-    let mut post_hoc = PostHocVerifier::new(config.clone());
-    post_hoc.enqueue_records(initial_records, &mut writer)?;
-    post_hoc.drain_queue(chain_watcher.records(), &mut spc, &mut writer)?;
-    let first = with_extra_conditions(run_all_checks(&config), post_hoc.active_conditions());
-    let failures = critical_failures(&first);
+
+    // QS-033 gate-before-write: see run_once for the same pattern.
+    let env_snapshot = run_all_checks(&config);
+    let failures = critical_failures(&env_snapshot);
     if !failures.is_empty() {
         return Err(format!(
             "quality service startup gate failed: {}",
             failures.join("; ")
         ));
     }
-    writer.append_environmental_snapshot(&first)?;
+    writer.append_environmental_snapshot(&env_snapshot)?;
+
+    let mut post_hoc = PostHocVerifier::new(config.clone());
+    post_hoc.enqueue_records(initial_records, &mut writer)?;
+    post_hoc.drain_queue(chain_watcher.records(), &mut spc, &mut writer)?;
+    let first = if !post_hoc.active_conditions().is_empty() {
+        let snapshot = with_extra_conditions(run_all_checks(&config), post_hoc.active_conditions());
+        writer.append_environmental_snapshot(&snapshot)?;
+        snapshot
+    } else {
+        env_snapshot
+    };
     run_behavioral_analysis(&config, chain_watcher.records(), &mut writer)?;
     let mut last_behavioral = Instant::now();
     let mut element = run_element_verification(&config, chain_watcher.records(), &mut writer)?;

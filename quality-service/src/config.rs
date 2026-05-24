@@ -2,6 +2,26 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// QS-033 A3: read an env var, preferring the `ATESTED_*` name and falling
+/// back to a `GOV_*` legacy alias. A stderr deprecation warning is emitted
+/// when the legacy variant is the only one set.
+///
+/// The legacy `GOV_*` names predate the QS-029 `ATESTED_*` naming convention.
+/// QS-031 fell into the trap of guessing the prefix; the alias map plus the
+/// warning surface the migration without breaking existing operator scripts.
+fn read_env_preferred(canonical: &str, legacy: &str) -> Option<String> {
+    if let Ok(value) = env::var(canonical) {
+        return Some(value);
+    }
+    if let Ok(value) = env::var(legacy) {
+        eprintln!(
+            "warning: env var {legacy} is deprecated; use {canonical} (the legacy name still works for one release window)"
+        );
+        return Some(value);
+    }
+    None
+}
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub repo_root: PathBuf,
@@ -39,26 +59,39 @@ impl Config {
                     .expect("quality-service has repo parent")
                     .to_path_buf()
             });
-        let runtime_root = env::var("GOV_RUNTIME_DIR")
+        // QS-033 A3: ATESTED_* is canonical; GOV_* aliases work but warn.
+        // The Python codebase still uses GOV_* extensively — a sweep across
+        // proxy/, dashboard/, scripts/ is a follow-on dispatch. The Rust
+        // crate is the surface I burned on in QS-031, so it normalizes here
+        // and the rest follows later without breaking existing operator env
+        // exports.
+        let runtime_root = read_env_preferred("ATESTED_RUNTIME_DIR", "GOV_RUNTIME_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| repo_root.join("gov_runtime"));
-        let qa_signing_key_path = env::var("ATESTED_QA_SIGNING_KEY_PATH")
-            .or_else(|_| env::var("GOV_QA_SIGNING_KEY_PATH"))
+            .unwrap_or_else(|| repo_root.join("gov_runtime"));
+        let qa_signing_key_path =
+            read_env_preferred("ATESTED_QA_SIGNING_KEY_PATH", "GOV_QA_SIGNING_KEY_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| runtime_root.join(".atested-qa-signing-key.pem"));
+        let governance_signing_key_path =
+            read_env_preferred("ATESTED_SIGNING_KEY_PATH", "GOV_SIGNING_KEY_PATH")
+                .map(PathBuf::from);
+        let policy_rules_path =
+            read_env_preferred("ATESTED_POLICY_RULES_PATH", "GOV_POLICY_RULES_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| repo_root.join("capabilities/policy-rules.json"));
+        let capability_registry_path = read_env_preferred(
+            "ATESTED_CAPABILITY_REGISTRY_PATH",
+            "GOV_CAPABILITY_REGISTRY_PATH",
+        )
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo_root.join("capabilities/capability-registry.json"));
+        let governance_chain_path =
+            read_env_preferred("ATESTED_DECISION_CHAIN_PATH", "GOV_DECISION_CHAIN_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| runtime_root.join("LOGS/decision-chain.jsonl"));
+        let qa_chain_path = read_env_preferred("ATESTED_QA_CHAIN_PATH", "GOV_QA_CHAIN_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| runtime_root.join(".atested-qa-signing-key.pem"));
-        let governance_signing_key_path = env::var("GOV_SIGNING_KEY_PATH").ok().map(PathBuf::from);
-        let policy_rules_path = env::var("GOV_POLICY_RULES_PATH")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| repo_root.join("capabilities/policy-rules.json"));
-        let capability_registry_path = env::var("GOV_CAPABILITY_REGISTRY_PATH")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| repo_root.join("capabilities/capability-registry.json"));
-        let governance_chain_path = env::var("GOV_DECISION_CHAIN_PATH")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| runtime_root.join("LOGS/decision-chain.jsonl"));
-        let qa_chain_path = env::var("GOV_QA_CHAIN_PATH")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| runtime_root.join("LOGS/qa-chain.jsonl"));
+            .unwrap_or_else(|| runtime_root.join("LOGS/qa-chain.jsonl"));
         let heartbeat_seconds = env::var("ATESTED_QS_HEARTBEAT_SECONDS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())

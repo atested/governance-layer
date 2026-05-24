@@ -1845,6 +1845,38 @@ def main():
         logger.error("Refusing to start: %s", exc)
         sys.exit(1)
 
+    # QS-033 A2: signal proxy readiness AFTER startup events are written so
+    # the supervisor (and the quality service it starts next) sees a chain
+    # tail that already reflects the current policy_rules_hash. Failure to
+    # write the marker is non-fatal — when the proxy is launched outside the
+    # supervisor, the env var is unset and this is a no-op.
+    proxy_ready_path = os.environ.get("ATESTED_PROXY_READY_FILE", "").strip()
+    if proxy_ready_path:
+        try:
+            ready_path = Path(proxy_ready_path)
+            ready_path.parent.mkdir(parents=True, exist_ok=True)
+            ready_path.write_text("ready\n", encoding="utf-8")
+        except OSError as exc:
+            logger.warning(
+                "Failed to write proxy ready file %s: %s", proxy_ready_path, exc
+            )
+
+    # QS-033 A2: signal proxy readiness AFTER startup events are written so
+    # the supervisor (and the quality service it starts next) sees a chain
+    # tail that already reflects the current policy_rules_hash. Failure to
+    # write the marker is non-fatal — when the proxy is launched outside the
+    # supervisor, the env var is unset and this is a no-op.
+    proxy_ready_path = os.environ.get("ATESTED_PROXY_READY_FILE", "").strip()
+    if proxy_ready_path:
+        try:
+            ready_path = Path(proxy_ready_path)
+            ready_path.parent.mkdir(parents=True, exist_ok=True)
+            ready_path.write_text("ready\n", encoding="utf-8")
+        except OSError as exc:
+            logger.warning(
+                "Failed to write proxy ready file %s: %s", proxy_ready_path, exc
+            )
+
     policy = GovernanceProxy._load_default_policy()
     qa_chain_path = Path(
         os.environ.get("GOV_QA_CHAIN_PATH", "").strip()
@@ -1921,10 +1953,20 @@ def record_startup_integrity_events(
         "proxy_startup_code_hash",
         startup_payload,
     )
+    # QS-033 A2: include policy_rules_hash + capability_registry_hash so the
+    # quality service's env gate (last_governance_chain_hash → policy_rules_hash
+    # / capability_registry_hash) finds the current hashes at the chain tail
+    # immediately after the proxy starts, even before the first tool call.
+    # The legacy current_policy_rules_hash is retained for downstream readers
+    # that already use that name.
+    current_policy_hash = hashes["current_policy_rules_hash"]
+    current_cap_hash = compute_capability_registry_hash()
     chain_recorder.append_integrity_event(
         "policy_rules_loaded",
         {
-            "current_policy_rules_hash": hashes["current_policy_rules_hash"],
+            "current_policy_rules_hash": current_policy_hash,
+            "policy_rules_hash": current_policy_hash,
+            "capability_registry_hash": current_cap_hash,
             "policy_path": hashes["policy_path"],
             "user_identity": user_identity,
             "session_id": session_id,
