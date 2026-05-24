@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -20,6 +21,7 @@ SIGNING_KEY_NAME = ".atested-signing-key.pem"
 MAX_RESTARTS = 3
 RESTART_WINDOW_SECONDS = 60
 STATUS_INTERVAL_SECONDS = 1.0
+QUALITY_SERVICE_BUILD_TIMEOUT = 300  # seconds; cargo --release first build can take a few minutes
 
 _stopping = False
 
@@ -78,9 +80,134 @@ def detach_kwargs() -> dict:
     return {"start_new_session": True}
 
 
-def build_service_specs(role: str, sync_host: str, sync_port: int) -> list[dict]:
+def default_quality_service_bin() -> Path:
+    return REPO / "quality-service" / "target" / "release" / "quality-service"
+
+
+def quality_service_bin_path() -> Path:
+    return Path(
+        os.environ.get(
+            "ATESTED_QUALITY_SERVICE_BIN",
+            str(default_quality_service_bin()),
+        )
+    )
+
+
+def quality_service_source_dir() -> Path:
+    return REPO / "quality-service"
+
+
+def ensure_quality_service_binary(runtime: Path) -> tuple[Path, str | None]:
+    """Ensure the quality-service binary exists. Build it if missing/stale.
+
+    Returns (binary_path, error). If error is None, the binary is ready to
+    exec. If error is set, the supervisor must disable the quality-service
+    spec and surface the reason to the operator via the degraded marker.
+
+    Auto-build policy:
+      - Custom ATESTED_QUALITY_SERVICE_BIN: trusted as-is; no build attempted.
+      - Default path under quality-service/target/release/: build with
+        `cargo build --release` if absent OR if any source file is newer
+        than the binary mtime.
+      - If `cargo` is not on PATH (no Rust toolchain installed), the
+        quality service is disabled with reason 'rust_toolchain_missing'.
+
+    Logs go to {runtime}/supervisor/logs/quality_service.build.log.
+    """
+    custom_path = os.environ.get("ATESTED_QUALITY_SERVICE_BIN")
+    binary = quality_service_bin_path()
+    log_path = runtime / "supervisor" / "logs" / "quality_service.build.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if custom_path:
+        if not binary.exists():
+            return binary, f"custom ATESTED_QUALITY_SERVICE_BIN not found: {binary}"
+        return binary, None
+
+    src_dir = quality_service_source_dir()
+    cargo_toml = src_dir / "Cargo.toml"
+    if not cargo_toml.exists():
+        return binary, f"quality-service crate missing at {src_dir}"
+
+    needs_build = not binary.exists()
+    if binary.exists():
+        bin_mtime = binary.stat().st_mtime
+        for src_file in src_dir.glob("src/**/*.rs"):
+            if src_file.stat().st_mtime > bin_mtime:
+                needs_build = True
+                break
+        if not needs_build and cargo_toml.stat().st_mtime > bin_mtime:
+            needs_build = True
+
+    if not needs_build:
+        return binary, None
+
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        return (
+            binary,
+            "rust_toolchain_missing: cargo not found on PATH; install Rust to enable the quality service",
+        )
+
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write(f"\n=== {now_utc_z()} cargo build --release ===\n")
+        try:
+            result = subprocess.run(
+                [cargo, "build", "--release", "--manifest-path", str(cargo_toml)],
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=QUALITY_SERVICE_BUILD_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return binary, f"cargo build timed out after {QUALITY_SERVICE_BUILD_TIMEOUT}s; see {log_path}"
+
+    if result.returncode != 0:
+        return binary, f"cargo build --release failed (exit {result.returncode}); see {log_path}"
+    if not binary.exists():
+        return binary, f"cargo build reported success but binary missing at {binary}"
+    return binary, None
+
+
+def write_quality_service_degraded_marker(runtime: Path, reason: str | None) -> None:
+    """Write a small JSON marker the dashboard can read.
+
+    Path: {runtime}/supervisor/quality-service.degraded.json
+    Body: { reason: <reason or null>, updated_utc: ... }
+
+    The dashboard's conformance reader inspects this marker to distinguish
+    a normal HALTED state (quality service running but stale) from a
+    self-provisioning failure (toolchain missing, build failed, etc.).
+    Removed when the binary is ready.
+    """
+    marker = runtime / "supervisor" / "quality-service.degraded.json"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    if reason is None:
+        try:
+            marker.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    payload = {"reason": reason, "updated_utc": now_utc_z()}
+    write_json_atomic(marker, payload)
+
+
+def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path) -> list[dict]:
     proxy_port = os.environ.get("GOV_PROXY_PORT", "8080")
+    binary, build_error = ensure_quality_service_binary(runtime)
+    write_quality_service_degraded_marker(runtime, build_error)
+    quality_ready_file = runtime / "supervisor" / "quality-service.ready"
+    quality_spec: dict = {
+        "name": "quality_service",
+        "argv": [str(binary)],
+        "ready_file": str(quality_ready_file),
+        "startup_timeout_seconds": 30,
+    }
+    if build_error is not None:
+        quality_spec["disabled_at_start"] = True
+        quality_spec["disabled_reason"] = build_error
     specs = [
+        quality_spec,
         {"name": "proxy", "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port]},
         {"name": "dashboard", "argv": [sys.executable, "dashboard/server.py"]},
     ]
@@ -103,14 +230,16 @@ class ManagedService:
     def __init__(self, spec: dict, runtime: Path, log_dir: Path, env: dict):
         self.name = str(spec["name"])
         self.argv = list(spec["argv"])
+        self.ready_file = Path(spec["ready_file"]) if spec.get("ready_file") else None
+        self.startup_timeout_seconds = int(spec.get("startup_timeout_seconds", 0) or 0)
         self.runtime = runtime
         self.log_dir = log_dir
         self.env = env
         self.proc: subprocess.Popen | None = None
         self.restart_times: list[float] = []
         self.restart_count = 0
-        self.disabled = False
-        self.disabled_reason = ""
+        self.disabled = bool(spec.get("disabled_at_start", False))
+        self.disabled_reason = str(spec.get("disabled_reason", "") or "")
         self.started_at_epoch: float | None = None
         self.started_utc: str | None = None
         self.last_exit_code: int | None = None
@@ -196,6 +325,7 @@ class ManagedService:
         return {
             "name": self.name,
             "argv": self.argv,
+            "ready_file": str(self.ready_file) if self.ready_file else "",
             "pid": pid,
             "running": running,
             "started_utc": self.started_utc,
@@ -253,6 +383,8 @@ def main(argv=None) -> int:
     env = os.environ.copy()
     env["GOV_RUNTIME_DIR"] = str(runtime)
     env.setdefault("GOV_SIGNING_KEY_PATH", str(runtime / SIGNING_KEY_NAME))
+    env.setdefault("ATESTED_QA_SIGNING_KEY_PATH", str(runtime / ".atested-qa-signing-key.pem"))
+    env.setdefault("ATESTED_QS_READY_FILE", str(supervisor_dir / "quality-service.ready"))
     operator_path = runtime / "operator.json"
     try:
         operator = json.loads(operator_path.read_text(encoding="utf-8"))
@@ -268,11 +400,34 @@ def main(argv=None) -> int:
     started_utc = now_utc_z()
     services = [
         ManagedService(spec, runtime, log_dir, env)
-        for spec in build_service_specs(args.role, args.sync_host, args.sync_port)
+        for spec in build_service_specs(args.role, args.sync_host, args.sync_port, runtime)
     ]
 
     for service in services:
+        if service.disabled:
+            # Auto-provisioning could not produce a runnable binary (e.g., the
+            # Rust toolchain is missing). Skip ready-file gating; downstream
+            # services start anyway so the dashboard can render and explain
+            # the degraded state to the operator.
+            continue
+        if service.ready_file:
+            try:
+                service.ready_file.unlink()
+            except FileNotFoundError:
+                pass
         service.start()
+        if service.ready_file:
+            deadline = time.time() + service.startup_timeout_seconds
+            while time.time() < deadline:
+                if service.ready_file.exists():
+                    break
+                if service.proc is not None and service.proc.poll() is not None:
+                    raise RuntimeError(
+                        f"{service.name} exited before readiness; see {log_dir / (service.name + '.err.log')}"
+                    )
+                time.sleep(0.1)
+            if not service.ready_file.exists():
+                raise RuntimeError(f"{service.name} did not signal readiness within {service.startup_timeout_seconds}s")
 
     try:
         while not _stopping:
