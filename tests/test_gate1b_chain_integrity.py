@@ -587,10 +587,8 @@ class TestChainIntegrityViolationEvent:
     chain itself, not just the sidecar.
     """
 
-    def test_policy_change_records_chain_event(self, tmp_path):
-        """Policy change during runtime records an integrity event
-        in the decision chain.
-        """
+    def test_policy_change_no_longer_records_chain_event_from_mediate(self, tmp_path):
+        """Runtime policy-change gating is superseded by the QA chain gate."""
         chain_path = tmp_path / "decision-chain.jsonl"
         policy_path = tmp_path / "policy-rules.json"
         policy_path.write_text('{"rules":[],"default_decision":"ALLOW"}\n', encoding="utf-8")
@@ -602,7 +600,7 @@ class TestChainIntegrityViolationEvent:
         # Change policy during runtime
         policy_path.write_text('{"rules":[],"default_decision":"DENY"}\n', encoding="utf-8")
 
-        # mediate_decision detects the change and records it
+        # mediate_decision no longer performs direct policy-change gating.
         result = mediate_decision(
             "Read",
             {"file_path": str(tmp_path / "test.txt")},
@@ -611,13 +609,13 @@ class TestChainIntegrityViolationEvent:
             integrity_monitor=monitor,
         )
 
-        assert result["policy_decision"] == "DENY"
-        assert result["matched_rule"] == "integrity_policy_rules_changed"
+        assert result["policy_decision"] == "ALLOW"
 
-        # Verify the chain contains the policy_rules_changed event
+        # Verify the chain contains only the mediated decision.
         records = _read_chain(chain_path)
         event_types = [r.get("event_type") for r in records if "event_type" in r]
-        assert "policy_rules_changed" in event_types
+        assert "policy_rules_changed" not in event_types
+        assert records[-1]["record_type"] == "mediated_decision"
 
     def test_startup_code_hash_change_recorded_in_chain(self, tmp_path):
         """Code change between restarts records proxy_code_hash_changed
@@ -794,8 +792,8 @@ class TestMetadataTampering:
 class TestRuntimePolicyChangeIntegrity:
     """Verify that integrity checks correctly reflect policy changes."""
 
-    def test_policy_change_blocks_then_acknowledge_unblocks(self, tmp_path):
-        """Runtime policy change triggers deny-all until acknowledged."""
+    def test_policy_change_no_longer_blocks_mediate_decision(self, tmp_path):
+        """Policy file changes are detected by IntegrityMonitor but no longer gate mediation directly."""
         chain_path = tmp_path / "decision-chain.jsonl"
         policy_path = tmp_path / "policy-rules.json"
         policy_path.write_text('{"rules":[],"default_decision":"ALLOW"}\n', encoding="utf-8")
@@ -816,15 +814,14 @@ class TestRuntimePolicyChangeIntegrity:
         # Change policy
         policy_path.write_text('{"rules":[],"default_decision":"DENY"}\n', encoding="utf-8")
 
-        # Second mediation denied (policy changed)
+        # Second mediation proceeds; the QA gate is now responsible for hash mismatch gating.
         result2 = mediate_decision(
             "Read", {"file_path": str(tmp_path / "test.txt")},
             policy={"rules": [], "default_decision": "ALLOW"},
             chain_recorder=recorder,
             integrity_monitor=monitor,
         )
-        assert result2["policy_decision"] == "DENY"
-        assert result2["matched_rule"] == "integrity_policy_rules_changed"
+        assert result2["policy_decision"] == "ALLOW"
 
         # Acknowledge the change
         monitor.acknowledge_policy_rules_change(operator="admin")

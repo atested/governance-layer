@@ -99,7 +99,7 @@ def test_runtime_chain_deletion_blocks_next_append(tmp_path):
     assert "chain_file_missing" in side_events
 
 
-def test_policy_rules_change_records_event_and_denies(tmp_path):
+def test_policy_rules_change_no_longer_denies_in_mediate_decision(tmp_path):
     chain_path = tmp_path / "decision-chain.jsonl"
     policy_path = tmp_path / "policy-rules.json"
     policy_path.write_text('{"rules":[],"default_decision":"ALLOW"}\n', encoding="utf-8")
@@ -117,18 +117,17 @@ def test_policy_rules_change_records_event_and_denies(tmp_path):
         integrity_monitor=monitor,
     )
 
-    assert record["policy_decision"] == "DENY"
-    assert record["matched_rule"] == "integrity_policy_rules_changed"
+    assert record["policy_decision"] == "ALLOW"
     rows = [
         json.loads(line)
         for line in chain_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert rows[0]["event_type"] == "policy_rules_changed"
-    assert rows[1]["record_type"] == "mediated_decision"
+    assert len(rows) == 1
+    assert rows[0]["record_type"] == "mediated_decision"
 
 
-def test_proxy_request_denies_immediately_after_runtime_policy_change(tmp_path):
+def test_proxy_policy_change_short_circuit_removed(tmp_path):
     chain_path = tmp_path / "decision-chain.jsonl"
     policy_path = tmp_path / "policy-rules.json"
     policy_path.write_text('{"rules":[],"default_decision":"ALLOW"}\n', encoding="utf-8")
@@ -144,28 +143,7 @@ def test_proxy_request_denies_immediately_after_runtime_policy_change(tmp_path):
         integrity_monitor=monitor,
     )
 
-    policy_path.write_text('{"rules":[],"default_decision":"DENY"}\n', encoding="utf-8")
-    loop = asyncio.new_event_loop()
-    try:
-        status, headers, body = loop.run_until_complete(proxy.handle_request(
-            "POST",
-            "/v1/messages",
-            {},
-            b'{"model":"x","messages":[]}',
-        ))
-    finally:
-        loop.close()
-        asyncio.set_event_loop(asyncio.new_event_loop())
-
-    assert status == 423
-    assert headers["content-type"] == "application/json"
-    assert b"policy_rules_changed" in body
-    rows = [
-        json.loads(line)
-        for line in chain_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    assert rows[0]["event_type"] == "policy_rules_changed"
+    assert not hasattr(proxy, "_policy_change_denial_response")
 
 
 def test_proxy_code_hash_recorded_on_startup(tmp_path):

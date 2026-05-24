@@ -27,6 +27,7 @@ Architecture:
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -47,9 +48,15 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from classifier import classify
-from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash
+from canonical_form import canonical_json as _canonical_form_json
+from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash, compute_policy_rules_hash
 from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_chain
-from event_model import build_non_action_event
+from event_model import (
+    build_non_action_event,
+    is_non_action_event,
+    _compute_event_record_hash,
+    sign_non_action_event,
+)
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
 from machine_identity import (
     add_machine_identity_fields,
@@ -72,6 +79,7 @@ signing_preimage_payload = _vr_mod.signing_preimage_payload
 # Provider registry
 from proxy.providers import resolve_provider, PROVIDER_PREFIXES
 from proxy.providers.base import BaseProvider, BaseStreamingCollector, ToolCall, StreamAction
+from proxy.qa_gate import QAChainTailReader, ProxyQualityGate
 
 logger = logging.getLogger("atested.proxy")
 
@@ -149,10 +157,15 @@ _load_signing_key()
 DEFAULT_PORT = 8080
 DEFAULT_HOST = "127.0.0.1"
 ANTHROPIC_API_BASE = "https://api.anthropic.com"
+CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
 
 # Maximum request body size (bytes). Protects against unbounded reads.
 # 10 MB — large enough for any legitimate model API request.
 MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10 * 1024 * 1024))
+
+
+def compute_capability_registry_hash() -> str:
+    return "sha256:" + hashlib.sha256(CAP_REGISTRY_PATH.read_bytes()).hexdigest()
 
 # ---------------------------------------------------------------------------
 # Chain recorder (thread-safe, append-only JSONL)
@@ -197,17 +210,19 @@ class ChainRecorder:
                 # of signing state).
                 record["signature"] = None
                 record["signing_key_id"] = None
-                record["record_hash"] = _compute_record_hash(record)
-                # Sign the record if a key is loaded.
-                if _SIGNING_KEY is not None:
-                    preimage = signing_preimage_payload(record)
-                    sig_bytes = _SIGNING_KEY.sign(preimage.encode("utf-8"))
-                    record["signature"] = _b64url_nopad(sig_bytes)
-                    record["signing_key_id"] = _SIGNING_KEY_ID
-                line = json.dumps(
-                    record, sort_keys=True, separators=(",", ":"),
-                    ensure_ascii=False, allow_nan=False,
-                )
+                if is_non_action_event(record):
+                    record["record_hash"] = _compute_event_record_hash(record)
+                    if _SIGNING_KEY is not None:
+                        sign_non_action_event(record, _SIGNING_KEY, _SIGNING_KEY_ID)
+                else:
+                    record["record_hash"] = _compute_record_hash(record)
+                    # Sign the record if a key is loaded.
+                    if _SIGNING_KEY is not None:
+                        preimage = signing_preimage_payload(record)
+                        sig_bytes = _SIGNING_KEY.sign(preimage.encode("utf-8"))
+                        record["signature"] = _b64url_nopad(sig_bytes)
+                        record["signing_key_id"] = _SIGNING_KEY_ID
+                line = _canonical_form_json(record)
                 fd = os.open(
                     str(self._chain_path),
                     os.O_WRONLY | os.O_APPEND | os.O_CREAT,
@@ -417,6 +432,7 @@ def mediate_decision(
     user_identity: str = "",
     provider_name: str = "",
     integrity_monitor: Optional[IntegrityMonitor] = None,
+    qa_gate: Optional[ProxyQualityGate] = None,
 ) -> dict:
     """Classify, evaluate, and record a governance decision.
 
@@ -427,41 +443,22 @@ def mediate_decision(
     whether the operation has been approved. Approved operations are overridden
     to ALLOW with resolution "approved_lookup".
     """
-    classification = classify(tool_name, args)
-
-    policy_change = None
-    if integrity_monitor is not None:
-        policy_change = integrity_monitor.check_policy_rules_unchanged()
-        if policy_change is not None:
-            current_hash = policy_change["current_policy_rules_hash"]
-            if chain_recorder is not None and not policy_change.get("event_already_recorded"):
-                chain_recorder.append_integrity_event(
-                    "policy_rules_changed",
-                    {
-                        "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
-                        "current_policy_rules_hash": current_hash,
-                        "policy_path": policy_change["policy_path"],
-                        "response": "deny_all_until_acknowledged",
-                    },
-                )
-                integrity_monitor.mark_policy_change_event_recorded(current_hash)
-
-            record = _build_integrity_denial_record(
-                classification,
-                reason=(
-                    "Policy rules changed during proxy runtime; all operations "
-                    "are denied until the operator acknowledges the change."
-                ),
-                matched_rule="integrity_policy_rules_changed",
+    if qa_gate is not None:
+        qa_result = qa_gate.check()
+        if not qa_result.ok:
+            record = _build_governance_integrity_error_record(
+                tool_name,
+                condition_source=qa_result.condition_source or "qa_chain_absent",
+                condition_detail=qa_result.condition_detail,
                 user_identity=user_identity,
                 session_id=session_id,
+                provider_name=provider_name,
             )
-            if provider_name:
-                record["provider"] = provider_name
-                record["record_hash"] = _compute_record_hash(record)
             if chain_recorder is not None:
                 chain_recorder.append_atomic(record)
             return record
+
+    classification = classify(tool_name, args)
 
     record = evaluate(
         classification,
@@ -500,37 +497,42 @@ def mediate_decision(
     return record
 
 
-def _build_integrity_denial_record(
-    classification: dict,
+def _build_governance_integrity_error_record(
+    tool_name: str,
     *,
-    reason: str,
-    matched_rule: str,
+    condition_source: str,
+    condition_detail: str,
     user_identity: str,
     session_id: str,
+    provider_name: str = "",
 ) -> dict:
-    record = evaluate(
-        classification,
-        policy={
-            "rules": [],
-            "default_decision": "DENY",
-            "default_reason": reason,
-        },
-        prev_record_hash=None,
-        user_identity=user_identity,
-        session_id=session_id,
-        approval_store_hash=approval_store_hash(None),
+    reason = f"Integrity error: {condition_detail}"
+    payload = {
+        "tool_name": tool_name,
+        "original_tool": tool_name,
+        "condition_source": condition_source,
+        "condition_detail": condition_detail,
+        "action_taken": "integrity_error_returned",
+        "policy_decision": "INTEGRITY_ERROR",
+        "matched_rule": f"integrity_{condition_source}",
+        "policy_reasons": [{
+            "code": "GOVERNANCE_INTEGRITY_ERROR",
+            "detail": reason,
+            "condition_source": condition_source,
+        }],
+        "user_identity": user_identity,
+        "session_id": session_id,
+    }
+    if provider_name:
+        payload["provider"] = provider_name
+    return build_non_action_event(
+        "governance_integrity_error",
+        payload,
     )
-    record["matched_rule"] = matched_rule
-    record["policy_reasons"] = [{
-        "code": "INTEGRITY_POLICY_RULES_CHANGED",
-        "detail": {
-            "reason": reason,
-            "rule_id": matched_rule,
-            "response": "deny_all_until_acknowledged",
-        },
-    }]
-    record["record_hash"] = _compute_record_hash(record)
-    return record
+
+
+def _is_blocking_record(record: dict) -> bool:
+    return record.get("policy_decision") in {"DENY", "INTEGRITY_ERROR"}
 
 
 # ---------------------------------------------------------------------------
@@ -548,13 +550,15 @@ class StreamingToolCollector:
     def __init__(self, policy: dict, chain_recorder: Optional[ChainRecorder],
                  session_id: str = "", user_identity: str = "",
                  approval_store: Optional[ApprovalStore] = None,
-                 integrity_monitor: Optional[IntegrityMonitor] = None):
+                 integrity_monitor: Optional[IntegrityMonitor] = None,
+                 qa_gate: Optional[ProxyQualityGate] = None):
         self._policy = policy
         self._chain_recorder = chain_recorder
         self._session_id = session_id
         self._user_identity = user_identity
         self._approval_store = approval_store
         self._integrity_monitor = integrity_monitor
+        self._qa_gate = qa_gate
 
         # Active tool_use blocks being collected, keyed by index
         self._active_blocks: dict[int, dict] = {}
@@ -618,10 +622,11 @@ class StreamingToolCollector:
                     session_id=self._session_id,
                     user_identity=self._user_identity,
                     integrity_monitor=self._integrity_monitor,
+                    qa_gate=self._qa_gate,
                 )
                 self._decisions[idx] = record
 
-                if record["policy_decision"] == "DENY":
+                if _is_blocking_record(record):
                     self._denied_indices.add(idx)
                     reasons = record.get("policy_reasons", [])
                     reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
@@ -763,6 +768,7 @@ class GovernanceProxy:
         user_identity: str = "",
         provider_config: Optional[dict] = None,
         integrity_monitor: Optional[IntegrityMonitor] = None,
+        qa_gate: Optional[ProxyQualityGate] = None,
     ):
         self._upstream_base = upstream_base.rstrip("/")
         self._policy = policy or self._load_default_policy()
@@ -774,6 +780,7 @@ class GovernanceProxy:
         self._approval_store_mtime: float = 0.0
         self._approval_lock = threading.Lock()
         self._integrity_monitor = integrity_monitor
+        self._qa_gate = qa_gate
         # Provider-specific config (upstream URLs, etc.)
         self._provider_config = provider_config or {}
         # Default: put the legacy upstream_base as the anthropic upstream
@@ -860,56 +867,6 @@ class GovernanceProxy:
         forwarded["content-length"] = str(len(body))
         return forwarded
 
-    def _policy_change_denial_response(self) -> Optional[tuple[int, dict, bytes]]:
-        if self._integrity_monitor is None:
-            return None
-        policy_change = self._integrity_monitor.check_policy_rules_unchanged()
-        if policy_change is None:
-            return None
-        current_hash = policy_change["current_policy_rules_hash"]
-        if self._chain_recorder is not None and not policy_change.get("event_already_recorded"):
-            try:
-                self._chain_recorder.append_integrity_event(
-                    "policy_rules_changed",
-                    {
-                        "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
-                        "current_policy_rules_hash": current_hash,
-                        "policy_path": policy_change["policy_path"],
-                        "response": "deny_all_until_acknowledged",
-                    },
-                )
-                self._integrity_monitor.mark_policy_change_event_recorded(current_hash)
-            except Exception:
-                logger.exception("Failed to record policy_rules_changed event")
-        body = json.dumps({
-            "error": {
-                "type": "policy_rules_changed",
-                "message": (
-                    "Policy rules changed during proxy runtime; all operations "
-                    "are denied until the operator acknowledges the change."
-                ),
-            },
-            "previous_policy_rules_hash": policy_change["previous_policy_rules_hash"],
-            "current_policy_rules_hash": current_hash,
-        }, sort_keys=True).encode("utf-8")
-        return 423, {
-            "content-type": "application/json",
-            "content-length": str(len(body)),
-        }, body
-
-    async def _write_policy_change_denial(
-        self,
-        writer: asyncio.StreamWriter,
-        response: tuple[int, dict, bytes],
-    ) -> None:
-        status, headers, body = response
-        writer.write(f"HTTP/1.1 {status} Policy Rules Changed\r\n".encode("ascii"))
-        for key, value in headers.items():
-            writer.write(f"{key}: {value}\r\n".encode("utf-8"))
-        writer.write(b"\r\n")
-        writer.write(body)
-        await writer.drain()
-
     async def handle_request(self, method: str, path: str, headers: dict,
                              body: bytes,
                              provider: Optional[BaseProvider] = None,
@@ -928,11 +885,6 @@ class GovernanceProxy:
         url, fwd_headers, is_messages, is_streaming = self._prepare_request(
             method, path, headers, body
         )
-        if is_messages:
-            denial = self._policy_change_denial_response()
-            if denial is not None:
-                return denial
-
         if is_messages and is_streaming:
             return await self._handle_streaming_buffered(
                 url, fwd_headers, body
@@ -950,11 +902,6 @@ class GovernanceProxy:
         url, fwd_headers, is_tool_ep, is_streaming = self._prepare_request_with_provider(
             method, path, headers, body, provider
         )
-        if is_tool_ep:
-            denial = self._policy_change_denial_response()
-            if denial is not None:
-                return denial
-
         if is_tool_ep and is_streaming:
             return await self._handle_streaming_buffered_provider(
                 url, fwd_headers, body, provider
@@ -984,17 +931,12 @@ class GovernanceProxy:
         url, fwd_headers, is_messages, _ = self._prepare_request(
             "POST", path, headers, body
         )
-        if is_messages:
-            denial = self._policy_change_denial_response()
-            if denial is not None:
-                await self._write_policy_change_denial(writer, denial)
-                return
-
         collector = StreamingToolCollector(
             self._policy, self._chain_recorder,
             self._session_id, self._user_identity,
             approval_store=self._get_approval_store(),
             integrity_monitor=self._integrity_monitor,
+            qa_gate=self._qa_gate,
         )
         buffered_events: dict[int, list[bytes]] = {}
         _tool_use_count = 0
@@ -1108,12 +1050,6 @@ class GovernanceProxy:
         url, fwd_headers, is_tool_ep, _ = self._prepare_request_with_provider(
             "POST", path, headers, body, provider
         )
-        if is_tool_ep:
-            denial = self._policy_change_denial_response()
-            if denial is not None:
-                await self._write_policy_change_denial(writer, denial)
-                return
-
         collector = provider.create_streaming_collector()
         _tool_call_count = 0
         approval_store = self._get_approval_store()
@@ -1196,9 +1132,10 @@ class GovernanceProxy:
                                 user_identity=self._user_identity,
                                 provider_name=provider.name,
                                 integrity_monitor=self._integrity_monitor,
+                                qa_gate=self._qa_gate,
                             )
 
-                            if record["policy_decision"] == "DENY":
+                            if _is_blocking_record(record):
                                 reasons = record.get("policy_reasons", [])
                                 reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
                                 logger.info("Tool DENIED (%s): %s — %s",
@@ -1263,9 +1200,10 @@ class GovernanceProxy:
                 session_id=self._session_id,
                 user_identity=self._user_identity,
                 integrity_monitor=self._integrity_monitor,
+                qa_gate=self._qa_gate,
             )
 
-            if record["policy_decision"] == "DENY":
+            if _is_blocking_record(record):
                 reasons = record.get("policy_reasons", [])
                 reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
                 data["content"] = replace_tool_use_with_denial(
@@ -1329,9 +1267,10 @@ class GovernanceProxy:
                 user_identity=self._user_identity,
                 provider_name=provider.name,
                 integrity_monitor=self._integrity_monitor,
+                qa_gate=self._qa_gate,
             )
 
-            if record["policy_decision"] == "DENY":
+            if _is_blocking_record(record):
                 reasons = record.get("policy_reasons", [])
                 reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
                 denials.append((tc, reason_text, record.get("matched_rule", "")))
@@ -1352,6 +1291,7 @@ class GovernanceProxy:
             self._session_id, self._user_identity,
             approval_store=self._get_approval_store(),
             integrity_monitor=self._integrity_monitor,
+            qa_gate=self._qa_gate,
         )
 
         output_chunks: list[bytes] = []
@@ -1503,9 +1443,10 @@ class GovernanceProxy:
                                 user_identity=self._user_identity,
                                 provider_name=provider.name,
                                 integrity_monitor=self._integrity_monitor,
+                                qa_gate=self._qa_gate,
                             )
 
-                            if record["policy_decision"] == "DENY":
+                            if _is_blocking_record(record):
                                 reasons = record.get("policy_reasons", [])
                                 reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
                                 for denial_event in collector.build_denial_events(
@@ -1904,14 +1845,29 @@ def main():
         logger.error("Refusing to start: %s", exc)
         sys.exit(1)
 
+    policy = GovernanceProxy._load_default_policy()
+    qa_chain_path = Path(
+        os.environ.get("GOV_QA_CHAIN_PATH", "").strip()
+        or runtime / "LOGS" / "qa-chain.jsonl"
+    )
+    qa_gate = ProxyQualityGate(
+        QAChainTailReader(qa_chain_path),
+        expected_policy_rules_hash=compute_policy_rules_hash(policy),
+        expected_capability_registry_hash=compute_capability_registry_hash(),
+        stale_cycles=int(os.environ.get("GOV_QA_STALE_CYCLES", "3")),
+        heartbeat_seconds=float(os.environ.get("GOV_QA_HEARTBEAT_SECONDS", "30")),
+    )
+
     proxy = GovernanceProxy(
         upstream_base=anthropic_upstream,
+        policy=policy,
         chain_recorder=chain_recorder,
         chain_path=chain_path,
         session_id=args.session_id,
         user_identity=user_identity,
         provider_config=provider_config,
         integrity_monitor=integrity_monitor,
+        qa_gate=qa_gate,
     )
 
     server = ProxyServer(proxy, args.host, args.port)
