@@ -7,6 +7,16 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Maximum total serialized bytes the `findings` array of an aggregate QA
+/// record (qa_behavioral_analysis, qa_element_verification) may consume.
+/// Picked to leave ~1KB of headroom under the 4096-byte writer cap for the
+/// rest of the record envelope (event_type, sequence, timestamps, hashes,
+/// signature, signing_key_id, plus per-record summary fields). When the
+/// caller's findings exceed this budget the writer truncates the array and
+/// sets `findings_truncated: true`; the original total stays visible via
+/// the existing anomaly_count / elements_flagged fields on the record.
+const FINDINGS_BUDGET_BYTES: usize = 3000;
+
 pub struct QaChainWriter {
     path: PathBuf,
     key: QaSigningKey,
@@ -182,16 +192,22 @@ impl QaChainWriter {
         analysis_window: &str,
         findings: Vec<Value>,
     ) -> Result<Value, String> {
+        let total = findings.len();
+        let (bounded, truncated) = bound_findings_to_budget(findings, FINDINGS_BUDGET_BYTES);
         let mut record = base_event("qa_behavioral_analysis", self.next_sequence);
         record.insert(
             "analysis_window".to_string(),
             Value::String(analysis_window.to_string()),
         );
+        record.insert("anomaly_count".to_string(), Value::from(total as u64));
         record.insert(
-            "anomaly_count".to_string(),
-            Value::from(findings.len() as u64),
+            "findings_included_count".to_string(),
+            Value::from(bounded.len() as u64),
         );
-        record.insert("findings".to_string(), Value::Array(findings));
+        if truncated {
+            record.insert("findings_truncated".to_string(), Value::Bool(true));
+        }
+        record.insert("findings".to_string(), Value::Array(bounded));
         self.append_record(Value::Object(record))
     }
 
@@ -205,6 +221,7 @@ impl QaChainWriter {
         findings: Vec<Value>,
         coverage: Value,
     ) -> Result<Value, String> {
+        let (bounded, truncated) = bound_findings_to_budget(findings, FINDINGS_BUDGET_BYTES);
         let mut record = base_event("qa_element_verification", self.next_sequence);
         record.insert("spec_id".to_string(), Value::String(spec_id.to_string()));
         record.insert(
@@ -223,7 +240,14 @@ impl QaChainWriter {
             "elements_skipped".to_string(),
             Value::from(elements_skipped as u64),
         );
-        record.insert("findings".to_string(), Value::Array(findings));
+        record.insert(
+            "findings_included_count".to_string(),
+            Value::from(bounded.len() as u64),
+        );
+        if truncated {
+            record.insert("findings_truncated".to_string(), Value::Bool(true));
+        }
+        record.insert("findings".to_string(), Value::Array(bounded));
         record.insert("coverage".to_string(), coverage);
         self.append_record(Value::Object(record))
     }
@@ -295,6 +319,44 @@ fn base_event(event_type: &str, sequence: u64) -> Map<String, Value> {
         Value::String(Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
     );
     record
+}
+
+/// Truncate the findings array so its canonical serialization fits within
+/// `budget_bytes`. Returns (bounded_array, truncated_flag). Findings are
+/// included in order until the next one would exceed the budget, then the
+/// remainder is dropped. A finding that, by itself, exceeds the budget is
+/// also skipped (so the resulting array is empty but the truncated flag is
+/// set, which signals the caller to investigate the producer). Producers
+/// remain responsible for emitting per-item records when full fidelity is
+/// required; this helper exists so aggregate summary records cannot push
+/// the QA chain over the 4KB atomic-append limit on any single line.
+pub(crate) fn bound_findings_to_budget(
+    findings: Vec<Value>,
+    budget_bytes: usize,
+) -> (Vec<Value>, bool) {
+    let total = findings.len();
+    let mut included: Vec<Value> = Vec::with_capacity(total);
+    // Track array overhead: opening '[', closing ']', and one ',' between
+    // every adjacent pair. Each finding's own serialized form is counted
+    // by canonical_json on the value.
+    let mut used = 2usize; // for '[' and ']'
+    for finding in findings.into_iter() {
+        let serialized = match canonical_json(&finding) {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
+        let separator = if included.is_empty() { 0 } else { 1 };
+        let projected = used + separator + serialized.len();
+        if projected > budget_bytes {
+            // Stop on first finding that would overflow. Remaining findings
+            // are dropped; the caller marks the record as truncated.
+            return (included, true);
+        }
+        used = projected;
+        included.push(finding);
+    }
+    let truncated = included.len() < total;
+    (included, truncated)
 }
 
 fn finite_value(value: f64) -> Result<Value, String> {

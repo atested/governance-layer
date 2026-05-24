@@ -3,6 +3,17 @@ use crate::writer::QaChainWriter;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Per-finding cap on the evidence_records hash list. The aggregate
+/// qa_behavioral_analysis record is bounded by FINDINGS_BUDGET_BYTES in
+/// writer.rs, but capping evidence at the source keeps each individual
+/// finding small enough that the bound rarely needs to truncate the
+/// findings array itself — especially when a pattern (e.g. an overly
+/// broad rule) would otherwise embed every governance-chain decision
+/// hash in a single finding. When the source list exceeds this cap, the
+/// finding's evidence_records is sliced to the first N entries; the full
+/// count is preserved as evidence_records_total on the finding object.
+const MAX_EVIDENCE_RECORDS_PER_FINDING: usize = 5;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BehavioralFinding {
     pub finding_type: String,
@@ -14,13 +25,25 @@ pub struct BehavioralFinding {
 
 impl BehavioralFinding {
     pub fn value(&self) -> Value {
-        json!({
+        let total = self.evidence_records.len();
+        let sample: Vec<String> = self
+            .evidence_records
+            .iter()
+            .take(MAX_EVIDENCE_RECORDS_PER_FINDING)
+            .cloned()
+            .collect();
+        let mut object = json!({
             "type": self.finding_type,
             "subtype": self.subtype,
             "detail": self.detail,
             "severity": self.severity,
-            "evidence_records": self.evidence_records,
-        })
+            "evidence_records": sample,
+            "evidence_records_total": total,
+        });
+        if total > MAX_EVIDENCE_RECORDS_PER_FINDING {
+            object["evidence_records_truncated"] = Value::Bool(true);
+        }
+        object
     }
 }
 
