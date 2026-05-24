@@ -79,6 +79,10 @@ async function _request(method, path, { params, body } = {}) {
 /**
  * Governance status overview.
  * GET /api/status
+ *
+ * DEPRECATED — use getConformance() (/api/conformance) for operator-facing
+ * health/state. /api/status remains active for backward compatibility and
+ * the response carries {deprecated: true, successor: "/api/conformance"}.
  */
 export function getStatus(opts = {}) {
   return _request('GET', '/status', { params: opts });
@@ -87,9 +91,21 @@ export function getStatus(opts = {}) {
 /**
  * System health.
  * GET /api/health
+ *
+ * DEPRECATED — use getConformance() (/api/conformance). The legacy endpoint
+ * remains active but its response carries deprecation metadata and the
+ * Deprecation: true HTTP header.
  */
 export function getHealth() {
   return _request('GET', '/health');
+}
+
+/**
+ * Quality service conformance state.
+ * GET /api/conformance
+ */
+export function getConformance() {
+  return _request('GET', '/conformance');
 }
 
 /**
@@ -256,6 +272,10 @@ export function postApprovalRevoke({ artifact_identity, operator } = {}) {
 /**
  * Acknowledge a health alert.
  * POST /api/health/acknowledge
+ *
+ * DEPRECATED — operator-facing findings now flow through the conformance
+ * indicator (getConformance()). The endpoint remains active for backward
+ * compatibility; responses carry deprecation metadata.
  */
 export function postHealthAcknowledge({ source, message } = {}) {
   return _request('POST', '/health/acknowledge', { body: { source, message } });

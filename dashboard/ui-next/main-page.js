@@ -146,6 +146,38 @@ export function renderMainPage() {
       <h1 class="mp-page-title">Atested Operations Dashboard</h1>
       <div class="mp-machine-status" id="mp-machine-status">Machine role loading</div>
     </div>
+    <div class="mp-conformance mp-conformance-halted" id="mp-conformance-indicator">
+      <button class="mp-conformance-summary" id="mp-conformance-toggle" type="button" aria-expanded="false">
+        <span class="mp-conformance-state" id="mp-conformance-state">HALTED</span>
+        <span class="mp-conformance-title">Quality service</span>
+        <span class="mp-conformance-detail" id="mp-conformance-summary-text">Loading conformance state</span>
+      </button>
+      <div class="mp-conformance-panel" id="mp-conformance-panel" hidden>
+        <div class="mp-conformance-grid">
+          <div>
+            <h3>Verification Modes</h3>
+            <div id="mp-conformance-modes" class="mp-conformance-list"></div>
+          </div>
+          <div>
+            <h3>Active Conditions</h3>
+            <div id="mp-conformance-conditions" class="mp-conformance-list"></div>
+          </div>
+        </div>
+        <div class="mp-conformance-grid">
+          <div>
+            <h3>Environmental Checks</h3>
+            <div id="mp-conformance-checks" class="mp-conformance-checks"></div>
+          </div>
+          <div>
+            <h3>Liveness</h3>
+            <div id="mp-conformance-liveness" class="mp-conformance-list"></div>
+          </div>
+        </div>
+        <div class="mp-conformance-future">
+          <strong>Future modes:</strong> SPC charts, behavioral findings, post-hoc decision verification, and element verification will appear here when those quality-service modes are implemented.
+        </div>
+      </div>
+    </div>
     <div class="mp-top-panes">
       <div class="mp-pane mp-pane-clickable" id="mp-chain-health" tabindex="0" role="button">
         <div class="mp-pane-accent" id="mp-health-accent"></div>
@@ -238,6 +270,14 @@ export function renderMainPage() {
     if (e.target.closest('.mp-feed-row')) return;
     openActivityWindow(recentPane);
   });
+
+  const conformanceToggle = _page.querySelector('#mp-conformance-toggle');
+  const conformancePanel = _page.querySelector('#mp-conformance-panel');
+  conformanceToggle.addEventListener('click', () => {
+    const expanded = conformanceToggle.getAttribute('aria-expanded') === 'true';
+    conformanceToggle.setAttribute('aria-expanded', String(!expanded));
+    conformancePanel.hidden = expanded;
+  });
   recentPane.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openActivityWindow(recentPane); }
   });
@@ -327,10 +367,11 @@ export function renderMainPage() {
 export async function loadMainPageData() {
   if (!_page) return;
 
-  const [healthRes, statusRes, activityRes] = await Promise.all([
+  const [healthRes, statusRes, activityRes, conformanceRes] = await Promise.all([
     api.getHealth(),
     api.getStatus(),
     api.getActivity({ limit: 5 }),
+    api.getConformance(),
   ]);
 
   // Chain Health pane
@@ -421,6 +462,9 @@ export async function loadMainPageData() {
 
   // Recent Activity feed
   _renderRecentActivity(activityRes);
+
+  // Quality service conformance indicator
+  _renderConformance(conformanceRes);
 
   // Update workflow card accent for Health based on integrity state
   _updateWorkflowAccent('health', _healthState === 'healthy' ? 'green' : 'amber');
@@ -607,6 +651,135 @@ function _renderRecentActivity(result) {
   }
 }
 
+function _renderConformance(result) {
+  const indicator = _page?.querySelector('#mp-conformance-indicator');
+  if (!indicator) return;
+  if (!result.ok) {
+    _setConformanceShell('halted', 'HALTED', 'Unable to load quality service state');
+    return;
+  }
+  const data = result.data || {};
+  const state = String(data.state || 'halted').toLowerCase();
+  const label = state.toUpperCase();
+  const seq = data.latest_snapshot?.sequence;
+  const timestamp = data.latest_snapshot?.timestamp;
+  const summary = state === 'verified'
+    ? `Verified · sequence ${seq ?? '--'} · ${_formatTime24(timestamp)}`
+    : state === 'attention'
+      ? `Attention · ${data.active_conditions?.length || 0} active findings`
+      : state === 'intervention'
+        ? `Intervention · ${data.active_conditions?.length || 0} active conditions`
+        : data.detail || 'Quality service unavailable';
+  _setConformanceShell(state, label, summary);
+  _renderConformanceModes(data.modes || {});
+  _renderConformanceConditions(data.active_conditions || []);
+  _renderConformanceChecks(data.latest_snapshot?.checks || data.modes?.environmental?.checks || {});
+  _renderConformanceLiveness(data);
+}
+
+function _setConformanceShell(state, label, summary) {
+  const indicator = _page?.querySelector('#mp-conformance-indicator');
+  const stateEl = _page?.querySelector('#mp-conformance-state');
+  const summaryEl = _page?.querySelector('#mp-conformance-summary-text');
+  if (!indicator || !stateEl || !summaryEl) return;
+  indicator.className = `mp-conformance mp-conformance-${_classToken(state)}`;
+  stateEl.textContent = label;
+  summaryEl.textContent = summary || '';
+}
+
+function _renderConformanceModes(modes) {
+  const root = _page?.querySelector('#mp-conformance-modes');
+  if (!root) return;
+  root.innerHTML = '';
+  for (const key of ['environmental', 'post_hoc', 'spc', 'element', 'behavioral']) {
+    const mode = modes[key] || { status: 'not_active' };
+    const row = document.createElement('div');
+    row.className = 'mp-conformance-row';
+    row.innerHTML = `
+      <span>${_esc(_modeLabel(key))}</span>
+      <strong>${_esc(String(mode.status || 'unknown'))}</strong>
+      ${mode.detail || mode.note ? `<em>${_esc(mode.detail || mode.note)}</em>` : ''}
+    `;
+    root.appendChild(row);
+  }
+}
+
+function _renderConformanceConditions(conditions) {
+  const root = _page?.querySelector('#mp-conformance-conditions');
+  if (!root) return;
+  root.innerHTML = '';
+  if (!conditions.length) {
+    root.innerHTML = '<div class="mp-conformance-muted">No active conditions</div>';
+    return;
+  }
+  for (const condition of conditions) {
+    const item = document.createElement('div');
+    item.className = `mp-conformance-condition severity-${_classToken(condition.severity || 'medium')}`;
+    item.innerHTML = `
+      <strong>${_esc(condition.condition_id || condition.condition_type || 'condition')}</strong>
+      <span>${_esc(condition.detail || '')}</span>
+      <em>${_esc(condition.guidance || '')}</em>
+    `;
+    root.appendChild(item);
+  }
+}
+
+function _renderConformanceChecks(checks) {
+  const root = _page?.querySelector('#mp-conformance-checks');
+  if (!root) return;
+  root.innerHTML = '';
+  const entries = Object.entries(checks || {});
+  if (!entries.length) {
+    root.innerHTML = '<div class="mp-conformance-muted">No environmental snapshot available</div>';
+    return;
+  }
+  for (const [id, check] of entries) {
+    const status = String(check?.status || 'unknown');
+    const row = document.createElement('div');
+    row.className = `mp-check-row status-${_classToken(status)}`;
+    row.innerHTML = `
+      <span>${_esc(id)}</span>
+      <strong>${_esc(status)}</strong>
+      <em>${_esc(check?.detail || '')}</em>
+    `;
+    root.appendChild(row);
+  }
+}
+
+function _renderConformanceLiveness(data) {
+  const root = _page?.querySelector('#mp-conformance-liveness');
+  if (!root) return;
+  const snap = data.latest_snapshot || {};
+  root.innerHTML = `
+    <div class="mp-conformance-row"><span>QA chain</span><strong>${data.qa_chain_present ? 'present' : 'absent'}</strong></div>
+    <div class="mp-conformance-row"><span>Quality service</span><strong>${data.quality_service_alive ? 'alive' : 'unavailable'}</strong></div>
+    <div class="mp-conformance-row"><span>Sequence</span><strong>${_esc(String(snap.sequence ?? '--'))}</strong></div>
+    <div class="mp-conformance-row"><span>Last snapshot</span><strong>${_esc(_formatTime24(snap.timestamp))}</strong></div>
+    <div class="mp-conformance-row"><span>Policy hash</span><strong>${_esc(_shortHash(snap.policy_rules_hash))}</strong></div>
+    <div class="mp-conformance-row"><span>Capability hash</span><strong>${_esc(_shortHash(snap.capability_registry_hash))}</strong></div>
+  `;
+}
+
+function _modeLabel(key) {
+  return {
+    environmental: 'Environmental',
+    post_hoc: 'Post-hoc',
+    spc: 'SPC',
+    element: 'Element',
+    behavioral: 'Behavioral',
+  }[key] || key;
+}
+
+function _classToken(value) {
+  return String(value || 'unknown').toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+}
+
+function _shortHash(value) {
+  if (!value) return '--';
+  const text = String(value);
+  return text.length > 22 ? `${text.slice(0, 14)}...${text.slice(-6)}` : text;
+}
+
 function _formatTime24(isoStr) {
   if (!isoStr) return '--';
   try {
@@ -685,6 +858,137 @@ mpStyles.textContent = `
   }
   .mp-machine-warning {
     color: #d29922;
+  }
+
+  /* ---- Quality service conformance ---- */
+  .mp-conformance {
+    background: #22262e;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-left: 6px solid #6b7280;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    overflow: visible;
+  }
+  .mp-conformance-verified { border-left-color: #3fb950; }
+  .mp-conformance-attention { border-left-color: #d29922; }
+  .mp-conformance-intervention { border-left-color: #f85149; }
+  .mp-conformance-halted { border-left-color: #f85149; background: rgba(248, 81, 73, 0.06); }
+  .mp-conformance-summary {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: #e4e6eb;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 132px 160px 1fr;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    padding: 12px 16px;
+    text-align: left;
+    font: inherit;
+  }
+  .mp-conformance-summary:focus-visible {
+    outline: 2px solid #6699cc;
+    outline-offset: -2px;
+  }
+  .mp-conformance-state {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .mp-conformance-verified .mp-conformance-state { color: #3fb950; }
+  .mp-conformance-attention .mp-conformance-state { color: #d29922; }
+  .mp-conformance-intervention .mp-conformance-state,
+  .mp-conformance-halted .mp-conformance-state { color: #f85149; }
+  .mp-conformance-title {
+    color: #e4e6eb;
+    font-weight: 600;
+  }
+  .mp-conformance-detail {
+    color: #8b919a;
+    font-size: 0.82rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mp-conformance-panel {
+    border-top: 1px dashed rgba(255,255,255,0.12);
+    padding: 14px 16px 16px;
+  }
+  .mp-conformance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .mp-conformance h3 {
+    color: #6699cc;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+  }
+  .mp-conformance-list,
+  .mp-conformance-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .mp-conformance-row,
+  .mp-check-row,
+  .mp-conformance-condition {
+    background: rgba(255,255,255,0.03);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 2px;
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: 120px 120px 1fr;
+    gap: 8px;
+    align-items: start;
+    font-size: 0.78rem;
+  }
+  .mp-conformance-condition {
+    grid-template-columns: 130px 1fr;
+  }
+  .mp-conformance-condition em {
+    grid-column: 1 / -1;
+  }
+  .mp-conformance-row span,
+  .mp-check-row span {
+    color: #8b919a;
+  }
+  .mp-conformance-row strong,
+  .mp-check-row strong,
+  .mp-conformance-condition strong {
+    color: #e4e6eb;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+  }
+  .mp-conformance-row em,
+  .mp-check-row em,
+  .mp-conformance-condition em {
+    color: #8b919a;
+    font-style: normal;
+  }
+  .mp-check-row.status-pass strong { color: #3fb950; }
+  .mp-check-row.status-fail strong,
+  .mp-conformance-condition.severity-critical strong { color: #f85149; }
+  .mp-check-row.status-warning strong,
+  .mp-conformance-condition.severity-high strong { color: #d29922; }
+  .mp-conformance-muted {
+    color: #8b919a;
+    font-size: 0.82rem;
+    padding: 8px 10px;
+  }
+  .mp-conformance-future {
+    border-top: 1px dashed rgba(255,255,255,0.08);
+    color: #8b919a;
+    font-size: 0.78rem;
+    padding-top: 12px;
   }
 
   /* ---- Top display panes ---- */
@@ -996,6 +1300,15 @@ mpStyles.textContent = `
       padding-top: calc(48px + 12px);
     }
     .mp-top-panes {
+      grid-template-columns: 1fr;
+    }
+    .mp-conformance-summary,
+    .mp-conformance-grid {
+      grid-template-columns: 1fr;
+    }
+    .mp-conformance-row,
+    .mp-check-row,
+    .mp-conformance-condition {
       grid-template-columns: 1fr;
     }
     .mp-launcher-row {
