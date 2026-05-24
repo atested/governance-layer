@@ -1,0 +1,4922 @@
+spec_id: chain-events-v1
+title: Governance Chain Event Registry
+status: active
+scope: governance-layer
+last_verified: '2026-05-23'
+owner: greg
+imports: []
+overview:
+  normative_scope: Registry of non-action governance chain event types accepted by scripts/event_model.py.
+  non_normative_notes:
+  - Event IDs start at EVT-CHN-101 to avoid colliding with chain-integrity-spec-v1.yaml EVT-CHN-001 and EVT-CHN-002.
+  - Producer components are conservative for registry-level schemas; emitter-specific ownership should be narrowed during
+    per-spec conversion.
+elements:
+- element_type: chain_event_schema
+  id: EVT-CHN-101
+  event: verification_state_transition
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: verification_state_transition
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    governed_family:
+      type: string
+    from_state:
+      type: string
+    to_state:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - governed_family
+  - from_state
+  - to_state
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: verification_state_transition
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 47
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 208
+  validator: event_model._validate_verification_state_transition
+- element_type: chain_event_schema
+  id: EVT-CHN-102
+  event: opaque_artifact_approval
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: opaque_artifact_approval
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    artifact_identity:
+      type: string
+    approving_operator:
+      type: string
+    governed_family:
+      type: string
+    deployment_context:
+      type: string
+    policy_version:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - artifact_identity
+  - approving_operator
+  - governed_family
+  - deployment_context
+  - policy_version
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: opaque_artifact_approval
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 48
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 228
+  validator: event_model._validate_opaque_artifact_approval
+- element_type: chain_event_schema
+  id: EVT-CHN-103
+  event: opaque_artifact_revocation
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: opaque_artifact_revocation
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    artifact_identity:
+      type: string
+    revoking_operator:
+      type: string
+    governed_family:
+      type: string
+    deployment_context:
+      type: string
+    policy_version:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - artifact_identity
+  - revoking_operator
+  - governed_family
+  - deployment_context
+  - policy_version
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: opaque_artifact_revocation
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 49
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 252
+  validator: event_model._validate_opaque_artifact_revocation
+- element_type: chain_event_schema
+  id: EVT-CHN-104
+  event: opaque_invocation_decision
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: opaque_invocation_decision
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    artifact_identity:
+      type: string
+    governed_family:
+      type: string
+    resolution:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - artifact_identity
+  - governed_family
+  - resolution
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: opaque_invocation_decision
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 50
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 277
+  validator: event_model._validate_opaque_invocation_decision
+- element_type: chain_event_schema
+  id: EVT-CHN-105
+  event: usage_attestation
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: usage_attestation
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: usage_attestation
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 51
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-106
+  event: ungoverned_operation_observed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: ungoverned_operation_observed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    operation_type:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - operation_type
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: ungoverned_operation_observed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 52
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 296
+  validator: event_model._validate_ungoverned_operation_observed
+- element_type: chain_event_schema
+  id: EVT-CHN-107
+  event: registry_config_change
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: registry_config_change
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    new_registry_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    tools_count:
+      type: integer
+    licensed:
+      type: boolean
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - new_registry_hash
+  - tools_count
+  - licensed
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: registry_config_change
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 53
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 483
+  validator: event_model._validate_registry_config_change
+- element_type: chain_event_schema
+  id: EVT-CHN-108
+  event: help_query
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: help_query
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: help_query
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 54
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-109
+  event: feedback_submitted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: feedback_submitted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: feedback_submitted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 55
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-110
+  event: telemetry_submitted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: telemetry_submitted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    destination:
+      type: string
+    payload_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    payload_size:
+      type: integer
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - destination
+  - payload_hash
+  - payload_size
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: telemetry_submitted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 56
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 447
+  validator: event_model._validate_trouble_or_telemetry_submitted
+- element_type: chain_event_schema
+  id: EVT-CHN-111
+  event: telemetry_opt_in_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: telemetry_opt_in_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    previous_state:
+      type: string
+    new_state:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - previous_state
+  - new_state
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: telemetry_opt_in_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 57
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 479
+  validator: event_model._validate_telemetry_opt_in_changed
+- element_type: chain_event_schema
+  id: EVT-CHN-112
+  event: notification_received
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: notification_received
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    notification_id:
+      type: string
+    notification_type:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - notification_id
+  - notification_type
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: notification_received
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 58
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 475
+  validator: event_model._validate_notification_received
+- element_type: chain_event_schema
+  id: EVT-CHN-113
+  event: notification_dismissed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: notification_dismissed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: notification_dismissed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 59
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-114
+  event: notifications_viewed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: notifications_viewed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: notifications_viewed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 60
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-115
+  event: disclosure_shown
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: disclosure_shown
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: disclosure_shown
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 61
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-116
+  event: questionnaire_response
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: questionnaire_response
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: questionnaire_response
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 62
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-117
+  event: questionnaire_reset
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: questionnaire_reset
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: questionnaire_reset
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 63
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-118
+  event: capacity_inputs
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: capacity_inputs
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: capacity_inputs
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 64
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-119
+  event: case_document_generated
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: case_document_generated
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: case_document_generated
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 65
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-120
+  event: trial_complete
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: trial_complete
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: trial_complete
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 66
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-121
+  event: license_registered
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_registered
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_registered
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 67
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-122
+  event: trial_extended
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: trial_extended
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: trial_extended
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 68
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-123
+  event: license_purchased
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_purchased
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_purchased
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 69
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-124
+  event: auto_renewal_opted_out
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: auto_renewal_opted_out
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: auto_renewal_opted_out
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 70
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-125
+  event: auto_renewal_opted_in
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: auto_renewal_opted_in
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: auto_renewal_opted_in
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 71
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-126
+  event: license_upgraded
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_upgraded
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_upgraded
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 72
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-127
+  event: license_downgraded
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_downgraded
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_downgraded
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 73
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-128
+  event: license_tier_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_tier_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_tier_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 74
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-129
+  event: license_revoked
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_revoked
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_revoked
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 75
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-130
+  event: license_activated
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_activated
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_activated
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 76
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-131
+  event: license_expiration_warning
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_expiration_warning
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_expiration_warning
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 77
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-132
+  event: license_modified
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_modified
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_modified
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 78
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-133
+  event: machine_added
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_added
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    subject_machine_id:
+      type: string
+    subject_machine_role:
+      type: string
+    public_key_fingerprint:
+      type: string
+    operator_confirmation_event_id:
+      type: string
+    license_status:
+      type: string
+    sync_authorized:
+      type: boolean
+    registry_hash_after:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - subject_machine_id
+  - subject_machine_role
+  - public_key_fingerprint
+  - operator_confirmation_event_id
+  - license_status
+  - sync_authorized
+  - registry_hash_after
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_added
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 79
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 372
+  validator: event_model._validate_machine_added
+- element_type: chain_event_schema
+  id: EVT-CHN-134
+  event: machine_removed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_removed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    subject_machine_id:
+      type: string
+    license_status:
+      type: string
+    sync_authorized:
+      type: boolean
+    registry_hash_after:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - subject_machine_id
+  - license_status
+  - sync_authorized
+  - registry_hash_after
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_removed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 80
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 384
+  validator: event_model._validate_machine_removed
+- element_type: chain_event_schema
+  id: EVT-CHN-135
+  event: machine_role_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_role_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    subject_machine_id:
+      type: string
+    from_role:
+      type: string
+    to_role:
+      type: string
+    registry_hash_after:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - subject_machine_id
+  - from_role
+  - to_role
+  - registry_hash_after
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_role_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 81
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 393
+  validator: event_model._validate_machine_role_changed
+- element_type: chain_event_schema
+  id: EVT-CHN-136
+  event: machine_key_rotated
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_key_rotated
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    subject_machine_id:
+      type: string
+    old_public_key_fingerprint:
+      type: string
+    new_public_key_fingerprint:
+      type: string
+    registry_hash_after:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - subject_machine_id
+  - old_public_key_fingerprint
+  - new_public_key_fingerprint
+  - registry_hash_after
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_key_rotated
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 82
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 402
+  validator: event_model._validate_machine_key_rotated
+- element_type: chain_event_schema
+  id: EVT-CHN-137
+  event: machine_license_status_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_license_status_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    subject_machine_id:
+      type: string
+    from_license_status:
+      type: string
+    to_license_status:
+      type: string
+    sync_authorized:
+      type: boolean
+    registry_hash_after:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - subject_machine_id
+  - from_license_status
+  - to_license_status
+  - sync_authorized
+  - registry_hash_after
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_license_status_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 83
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 411
+  validator: event_model._validate_machine_license_status_changed
+- element_type: chain_event_schema
+  id: EVT-CHN-138
+  event: machine_revoked
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: machine_revoked
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: machine_revoked
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 84
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-139
+  event: remote_chain_import
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: remote_chain_import
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    source_machine_id:
+      type: string
+    source_machine_key_id:
+      type: string
+    segment_id:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    segment_kind:
+      type: string
+    stored_segment_sha256:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    remote_first_record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    remote_last_record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    remote_record_count:
+      type: integer
+    import_sequence:
+      type: integer
+    sync_session_id:
+      type: string
+    primary_import_timestamp_utc:
+      type: string
+    verification_result:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - source_machine_id
+  - source_machine_key_id
+  - segment_id
+  - segment_kind
+  - stored_segment_sha256
+  - remote_first_record_hash
+  - remote_last_record_hash
+  - remote_record_count
+  - import_sequence
+  - sync_session_id
+  - primary_import_timestamp_utc
+  - verification_result
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: remote_chain_import
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 85
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 355
+  validator: event_model._validate_remote_chain_import
+- element_type: chain_event_schema
+  id: EVT-CHN-140
+  event: institution_inquiry_submitted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: institution_inquiry_submitted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: institution_inquiry_submitted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 86
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-141
+  event: research_program_opted_in
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: research_program_opted_in
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: research_program_opted_in
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 87
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-142
+  event: research_program_opt_in_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: research_program_opt_in_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: research_program_opt_in_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 88
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-143
+  event: communications_request_submitted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: communications_request_submitted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: communications_request_submitted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 89
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-144
+  event: terms_acknowledged
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: terms_acknowledged
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: terms_acknowledged
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 90
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-145
+  event: chain_integrity_violation
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: chain_integrity_violation
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: chain_integrity_violation
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 91
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-146
+  event: proxy_startup_code_hash
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: proxy_startup_code_hash
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: proxy_startup_code_hash
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 92
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-147
+  event: proxy_code_hash_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: proxy_code_hash_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: proxy_code_hash_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 93
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-148
+  event: policy_rules_loaded
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: policy_rules_loaded
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: policy_rules_loaded
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 94
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-149
+  event: policy_rules_changed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: policy_rules_changed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    previous_policy_rules_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    current_policy_rules_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    policy_path:
+      type: string
+    response:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - previous_policy_rules_hash
+  - current_policy_rules_hash
+  - policy_path
+  - response
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: policy_rules_changed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 95
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 429
+  validator: event_model._validate_policy_rules_changed
+- element_type: chain_event_schema
+  id: EVT-CHN-150
+  event: policy_acknowledged
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: policy_acknowledged
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    current_policy_rules_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    policy_path:
+      type: string
+    operator_identity:
+      type: string
+    response:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - current_policy_rules_hash
+  - policy_path
+  - operator_identity
+  - response
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: policy_acknowledged
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 96
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 438
+  validator: event_model._validate_policy_acknowledged
+- element_type: chain_event_schema
+  id: EVT-CHN-151
+  event: chain_started_after_archive
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: chain_started_after_archive
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: chain_started_after_archive
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: partial
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 97
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+  implemented_scope:
+  - event type is registered in NON_ACTION_EVENT_TYPES
+  - common event envelope validation applies
+  - canonical record hash can be verified
+  missing_scope:
+  - event-specific payload validator is not implemented in scripts/event_model.py
+- element_type: chain_event_schema
+  id: EVT-CHN-152
+  event: chain_export_created
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: chain_export_created
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    record_count:
+      type: integer
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - record_count
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: chain_export_created
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 98
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 487
+  validator: event_model._validate_chain_export_created
+- element_type: chain_event_schema
+  id: EVT-CHN-153
+  event: encrypted_evidence_package_created
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: encrypted_evidence_package_created
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    package_id:
+      type: string
+    operator_identity:
+      type: string
+    record_count:
+      type: integer
+    password_recorded:
+      type: boolean
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - package_id
+  - operator_identity
+  - record_count
+  - password_recorded
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: encrypted_evidence_package_created
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 99
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 491
+  validator: event_model._validate_encrypted_evidence_package_created
+- element_type: chain_event_schema
+  id: EVT-CHN-154
+  event: trouble_report_submitted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: trouble_report_submitted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    destination:
+      type: string
+    payload_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    payload_size:
+      type: integer
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - destination
+  - payload_hash
+  - payload_size
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: trouble_report_submitted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 100
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 447
+  validator: event_model._validate_trouble_or_telemetry_submitted
+- element_type: chain_event_schema
+  id: EVT-CHN-155
+  event: report_exported
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: report_exported
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    report_name:
+      type: string
+    format:
+      type: string
+    record_count:
+      type: integer
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - report_name
+  - format
+  - record_count
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: report_exported
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 101
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 455
+  validator: event_model._validate_report_exported
+- element_type: chain_event_schema
+  id: EVT-CHN-156
+  event: version_check_performed
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: version_check_performed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    current_version:
+      type: string
+    latest_version:
+      type: string
+    update_available:
+      type: boolean
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - current_version
+  - latest_version
+  - update_available
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: version_check_performed
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 102
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 421
+  validator: event_model._validate_version_check_performed
+- element_type: chain_event_schema
+  id: EVT-CHN-157
+  event: dashboard_config_unlocked
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: dashboard_config_unlocked
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    operator_label:
+      type: string
+    tier:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - operator_label
+  - tier
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: dashboard_config_unlocked
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 103
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 463
+  validator: event_model._validate_dashboard_config_unlocked
+- element_type: chain_event_schema
+  id: EVT-CHN-158
+  event: failed_authentication_attempt
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: failed_authentication_attempt
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    endpoint:
+      type: string
+    failure_reason:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - endpoint
+  - failure_reason
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: failed_authentication_attempt
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 104
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 467
+  validator: event_model._validate_failed_authentication_attempt
+- element_type: chain_event_schema
+  id: EVT-CHN-159
+  event: license_validation_attempted
+  domain: CHN
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - proxy
+    - governance-cli
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: license_validation_attempted
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    result:
+      type: string
+    endpoint:
+      type: string
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - result
+  - endpoint
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: license_validation_attempted
+  verify: Record validates against the common non-action event envelope, event-specific fields where a validator exists, hash
+    linkage, canonical record hash, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: INVARIANTS.md
+      section: 'Appendix: Chain event registry'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 105
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 529
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 621
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 471
+  validator: event_model._validate_license_validation_attempted
+- element_type: chain_event_schema
+  id: EVT-GOV-001
+  event: governance_integrity_error
+  domain: GOV
+  severity: critical
+  components:
+    producers:
+    - proxy
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: governance_integrity_error
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    prev_record_hash:
+      type:
+      - string
+      - 'null'
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    signature:
+      type:
+      - string
+      - 'null'
+    signing_key_id:
+      type:
+      - string
+      - 'null'
+    tool_name:
+      type: string
+    condition_source:
+      type: string
+      enum:
+      - qa_chain_staleness
+      - hash_mismatch
+      - active_condition
+      - qa_chain_absent
+    condition_detail:
+      type: string
+    action_taken:
+      type: string
+      const: integrity_error_returned
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - record_hash
+  - tool_name
+  - condition_source
+  - condition_detail
+  - action_taken
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: governance_integrity_error
+  verify: >
+    Record validates against the common non-action event envelope,
+    the governance_integrity_error condition source enum, canonical record
+    hash, hash linkage, and signature when a signing key is configured.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 14. Governance Integrity Error Event'
+    code:
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 99
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 456
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 545
+    - file: archive/gov/governance-layer/scripts/readout.py
+      line: 372
+  validator: event_model._validate_governance_integrity_error

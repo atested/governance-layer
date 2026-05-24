@@ -102,7 +102,10 @@ impl Config {
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
             .unwrap_or(100);
-        let spec_root = repo_root.join("../../project-management/atested/claude-project-files");
+        // Spec sources live in the repo at governance-layer/specs/. Prior to
+        // QS-029 these defaults reached outside the repo into the Claude.ai
+        // project mirror; QS-029 moved them in.
+        let spec_root = repo_root.join("specs");
         let chain_events_spec_path = env::var("ATESTED_CHAIN_EVENTS_SPEC_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| spec_root.join("chain-events-v1.yaml"));

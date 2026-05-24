@@ -1,0 +1,693 @@
+spec_id: chain-integrity-v1
+title: Chain Integrity and Governance Invariants Specification
+status: active
+scope: governance-layer
+last_verified: 2026-05-19
+owner: greg
+imports: []
+
+overview:
+  normative_scope: >
+    Converts INVARIANTS.md always-on invariants INV-001 through INV-010 into
+    Atested Specification Format v3 elements. The spec covers governance chain
+    decision records, hash chaining, signing, denial reason codes, redaction
+    markers, replay checks, opaque-tool classification, and append locking.
+  non_normative_notes:
+    - >
+      INVARIANTS.md optional invariants INV-101 through INV-103 are retained
+      as deferred, non-normative items because the source document labels them
+      "Optional invariants (later)" and no active implementation was found.
+    - >
+      This YAML file uses top-level envelope fields rather than Markdown
+      frontmatter because the requested converted artifact has a .yaml
+      extension.
+
+elements:
+  - element_type: chain_event_schema
+    id: EVT-CHN-001
+    event: mediated_decision
+    domain: CHN
+    severity: critical
+    components:
+      producers: [proxy]
+      consumers: [dashboard, governance-cli]
+    fields:
+      record_version:
+        type: string
+        const: "2.0"
+      record_type:
+        type: string
+        const: mediated_decision
+      timestamp_utc:
+        type: string
+        format: date-time
+      request_id:
+        type: string
+      session_id:
+        type: string
+      user_identity:
+        type: string
+      original_tool:
+        type: string
+      classification:
+        type: object
+        required: [action_type, targets, scope, confidence_tier]
+      evidence:
+        type: object
+      policy_decision:
+        type: string
+        enum: [ALLOW, DENY]
+      policy_reasons:
+        type: array
+      matched_rule:
+        type: string
+      policy_rules_hash:
+        type: string
+        pattern: "^sha256:[0-9a-f]{64}$"
+      approval_store_hash:
+        type: [string, "null"]
+      prev_record_hash:
+        type: [string, "null"]
+      record_hash:
+        type: string
+        pattern: "^sha256:[0-9a-f]{64}$"
+      signature:
+        type: [string, "null"]
+      signing_key_id:
+        type: [string, "null"]
+    required:
+      - record_version
+      - record_type
+      - timestamp_utc
+      - request_id
+      - original_tool
+      - classification
+      - evidence
+      - policy_decision
+      - policy_reasons
+      - matched_rule
+      - policy_rules_hash
+      - prev_record_hash
+      - record_hash
+    chain_constraints:
+      - hash_linked: true
+      - canonical_hash: record_hash is sha256 of canonical JSON with record_hash, signature, and signing_key_id nulled
+      - signed: true
+    check_type: event_triggered
+    verification_mode: runtime_monitor
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+      role: proxy
+    verify: >
+      Each mediated decision record validates against this schema, its
+      record_hash recomputes from canonical JSON, and signature fields validate
+      for every new record written while a signing key is configured.
+    validator: validators.chain.mediated_decision_schema
+    status: active
+    implementation_status: implemented
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "Always-on invariants"
+      code:
+        - file: scripts/policy_eval_v2.py
+          line: 343
+        - file: scripts/verify-record.py
+          line: 388
+        - file: proxy/server.py
+          line: 409
+
+  - element_type: chain_event_schema
+    id: EVT-CHN-002
+    event: non_action_governance_event
+    domain: CHN
+    severity: high
+    components:
+      producers: [dashboard, governance-cli]
+      consumers: [dashboard, governance-cli]
+    fields:
+      record_type:
+        type: string
+        const: non_action_event
+      event_type:
+        type: string
+      event_id:
+        type: string
+      timestamp_utc:
+        type: string
+        format: date-time
+      prev_record_hash:
+        type: [string, "null"]
+      record_hash:
+        type: string
+        pattern: "^sha256:[0-9a-f]{64}$"
+      signature:
+        type: [string, "null"]
+      signing_key_id:
+        type: [string, "null"]
+    required: [event_type, timestamp_utc, prev_record_hash, record_hash]
+    chain_constraints:
+      - hash_linked: true
+      - canonical_hash: record_hash validates with event_model verifier
+      - signed: true
+      - non_policy_replayable: true
+    check_type: event_triggered
+    verification_mode: runtime_monitor
+    observe:
+      source: chain_record
+      selector:
+        event_type_pattern: "*"
+      role: any
+    verify: >
+      Non-action governance events are accepted only if their event_type is in
+      the event model, their hash validates, they preserve chain linkage, and
+      signature fields validate for every new record written while a signing
+      key is configured.
+    validator: validators.chain.non_action_event_schema
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Dashboard non-action event writer signs records when a dashboard signing key is loaded.
+      - Non-action event verifier validates event structure and hash integrity.
+    missing_scope:
+      - governance-cli non-action event writer does not currently sign records.
+      - Existing verifier behavior does not uniformly require signatures for every non-action event.
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "Always-on invariants"
+      code:
+        - file: scripts/event_model.py
+          line: 46
+        - file: scripts/event_model.py
+          line: 375
+        - file: scripts/verify-record.py
+          line: 375
+
+  - element_type: requirement
+    id: REQ-CHN-001
+    pattern: event-driven
+    statement: >
+      WHEN a tool call is mediated by the proxy
+      THE system SHALL write a mediated_decision record before returning the
+      mediated provider response.
+    severity: critical
+    components:
+      producers: [proxy]
+      consumers: [dashboard]
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+      correlation_key: request_id
+      role: proxy
+    check_type: event_triggered
+    verification_mode: both
+    verify: >
+      Within the proxy observation boundary, every provider tool call extracted
+      from a model response has a corresponding mediated_decision record with
+      matching request context before the provider response is rewritten or
+      passed through. This element does not claim observability over privileged
+      actions that bypass the proxy.
+    validator: validators.chain.privileged_action_has_decision_record
+    status: active
+    implementation_status: implemented
+    implemented_scope:
+      - Provider tool calls intercepted by the API proxy are classified, evaluated, and recorded.
+      - Denied provider tool calls are replaced with governance denial text before execution.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-001 No privileged action without a decision record."
+      code:
+        - file: proxy/server.py
+          line: 409
+        - file: proxy/server.py
+          line: 466
+        - file: proxy/server.py
+          line: 497
+        - file: proxy/providers/openai.py
+          line: 55
+        - file: proxy/providers/anthropic.py
+          line: 72
+
+  - element_type: requirement
+    id: REQ-CHN-002
+    pattern: event-driven
+    statement: >
+      WHEN a mediated_decision record is written
+      THE system SHALL have completed policy evaluation for that record.
+    severity: critical
+    components:
+      producers: [proxy]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+      role: proxy
+    check_type: event_triggered
+    verification_mode: runtime_monitor
+    verify: >
+      The record contains policy_decision, matched_rule, policy_reasons, and
+      policy_rules_hash fields produced by the evaluator, and policy_decision
+      is one of the evaluator's concrete outcomes.
+    validator: validators.chain.decision_record_has_policy_evaluation
+    status: active
+    implementation_status: implemented
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-002 No decision record without a completed policy evaluation."
+      code:
+        - file: proxy/server.py
+          line: 466
+        - file: scripts/policy_eval_v2.py
+          line: 275
+        - file: scripts/policy_eval_v2.py
+          line: 319
+        - file: scripts/policy_eval_v2.py
+          line: 343
+
+  - element_type: requirement
+    id: REQ-CHN-003
+    pattern: event-driven
+    statement: >
+      WHEN policy evaluation runs for a tool call
+      THE system SHALL include tool capability metadata in the resulting
+      decision record.
+    severity: high
+    components:
+      producers: [proxy]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+        field: classification
+      role: proxy
+    check_type: event_triggered
+    verification_mode: runtime_monitor
+    verify: >
+      The decision record classification object contains action_type, targets,
+      scope, and confidence_tier, and the record contains an evidence object
+      derived by the classifier.
+    validator: validators.chain.decision_record_has_capability_metadata
+    status: active
+    implementation_status: implemented
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-003 No policy evaluation without tool capability metadata."
+      code:
+        - file: scripts/classifier.py
+          line: 549
+        - file: scripts/classifier.py
+          line: 556
+        - file: scripts/policy_eval_v2.py
+          line: 352
+        - file: scripts/policy_eval_v2.py
+          line: 358
+
+  - element_type: negative_constraint
+    id: NEG-CHN-001
+    statement: >
+      The system shall never accept a governance chain whose records fail
+      append-only hash linkage or whose stored record_hash does not match the
+      canonical record body.
+    severity: critical
+    components:
+      producers: [proxy, dashboard, governance-cli]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector: all
+      role: any
+    check_type: periodic
+    verification_mode: runtime_monitor
+    verify: >
+      For every non-empty chain line after the first, prev_record_hash equals
+      the preceding record_hash, and each record_hash recomputes from canonical
+      JSON according to its record type.
+    validator: validators.chain.hash_linkage_intact
+    status: active
+    implementation_status: implemented
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-004 Logs are append-only and tamper-evident via hash chaining."
+      code:
+        - file: proxy/server.py
+          line: 194
+        - file: dashboard/server.py
+          line: 779
+        - file: scripts/integrity_monitor.py
+          line: 228
+        - file: scripts/verify-chain.py
+          line: 138
+
+  - element_type: requirement
+    id: REQ-SEC-001
+    pattern: ubiquitous
+    statement: >
+      The system shall sign every governance chain record when a signing key is
+      configured, and the verifier shall validate chain hashes and signatures.
+    severity: critical
+    components:
+      producers: [proxy]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector: all
+      role: any
+    check_type: periodic
+    verification_mode: runtime_monitor
+    verify: >
+      Every new chain record written while a signing key is configured includes
+      signature and signing_key_id, and the verifier validates the Ed25519
+      signature. Historical pre-dispatch records without signature fields remain
+      compatibility-valid only as legacy chain material.
+    validator: validators.security.chain_records_signed
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Proxy startup refuses to run without a loaded signing key.
+      - ChainRecorder signs mediated_decision records when a signing key is loaded.
+      - Dashboard non-action event writer signs records when a dashboard signing key is loaded.
+      - verify-record validates Ed25519 signatures when signature fields are present.
+      - Pre-dispatch unsigned mediated_decision records remain compatibility-valid.
+    missing_scope:
+      - governance-cli non-action event writer does not currently sign records.
+      - Verification does not uniformly reject every unsigned non-action event when a signing key is configured.
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-005 Chain record signing and verification."
+      code:
+        - file: proxy/server.py
+          line: 202
+        - file: proxy/server.py
+          line: 1796
+        - file: scripts/verify-record.py
+          line: 314
+        - file: scripts/verify-record.py
+          line: 419
+
+  - element_type: requirement
+    id: REQ-CHN-004
+    pattern: event-driven
+    statement: >
+      WHEN policy evaluation denies a tool call
+      THE system SHALL include machine-parsable reason codes in the decision
+      record.
+    severity: high
+    components:
+      producers: [proxy]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+        policy_decision: DENY
+        field: policy_reasons
+      role: proxy
+    check_type: event_triggered
+    verification_mode: runtime_monitor
+    verify: >
+      Every DENY mediated_decision record has a non-empty policy_reasons array,
+      and each reason contains a string code and a structured detail object.
+    validator: validators.chain.denials_have_reason_codes
+    status: active
+    implementation_status: implemented
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-006 Any denial must include machine-parsable reason codes."
+      code:
+        - file: scripts/policy_eval_v2.py
+          line: 329
+        - file: scripts/policy_eval_v2.py
+          line: 332
+        - file: scripts/policy_eval_v2.py
+          line: 359
+
+  - element_type: negative_constraint
+    id: NEG-CHN-002
+    statement: >
+      The system shall never silently drop tool arguments or evidence when it
+      redacts them from governance records.
+    severity: critical
+    components:
+      producers: [proxy, governance-cli]
+      consumers: [dashboard, governance-cli]
+    observe:
+      source: chain_record
+      selector: all
+      role: any
+    check_type: periodic
+    verification_mode: runtime_monitor
+    verify: >
+      For governance chain records only, when a field containing raw tool
+      arguments, raw content, or evidence is absent, an appropriate
+      record-type-specific redaction marker is present. Acceptable markers may
+      include explicit redaction fields, hashes, normalized_args, or evidence
+      references sufficient to distinguish intentional redaction from silent
+      loss.
+    validator: validators.chain.redaction_is_explicit
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Legacy pass_decision records include tool_args_redacted, content_hash, normalized_args, and evidence_refs.
+      - Messaging records include explicit opaque payload and redacted argument metadata.
+      - mediated_decision records include classifier evidence and derived targets.
+    missing_scope:
+      - v2 mediated_decision records do not include a general explicit redaction marker for omitted raw tool arguments.
+      - A per-record-type redaction schema defining which governance chain fields may be redacted and what markers are required does not yet exist.
+      - Full verification is blocked until that redaction schema exists.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-007 Any redaction must be explicit; never silently drop args/evidence."
+      code:
+        - file: scripts/policy-eval.py
+          line: 685
+        - file: scripts/policy-eval.py
+          line: 887
+        - file: scripts/policy_eval_v2.py
+          line: 343
+        - file: scripts/policy_eval_v2.py
+          line: 358
+
+  - element_type: requirement
+    id: REQ-CHN-005
+    pattern: event-driven
+    statement: >
+      WHEN the replay verifier is run for a replayable stored policy decision
+      THE system SHALL reproduce the original deterministic policy outcome.
+    severity: critical
+    components:
+      producers: [governance-cli]
+      consumers: [governance-cli]
+    observe:
+      source: file_state
+      selector:
+        base: repo_root
+        path: scripts/replay-record.py
+      role: governance-cli
+    check_type: reconstructive
+    verification_mode: generated_test
+    preconditions:
+      - runtime_fixture: replayable_decision_record
+    verify: >
+      The replay verifier decodes stored request bytes, verifies request_hash,
+      re-runs policy evaluation, and reports no mismatches for policy_decision,
+      reason_codes, tool, cap_registry_hash, messaging_map_hash,
+      normalized_args, and coverage_stamp.
+    validator: validators.chain.replay_reproduces_policy_outcome
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - pass_decision records with request_bytes_b64 and request_hash are replayable.
+      - triage_decision and terminal_judgment projection replay paths exist.
+      - non-action governance events are verified structurally and skipped as not policy-replayable.
+    missing_scope:
+      - Current v2 mediated_decision proxy records do not carry request_bytes_b64 or an equivalent input bundle and are not replayed by replay-record.py.
+      - v2 mediated_decision records must be updated to carry sufficient input data, equivalent to legacy request_bytes_b64, to enable deterministic replay.
+      - Full quality service verification of governance decision correctness is blocked until v2 mediated_decision replay input capture exists.
+      - Replay environment pinning for classifier and policy versions is not fully specified in INVARIANTS.md.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-008 Replay verifier must reproduce policy outcomes for stored inputs."
+      code:
+        - file: scripts/replay-record.py
+          line: 3
+        - file: scripts/replay-record.py
+          line: 100
+        - file: scripts/replay-record.py
+          line: 546
+        - file: scripts/replay-record.py
+          line: 623
+
+  - element_type: requirement
+    id: REQ-GOV-001
+    pattern: event-driven
+    statement: >
+      WHEN the proxy receives a tool call whose effects are opaque or
+      uninspectable
+      THE system SHALL classify the call conservatively, attach classification
+      metadata, and evaluate it normally through policy.
+    severity: high
+    components:
+      producers: [proxy]
+      consumers: [dashboard]
+    observe:
+      source: chain_record
+      selector:
+        record_type: mediated_decision
+        field: classification
+      role: proxy
+    check_type: event_triggered
+    verification_mode: both
+    preconditions:
+      - runtime_fixture: opaque_tool_call
+    verify: >
+      Opaque tool calls produce classification metadata with confidence_tier 3
+      or 4, preserve original_tool, include classifier evidence, and reach
+      policy evaluation. Denial, if any, is a policy outcome rather than a
+      classifier-stage rejection for opacity alone.
+    validator: validators.gov.opaque_tool_is_classified_and_evaluated
+    status: active
+    implementation_status: implemented
+    implemented_scope:
+      - Current classifier returns valid classification metadata, original_tool, evidence, and conservative confidence_tier for opaque and uninspectable tool calls.
+      - Proxy mediation passes the classifier result through policy evaluation and writes the resulting decision record.
+    verification_status: verified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-009 The evaluate endpoint must never return immediate DENY solely because a tool name is unrecognized."
+      code:
+        - file: scripts/classifier.py
+          line: 549
+        - file: scripts/classifier.py
+          line: 716
+        - file: scripts/policy_eval_v2.py
+          line: 275
+        - file: proxy/server.py
+          line: 430
+        - file: proxy/server.py
+          line: 466
+        - file: tests/test_gate1a_classifier_policy.py
+          line: 809
+        - file: tests/test_gate1a_classifier_policy.py
+          line: 832
+
+  - element_type: workflow_contract
+    id: WF-CHN-001
+    workflow: chain_append_lock_protocol
+    severity: critical
+    components:
+      producers: [proxy, dashboard, governance-cli]
+      consumers: [dashboard, governance-cli]
+    correlation_key: record_hash
+    timeout: 5s
+    steps:
+      - id: acquire_cross_process_lock
+        action: mkdir <chain_path>.lock.d
+        observe:
+          source: file_state
+          selector:
+            base: runtime_root
+            path: LOGS/decision-chain.jsonl.lock.d
+        verify: Writer obtains exclusive mkdir lock before reading chain head.
+      - id: acquire_in_process_serialization
+        action: enter Python threading lock or rely on shell single-threaded process
+        requires: acquire_cross_process_lock
+        observe:
+          source: process_state
+          selector:
+            process_name: any_chain_writer
+        verify: Python writers use a process-local threading lock around chain append.
+      - id: read_head_inside_lock
+        action: read tail record_hash as prev_record_hash
+        requires: acquire_cross_process_lock
+        observe:
+          source: chain_record
+          selector: all
+        verify: New record prev_record_hash equals the record_hash of the immediately preceding chain line.
+      - id: compute_record_hash_inside_lock
+        action: compute canonical record_hash
+        requires: read_head_inside_lock
+        observe:
+          source: chain_record
+          selector: all
+        verify: New record_hash recomputes from the final record body according to its record type.
+      - id: append_single_atomic_write
+        action: append one canonical JSON line with O_APPEND
+        requires: compute_record_hash_inside_lock
+        observe:
+          source: chain_record
+          selector: all
+        verify: Chain contains exactly one complete JSON object per appended line.
+    failure_modes:
+      - name: duplicate_head_hash
+        condition: two adjacent or later records claim the same predecessor where sequence order should be linear
+        verify: chain verifier reports prev_record_hash mismatch or duplicate predecessor anomaly
+      - name: stale_lock
+        condition: lock owner no longer exists after max wait
+        verify: Python lock helpers may remove stale lock metadata and retry; shell helpers time out
+    check_type: transactional
+    verification_mode: both
+    preconditions:
+      - runtime_fixture: concurrent_chain_writers
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: INVARIANTS.md
+        section: "INV-010 Every writer to decision-chain.jsonl must acquire the chain lock protocol before reading the head hash and appending."
+      code:
+        - file: proxy/server.py
+          line: 162
+        - file: proxy/server.py
+          line: 175
+        - file: proxy/server.py
+          line: 272
+        - file: dashboard/server.py
+          line: 686
+        - file: dashboard/server.py
+          line: 763
+        - file: scripts/atested_cli.py
+          line: 83
+        - file: scripts/atested_cli.py
+          line: 155
+        - file: scripts/append-record.sh
+          line: 24
+        - file: scripts/append-record-runtime.sh
+          line: 26
+
+non_normative:
+  deferred_invariants:
+    - id: INV-101
+      text: "Rate limits per capability class."
+      status: deferred_optional_later
+    - id: INV-102
+      text: "Two-person rule for high-risk capabilities."
+      status: deferred_optional_later
+    - id: INV-103
+      text: "Separation of duties for policy authoring vs deployment."
+      status: deferred_optional_later

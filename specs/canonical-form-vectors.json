@@ -1,0 +1,600 @@
+{
+  "canonical_json_kwargs": {
+    "allow_nan": false,
+    "ensure_ascii": false,
+    "separators": [
+      ",",
+      ":"
+    ],
+    "sort_keys": true
+  },
+  "ed25519_signature_vector": {
+    "algorithm": "Ed25519 pure, no prehash",
+    "available": true,
+    "message": "{\"event_type\":\"qa_environmental_snapshot\",\"overall\":\"healthy\",\"sequence\":1}",
+    "private_key_pkcs8_pem": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n",
+    "private_key_seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "public_key_fingerprint": "ed25519:56475aa75463474c0285df5dbf2bcab73da651358839e9b77481b2eab107708c",
+    "public_key_raw_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+    "public_key_spki_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAA6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=\n-----END PUBLIC KEY-----\n",
+    "python_cryptography_version": "46.0.5",
+    "signature_base64url_nopad": "6VFzGlkvQHLRbzWV2dXA7we-mIsB2vckQqUqtilppjcKpvvZltiT3F5FXrTTcCYvGaKAeKcYjYd9ySRA9uYRDg",
+    "signature_hex": "e951731a592f4072d16f3595d9d5c0ef07be988b01daf72442a52ab62969a6370aa6fbd996d893dc5e455eb4d370262f19a28078a7188d877dc92440f6e6110e"
+  },
+  "generated_by": "scripts/canonical_form.py",
+  "invalid_vectors": [
+    {
+      "id": "INV001",
+      "input": {
+        "nan": "NaN"
+      },
+      "notes": "NaN is represented as a string here; numeric NaN must be rejected by canonical_json."
+    },
+    {
+      "id": "INV002",
+      "input": {
+        "infinity": "Infinity"
+      },
+      "notes": "Infinity is represented as a string here; numeric Infinity must be rejected by canonical_json."
+    }
+  ],
+  "schema_version": "canonical-form-v1-vectors",
+  "vectors": [
+    {
+      "canonical_json": "{\"a\":\"first\",\"z\":\"last\"}",
+      "id": "V001",
+      "input": {
+        "a": "first",
+        "z": "last"
+      },
+      "notes": "simple ASCII object and sorted keys",
+      "sha256": "sha256:af3bf072ea841a14c20d546622a7edd6ecb1b6a59c12f49cef627eac17416041",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"accent\":\"café\",\"cjk\":\"漢字\",\"emoji\":\"🧪\"}",
+      "id": "V002",
+      "input": {
+        "accent": "café",
+        "cjk": "漢字",
+        "emoji": "🧪"
+      },
+      "notes": "multi-byte UTF-8 CJK, emoji, and raw non-ASCII output",
+      "sha256": "sha256:ab099e90147dd867266d081599e720b02b770403d9a3aaeb4568aea251edab44",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"nfc_like\":\"é\",\"nfd_like\":\"é\"}",
+      "id": "V003",
+      "input": {
+        "nfc_like": "é",
+        "nfd_like": "é"
+      },
+      "notes": "combining character sequence without Unicode normalization",
+      "sha256": "sha256:fee502b60b988c271c5110836dc5ffd5fbde4cef32217dc7935eacb71a76fe35",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"negative\":-17,\"positive\":42,\"zero\":0}",
+      "id": "V004",
+      "input": {
+        "negative": -17,
+        "positive": 42,
+        "zero": 0
+      },
+      "notes": "positive, negative, and zero integers",
+      "sha256": "sha256:9f29883067897e9374ecdbbe48f88dc32e8689860b20594c8a8a830fa9577219",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"big\":9223372036854775808,\"small\":-9223372036854775809}",
+      "id": "V005",
+      "input": {
+        "big": 9223372036854775808,
+        "small": -9223372036854775809
+      },
+      "notes": "large integer beyond int64 but valid JSON integer",
+      "sha256": "sha256:66aa00291a458e421f5f037d7202b84fd6f0afae45fcc238714a22951c09c9c5",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"negative_zero\":-0.0,\"zero\":0.0}",
+      "id": "V006",
+      "input": {
+        "negative_zero": -0.0,
+        "zero": 0.0
+      },
+      "notes": "float zero and negative zero",
+      "sha256": "sha256:9c0a23ac39a1650daa7b9a6576462cdd3cd495c242c01155fe43e691a89cc78d",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"one_point_one\":1.1,\"sum\":0.30000000000000004}",
+      "id": "V007",
+      "input": {
+        "one_point_one": 1.1,
+        "sum": 0.30000000000000004
+      },
+      "notes": "ordinary floats and Python shortest-roundtrip rendering",
+      "sha256": "sha256:4635ec33daf68acf7a8f7e053c01442a4f01823117109b3720067e9b746bebdd",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"small\":1e-06,\"smaller\":1e-07,\"tiny\":5e-324}",
+      "id": "V008",
+      "input": {
+        "small": 1e-06,
+        "smaller": 1e-07,
+        "tiny": 5e-324
+      },
+      "notes": "small floats and scientific notation boundary",
+      "sha256": "sha256:d66ec9f5bbc4777adbea52128e2c77cdb9b193abd0f7e6317a948e47bb78437d",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"large_plain\":1e+16,\"large_sci\":1.23e+45}",
+      "id": "V009",
+      "input": {
+        "large_plain": 1e+16,
+        "large_sci": 1.23e+45
+      },
+      "notes": "large floats and scientific notation",
+      "sha256": "sha256:4aad852cfad0117190eb584e0deb80f42195c34968df46b027ec24fd01e21389",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"one_float\":1.0,\"trailing_zero_source\":1.23}",
+      "id": "V010",
+      "input": {
+        "one_float": 1.0,
+        "trailing_zero_source": 1.23
+      },
+      "notes": "integer-valued float retains decimal form",
+      "sha256": "sha256:2b5560e435f0a655f594960cbfd30f5796e905ba58c0ace61063a1ae5aeb574a",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"false\":false,\"none\":null,\"text\":\"yes\",\"true\":true}",
+      "id": "V011",
+      "input": {
+        "false": false,
+        "none": null,
+        "text": "yes",
+        "true": true
+      },
+      "notes": "null, booleans, and strings",
+      "sha256": "sha256:029a11b594eb3d60cc9b73a4ba0115cf2e08a2561b59fc4c93c0d34242670f2a",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"empty_array\":[],\"empty_object\":{}}",
+      "id": "V012",
+      "input": {
+        "empty_array": [],
+        "empty_object": {}
+      },
+      "notes": "empty object and array",
+      "sha256": "sha256:0f2158204145fd606c11e64e0161a9a78eb7c27fb39b7b5cb6fee328fb5b99da",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"outer\":{\"a\":{\"inner\":true},\"b\":[3,2,1]}}",
+      "id": "V013",
+      "input": {
+        "outer": {
+          "a": {
+            "inner": true
+          },
+          "b": [
+            3,
+            2,
+            1
+          ]
+        }
+      },
+      "notes": "nested objects and arrays",
+      "sha256": "sha256:be5e9da926dfdf52eb3d71d10c069d499f9ca43720cb48a74311d5cffd5d1ab0",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"array\":[null,true,false,1,-2.5,\"x\",{\"k\":\"v\"},[]]}",
+      "id": "V014",
+      "input": {
+        "array": [
+          null,
+          true,
+          false,
+          1,
+          -2.5,
+          "x",
+          {
+            "k": "v"
+          },
+          []
+        ]
+      },
+      "notes": "mixed-type array",
+      "sha256": "sha256:ea55df8d3fc0cb0ba8c151b3618a9864b8a8bac4685664510ad7726ed19fbd49",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":[\"leaf\"]}}}}}",
+      "id": "V015",
+      "input": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": [
+                  "leaf"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "notes": "deeply nested structure",
+      "sha256": "sha256:dee13e8a02be41ac3a51b180477e4f62bff345823394086bb11b18cb0034e7c1",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"A\":2,\"B\":4,\"a\":3,\"b\":1}",
+      "id": "V016",
+      "input": {
+        "A": 2,
+        "B": 4,
+        "a": 3,
+        "b": 1
+      },
+      "notes": "non-sorted insertion order and mixed-case keys",
+      "sha256": "sha256:3ff5b748c5d1b0a4e7af799db18531d11623638c781d8bfd9e16465fc30b857c",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"a\":4,\"é\":2,\"é\":1,\"中\":3}",
+      "id": "V017",
+      "input": {
+        "a": 4,
+        "é": 2,
+        "é": 1,
+        "中": 3
+      },
+      "notes": "Unicode keys sort by Unicode code point",
+      "sha256": "sha256:d5b22b55068390486ff41d5ffbd79ac6ad5e89a9eafd9fa3496a5d7ac63aae98",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"backslash\":\"\\\\\",\"newline\":\"\\n\",\"quote\":\"\\\"\",\"tab\":\"\\t\"}",
+      "id": "V018",
+      "input": {
+        "backslash": "\\",
+        "newline": "\n",
+        "quote": "\"",
+        "tab": "\t"
+      },
+      "notes": "escaped JSON control characters",
+      "sha256": "sha256:c52f1ae92205cd3974fff180fbea45a43547be25ea0420b1e0235ddf041e34bb",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"classification\":{\"category\":\"shell\",\"risk_tier\":3,\"targets\":[\"tmp/out.txt\"]},\"evidence_refs\":[\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"intent\":{\"expected_outputs\":[{\"kind\":\"path\",\"ref\":\"output:path\",\"value\":\"/tmp/out.txt\"},{\"kind\":\"text\",\"ref\":\"output:text\",\"value\":\"kept\"}]},\"matched_rule\":\"deny_shell_write\",\"normalized_args\":{\"canonical_dst_path\":\"/private/tmp/b\",\"canonical_path\":\"/private/tmp/out.txt\",\"canonical_src_path\":\"/private/tmp/a\",\"visible\":\"kept\"},\"original_tool\":\"bash\",\"policy_decision\":\"DENY\",\"policy_inputs\":{\"allow_base_dirs\":[\"/tmp\"],\"canonical_path\":\"/private/tmp/out.txt\",\"tier\":\"deny\"},\"policy_reasons\":[{\"code\":\"V2_DENY_SHELL_WRITE\",\"detail\":{\"reason\":\"shell write denied\"}},{\"code\":\"V2_AUDIT\",\"detail\":{\"reason\":\"extra detail omitted from signing\"}}],\"prev_record_hash\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"process_id\":4242,\"record_hash\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"record_type\":\"mediated_decision\",\"record_version\":\"2.0\",\"request_bytes_b64\":\"ZXhhbXBsZQ==\",\"request_id\":\"req-001\",\"session_id\":\"sess-001\",\"signature\":\"sig\",\"signing_key_id\":\"ed25519:key\",\"timestamp_utc\":\"2026-05-23T14:30:00Z\",\"tool_args_redacted\":{\"canonical_path\":\"/private/tmp/out.txt\",\"command\":\"echo hi\",\"path\":\"/tmp/out.txt\"},\"untrusted_inputs\":[{\"source\":\"tool_args\"}]}",
+      "id": "V019",
+      "input": {
+        "classification": {
+          "category": "shell",
+          "risk_tier": 3,
+          "targets": [
+            "tmp/out.txt"
+          ]
+        },
+        "evidence_refs": [
+          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "intent": {
+          "expected_outputs": [
+            {
+              "kind": "path",
+              "ref": "output:path",
+              "value": "/tmp/out.txt"
+            },
+            {
+              "kind": "text",
+              "ref": "output:text",
+              "value": "kept"
+            }
+          ]
+        },
+        "matched_rule": "deny_shell_write",
+        "normalized_args": {
+          "canonical_dst_path": "/private/tmp/b",
+          "canonical_path": "/private/tmp/out.txt",
+          "canonical_src_path": "/private/tmp/a",
+          "visible": "kept"
+        },
+        "original_tool": "bash",
+        "policy_decision": "DENY",
+        "policy_inputs": {
+          "allow_base_dirs": [
+            "/tmp"
+          ],
+          "canonical_path": "/private/tmp/out.txt",
+          "tier": "deny"
+        },
+        "policy_reasons": [
+          {
+            "code": "V2_DENY_SHELL_WRITE",
+            "detail": {
+              "reason": "shell write denied"
+            }
+          },
+          {
+            "code": "V2_AUDIT",
+            "detail": {
+              "reason": "extra detail omitted from signing"
+            }
+          }
+        ],
+        "prev_record_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "process_id": 4242,
+        "record_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "record_type": "mediated_decision",
+        "record_version": "2.0",
+        "request_bytes_b64": "ZXhhbXBsZQ==",
+        "request_id": "req-001",
+        "session_id": "sess-001",
+        "signature": "sig",
+        "signing_key_id": "ed25519:key",
+        "timestamp_utc": "2026-05-23T14:30:00Z",
+        "tool_args_redacted": {
+          "canonical_path": "/private/tmp/out.txt",
+          "command": "echo hi",
+          "path": "/tmp/out.txt"
+        },
+        "untrusted_inputs": [
+          {
+            "source": "tool_args"
+          }
+        ]
+      },
+      "notes": "v2 mediated decision hash and signing preimage",
+      "record_hash_preimage": "{\"classification\":{\"category\":\"shell\",\"risk_tier\":3,\"targets\":[\"tmp/out.txt\"]},\"evidence_refs\":[\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"intent\":{\"expected_outputs\":[{\"kind\":\"path\",\"ref\":\"output:path\",\"value\":\"/tmp/out.txt\"},{\"kind\":\"text\",\"ref\":\"output:text\",\"value\":\"kept\"}]},\"matched_rule\":\"deny_shell_write\",\"normalized_args\":{\"canonical_dst_path\":\"/private/tmp/b\",\"canonical_path\":\"/private/tmp/out.txt\",\"canonical_src_path\":\"/private/tmp/a\",\"visible\":\"kept\"},\"original_tool\":\"bash\",\"policy_decision\":\"DENY\",\"policy_inputs\":{\"allow_base_dirs\":[\"/tmp\"],\"canonical_path\":\"/private/tmp/out.txt\",\"tier\":\"deny\"},\"policy_reasons\":[{\"code\":\"V2_DENY_SHELL_WRITE\",\"detail\":{\"reason\":\"shell write denied\"}},{\"code\":\"V2_AUDIT\",\"detail\":{\"reason\":\"extra detail omitted from signing\"}}],\"prev_record_hash\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"process_id\":4242,\"record_hash\":null,\"record_type\":\"mediated_decision\",\"record_version\":\"2.0\",\"request_bytes_b64\":\"ZXhhbXBsZQ==\",\"request_id\":\"req-001\",\"session_id\":\"sess-001\",\"signature\":null,\"signing_key_id\":null,\"timestamp_utc\":\"2026-05-23T14:30:00Z\",\"tool_args_redacted\":{\"canonical_path\":\"/private/tmp/out.txt\",\"command\":\"echo hi\",\"path\":\"/tmp/out.txt\"},\"untrusted_inputs\":[{\"source\":\"tool_args\"}]}",
+      "record_hash_sha256": "sha256:140e5151c915981e430730b87e046118a868bf86471f93e280395d410de1424f",
+      "sha256": "sha256:f4b347447114cc1e2be2e2a654ceb04d01b265178bba8e6b0d77711f89af0e97",
+      "signing_preimage": "{\"classification\":{\"category\":\"shell\",\"risk_tier\":3,\"targets\":[\"tmp/out.txt\"]},\"intent\":{\"expected_outputs\":[{\"kind\":\"path\",\"ref\":\"output:path\",\"value\":\"<path-redacted>\"},{\"kind\":\"text\",\"ref\":\"output:text\",\"value\":\"kept\"}]},\"matched_rule\":\"deny_shell_write\",\"normalized_args\":{\"visible\":\"kept\"},\"original_tool\":\"bash\",\"policy_decision\":\"DENY\",\"policy_inputs\":{\"tier\":\"deny\"},\"policy_reasons\":[{\"code\":\"V2_DENY_SHELL_WRITE\"},{\"code\":\"V2_AUDIT\"}],\"prev_record_hash\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"record_type\":\"mediated_decision\",\"record_version\":\"2.0\",\"tool_args_redacted\":{\"command\":\"echo hi\"}}",
+      "signing_preimage_sha256": "sha256:a67d23076300ca8485743b4b21e9cc67096f4b5cd9033d80e94f22bf64f7e9db"
+    },
+    {
+      "canonical_json": "{\"destination\":\"https://license.atested.com/api/telemetry\",\"event_id\":\"evt-001\",\"event_model_version\":\"0.1\",\"event_type\":\"telemetry_submitted\",\"payload_hash\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"payload_size\":512,\"prev_record_hash\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"record_hash\":\"sha256:3333333333333333333333333333333333333333333333333333333333333333\",\"signature\":\"sig\",\"signing_key_id\":\"ed25519:key\",\"timestamp_utc\":\"2026-05-23T14:30:01Z\"}",
+      "id": "V020",
+      "input": {
+        "destination": "https://license.atested.com/api/telemetry",
+        "event_id": "evt-001",
+        "event_model_version": "0.1",
+        "event_type": "telemetry_submitted",
+        "payload_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "payload_size": 512,
+        "prev_record_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "record_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "signature": "sig",
+        "signing_key_id": "ed25519:key",
+        "timestamp_utc": "2026-05-23T14:30:01Z"
+      },
+      "notes": "non-action governance event hash and signing preimage",
+      "record_hash_preimage": "{\"destination\":\"https://license.atested.com/api/telemetry\",\"event_id\":\"evt-001\",\"event_model_version\":\"0.1\",\"event_type\":\"telemetry_submitted\",\"payload_hash\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"payload_size\":512,\"prev_record_hash\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"record_hash\":null,\"signature\":null,\"signing_key_id\":null,\"timestamp_utc\":\"2026-05-23T14:30:01Z\"}",
+      "record_hash_sha256": "sha256:e4053335d2d519599252202ab89aa871089a9e0da442f71bb5461a4b271b3a73",
+      "sha256": "sha256:0b4cbf33964976a4b8896b53ecf4ab2c25611f8685fa4ecbccc28b9d8b28a24f",
+      "signing_preimage": "{\"destination\":\"https://license.atested.com/api/telemetry\",\"event_id\":\"evt-001\",\"event_model_version\":\"0.1\",\"event_type\":\"telemetry_submitted\",\"payload_hash\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"payload_size\":512,\"prev_record_hash\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"record_hash\":null,\"signature\":null,\"signing_key_id\":null,\"timestamp_utc\":\"2026-05-23T14:30:01Z\"}",
+      "signing_preimage_sha256": "sha256:e4053335d2d519599252202ab89aa871089a9e0da442f71bb5461a4b271b3a73"
+    },
+    {
+      "canonical_json": "{\"metadata_hash\":\"sha256:4444444444444444444444444444444444444444444444444444444444444444\",\"policy_rules_hash\":\"sha256:5555555555555555555555555555555555555555555555555555555555555555\",\"schema_version\":1}",
+      "id": "V021",
+      "input": {
+        "metadata_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "policy_rules_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "schema_version": 1
+      },
+      "metadata_hash_preimage": "{\"metadata_hash\":null,\"policy_rules_hash\":\"sha256:5555555555555555555555555555555555555555555555555555555555555555\",\"schema_version\":1}",
+      "metadata_hash_sha256": "sha256:34964f8af5d990fa3ebe5131909f9d140c2a39be56bf25867a2118045b67393b",
+      "notes": "integrity metadata hash with metadata_hash nulled",
+      "sha256": "sha256:c6478e435b35993890a9b45ab74e2724fd96bdce72e627485f8e659efadd5308",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"machines\":[{\"id\":\"m2\"},{\"id\":\"m1\"}],\"registry_hash\":\"sha256:6666666666666666666666666666666666666666666666666666666666666666\",\"registry_version\":1}",
+      "id": "V022",
+      "input": {
+        "machines": [
+          {
+            "id": "m2"
+          },
+          {
+            "id": "m1"
+          }
+        ],
+        "registry_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "registry_version": 1
+      },
+      "notes": "machine registry hash with registry_hash nulled",
+      "registry_hash_preimage": "{\"machines\":[{\"id\":\"m2\"},{\"id\":\"m1\"}],\"registry_hash\":null,\"registry_version\":1}",
+      "registry_hash_sha256": "sha256:ccbd7edd84e0b0c3e6b208c5a13f1577a9429abb8532bde7553c4be180b8231a",
+      "sha256": "sha256:bf4885ef6291a29551e854586e8491c632ca3f6a5b15bf049803f2773b9350e9",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"active_approvals\":[{\"artifact_identity\":\"sha256:aaa\",\"policy_version\":\"baseline-v1\"},{\"artifact_identity\":\"sha256:bbb\",\"policy_version\":\"baseline-v1\"}],\"approval_store_version\":\"0.1\"}",
+      "id": "V023",
+      "input": {
+        "active_approvals": [
+          {
+            "artifact_identity": "sha256:aaa",
+            "policy_version": "baseline-v1"
+          },
+          {
+            "artifact_identity": "sha256:bbb",
+            "policy_version": "baseline-v1"
+          }
+        ],
+        "approval_store_version": "0.1"
+      },
+      "notes": "approval store snapshot with approval ordering inputs",
+      "sha256": "sha256:e91567c60d4424e5e9a5ea9046a5a7ccb0fd3c2c708a5831fefcb3feb2b75a5b",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"active_conditions\":[],\"capability_registry_hash\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"checks\":{\"ENV-001\":{\"status\":\"pass\"},\"ENV-007\":{\"disk_available_mb\":2048,\"status\":\"pass\"}},\"event_type\":\"qa_environmental_snapshot\",\"overall\":\"healthy\",\"policy_rules_hash\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":48217,\"timestamp_utc\":\"2026-05-23T14:30:00Z\"}",
+      "id": "V024",
+      "input": {
+        "active_conditions": [],
+        "capability_registry_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "checks": {
+          "ENV-001": {
+            "status": "pass"
+          },
+          "ENV-007": {
+            "disk_available_mb": 2048,
+            "status": "pass"
+          }
+        },
+        "event_type": "qa_environmental_snapshot",
+        "overall": "healthy",
+        "policy_rules_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sequence": 48217,
+        "timestamp_utc": "2026-05-23T14:30:00Z"
+      },
+      "notes": "QA environmental snapshot shape from quality service spec",
+      "sha256": "sha256:cb2fe8d1f8632f2b999fc9b9e08e46d9f6b73dbee0254871f21715cd6b5d8cec",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"condition_id\":\"CR-CRIT-001\",\"condition_type\":\"stale_rules\",\"detail\":\"policy_rules_hash mismatch\",\"event_type\":\"qa_condition_detected\",\"governance_record_ref\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":48218,\"severity\":\"critical\",\"timestamp_utc\":\"2026-05-23T14:30:00.123Z\"}",
+      "id": "V025",
+      "input": {
+        "condition_id": "CR-CRIT-001",
+        "condition_type": "stale_rules",
+        "detail": "policy_rules_hash mismatch",
+        "event_type": "qa_condition_detected",
+        "governance_record_ref": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "sequence": 48218,
+        "severity": "critical",
+        "timestamp_utc": "2026-05-23T14:30:00.123Z"
+      },
+      "notes": "QA condition detected shape",
+      "sha256": "sha256:f7000ff4fb13f2840b9b4c13875962095331d181aed4bc5055e0ab6cb0e07cdc",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"all_clear\":true,\"checks_performed\":{\"approval_provenance\":\"pass\",\"classification_consistency\":\"pass\",\"structural_integrity\":\"pass\"},\"decision_type\":\"ALLOW\",\"event_type\":\"qa_decision_verification\",\"governance_record_hash\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"sequence\":48219,\"timestamp_utc\":\"2026-05-23T14:30:01Z\",\"tool_name\":\"bash\"}",
+      "id": "V026",
+      "input": {
+        "all_clear": true,
+        "checks_performed": {
+          "approval_provenance": "pass",
+          "classification_consistency": "pass",
+          "structural_integrity": "pass"
+        },
+        "decision_type": "ALLOW",
+        "event_type": "qa_decision_verification",
+        "governance_record_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "sequence": 48219,
+        "timestamp_utc": "2026-05-23T14:30:01Z",
+        "tool_name": "bash"
+      },
+      "notes": "QA decision verification shape",
+      "sha256": "sha256:49a71dfd53aa2b86edd38115ae36dd455120f199a801524718115714349f9ff3",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"current_value\":0.97,\"event_type\":\"qa_spc_finding\",\"lcl\":0.38,\"metric_id\":\"SPC-001\",\"metric_name\":\"ALLOW rate\",\"sequence\":48222,\"status\":\"above_ucl\",\"timestamp_utc\":\"2026-05-23T14:30:00Z\",\"ucl\":0.82,\"window\":\"1h\"}",
+      "id": "V027",
+      "input": {
+        "current_value": 0.97,
+        "event_type": "qa_spc_finding",
+        "lcl": 0.38,
+        "metric_id": "SPC-001",
+        "metric_name": "ALLOW rate",
+        "sequence": 48222,
+        "status": "above_ucl",
+        "timestamp_utc": "2026-05-23T14:30:00Z",
+        "ucl": 0.82,
+        "window": "1h"
+      },
+      "notes": "QA SPC finding shape with bounded ratio values",
+      "sha256": "sha256:327d9b8c74272d46d5de326045c7a11e6ad773a20d39a3306b3f40ecbf9f64d9",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"coverage\":{\"active_verified\":10,\"contradictory\":2},\"elements_checked\":12,\"elements_flagged\":1,\"elements_passed\":10,\"elements_skipped\":1,\"event_type\":\"qa_element_verification\",\"findings\":[{\"element_id\":\"REQ-CHN-005\",\"severity\":\"high\"}],\"sequence\":48223,\"spec_id\":\"chain-integrity-v1\",\"timestamp_utc\":\"2026-05-23T14:30:00Z\"}",
+      "id": "V028",
+      "input": {
+        "coverage": {
+          "active_verified": 10,
+          "contradictory": 2
+        },
+        "elements_checked": 12,
+        "elements_flagged": 1,
+        "elements_passed": 10,
+        "elements_skipped": 1,
+        "event_type": "qa_element_verification",
+        "findings": [
+          {
+            "element_id": "REQ-CHN-005",
+            "severity": "high"
+          }
+        ],
+        "sequence": 48223,
+        "spec_id": "chain-integrity-v1",
+        "timestamp_utc": "2026-05-23T14:30:00Z"
+      },
+      "notes": "QA element verification shape",
+      "sha256": "sha256:363a6b674a6f5195bfbba1127492c84902b89f55423685c04294dd4ca9522205",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"analysis_window\":\"1h\",\"anomaly_count\":1,\"event_type\":\"qa_behavioral_analysis\",\"findings\":[{\"evidence_records\":[\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"],\"severity\":\"medium\",\"tool_name\":\"file_write\",\"type\":\"classification_inconsistency\"}],\"sequence\":48300,\"timestamp_utc\":\"2026-05-23T15:00:00Z\"}",
+      "id": "V029",
+      "input": {
+        "analysis_window": "1h",
+        "anomaly_count": 1,
+        "event_type": "qa_behavioral_analysis",
+        "findings": [
+          {
+            "evidence_records": [
+              "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            ],
+            "severity": "medium",
+            "tool_name": "file_write",
+            "type": "classification_inconsistency"
+          }
+        ],
+        "sequence": 48300,
+        "timestamp_utc": "2026-05-23T15:00:00Z"
+      },
+      "notes": "QA behavioral analysis nested finding shape",
+      "sha256": "sha256:7718ae37f0d119d7f4be63ac9717371024a155270e71dcfb8626c2db226ff17d",
+      "signing_preimage": null
+    },
+    {
+      "canonical_json": "{\"conditions_by_type\":{\"classification_anomaly\":1,\"stale_rules\":2},\"conditions_detected\":3,\"decisions_verified\":1247,\"event_type\":\"qa_session_summary\",\"final_sequence\":50000,\"sequence\":50000,\"session_duration_hours\":10,\"session_start\":\"2026-05-23T08:00:00Z\",\"timestamp_utc\":\"2026-05-23T18:00:00Z\"}",
+      "id": "V030",
+      "input": {
+        "conditions_by_type": {
+          "classification_anomaly": 1,
+          "stale_rules": 2
+        },
+        "conditions_detected": 3,
+        "decisions_verified": 1247,
+        "event_type": "qa_session_summary",
+        "final_sequence": 50000,
+        "sequence": 50000,
+        "session_duration_hours": 10,
+        "session_start": "2026-05-23T08:00:00Z",
+        "timestamp_utc": "2026-05-23T18:00:00Z"
+      },
+      "notes": "QA session summary shape",
+      "sha256": "sha256:3fb62138b0c584b6e5921f4dca19f2bae90808ab0fc706455081320111c40b83",
+      "signing_preimage": null
+    }
+  ]
+}

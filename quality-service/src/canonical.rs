@@ -137,15 +137,19 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
+    // Canonical-form conformance vectors live at governance-layer/specs/.
+    // Honors ATESTED_CANONICAL_FORM_VECTORS_PATH for parity with the runtime
+    // spec-path overrides in config.rs (ATESTED_CHAIN_EVENTS_SPEC_PATH,
+    // ATESTED_CHAIN_INTEGRITY_SPEC_PATH). Falls back to the in-repo default
+    // resolved relative to the crate's manifest directory.
     fn vector_path() -> PathBuf {
+        if let Ok(custom) = std::env::var("ATESTED_CANONICAL_FORM_VECTORS_PATH") {
+            return PathBuf::from(custom);
+        }
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("project-management/atested/claude-project-files/canonical-form-vectors.json")
+            .join("specs/canonical-form-vectors.json")
     }
 
     #[test]

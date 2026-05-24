@@ -1,0 +1,928 @@
+spec_id: simulation-scenarios-v1
+title: Simulation Scenarios Specification
+status: active
+scope: atested-com
+last_verified: 2026-05-23
+owner: greg
+imports: []
+
+overview:
+  normative_scope: >
+    Converts simulation-scenarios.md into Atested Specification Format v3.
+    The spec covers the five public simulation scenarios used by the pricing
+    simulation and the operator UI demo simulation on atested.com.
+  non_normative_notes:
+    - >
+      The source document describes itself as the single reference document for
+      all simulation content. Current code implements both a pricing simulation
+      under pricing/sim and an operator UI demo under demo/sim.
+    - >
+      Several precise fixture values in code differ from the legacy document
+      counts and persona text. Those elements are marked partial or
+      contradictory rather than silently normalizing the conversion.
+    - >
+      This YAML file uses top-level envelope fields rather than Markdown
+      frontmatter because the requested artifact has a .yaml extension.
+
+elements:
+  - element_type: data_schema
+    id: SCH-SIM-001
+    schema: simulation_scenario_fixture
+    severity: high
+    components:
+      producers: [browser-ui]
+    type: object
+    required: [health, approvals, communications, licensingMode, questionnaireState, caseDocument]
+    properties:
+      persona:
+        type: object
+      health:
+        type: object
+        required: [chain]
+      approvals:
+        type: object
+      communications:
+        type: object
+        required: [slots]
+      licensingMode:
+        type: object
+        required: [license_status, license_tier]
+      questionnaireState:
+        type: object
+      caseDocument:
+        type: object
+    additionalProperties: true
+    check_type: consistency
+    verification_mode: generated_test
+    preconditions:
+      - repo_root: atested.com
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: demo/sim/fixtures/*.js
+    verify: >
+      Each fixture exports the scenario objects required by the demo API:
+      health, approvals, communications, licensingMode, questionnaireState,
+      and caseDocument.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Simulation screens"
+      code:
+        - file: demo/sim/api.js
+          line: 253
+        - file: demo/sim/api.js
+          line: 271
+        - file: demo/sim/api.js
+          line: 1239
+        - file: demo/sim/api.js
+          line: 1267
+
+  - element_type: requirement
+    id: REQ-SIM-001
+    pattern: ubiquitous
+    statement: >
+      The pricing simulation shall expose Personal, Personal Plus, Crew, Team,
+      and Institution scenarios with licensing mode, questionnaire state, and
+      case document data for each scenario.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: pricing/sim/api.js
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      SCENARIOS contains the five canonical scenario keys and getLicensingMode,
+      getQuestionnaireState, and getCaseDocument return the active scenario data.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "File notes"
+      code:
+        - file: pricing/sim/api.js
+          line: 14
+        - file: pricing/sim/api.js
+          line: 286
+        - file: pricing/sim/api.js
+          line: 294
+        - file: pricing/sim/api.js
+          line: 298
+        - file: pricing/sim/api.js
+          line: 302
+
+  - element_type: requirement
+    id: REQ-SIM-002
+    pattern: ubiquitous
+    statement: >
+      The operator UI demo simulation shall expose Personal, Personal Plus,
+      Crew, Team, and Institution plan scenarios and allow the viewer to switch
+      scenarios without leaving the demo.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: demo/sim/demo-app.js
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      PLANS contains the five canonical plans, the demo initializes a scenario,
+      and _switchPlan calls api.setScenario then reloads demo data.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "File notes"
+      code:
+        - file: demo/sim/demo-app.js
+          line: 21
+        - file: demo/sim/demo-app.js
+          line: 38
+        - file: demo/sim/demo-app.js
+          line: 155
+        - file: demo/sim/api.js
+          line: 253
+
+  - element_type: requirement
+    id: REQ-SIM-003
+    pattern: state-driven
+    statement: >
+      WHILE the Personal scenario is selected
+      THE system SHALL show a single-user, single-machine Personal simulation
+      with OpenClaw-style activity, safety-only alerts, no priority slots, an
+      approximately 500-event healthy chain, a Personal recommendation, and a
+      free registered license with no renewal section.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: simulation_plan
+        test_id: personal
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Personal fixture and rendered UI match the source scenario, including
+      tier, user count, machine count, communications slots, health, case
+      document, and license status.
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Personal tier fixture exists.
+      - Fixture is single user and single machine.
+      - Communications slots are medium 0, high 0.
+      - License mode is Personal and registered.
+    missing_scope:
+      - Legacy spec says approximately 500 events; demo fixture has 1,248 chain events and pricing case evidence has 1,247 decisions.
+      - Legacy persona says OpenClaw enthusiast; pricing fixture currently uses Alex Demo / Software engineer with different discovery and deciding-factor copy.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Personal - The Enthusiast"
+      code:
+        - file: demo/sim/fixtures/personal.js
+          line: 1
+        - file: demo/sim/fixtures/personal.js
+          line: 17
+        - file: demo/sim/fixtures/personal.js
+          line: 99
+        - file: demo/sim/fixtures/personal.js
+          line: 500
+        - file: demo/sim/fixtures/personal.js
+          line: 528
+        - file: pricing/sim/api.js
+          line: 15
+
+  - element_type: requirement
+    id: REQ-SIM-004
+    pattern: state-driven
+    statement: >
+      WHILE the Personal Plus scenario is selected
+      THE system SHALL show a solo professional Personal Plus simulation with
+      one user, three machines, operational monitoring active, two Medium
+      priority slots, approximately 2,000 events, a Personal Plus
+      recommendation, and a $99/year active license with a visible renewal date.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: simulation_plan
+        test_id: personal-plus
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Personal Plus fixture and rendered UI match the source scenario,
+      including tier, user count, machine count, active monitoring level,
+      communications slots, case recommendation, and license terms.
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Personal Plus tier fixture exists.
+      - Fixture is single user and three machines.
+      - Communications slots are medium 2, high 0.
+      - License mode is active Personal Plus with expiry.
+    missing_scope:
+      - Legacy spec says approximately 2,000 events; demo fixture has 3,834 chain events and pricing case evidence has 3,820 decisions.
+      - Legacy persona says independent developer from Stack Overflow; fixtures use Sam Demo / DevOps engineer and different discovery copy.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Personal Plus - The Solo Professional"
+      code:
+        - file: demo/sim/fixtures/personal-plus.js
+          line: 1
+        - file: demo/sim/fixtures/personal-plus.js
+          line: 17
+        - file: demo/sim/fixtures/personal-plus.js
+          line: 122
+        - file: demo/sim/fixtures/personal-plus.js
+          line: 579
+        - file: demo/sim/fixtures/personal-plus.js
+          line: 608
+        - file: pricing/sim/api.js
+          line: 63
+
+  - element_type: requirement
+    id: REQ-SIM-005
+    pattern: state-driven
+    statement: >
+      WHILE the Crew scenario is selected
+      THE system SHALL show an engineering lead simulation with multiple users,
+      eight machines, safety plus operational plus usage-pattern monitoring,
+      four Medium and two High priority slots, approximately 15,000 events, a
+      Crew recommendation, and a $4,995/year active license.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: simulation_plan
+        test_id: crew
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Crew fixture and rendered UI match the source scenario, including tier,
+      user count, machine count, monitoring level, communications slots, case
+      recommendation, and license terms.
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Crew fixture exists with Engineering Lead persona.
+      - Demo fixture uses five users and eight machines.
+      - Communications slots are medium 4, high 2.
+      - License mode is active Crew with expiry.
+    missing_scope:
+      - Legacy activity text says four users while its case document says five machines; current fixture uses five users and eight machines.
+      - Legacy spec says approximately 15,000 events; demo fixture has 42,137 chain events and pricing case evidence has 42,150 decisions.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Crew - The Engineering Lead"
+      code:
+        - file: demo/sim/fixtures/crew.js
+          line: 8
+        - file: demo/sim/fixtures/crew.js
+          line: 21
+        - file: demo/sim/fixtures/crew.js
+          line: 172
+        - file: demo/sim/fixtures/crew.js
+          line: 716
+        - file: demo/sim/fixtures/crew.js
+          line: 752
+        - file: pricing/sim/api.js
+          line: 112
+
+  - element_type: requirement
+    id: REQ-SIM-006
+    pattern: state-driven
+    statement: >
+      WHILE the Team scenario is selected
+      THE system SHALL show a senior engineering manager simulation with 25
+      users, 40 machines, governance health monitoring active, eight Medium
+      and four High priority slots, approximately 80,000 events, a Team
+      recommendation, and a $49,995/year active license.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: simulation_plan
+        test_id: team
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Team fixture and rendered UI match the source scenario, including tier,
+      user count, machine count, monitoring level, communications slots, case
+      recommendation, and license terms.
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Team fixture exists with 25 users and 40 machines.
+      - Communications slots are medium 8, high 4.
+      - License mode is active Team with expiry.
+    missing_scope:
+      - Legacy role says Senior Engineering Manager; demo fixture uses VP Engineering.
+      - Legacy spec says approximately 80,000 events; demo fixture has 186,419 chain events and pricing case evidence has 186,400 decisions.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Team - The Senior Engineering Manager"
+      code:
+        - file: demo/sim/fixtures/team.js
+          line: 8
+        - file: demo/sim/fixtures/team.js
+          line: 20
+        - file: demo/sim/fixtures/team.js
+          line: 242
+        - file: demo/sim/fixtures/team.js
+          line: 922
+        - file: demo/sim/fixtures/team.js
+          line: 958
+        - file: pricing/sim/api.js
+          line: 164
+
+  - element_type: requirement
+    id: REQ-SIM-007
+    pattern: state-driven
+    statement: >
+      WHILE the Institution scenario is selected
+      THE system SHALL show a principal engineer / AI infrastructure
+      simulation with 200 users, 500 machines, all monitoring panes active,
+      custom communications allocation, approximately 500,000 events, an
+      Institution recommendation using conversation-starter questions, and a
+      negotiated active license with named-contact context.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: simulation_plan
+        test_id: institution
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Institution fixture and rendered UI match the source scenario, including
+      tier, user count, machine count, monitoring level, communications slots,
+      case recommendation, and license terms.
+    status: active
+    implementation_status: partial
+    implemented_scope:
+      - Institution fixture exists with 200 users and 500 machines.
+      - Communications slots are medium 16, high 8.
+      - License mode is active Institution with expiry.
+    missing_scope:
+      - Legacy role says Principal Engineer, AI Infrastructure; demo fixture uses CTO.
+      - Legacy spec says approximately 500,000 events; demo fixture has 1,247,831 chain events and pricing case evidence has 1,247,000 decisions.
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Institution - The Principal Engineer"
+      code:
+        - file: demo/sim/fixtures/institution.js
+          line: 8
+        - file: demo/sim/fixtures/institution.js
+          line: 20
+        - file: demo/sim/fixtures/institution.js
+          line: 230
+        - file: demo/sim/fixtures/institution.js
+          line: 1055
+        - file: demo/sim/fixtures/institution.js
+          line: 1091
+        - file: pricing/sim/api.js
+          line: 218
+
+  - element_type: requirement
+    id: REQ-SIM-008
+    pattern: ubiquitous
+    statement: >
+      The demo main page shall expose the nine operator UI workflow windows:
+      Activity, Approvals, Audit, Reports, Health, Configuration,
+      Communications, Alerts, and Licensing.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: main_page
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      WINDOW_OPENERS maps the nine launchers to the corresponding window
+      openers and the main page renders grouped launchers.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Simulation screens"
+      code:
+        - file: demo/sim/main-page.js
+          line: 20
+        - file: demo/sim/main-page.js
+          line: 31
+        - file: demo/sim/main-page.js
+          line: 44
+
+  - element_type: requirement
+    id: REQ-SIM-009
+    pattern: ubiquitous
+    statement: >
+      The Activity screen shall show governed operations with decision, tool,
+      user, machine, rule, target, filter, sort, pagination, export, and record
+      detail affordances backed by the active scenario fixture.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: activity_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Activity window renders fixture activity, supports client-side filters,
+      computes allow/deny/tool summaries, paginates results, and opens record
+      detail.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Activity feed bullets"
+      code:
+        - file: demo/sim/windows/activity.js
+          line: 1
+        - file: demo/sim/windows/activity.js
+          line: 17
+        - file: demo/sim/api.js
+          line: 281
+        - file: demo/sim/api.js
+          line: 319
+
+  - element_type: requirement
+    id: REQ-SIM-010
+    pattern: ubiquitous
+    statement: >
+      The Approvals screen shall show active approvals, stale approval
+      recommendations, an approve operation pane, and revocation guidance backed
+      by the active scenario fixture.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: approvals_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Approvals window loads fixture approvals, renders active and stale counts,
+      and presents approval and revocation guidance controls.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Approvals bullets"
+      code:
+        - file: demo/sim/windows/approvals.js
+          line: 1
+        - file: demo/sim/windows/approvals.js
+          line: 28
+        - file: demo/sim/windows/approvals.js
+          line: 46
+        - file: demo/sim/api.js
+          line: 334
+
+  - element_type: requirement
+    id: REQ-SIM-011
+    pattern: state-driven
+    statement: >
+      WHILE a tier scenario is selected
+      THE Alerts screen SHALL activate monitoring panes according to the
+      selected tier: Safety at Personal, Operational at Personal Plus, Usage at
+      Crew, Governance Health at Team, and Continuous Oversight at Institution.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: alerts_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      The alert pane tier ordering and activeTier declarations match the five
+      scenario tiers, and inactive panes remain visible but inactive.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Alerts bullets"
+      code:
+        - file: demo/sim/windows/alerts.js
+          line: 15
+        - file: demo/sim/windows/alerts.js
+          line: 33
+
+  - element_type: requirement
+    id: REQ-SIM-012
+    pattern: ubiquitous
+    statement: >
+      The Health screen shall show chain status, deny rate, integrity,
+      storage, users, license, machine, and recent event health data for the
+      active scenario.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: health_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Health window loads fixture health data and renders the health panes plus
+      recent health events.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Health bullets"
+      code:
+        - file: demo/sim/windows/health.js
+          line: 17
+        - file: demo/sim/windows/health.js
+          line: 30
+        - file: demo/sim/windows/health.js
+          line: 64
+        - file: demo/sim/api.js
+          line: 275
+
+  - element_type: requirement
+    id: REQ-SIM-013
+    pattern: ubiquitous
+    statement: >
+      The Configuration screen shall show policy rules, base directories,
+      discovered tools, signing state, and machine role for the active
+      scenario.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: configuration_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Configuration window loads fixture config data and renders counts for
+      rules, base directories, mappings, signing, and machine role.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Configuration bullets"
+      code:
+        - file: demo/sim/windows/configuration.js
+          line: 17
+        - file: demo/sim/windows/configuration.js
+          line: 30
+        - file: demo/sim/windows/configuration.js
+          line: 52
+        - file: demo/sim/api.js
+          line: 1209
+
+  - element_type: requirement
+    id: REQ-SIM-014
+    pattern: ubiquitous
+    statement: >
+      The Reports screen shall expose governance summary, denial patterns,
+      user comparison, audit evidence export, unusual activity, telemetry
+      transparency, and support request report templates for the active
+      scenario.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: reports_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      REPORT_TEMPLATES includes the specified reports with default ranges and
+      grouping dimensions.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Reports bullets"
+      code:
+        - file: demo/sim/windows/reports.js
+          line: 15
+        - file: demo/sim/windows/reports.js
+          line: 57
+
+  - element_type: requirement
+    id: REQ-SIM-015
+    pattern: state-driven
+    statement: >
+      WHILE a tier scenario is selected
+      THE Communications screen SHALL show tier-appropriate Medium and High
+      priority request slot allocation and request history for that scenario.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /demo
+        component: communications_window
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      SLOT_ALLOC matches Personal 0/0, Personal Plus 2/0, Crew 4/2, Team 8/4,
+      and Institution 16/8, and communications data is loaded from the active
+      fixture.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Communications bullets"
+      code:
+        - file: demo/sim/windows/communications.js
+          line: 23
+        - file: demo/sim/windows/communications.js
+          line: 51
+        - file: demo/sim/windows/communications.js
+          line: 73
+        - file: demo/sim/api.js
+          line: 1239
+
+  - element_type: requirement
+    id: REQ-SIM-016
+    pattern: ubiquitous
+    statement: >
+      The Case Document screen shall show recommendation, governance evidence,
+      capacity inputs, why-not-lower reasoning, and why-not-higher reasoning
+      for the active pricing or demo scenario.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: ui_state
+      selector:
+        route: /pricing
+        component: case_document
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      getCaseDocument returns case data and the questionnaire engine produces
+      why-not-lower and why-not-higher reasoning from capacity and answers.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Case Document bullets"
+      code:
+        - file: pricing/sim/api.js
+          line: 302
+        - file: pricing/sim/questionnaire-engine.js
+          line: 342
+        - file: pricing/sim/windows/licensing.js
+          line: 2600
+        - file: demo/sim/api.js
+          line: 1275
+
+  - element_type: requirement
+    id: REQ-SIM-017
+    pattern: ubiquitous
+    statement: >
+      The pricing simulation shall compute tier recommendation gates from user
+      and machine counts and then run a deterministic climbing procedure using
+      questionnaire answers.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: pricing/sim/questionnaire-engine.js
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      computeBaseTier maps 51+ users to Institution, 13+ to Team, 2+ to Crew,
+      one user with more than 3 machines to Crew, one user with 2-3 machines to
+      Personal Plus, and one user with one machine to Personal; runClimbingProcedure
+      walks tier boundaries from the base tier.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "Case Document bullets"
+      code:
+        - file: pricing/sim/questionnaire-engine.js
+          line: 50
+        - file: pricing/sim/questionnaire-engine.js
+          line: 80
+        - file: pricing/sim/questionnaire-engine.js
+          line: 342
+
+  - element_type: requirement
+    id: REQ-SIM-018
+    pattern: ubiquitous
+    statement: >
+      The pricing simulation shall display current commercial terms for the
+      five tiers: Personal free, Personal Plus $99/year, Crew $4,995/year, Team
+      $49,995/year, and Institution negotiated.
+    severity: high
+    components:
+      producers: [browser-ui]
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: pricing/sim/tier-definitions.js
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      COMMERCIAL_TERMS contains the five tier prices and annual billing terms,
+      and CAPACITY_RANGES contains the corresponding user and machine ranges.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "License bullets"
+      code:
+        - file: pricing/sim/tier-definitions.js
+          line: 46
+        - file: pricing/sim/tier-definitions.js
+          line: 56
+        - file: pricing/sim/tier-definitions.js
+          line: 64
+        - file: pricing/sim/tier-definitions.js
+          line: 71
+        - file: pricing/sim/tier-definitions.js
+          line: 78
+        - file: pricing/sim/tier-definitions.js
+          line: 85
+
+  - element_type: negative_constraint
+    id: NEG-SIM-001
+    statement: >
+      The website simulations shall not make live dashboard API calls for
+      scenario data; simulation data comes from fixture adapters and mutable
+      in-memory state.
+    severity: medium
+    components:
+      producers: [browser-ui]
+    observe:
+      source: file_state
+      selector:
+        base: website_root
+        path: "{pricing/sim/api.js,demo/sim/api.js}"
+    check_type: consistency
+    verification_mode: generated_test
+    verify: >
+      Pricing API comments declare no network calls, demo API serves fixture
+      data through getStatus, getHealth, getActivity, getCommunications,
+      getLicensingMode, getQuestionnaireState, and getCaseDocument.
+    status: active
+    implementation_status: implemented
+    verification_status: unverified
+    references:
+      legacy_spec:
+        file: simulation-scenarios.md
+        section: "File notes"
+      code:
+        - file: pricing/sim/api.js
+          line: 1
+        - file: pricing/sim/api.js
+          line: 5
+        - file: demo/sim/api.js
+          line: 269
+        - file: demo/sim/api.js
+          line: 1239
+        - file: demo/sim/api.js
+          line: 1267
+
+conversion_assessment:
+  element_count:
+    data_schemas: 1
+    requirements: 18
+    negative_constraints: 1
+    chain_event_schemas: 0
+    state_machines: 0
+    workflows: 0
+    schedules: 0
+    configuration_entries: 0
+    privacy_boundaries: 0
+  clean_fit:
+    - REQ-SIM-001
+    - REQ-SIM-002
+    - REQ-SIM-008
+    - REQ-SIM-009
+    - REQ-SIM-010
+    - REQ-SIM-011
+    - REQ-SIM-012
+    - REQ-SIM-013
+    - REQ-SIM-014
+    - REQ-SIM-015
+    - REQ-SIM-016
+    - REQ-SIM-017
+    - REQ-SIM-018
+    - NEG-SIM-001
+  awkward_fit:
+    - >
+      REQ-SIM-003 through REQ-SIM-007 combine persona copy, UI content,
+      fixture values, and product marketing claims. V3 can represent them as
+      requirements, but the pass/fail criteria depend on generated-test browser
+      fixtures rather than runtime monitoring.
+    - >
+      The source document uses approximate counts ("~500 events") while code
+      uses exact fixture counts. The conversion records those mismatches in
+      implemented_scope and missing_scope.
+  format_gaps:
+    - >
+      No new v3 construct was required. A future fixture contract section could
+      make simulation data more compact than modeling every scenario as a
+      requirement.
+  three_status_assessment: >
+    The three-status model was useful. It allowed implemented qualitative
+    simulation behavior to remain active while marking stale persona/count
+    details as partial missing scope instead of pretending the legacy text and
+    code are identical.
+  references_assessment: >
+    Code references were consistently populatable for scenario selection,
+    fixture data, window behavior, recommendation logic, and pricing terms.
+    Some legacy claims are narrative and do not map to single code lines; those
+    are anchored to the nearest fixture or window module.
+  ambiguities:
+    - >
+      V3 does not say whether converted .yaml specs should use frontmatter
+      delimiters. The pilot chain-integrity spec used top-level envelope fields,
+      so this conversion follows that precedent.
+    - >
+      V3's ui_state selectors assume test_id coverage. The current public
+      simulations do not consistently expose test IDs, so generated tests may
+      need DOM selectors or fixture-level checks until test IDs are added.
