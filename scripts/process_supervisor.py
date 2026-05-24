@@ -415,12 +415,6 @@ def main(argv=None) -> int:
     # policy_rules_loaded record (with policy_rules_hash) before it reads the
     # decision chain tail.
     env.setdefault("ATESTED_PROXY_READY_FILE", str(supervisor_dir / "proxy.ready"))
-    # QS-033 A2: the proxy writes a startup record on launch and then signals
-    # readiness via this file. The quality_service spec waits for QS's own
-    # ready file; the proxy now does the same so the QS env gate sees a fresh
-    # policy_rules_loaded record (with policy_rules_hash) before it reads the
-    # decision chain tail.
-    env.setdefault("ATESTED_PROXY_READY_FILE", str(supervisor_dir / "proxy.ready"))
     operator_path = runtime / "operator.json"
     try:
         operator = json.loads(operator_path.read_text(encoding="utf-8"))
@@ -438,6 +432,24 @@ def main(argv=None) -> int:
         ManagedService(spec, runtime, log_dir, env)
         for spec in build_service_specs(args.role, args.sync_host, args.sync_port, runtime)
     ]
+
+    def _startup_status_payload() -> dict:
+        return {
+            "supervisor": {
+                "pid": os.getpid(),
+                "token": args.token,
+                "runtime": str(runtime),
+                "running": True,
+                "role": args.role,
+                "started_utc": started_utc,
+                "uptime_seconds": int(max(0, time.time() - started_epoch)),
+                "pid_file": str(pid_path),
+                "status_path": str(status_path),
+                "log_dir": str(log_dir),
+            },
+            "services": {svc.name: svc.status() for svc in services},
+            "updated_utc": now_utc_z(),
+        }
 
     for service in services:
         if service.disabled:
@@ -464,6 +476,14 @@ def main(argv=None) -> int:
                 time.sleep(0.1)
             if not service.ready_file.exists():
                 raise RuntimeError(f"{service.name} did not signal readiness within {service.startup_timeout_seconds}s")
+        # QS-033 A2: write services.json immediately after this service is
+        # ready so the next service in the spec list (e.g. quality_service
+        # following proxy) can observe `proxy.running=true` via ENV-009. The
+        # main loop below also writes status on a 1s tick, but it does not
+        # run until every ready-gated service in the loop has finished
+        # starting — too late for the QS env gate which runs synchronously
+        # at QS startup.
+        write_status(status_path, services_path, _startup_status_payload())
 
     try:
         while not _stopping:
