@@ -1,0 +1,20 @@
+[package]
+name = "quality-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.22.1"
+chrono = { version = "0.4.38", default-features = false, features = ["clock", "std"] }
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+libc = "0.2.164"
+notify = "6.1.1"
+rand_core = { version = "0.6.4", features = ["getrandom"] }
+ryu = "1.0.18"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = { version = "1.0.133", features = ["preserve_order", "arbitrary_precision"] }
+serde_yaml = "0.9.34"
+sha2 = "0.10.8"
+
+[dev-dependencies]
+tempfile = "3.14.0"
