@@ -1,0 +1,305 @@
+# SUPERSEDED: This spec is archived as a historical reference.
+# Authoritative source: dashboard/ui-next/tier-feature-registry.json
+# (introduced by QS-011, commit f003554, "tier feature registry — single
+# source of truth for UI + server"). Consumers must read the JSON
+# registry; this YAML is retained for traceability only.
+spec_id: tier-registry-v1
+title: Canonical Tier Registry (SUPERSEDED — see dashboard/ui-next/tier-feature-registry.json)
+status: superseded
+superseded_by: dashboard/ui-next/tier-feature-registry.json
+superseded_by_commit: f003554
+superseded_by_dispatch: QS-011
+scope: both
+last_verified: '2026-05-23'
+owner: greg
+imports: []
+overview:
+  normative_scope: Authoritative canonical tier names, pricing, recommendation gates, machine activation caps, feature gates,
+    and tier-dependent limits compiled from current code and tier feature documentation.
+elements:
+- element_type: data_schema
+  id: SCH-LIC-010
+  schema: tier_key
+  severity: high
+  components:
+    producers:
+    - dashboard
+    - atested-com-worker
+    - browser-ui
+    consumers:
+    - dashboard
+    - browser-ui
+    - quality-service
+  type: string
+  enum:
+  - personal
+  - personal_plus
+  - crew
+  - team
+  - institution
+  check_type: consistency
+  verification_mode: runtime_monitor
+  observe:
+    source: file_state
+    selector:
+      base: repo_root
+      path: docs/TIER_FEATURES.md
+  verify: Only canonical tier keys are used as current tiers. Business and enterprise are deprecated aliases only.
+  status: active
+  implementation_status: partial
+  implemented_scope:
+  - canonical tier set appears in pricing sim, worker admin tier validation, and dashboard communications allocation
+  missing_scope:
+  - business and enterprise aliases still appear in alert UI code and should be removed outside this dispatch
+  verification_status: unverified
+  references:
+    code:
+    - file: archive/gov/atested.com/workers/license-worker.js
+      line: 80
+    - file: archive/gov/atested.com/pricing/sim/question-catalog.js
+      line: 39
+    - file: archive/gov/governance-layer/dashboard/ui-next/windows/alerts.js
+      line: 16
+    - file: archive/gov/atested.com/demo/sim/windows/alerts.js
+      line: 16
+- element_type: configuration_entry
+  id: CFG-LIC-010
+  config: canonical_tier_registry
+  severity: critical
+  components:
+    producers:
+    - dashboard
+    - atested-com-worker
+    - browser-ui
+    consumers:
+    - dashboard
+    - browser-ui
+    - quality-service
+  registry:
+    canonical_tiers:
+    - key: personal
+      display_name: Personal
+      annual_price_usd: 0
+      machine_activation_cap: 1
+      recommendation_gate: 1 user and 1 machine
+      billing: free
+    - key: personal_plus
+      display_name: Personal Plus
+      annual_price_usd: 99
+      machine_activation_cap: 3
+      recommendation_gate: 1 user and 2-3 machines
+      billing: annual
+    - key: crew
+      display_name: Crew
+      annual_price_usd: 4995
+      machine_activation_cap: null
+      recommendation_gate: 2-12 users, or 1 user with more than 3 machines
+      billing: annual
+    - key: team
+      display_name: Team
+      annual_price_usd: 49995
+      machine_activation_cap: null
+      recommendation_gate: 13-50 users
+      billing: annual
+    - key: institution
+      display_name: Institution
+      annual_price_usd: null
+      machine_activation_cap: null
+      recommendation_gate: 51+ users
+      billing: annual negotiated
+    deprecated_aliases:
+    - alias: business
+      canonical_replacement: institution
+      observed_in_code: true
+    - alias: enterprise
+      canonical_replacement: institution
+      observed_in_code: true
+    payment_links:
+      personal: https://buy.stripe.com/dRmdR166q2Wi7WbdVq5Vu00
+      personal_plus: https://buy.stripe.com/00w6oz3Yi2Wi7Wb9Fa5Vu03
+      crew: https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01
+      team: https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02
+      institution: null
+    stripe_price_ids:
+      personal: price_1TPAJS0qB508CvQRnJ2n6bTl
+      personal_plus: price_1TObIQ0qB508CvQRCIKho52w
+      crew: price_1TObNw0qB508CvQRSvo2UgiI
+      team: price_1TObOt0qB508CvQRLcOU1y4p
+      institution: null
+    charter_pricing:
+      active: true
+      promo_code: CHARTER2026
+      crew:
+        first_year_price_usd: 2498
+        renewal_price_usd: 4995
+      team:
+        first_year_price_usd: 24998
+        renewal_price_usd: 49995
+    communications_slots:
+      personal:
+        medium: 0
+        high: 0
+      personal_plus:
+        medium: 2
+        high: 0
+      crew:
+        medium: 4
+        high: 2
+      team:
+        medium: 8
+        high: 4
+      institution:
+        medium: 16
+        high: 8
+    history_window_limits:
+      documented_in_tier_features:
+        personal:
+          rolling_days: 10
+          restricted_ranges:
+          - 30d
+          - all
+        personal_plus:
+          rolling_days: 30
+          restricted_ranges:
+          - all
+        crew:
+          rolling_days: null
+          restricted_ranges: []
+        team:
+          rolling_days: null
+          restricted_ranges: []
+        institution:
+          rolling_days: null
+          restricted_ranges: []
+      implemented_dashboard_server:
+        personal:
+          rolling_days: 8
+          error: Extended time ranges require Team tier or above.
+        personal_plus:
+          rolling_days: null
+          note: No explicit Personal Plus 30-day cap observed in dashboard/server.py audit report route.
+    feature_gates:
+      baseline_all_tiers:
+      - governance_chain
+      - policy_evaluation
+      - dashboard_access
+      - audit_trail
+      - evidence_package_export
+      - reports_json_csv_excel
+      personal_plus_and_above:
+      - multi_machine_support
+      - machine_scoped_reporting
+      - operational_monitoring
+      crew_and_above:
+      - unlimited_machines
+      - multi_user_governance
+      - team_activity_view
+      - usage_pattern_detection
+      team_and_above:
+      - role_based_governance
+      - advanced_reporting
+      - access_control
+      - governance_health_alerts
+      - priority_feedback
+      institution:
+      - custom_integrations
+      - compliance_reporting
+      - enterprise_analytics
+      - dedicated_feedback
+      - continuous_oversight
+      pricing_sim_capability_ids:
+        personal:
+        - gov_chain
+        - gov_policy
+        - vis_dashboard
+        - vis_audit
+        - ops_single
+        - sup_docs_feedback
+        personal_plus:
+        - gov_chain
+        - gov_policy
+        - vis_dashboard
+        - vis_audit
+        - ops_multi_machine
+        - ops_single
+        - sup_feedback
+        crew:
+        - gov_chain
+        - gov_policy
+        - gov_shared
+        - vis_dashboard
+        - vis_audit
+        - vis_team
+        - ops_multi_machine
+        - ops_multi_user
+        - sup_feedback
+        team:
+        - gov_chain
+        - gov_policy
+        - gov_shared
+        - gov_roles
+        - vis_dashboard
+        - vis_audit
+        - vis_team
+        - vis_reports
+        - ops_multi_machine
+        - ops_multi_user
+        - ops_rbac
+        - sup_priority_feedback
+        institution:
+        - gov_chain
+        - gov_policy
+        - gov_shared
+        - gov_roles
+        - gov_compliance
+        - vis_dashboard
+        - vis_audit
+        - vis_team
+        - vis_reports
+        - vis_enterprise
+        - ops_multi_machine
+        - ops_multi_user
+        - ops_rbac
+        - ops_custom_int
+        - sup_dedicated_feedback
+  check_type: consistency
+  verification_mode: runtime_monitor
+  observe:
+    source: file_state
+    selector:
+      base: repo_root
+      path: docs/TIER_FEATURES.md
+  verify: Runtime tier behavior and UI tier copy match this canonical registry, except documented conflicts.
+  status: active
+  implementation_status: contradictory
+  conflict:
+    code_behavior: Dashboard server audit report route enforces Personal at approximately 8 days and says extended time ranges
+      require Team; alert UIs still include business/enterprise aliases.
+    spec_behavior: Tier registry uses Personal 10 days, Personal Plus 30 days, Crew and above unlimited; only Personal, Personal
+      Plus, Crew, Team, Institution are canonical.
+    resolution: decision_needed
+  verification_status: unverified
+  references:
+    code:
+    - file: archive/gov/atested.com/pricing/sim/tier-definitions.js
+      line: 18
+    - file: archive/gov/atested.com/pricing/sim/tier-definitions.js
+      line: 46
+    - file: archive/gov/atested.com/pricing/sim/tier-definitions.js
+      line: 56
+    - file: archive/gov/atested.com/pricing/sim/tier-definitions.js
+      line: 115
+    - file: archive/gov/governance-layer/docs/TIER_FEATURES.md
+      line: 6
+    - file: archive/gov/governance-layer/docs/TIER_FEATURES.md
+      line: 35
+    - file: archive/gov/governance-layer/docs/TIER_FEATURES.md
+      line: 52
+    - file: archive/gov/governance-layer/dashboard/server.py
+      line: 4825
+    - file: archive/gov/governance-layer/dashboard/server.py
+      line: 4960
+    - file: archive/gov/atested.com/workers/license-worker.js
+      line: 45
+    - file: archive/gov/atested.com/workers/license-worker.js
+      line: 1760

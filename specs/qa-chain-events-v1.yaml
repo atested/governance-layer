@@ -1,0 +1,527 @@
+spec_id: qa-chain-events-v1
+title: QA Chain Event Registry
+status: active
+scope: governance-layer
+last_verified: '2026-05-23'
+owner: greg
+imports: []
+overview:
+  normative_scope: >
+    Registry of quality service QA chain event schemas. The quality service
+    implementation does not exist yet; these elements establish the schema
+    contract future writers and verifiers must satisfy.
+  source_note: >
+    Derived from quality-service-spec-v1.3-final.md Section 12 as referenced
+    by QS-018. The named file was not present in claude-project-files during
+    this dispatch, so the provided dispatch text and v1.2.1/v1.3 planning
+    context were used as the source.
+elements:
+- element_type: chain_event_schema
+  id: EVT-QA-001
+  event: qa_environmental_snapshot
+  domain: QA
+  severity: critical
+  components:
+    producers: [quality-service]
+    consumers: [proxy, dashboard]
+  fields:
+    event_type: {type: string, const: qa_environmental_snapshot}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    policy_rules_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    capability_registry_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    checks:
+      type: object
+      additionalProperties:
+        type: object
+    active_conditions:
+      type: array
+      items: {type: string}
+    overall:
+      type: string
+      enum: [healthy, attention, intervention, halted]
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - policy_rules_hash
+  - capability_registry_hash
+  - checks
+  - active_conditions
+  - overall
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_environmental_snapshot
+  verify: QA snapshot validates against this schema and advances the monotonic sequence.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_environmental_snapshot'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-002
+  event: qa_condition_detected
+  domain: QA
+  severity: critical
+  components:
+    producers: [quality-service]
+    consumers: [proxy, dashboard]
+  fields:
+    event_type: {type: string, const: qa_condition_detected}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    condition_id: {type: string}
+    condition_type: {type: string}
+    severity: {type: string, enum: [critical, high, medium, low]}
+    detail: {type: string}
+    governance_record_ref: {type: [string, 'null'], pattern: '^sha256:[0-9a-f]{64}$'}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - condition_id
+  - condition_type
+  - severity
+  - detail
+  - governance_record_ref
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_condition_detected
+  verify: Condition record validates against this schema and references a registry condition.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_condition_detected'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-003
+  event: qa_decision_verification
+  domain: QA
+  severity: critical
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_decision_verification}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    governance_record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    decision_type: {type: string, enum: [ALLOW, DENY]}
+    tool_name: {type: string}
+    checks_performed:
+      type: object
+      additionalProperties: {type: string}
+    all_clear: {type: boolean}
+    findings:
+      type: array
+      items: {type: object}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - governance_record_hash
+  - decision_type
+  - tool_name
+  - checks_performed
+  - all_clear
+  - findings
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_decision_verification
+  verify: Every checked governance decision has a matching QA verification record.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_decision_verification'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-004
+  event: qa_decision_verification_skipped
+  domain: QA
+  severity: high
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_decision_verification_skipped}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    governance_record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    reason: {type: string}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - governance_record_hash
+  - reason
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_decision_verification_skipped
+  verify: Skipped verification record identifies the governance record and skip reason.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_decision_verification_skipped'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-005
+  event: qa_verification_backlog_warning
+  domain: QA
+  severity: high
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_verification_backlog_warning}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    queue_depth: {type: integer, minimum: 0}
+    queue_capacity: {type: integer, minimum: 1}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - queue_depth
+  - queue_capacity
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_verification_backlog_warning
+  verify: Backlog warning reports queue depth and capacity when post-hoc verification is overloaded.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_verification_backlog_warning'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-006
+  event: qa_spc_finding
+  domain: QA
+  severity: medium
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_spc_finding}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    metric_id: {type: string}
+    metric_name: {type: string}
+    current_value: {type: number}
+    ucl: {type: number}
+    lcl: {type: number}
+    window: {type: string}
+    status: {type: string}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - metric_id
+  - metric_name
+  - current_value
+  - ucl
+  - lcl
+  - window
+  - status
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_spc_finding
+  verify: SPC finding reports the metric value, control limits, window, and status.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_spc_finding'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-007
+  event: qa_element_verification
+  domain: QA
+  severity: high
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_element_verification}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    spec_id: {type: string}
+    elements_checked: {type: integer, minimum: 0}
+    elements_passed: {type: integer, minimum: 0}
+    elements_flagged: {type: integer, minimum: 0}
+    elements_skipped: {type: integer, minimum: 0}
+    findings:
+      type: array
+      items: {type: object}
+    coverage:
+      type: object
+      additionalProperties: {type: integer}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - spec_id
+  - elements_checked
+  - elements_passed
+  - elements_flagged
+  - elements_skipped
+  - findings
+  - coverage
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_element_verification
+  verify: Element verification record reports counts, findings, and coverage for one spec.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_element_verification'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-008
+  event: qa_behavioral_analysis
+  domain: QA
+  severity: medium
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_behavioral_analysis}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    analysis_window: {type: string}
+    findings:
+      type: array
+      items: {type: object}
+    anomaly_count: {type: integer, minimum: 0}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - analysis_window
+  - findings
+  - anomaly_count
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_behavioral_analysis
+  verify: Behavioral analysis record reports the analysis window, findings, and anomaly count.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_behavioral_analysis'
+    code: []
+- element_type: chain_event_schema
+  id: EVT-QA-009
+  event: qa_session_summary
+  domain: QA
+  severity: high
+  components:
+    producers: [quality-service]
+    consumers: [dashboard]
+  fields:
+    event_type: {type: string, const: qa_session_summary}
+    sequence: {type: integer, minimum: 1}
+    timestamp_utc: {type: string, format: date-time}
+    session_start: {type: string, format: date-time}
+    session_duration_hours: {type: number, minimum: 0}
+    decisions_verified: {type: integer, minimum: 0}
+    conditions_detected: {type: integer, minimum: 0}
+    conditions_by_type:
+      type: object
+      additionalProperties: {type: integer}
+    environmental_snapshots: {type: integer, minimum: 0}
+    spc_findings: {type: integer, minimum: 0}
+    element_verifications: {type: integer, minimum: 0}
+    behavioral_analyses: {type: integer, minimum: 0}
+    final_sequence: {type: integer, minimum: 1}
+    prev_record_hash: {type: [string, 'null']}
+    record_hash: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    signature: {type: string}
+    signing_key_id: {type: string}
+  required:
+  - event_type
+  - sequence
+  - timestamp_utc
+  - session_start
+  - session_duration_hours
+  - decisions_verified
+  - conditions_detected
+  - conditions_by_type
+  - environmental_snapshots
+  - spc_findings
+  - element_verifications
+  - behavioral_analyses
+  - final_sequence
+  - record_hash
+  - signature
+  - signing_key_id
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - qa_signing_key: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: generated_test
+  observe:
+    source: chain_record
+    selector:
+      event_type: qa_session_summary
+  verify: Session summary record reports lifecycle counts and final sequence.
+  status: active
+  implementation_status: not_implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: quality-service-spec-v1.3-final.md
+      section: 'Section 12. qa_session_summary'
+    code: []

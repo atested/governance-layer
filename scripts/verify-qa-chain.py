@@ -34,7 +34,10 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import yaml
+
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -46,13 +49,16 @@ from canonical_form import (
 
 
 # ---------------------------------------------------------------------------
-# QA chain event registry (source of truth: qa-chain-events-v1.yaml)
+# QA chain event registry — loaded from specs/qa-chain-events-v1.yaml
 # ---------------------------------------------------------------------------
 #
-# Maintained in lockstep with claude-project-files/qa-chain-events-v1.yaml.
-# Each entry lists required fields beyond the universal envelope
-# {event_type, sequence, timestamp_utc, prev_record_hash, record_hash,
-#  signature, signing_key_id}.
+# The YAML is the single source of truth. Each element's `required` list
+# enumerates the fields that must be present in a record of that event type
+# (including the universal envelope). The verifier walks the YAML and builds
+# the per-event required-field map at import time.
+#
+# Override the spec path via ATESTED_QA_CHAIN_EVENTS_SPEC_PATH (parity with
+# the other ATESTED_*_PATH overrides introduced by QS-029).
 
 _UNIVERSAL_REQUIRED = (
     "event_type",
@@ -63,66 +69,51 @@ _UNIVERSAL_REQUIRED = (
     "signing_key_id",
 )
 
-QA_EVENT_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
-    "qa_environmental_snapshot": (
-        "policy_rules_hash",
-        "capability_registry_hash",
-        "checks",
-        "active_conditions",
-        "overall",
-    ),
-    "qa_condition_detected": (
-        "condition_id",
-        "condition_type",
-        "severity",
-        "detail",
-    ),
-    "qa_decision_verification": (
-        "governance_record_hash",
-        "decision_type",
-        "tool_name",
-        "checks_performed",
-        "all_clear",
-    ),
-    "qa_decision_verification_skipped": (
-        "governance_record_hash",
-        "reason",
-    ),
-    "qa_verification_backlog_warning": (
-        "queue_depth",
-        "queue_capacity",
-    ),
-    "qa_spc_finding": (
-        "metric_id",
-        "metric_name",
-        "current_value",
-        "window",
-        "status",
-    ),
-    "qa_element_verification": (
-        "spec_id",
-        "elements_checked",
-        "elements_passed",
-        "elements_flagged",
-        "elements_skipped",
-        "findings",
-        "coverage",
-    ),
-    "qa_behavioral_analysis": (
-        "analysis_window",
-        "findings",
-        "anomaly_count",
-    ),
-    "qa_session_summary": (
-        "session_start",
-        "session_duration_hours",
-        "decisions_verified",
-        "conditions_detected",
-        "environmental_snapshots",
-        "final_sequence",
-    ),
-}
 
+def _resolve_spec_path() -> Path:
+    override = os.environ.get("ATESTED_QA_CHAIN_EVENTS_SPEC_PATH")
+    if override:
+        return Path(override)
+    return REPO_ROOT / "specs" / "qa-chain-events-v1.yaml"
+
+
+def _load_event_required_fields(
+    spec_path: Path,
+) -> dict[str, tuple[str, ...]]:
+    """Build {event_type: (required_field, ...)} from the YAML registry.
+
+    Universal envelope fields are stripped so the per-event extras can be
+    appended to _UNIVERSAL_REQUIRED at validation time without duplicates.
+    """
+    try:
+        with spec_path.open("r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except OSError as exc:
+        raise RuntimeError(
+            f"failed to read QA chain event registry {spec_path}: {exc}"
+        ) from exc
+    if not isinstance(data, dict) or not isinstance(data.get("elements"), list):
+        raise RuntimeError(
+            f"QA chain event registry {spec_path} has no 'elements' list"
+        )
+    universal = set(_UNIVERSAL_REQUIRED) | {"prev_record_hash"}
+    out: dict[str, tuple[str, ...]] = {}
+    for element in data["elements"]:
+        if not isinstance(element, dict):
+            continue
+        event = element.get("event")
+        required = element.get("required")
+        if not isinstance(event, str) or not isinstance(required, list):
+            continue
+        extras = tuple(field for field in required if field not in universal)
+        out[event] = extras
+    return out
+
+
+QA_EVENT_SPEC_PATH = _resolve_spec_path()
+QA_EVENT_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = _load_event_required_fields(
+    QA_EVENT_SPEC_PATH
+)
 KNOWN_QA_EVENT_TYPES = frozenset(QA_EVENT_REQUIRED_FIELDS)
 
 
