@@ -15,6 +15,7 @@ import { openIdentitySessionWindow } from './windows/identity-session.js';
 import { openLicensingWindow } from './windows/licensing.js';
 import { installTroubleButton } from './trouble.js';
 import { installSummaryTelemetry, recordUiAggregate } from './summary-telemetry.js';
+import { tierLabel } from './tier-definitions.js';
 import * as api from './api.js';
 
 // Verify adoptedStyleSheets support
@@ -296,24 +297,15 @@ async function _loadLicenseState() {
 
     const { license_status, license_tier } = res.data;
 
-    // Map status+tier to chrome display
-    const TIER_NAMES = {
-      personal: 'Personal', personal_plus: 'Personal Plus',
-      crew: 'Crew', team: 'Team', institution: 'Institution',
-    };
-
     let tierName, dotColor;
     if (license_status === 'trial') {
       tierName = 'Trial';
       dotColor = 'var(--ok, #3fb950)';
     } else if (license_status === 'licensed') {
-      tierName = TIER_NAMES[license_tier] || license_tier;
+      tierName = tierLabel(license_tier);
       dotColor = 'var(--ok, #3fb950)';
     } else if (license_status === 'personal') {
       tierName = 'Personal';
-      dotColor = 'var(--warning, #d29922)';
-    } else if (license_status === 'unlicensed') {
-      tierName = 'Unlicensed';
       dotColor = 'var(--warning, #d29922)';
     } else if (license_status === 'clock_anomaly') {
       tierName = 'Clock Issue';

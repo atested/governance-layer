@@ -2934,7 +2934,7 @@ const PRICING_FEATURES = {
     categories: [
       { name: 'Operations', features: [
         { name: 'Custom Deployment', desc: 'On-premises or hybrid deployment configured to your infrastructure requirements. Your data stays where you need it.' },
-        { name: 'Unlimited Scale', desc: '51+ users with enterprise-scale administration and policy management. No user ceiling.' },
+        { name: 'Unlimited Scale', desc: '51+ users with institution-scale administration and policy management. No user ceiling.' },
       ]},
       { name: 'Compliance', features: [
         { name: 'Third-Party Attestation', desc: 'Independent verification of your governance chain by authorized auditors. Proof that your AI governance is what you say it is.' },

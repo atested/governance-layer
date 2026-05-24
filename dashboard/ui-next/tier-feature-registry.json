@@ -1,0 +1,649 @@
+{
+  "tierOrder": [
+    "personal",
+    "personal_plus",
+    "crew",
+    "team",
+    "institution"
+  ],
+  "tiers": {
+    "personal": {
+      "label": "Personal",
+      "machineActivationCap": 1,
+      "reportRange": {
+        "maxDays": 10,
+        "restrictedRanges": [
+          "30d",
+          "all"
+        ],
+        "unlocksAt": "Crew"
+      },
+      "communicationsSlots": {
+        "medium": 0,
+        "high": 0
+      },
+      "commercialTerms": {
+        "price": "Free",
+        "billing": "N/A",
+        "support": "Documentation & Feedback",
+        "dating": "From registration",
+        "summary": "Single operator, full governance chain, documentation and feedback system support."
+      },
+      "capacityRange": "1 user, 1 machine",
+      "featureFlags": {
+        "governance_chain": true,
+        "policy_evaluation": true,
+        "dashboard_access": true,
+        "audit_trail": true,
+        "evidence_export": true,
+        "reports": true,
+        "multi_machine": false,
+        "multi_user": false,
+        "shared_governance": false,
+        "team_activity": false,
+        "role_based_governance": false,
+        "access_control": false,
+        "advanced_reporting": false,
+        "compliance_reporting": false,
+        "custom_integrations": false,
+        "priority_feedback": false,
+        "dedicated_feedback": false,
+        "continuous_oversight": false
+      },
+      "capabilities": [
+        {
+          "id": "gov_chain",
+          "name": "Governance Chain",
+          "category": "Governance",
+          "isNew": true
+        },
+        {
+          "id": "gov_policy",
+          "name": "Policy Evaluation",
+          "category": "Governance",
+          "isNew": true
+        },
+        {
+          "id": "vis_dashboard",
+          "name": "Dashboard",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "vis_audit",
+          "name": "Audit Trail",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "vis_reports",
+          "name": "Reports",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "ops_single",
+          "name": "Single-Operator Mode",
+          "category": "Operations",
+          "isNew": true
+        },
+        {
+          "id": "sup_docs_feedback",
+          "name": "Documentation & Feedback Support",
+          "category": "Support",
+          "isNew": true
+        }
+      ]
+    },
+    "personal_plus": {
+      "label": "Personal Plus",
+      "machineActivationCap": 3,
+      "reportRange": {
+        "maxDays": 30,
+        "restrictedRanges": [
+          "all"
+        ],
+        "unlocksAt": "Crew"
+      },
+      "communicationsSlots": {
+        "medium": 2,
+        "high": 0
+      },
+      "commercialTerms": {
+        "price": "$99/yr",
+        "billing": "Annual",
+        "support": "Feedback System",
+        "dating": "From purchase",
+        "summary": "Single operator, multi-machine, support through the Atested feedback system."
+      },
+      "capacityRange": "1 user, up to 3 machines",
+      "featureFlags": {
+        "governance_chain": true,
+        "policy_evaluation": true,
+        "dashboard_access": true,
+        "audit_trail": true,
+        "evidence_export": true,
+        "reports": true,
+        "multi_machine": true,
+        "multi_user": false,
+        "shared_governance": false,
+        "team_activity": false,
+        "role_based_governance": false,
+        "access_control": false,
+        "advanced_reporting": false,
+        "compliance_reporting": false,
+        "custom_integrations": false,
+        "priority_feedback": false,
+        "dedicated_feedback": false,
+        "continuous_oversight": false
+      },
+      "capabilities": [
+        {
+          "id": "gov_chain",
+          "name": "Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_policy",
+          "name": "Policy Evaluation",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "vis_dashboard",
+          "name": "Dashboard",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_audit",
+          "name": "Audit Trail",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_reports",
+          "name": "Reports",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "ops_multi_machine",
+          "name": "Multi-Machine Support",
+          "category": "Operations",
+          "isNew": true
+        },
+        {
+          "id": "ops_single",
+          "name": "Single-Operator Mode",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "sup_feedback",
+          "name": "Feedback System Support",
+          "category": "Support",
+          "isNew": true
+        }
+      ]
+    },
+    "crew": {
+      "label": "Crew",
+      "machineActivationCap": null,
+      "reportRange": {
+        "maxDays": null,
+        "restrictedRanges": [],
+        "unlocksAt": null
+      },
+      "communicationsSlots": {
+        "medium": 4,
+        "high": 2
+      },
+      "commercialTerms": {
+        "price": "$4,995/yr",
+        "billing": "Annual",
+        "support": "Feedback System",
+        "dating": "From trial completion",
+        "summary": "2-12 operators, unlimited machines, shared governance chain, team visibility."
+      },
+      "capacityRange": "2-12 users, unlimited machines",
+      "featureFlags": {
+        "governance_chain": true,
+        "policy_evaluation": true,
+        "dashboard_access": true,
+        "audit_trail": true,
+        "evidence_export": true,
+        "reports": true,
+        "multi_machine": true,
+        "multi_user": true,
+        "shared_governance": true,
+        "team_activity": true,
+        "role_based_governance": false,
+        "access_control": false,
+        "advanced_reporting": false,
+        "compliance_reporting": false,
+        "custom_integrations": false,
+        "priority_feedback": false,
+        "dedicated_feedback": false,
+        "continuous_oversight": false
+      },
+      "capabilities": [
+        {
+          "id": "gov_chain",
+          "name": "Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_policy",
+          "name": "Policy Evaluation",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_shared",
+          "name": "Shared Governance Chain",
+          "category": "Governance",
+          "isNew": true
+        },
+        {
+          "id": "vis_dashboard",
+          "name": "Dashboard",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_audit",
+          "name": "Audit Trail",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_reports",
+          "name": "Reports",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_team",
+          "name": "Team Activity View",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "ops_multi_machine",
+          "name": "Multi-Machine Support",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_multi_user",
+          "name": "Multi-User Governance",
+          "category": "Operations",
+          "isNew": true
+        },
+        {
+          "id": "sup_feedback",
+          "name": "Feedback System Support",
+          "category": "Support",
+          "isNew": false
+        }
+      ]
+    },
+    "team": {
+      "label": "Team",
+      "machineActivationCap": null,
+      "reportRange": {
+        "maxDays": null,
+        "restrictedRanges": [],
+        "unlocksAt": null
+      },
+      "communicationsSlots": {
+        "medium": 8,
+        "high": 4
+      },
+      "commercialTerms": {
+        "price": "$49,995/yr",
+        "billing": "Annual",
+        "support": "Priority Feedback",
+        "dating": "From trial completion",
+        "summary": "13-50 operators, unlimited machines, role-based governance, priority support."
+      },
+      "capacityRange": "13-50 users, unlimited machines",
+      "featureFlags": {
+        "governance_chain": true,
+        "policy_evaluation": true,
+        "dashboard_access": true,
+        "audit_trail": true,
+        "evidence_export": true,
+        "reports": true,
+        "multi_machine": true,
+        "multi_user": true,
+        "shared_governance": true,
+        "team_activity": true,
+        "role_based_governance": true,
+        "access_control": true,
+        "advanced_reporting": true,
+        "compliance_reporting": false,
+        "custom_integrations": false,
+        "priority_feedback": true,
+        "dedicated_feedback": false,
+        "continuous_oversight": false
+      },
+      "capabilities": [
+        {
+          "id": "gov_chain",
+          "name": "Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_policy",
+          "name": "Policy Evaluation",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_shared",
+          "name": "Shared Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_roles",
+          "name": "Role-Based Governance",
+          "category": "Governance",
+          "isNew": true
+        },
+        {
+          "id": "vis_dashboard",
+          "name": "Dashboard",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_audit",
+          "name": "Audit Trail",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_reports",
+          "name": "Advanced Reporting",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "vis_team",
+          "name": "Team Activity View",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "ops_multi_machine",
+          "name": "Multi-Machine Support",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_multi_user",
+          "name": "Multi-User Governance",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_rbac",
+          "name": "Access Control",
+          "category": "Operations",
+          "isNew": true
+        },
+        {
+          "id": "sup_priority_feedback",
+          "name": "Priority Feedback Support",
+          "category": "Support",
+          "isNew": true
+        }
+      ]
+    },
+    "institution": {
+      "label": "Institution",
+      "machineActivationCap": null,
+      "reportRange": {
+        "maxDays": null,
+        "restrictedRanges": [],
+        "unlocksAt": null
+      },
+      "communicationsSlots": {
+        "medium": 16,
+        "high": 8
+      },
+      "commercialTerms": {
+        "price": "Negotiated",
+        "billing": "Annual",
+        "support": "Dedicated Feedback",
+        "dating": "From trial completion",
+        "summary": "51+ operators, unlimited machines, institutional governance, dedicated support through the Atested feedback system."
+      },
+      "capacityRange": "51+ users, custom machine estate",
+      "featureFlags": {
+        "governance_chain": true,
+        "policy_evaluation": true,
+        "dashboard_access": true,
+        "audit_trail": true,
+        "evidence_export": true,
+        "reports": true,
+        "multi_machine": true,
+        "multi_user": true,
+        "shared_governance": true,
+        "team_activity": true,
+        "role_based_governance": true,
+        "access_control": true,
+        "advanced_reporting": true,
+        "compliance_reporting": true,
+        "custom_integrations": true,
+        "priority_feedback": true,
+        "dedicated_feedback": true,
+        "continuous_oversight": true
+      },
+      "capabilities": [
+        {
+          "id": "gov_chain",
+          "name": "Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_policy",
+          "name": "Policy Evaluation",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_shared",
+          "name": "Shared Governance Chain",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_roles",
+          "name": "Role-Based Governance",
+          "category": "Governance",
+          "isNew": false
+        },
+        {
+          "id": "gov_compliance",
+          "name": "Compliance Reporting",
+          "category": "Governance",
+          "isNew": true
+        },
+        {
+          "id": "vis_dashboard",
+          "name": "Dashboard",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_audit",
+          "name": "Audit Trail",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_reports",
+          "name": "Advanced Reporting",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_team",
+          "name": "Team Activity View",
+          "category": "Visibility",
+          "isNew": false
+        },
+        {
+          "id": "vis_enterprise",
+          "name": "Institutional Analytics",
+          "category": "Visibility",
+          "isNew": true
+        },
+        {
+          "id": "ops_multi_machine",
+          "name": "Multi-Machine Support",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_multi_user",
+          "name": "Multi-User Governance",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_rbac",
+          "name": "Access Control",
+          "category": "Operations",
+          "isNew": false
+        },
+        {
+          "id": "ops_custom_int",
+          "name": "Custom Integrations",
+          "category": "Operations",
+          "isNew": true
+        },
+        {
+          "id": "sup_dedicated_feedback",
+          "name": "Dedicated Feedback Support",
+          "category": "Support",
+          "isNew": true
+        }
+      ]
+    }
+  },
+  "categories": [
+    "Governance",
+    "Visibility",
+    "Operations",
+    "Support"
+  ],
+  "paymentLinks": {
+    "personal": "https://buy.stripe.com/dRmdR166q2Wi7WbdVq5Vu00",
+    "personal_plus": "https://buy.stripe.com/00w6oz3Yi2Wi7Wb9Fa5Vu03",
+    "crew": "https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01",
+    "team": "https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02"
+  },
+  "charter": {
+    "active": true,
+    "promoCode": "CHARTER2026",
+    "copy": "Charter pricing. Limited availability. 50% off your first year. Standard pricing at renewal. We reserve the right to limit quantities.",
+    "tiers": {
+      "crew": {
+        "price": "$2,498",
+        "renewal": "$4,995/yr",
+        "link": "https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01?prefilled_promo_code=CHARTER2026"
+      },
+      "team": {
+        "price": "$24,998",
+        "renewal": "$49,995/yr",
+        "link": "https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02?prefilled_promo_code=CHARTER2026"
+      }
+    }
+  },
+  "alertGroups": [
+    {
+      "id": "safety",
+      "title": "Safety Alerts",
+      "activeTier": "personal",
+      "description": "Security vulnerability notifications, chain integrity alerts, emergency notifications.",
+      "severities": [
+        "security",
+        "critical"
+      ],
+      "categories": [
+        "chain_integrity",
+        "security",
+        "emergency"
+      ]
+    },
+    {
+      "id": "operational",
+      "title": "Operational Monitoring",
+      "activeTier": "personal_plus",
+      "description": "DENY rate anomalies, chain health degradation, version updates, stale approval notices.",
+      "severities": [
+        "critical",
+        "routine"
+      ],
+      "categories": [
+        "deny_rate",
+        "health",
+        "version",
+        "stale_approval",
+        "observation_gap"
+      ]
+    },
+    {
+      "id": "usage",
+      "title": "Usage Pattern Detection",
+      "activeTier": "crew",
+      "description": "Cross-user DENY pattern alerts, classifier confidence distribution shifts, unusual action patterns.",
+      "severities": [
+        "routine"
+      ],
+      "categories": [
+        "usage_pattern",
+        "classifier",
+        "tool_usage"
+      ]
+    },
+    {
+      "id": "governance",
+      "title": "Governance Health Monitoring",
+      "activeTier": "team",
+      "description": "Compliance drift detection, policy rule analysis, unacknowledged alert follow-up.",
+      "severities": [
+        "routine",
+        "informational"
+      ],
+      "categories": [
+        "compliance",
+        "policy_analysis",
+        "followup"
+      ]
+    },
+    {
+      "id": "oversight",
+      "title": "Continuous Oversight",
+      "activeTier": "institution",
+      "description": "Custom alert thresholds, scheduled governance reviews, named contact.",
+      "severities": [
+        "informational"
+      ],
+      "categories": [
+        "scheduled_review",
+        "custom_threshold",
+        "named_contact"
+      ]
+    }
+  ]
+}

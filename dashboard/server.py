@@ -22,7 +22,10 @@ from typing import Optional
 from urllib.parse import parse_qs, urlparse
 
 REPO = Path(__file__).resolve().parents[1]
+DASHBOARD_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = REPO / "scripts"
+if str(DASHBOARD_DIR) not in sys.path:
+    sys.path.insert(0, str(DASHBOARD_DIR))
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -30,11 +33,14 @@ from storage_contract import runtime_root
 
 RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
+QA_CHAIN = Path(os.environ.get("GOV_QA_CHAIN_PATH", "")).expanduser() if os.environ.get("GOV_QA_CHAIN_PATH") else RUNTIME / "LOGS" / "qa-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 TELEMETRY_SUMMARY = RUNTIME / "LOGS" / "telemetry" / "summary.json"
 EXPORT_TOKEN_TTL_SECONDS = 10 * 60
 _export_tokens = {}
 _export_tokens_lock = threading.Lock()
+_conformance_reader = None
+_conformance_reader_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # Ed25519 signing key (loaded once at startup for chain event signing)
@@ -102,6 +108,41 @@ def _write_json_file(path, data):
         pass
 
 
+def _load_tier_feature_registry():
+    """Load the UI/server shared tier registry from the canonical JSON file."""
+    registry_path = Path(__file__).resolve().parent / "ui-next" / "tier-feature-registry.json"
+    return json.loads(registry_path.read_text(encoding="utf-8"))
+
+
+TIER_FEATURE_REGISTRY = _load_tier_feature_registry()
+CANONICAL_TIERS = tuple(TIER_FEATURE_REGISTRY["tierOrder"])
+TIER_LABELS = {
+    key: value["label"]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+MACHINE_CAPS = {
+    key: value["machineActivationCap"]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+REPORT_RANGE_LIMITS = {
+    key: value["reportRange"]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+COMMUNICATIONS_SLOTS = {
+    key: value["communicationsSlots"]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+CASE_DOC_FEATURE_IDS = {
+    key: [cap["id"] for cap in value["capabilities"]]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+COMMERCIAL_TERMS = {
+    key: value["commercialTerms"]
+    for key, value in TIER_FEATURE_REGISTRY["tiers"].items()
+}
+SELF_SERVE_PAID_TIERS = frozenset(t for t in CANONICAL_TIERS if t not in {"personal", "institution"})
+
+
 def _telemetry_opted_in():
     opt_in_file = RUNTIME / "telemetry_opt_in"
     try:
@@ -134,7 +175,7 @@ def _new_telemetry_summary():
             "raw_events_transmitted": False,
             "storage": "aggregate counters only",
             "session_reconstruction": "not possible; the file stores period totals and lifetime totals, not event order, click timestamps, session ids, file paths, user identities, or record ids",
-            "governance_chain": "telemetry is never written to the governance chain",
+            "governance_chain": "telemetry payload content is not written to the governance chain; remote submissions record only destination, payload_hash, and payload_size metadata",
         },
         "updated_at_utc": None,
         "periods": {},
@@ -257,6 +298,14 @@ def _collect_trouble_submissions_by_period():
 
 
 def _collect_system_health_snapshot():
+    """DEPRECATED in favor of /api/conformance.
+
+    Retained because telemetry's anonymous-summary artifact still nests a
+    system_health block consumed by external consumers; removing it would
+    break a stable export shape. New operator-facing surfaces must read from
+    _conformance_state_snapshot() instead. See qs-024-look-forward-advisory.md
+    for the migration plan that retires this telemetry shape.
+    """
     try:
         from chain_health import collect_health_signals
         stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
@@ -276,6 +325,20 @@ def _collect_system_health_snapshot():
         "policy_rules_status": integrity.get("policy_rules_status", "not_available"),
         "version": os.environ.get("ATESTED_VERSION", "unknown"),
     }
+
+
+def _get_conformance_reader():
+    global _conformance_reader
+    with _conformance_reader_lock:
+        if _conformance_reader is None:
+            from conformance import DashboardQAChainReader
+            _conformance_reader = DashboardQAChainReader(QA_CHAIN)
+        return _conformance_reader
+
+
+def _conformance_state_snapshot():
+    from conformance import build_conformance_payload
+    return build_conformance_payload(_get_conformance_reader())
 
 
 def _build_telemetry_category_snapshot(summary):
@@ -371,17 +434,12 @@ def _get_peer_sharing_manager():
     return _peer_sharing_manager
 
 
-MACHINE_CAPS = {
-    "personal": 1, "personal_plus": 3,
-    "crew": None, "team": None, "institution": None,
-}
-
-
 def _effective_feature_tier(posture: dict) -> str:
     """Return the tier used for feature gates."""
     if (posture or {}).get("license_status") == "trial":
         return "institution"
-    return (posture or {}).get("license_tier") or "personal"
+    tier = (posture or {}).get("license_tier") or "personal"
+    return tier if tier in TIER_LABELS else "personal"
 
 
 def _get_install_fingerprint():
@@ -569,6 +627,60 @@ def _json_response(handler, data, status=200):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
+    cors_origin = handler._cors_origin() if hasattr(handler, "_cors_origin") else ""
+    if cors_origin:
+        handler.send_header("Access-Control-Allow-Origin", cors_origin)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# Successor endpoint for the deprecated legacy health surface.
+DEPRECATION_SUCCESSOR = "/api/conformance"
+
+
+def _deprecated_json_response(handler, data, status=200, *, successor=DEPRECATION_SUCCESSOR):
+    """Emit a JSON response with deprecation metadata for legacy health endpoints.
+
+    Behavior matches _json_response with two additions:
+      - HTTP headers signal deprecation (Deprecation: true, Link rel=successor-version).
+      - The response body carries {deprecated: true, successor: <path>, ...}.
+    """
+    payload = dict(data) if isinstance(data, dict) else {"data": data}
+    payload["deprecated"] = True
+    payload["successor"] = successor
+    body = json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Deprecation", "true")
+    handler.send_header("Link", f'<{successor}>; rel="successor-version"')
+    cors_origin = handler._cors_origin() if hasattr(handler, "_cors_origin") else ""
+    if cors_origin:
+        handler.send_header("Access-Control-Allow-Origin", cors_origin)
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# Successor endpoint for the deprecated legacy health surface.
+DEPRECATION_SUCCESSOR = "/api/conformance"
+
+
+def _deprecated_json_response(handler, data, status=200, *, successor=DEPRECATION_SUCCESSOR):
+    """Emit a JSON response with deprecation metadata for legacy health endpoints.
+
+    Behavior matches _json_response with two additions:
+      - HTTP headers signal deprecation (Deprecation: true, Link rel=successor-version).
+      - The response body carries {deprecated: true, successor: <path>, ...}.
+    """
+    payload = dict(data) if isinstance(data, dict) else {"data": data}
+    payload["deprecated"] = True
+    payload["successor"] = successor
+    body = json.dumps(payload, sort_keys=True, indent=2, ensure_ascii=False).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Deprecation", "true")
+    handler.send_header("Link", f'<{successor}>; rel="successor-version"')
     cors_origin = handler._cors_origin() if hasattr(handler, "_cors_origin") else ""
     if cors_origin:
         handler.send_header("Access-Control-Allow-Origin", cors_origin)
@@ -770,6 +882,7 @@ def _append_chain_record_atomic(event):
     """
     from event_model import _compute_event_record_hash, sign_non_action_event
     from machine_identity import add_machine_identity_fields, add_record_freshness_fields
+    from canonical_form import canonical_json as _canonical_form_json
     import stat as _stat
 
     CHAIN.parent.mkdir(parents=True, exist_ok=True)
@@ -791,8 +904,7 @@ def _append_chain_record_atomic(event):
                 sign_non_action_event(
                     event, _DASHBOARD_SIGNING_KEY, _DASHBOARD_SIGNING_KEY_ID,
                 )
-            line = json.dumps(event, sort_keys=True, separators=(",", ":"),
-                              ensure_ascii=False, allow_nan=False) + "\n"
+            line = _canonical_form_json(event) + "\n"
             fd = os.open(str(CHAIN), os.O_WRONLY | os.O_APPEND | os.O_CREAT,
                           _stat.S_IRUSR | _stat.S_IWUSR)
             try:
@@ -1576,21 +1688,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": str(exc)}, 500)
 
     def _handle_acknowledge(self):
-        """POST /api/health/acknowledge — acknowledge a health alert."""
+        """POST /api/health/acknowledge — DEPRECATED legacy alert-acknowledgement.
+
+        Operator-facing findings are now surfaced through /api/conformance and
+        its detail view. The endpoint continues to function for backward
+        compatibility; responses carry deprecation metadata.
+        """
         try:
             length = int(self.headers.get("Content-Length", 0))
             if length > 4096:
-                _json_response(self, {"error": "payload too large"}, 413)
+                _deprecated_json_response(self, {"error": "payload too large"}, 413)
                 return
             body = self.rfile.read(length)
             data = json.loads(body) if body else {}
         except (json.JSONDecodeError, ValueError):
-            _json_response(self, {"error": "invalid JSON"}, 400)
+            _deprecated_json_response(self, {"error": "invalid JSON"}, 400)
             return
 
         alert_source = str(data.get("source", "")).strip()
         if not alert_source:
-            _json_response(self, {"error": "source required"}, 400)
+            _deprecated_json_response(self, {"error": "source required"}, 400)
             return
 
         policy_acknowledged = False
@@ -1614,7 +1731,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 ))
                 policy_acknowledged = True
             except Exception as exc:
-                _json_response(self, {"error": f"policy acknowledgement failed: {exc}"}, 500)
+                _deprecated_json_response(self, {"error": f"policy acknowledgement failed: {exc}"}, 500)
                 return
 
         from chain_health import append_stability_event
@@ -1623,7 +1740,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "source": alert_source,
             "message": str(data.get("message", "")),
         })
-        _json_response(self, {
+        _deprecated_json_response(self, {
             "acknowledged": True,
             "policy_acknowledged": policy_acknowledged,
             "event_id": evt["stability_event_id"],
@@ -3380,7 +3497,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     # Tier ordering for upgrade/downgrade determination
-    _TIER_ORDER = ["personal", "personal_plus", "crew", "team", "institution"]
+    _TIER_ORDER = list(CANONICAL_TIERS)
 
     def _handle_licensing_purchase(self):
         """POST /api/licensing/purchase — purchase or upgrade a paid tier license.
@@ -3417,11 +3534,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         # Team+ fields
         primary_operator = str(data.get("primary_operator", "")).strip()
 
-        PURCHASABLE_TIERS = {"personal_plus", "crew", "team"}
-        if tier not in PURCHASABLE_TIERS:
+        if tier not in SELF_SERVE_PAID_TIERS:
             _json_response(self, {
                 "error": f"Tier '{tier}' is not available for self-serve purchase. "
-                         f"Available: {sorted(PURCHASABLE_TIERS)}",
+                         f"Available: {sorted(SELF_SERVE_PAID_TIERS)}",
             }, 400)
             return
 
@@ -4497,7 +4613,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if capacity:
                 base_tier = capacity.get("base_tier", "personal")
                 # Climbing procedure (mirrors questionnaire-engine.js logic)
-                TIERS = ["personal", "personal_plus", "crew", "team", "institution"]
+                TIERS = list(CANONICAL_TIERS)
                 BOUNDARIES = [
                     {"key": "personal_to_personal_plus", "from": "personal", "to": "personal_plus"},
                     {"key": "personal_plus_to_crew", "from": "personal_plus", "to": "crew"},
@@ -4510,11 +4626,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "crew_to_team": ["climb_team_scale", "climb_team_roles"],
                     "team_to_institution": ["climb_inst_scale", "climb_inst_compliance", "climb_inst_dedicated"],
                 }
-                TIER_LABELS = {
-                    "personal": "Personal", "personal_plus": "Personal Plus",
-                    "crew": "Crew", "team": "Team", "institution": "Institution",
-                }
-
                 base_idx = TIERS.index(base_tier) if base_tier in TIERS else 0
                 current_tier = base_tier
                 climb_path = [base_tier]
@@ -4640,30 +4751,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     @staticmethod
     def _case_doc_feature_ids(tier):
-        """Return feature IDs for the recommended tier.
-
-        The client uses these to look up translation templates.
-        Feature sets mirror tier-definitions.js.
-        """
-        FEATURES = {
-            "personal": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_single", "sup_docs_feedback"],
-            "personal_plus": ["gov_chain", "gov_policy", "vis_dashboard", "vis_audit", "ops_multi_machine", "ops_single", "sup_feedback"],
-            "crew": ["gov_chain", "gov_policy", "gov_shared", "vis_dashboard", "vis_audit", "vis_team", "ops_multi_machine", "ops_multi_user", "sup_feedback"],
-            "team": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "ops_multi_machine", "ops_multi_user", "ops_rbac", "sup_priority_feedback"],
-            "institution": ["gov_chain", "gov_policy", "gov_shared", "gov_roles", "gov_compliance", "vis_dashboard", "vis_audit", "vis_team", "vis_reports", "vis_enterprise", "ops_multi_machine", "ops_multi_user", "ops_rbac", "ops_custom_int", "sup_dedicated_feedback"],
-        }
-        return FEATURES.get(tier, [])
+        """Return feature IDs for the recommended tier."""
+        return CASE_DOC_FEATURE_IDS.get(tier, [])
 
     @staticmethod
     def _case_doc_commercial_terms(tier):
-        TERMS = {
-            "personal":      {"price": "Free",        "billing": "N/A",    "support": "Documentation & Feedback",  "dating": "From registration",     "summary": "Single operator, full governance."},
-            "personal_plus": {"price": "$99/yr",      "billing": "Annual", "support": "Feedback System",           "dating": "From purchase",         "summary": "Single operator, multi-machine."},
-            "crew":          {"price": "$4,995/yr",   "billing": "Annual", "support": "Feedback System",           "dating": "From trial completion", "summary": "2\u201312 operators, shared governance."},
-            "team":          {"price": "$49,995/yr",  "billing": "Annual", "support": "Priority Feedback",         "dating": "From trial completion", "summary": "13\u201350 operators, role-based governance."},
-            "institution":   {"price": "Negotiated",  "billing": "Annual", "support": "Dedicated Feedback",        "dating": "From trial completion", "summary": "51+ operators, enterprise governance."},
-        }
-        return TERMS.get(tier, {})
+        return COMMERCIAL_TERMS.get(tier, {})
 
     def log_message(self, format, *args):
         pass  # Silence request logs
@@ -4688,6 +4781,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         path = parsed.path
 
         if path == "/api/status":
+            # DEPRECATED: /api/status is part of the legacy health surface.
+            # Operator-facing health/state is now sourced from /api/conformance.
+            # Response continues to function for backward compatibility but is
+            # marked deprecated via response headers and body.
             from readout import assemble_governance_status_record
             window = qs_int("window") or None
             data = assemble_governance_status_record(
@@ -4695,7 +4792,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 window=window,
             )
             data["machine"] = _machine_status_snapshot()
-            _json_response(self, data)
+            _deprecated_json_response(self, data)
 
         elif path == "/api/activity":
             if qs("export_mode") in ("1", "true", "yes"):
@@ -4823,7 +4920,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"archives": list_archives(CHAIN)})
 
         elif path == "/api/audit/report":
-            # Tier-based range enforcement: Personal tier max 7 days
+            # Tier-based range enforcement from the shared tier feature registry.
             start_time = qs("start_time") or None
             end_time = qs("end_time") or None
             if start_time:
@@ -4831,12 +4928,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     from licensing import resolve_posture
                     posture = resolve_posture(RUNTIME)
                     tier = _effective_feature_tier(posture)
-                    if tier == "personal":
+                    range_limit = REPORT_RANGE_LIMITS.get(tier, {})
+                    max_days = range_limit.get("maxDays")
+                    if max_days is not None:
                         from datetime import datetime, timezone
                         st = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                         now = datetime.now(timezone.utc)
-                        if (now - st).total_seconds() > 8 * 86400:
-                            _json_response(self, {"error": "Extended time ranges require Team tier or above."}, status=403)
+                        if (now - st).total_seconds() > max_days * 86400:
+                            unlocks_at = range_limit.get("unlocksAt") or "a higher tier"
+                            _json_response(self, {
+                                "error": f"{TIER_LABELS.get(tier, tier)} includes a {max_days}-day rolling history. Extended time ranges require {unlocks_at} tier or above.",
+                            }, status=403)
                             return
                 except Exception:
                     pass  # Fail open — don't block report on licensing errors
@@ -4874,17 +4976,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, data)
 
         elif path == "/api/health":
+            # DEPRECATED: legacy health surface. Operator-facing health/state is
+            # now sourced from /api/conformance. Response continues to function
+            # for backward compatibility but is marked deprecated.
             from chain_health import collect_health_signals
             stability_log = RUNTIME / "LOGS" / "chain_stability.jsonl"
             chain_meta = RUNTIME / "LOGS" / "chain_meta.json"
             data = collect_health_signals(CHAIN, stability_log, chain_meta, RUNTIME)
             data["machine"] = _machine_status_snapshot()
-            _json_response(self, data)
+            _deprecated_json_response(self, data)
             _maybe_trigger_archive()
 
+        elif path == "/api/conformance":
+            _json_response(self, _conformance_state_snapshot())
+
         elif path == "/api/health/acknowledge":
-            # POST-only, but handle GET gracefully
-            _json_response(self, {"error": "use POST"}, 405)
+            # DEPRECATED: legacy alert-acknowledgement endpoint. Operator-facing
+            # findings now flow through /api/conformance and its detail view.
+            # POST-only, but handle GET gracefully.
+            _deprecated_json_response(self, {"error": "use POST"}, 405)
 
         elif path == "/api/users":
             from readout import load_chain_rows
@@ -4961,18 +5071,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             try:
                 from licensing import resolve_posture
 
-                # Slot allocations by tier
-                _SLOT_ALLOC = {
-                    "personal": {"medium": 0, "high": 0},
-                    "personal_plus": {"medium": 2, "high": 0},
-                    "crew": {"medium": 4, "high": 2},
-                    "team": {"medium": 8, "high": 4},
-                    "institution": {"medium": 16, "high": 8},
-                }
-
                 posture = resolve_posture(RUNTIME)
                 tier = _effective_feature_tier(posture).lower().replace(" ", "_")
-                alloc = _SLOT_ALLOC.get(tier, _SLOT_ALLOC["personal"])
+                alloc = COMMUNICATIONS_SLOTS.get(tier, COMMUNICATIONS_SLOTS["personal"])
 
                 # Load requests from JSONL log
                 requests_path = RUNTIME / "LOGS" / "communications_requests.jsonl"

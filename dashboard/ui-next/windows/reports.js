@@ -11,6 +11,7 @@ import { authorizeExport, downloadExport } from '../export-utils.js';
 import { recordUiAggregate, flushTelemetrySummary } from '../summary-telemetry.js';
 import { openCommunicationsWindow } from './communications.js';
 import { setTitleMessage } from '../window-messaging.js';
+import { REPORT_RANGE_LIMITS } from '../tier-definitions.js';
 
 const REPORT_TEMPLATES = [
   {
@@ -434,21 +435,14 @@ function _applyRange(state, range, opts = {}) {
   if (opts.load !== false) _loadReport(state);
 }
 
-// Tier-based time range restrictions.
-// Personal: 10-day rolling window. Personal Plus: 30-day. Crew+: unrestricted.
-const _TIER_RANGE_CONFIG = {
-  personal:      { maxDays: 10, restricted: ['30d', 'all'], unlocksAt: 'Crew' },
-  personal_plus: { maxDays: 30, restricted: ['all'],        unlocksAt: 'Crew' },
-};
-
 function _effectiveFeatureTier(modeData = {}) {
   if (modeData.license_status === 'trial') return 'institution';
   return modeData.license_tier || 'personal';
 }
 
 function _enforceRangeTier(state) {
-  const config = _TIER_RANGE_CONFIG[state.tier];
-  const restrictedSet = config ? new Set(config.restricted) : new Set();
+  const config = REPORT_RANGE_LIMITS[state.tier];
+  const restrictedSet = config ? new Set(config.restrictedRanges || []) : new Set();
   state.el.querySelectorAll('.rp-quick-btn').forEach(btn => {
     const isRestricted = restrictedSet.has(btn.dataset.range);
     btn.classList.toggle('rp-range-restricted', isRestricted);
@@ -461,7 +455,7 @@ function _enforceRangeTier(state) {
 }
 
 function _showTierRestriction(state, feature, detail) {
-  const config = _TIER_RANGE_CONFIG[state.tier];
+  const config = REPORT_RANGE_LIMITS[state.tier];
   if (!config) return;
   const isDemo = typeof api.getScenario === 'function';
   let text, action;

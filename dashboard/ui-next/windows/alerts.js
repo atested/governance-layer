@@ -8,71 +8,13 @@
 
 import * as api from '../api.js';
 import { modalManager } from '../modal-manager.js';
+import { ALERT_GROUPS, tierLabel, tierLevel } from '../tier-definitions.js';
 import { installWindowTooltips, setTooltip } from '../tooltip-utils.js';
 
 // ---------- Constants ----------
 
-/** Tier ordering for pane activation */
-const TIER_LEVELS = {
-  personal: 0,
-  personal_plus: 1,
-  crew: 2,
-  team: 3,
-  institution: 4,
-  business: 4,
-  enterprise: 4,
-};
-
-/** Human-readable tier names */
-const TIER_NAMES = {
-  personal: 'Personal', personal_plus: 'Personal Plus',
-  crew: 'Crew', team: 'Team', business: 'Business',
-  enterprise: 'Enterprise', institution: 'Institution',
-};
-
 /** Monitoring pane definitions in priority order */
-const MONITORING_PANES = [
-  {
-    id: 'safety',
-    title: 'Safety Alerts',
-    activeTier: 'personal',
-    description: 'Security vulnerability notifications, chain integrity alerts, emergency notifications.',
-    severities: ['security', 'critical'],
-    categories: ['chain_integrity', 'security', 'emergency'],
-  },
-  {
-    id: 'operational',
-    title: 'Operational Monitoring',
-    activeTier: 'personal_plus',
-    description: 'DENY rate anomalies, chain health degradation, version updates, stale approval notices.',
-    severities: ['critical', 'routine'],
-    categories: ['deny_rate', 'health', 'version', 'stale_approval', 'observation_gap'],
-  },
-  {
-    id: 'usage',
-    title: 'Usage Pattern Detection',
-    activeTier: 'crew',
-    description: 'Cross-user DENY pattern alerts, classifier confidence distribution shifts, unusual action patterns.',
-    severities: ['routine'],
-    categories: ['usage_pattern', 'classifier', 'tool_usage'],
-  },
-  {
-    id: 'governance',
-    title: 'Governance Health Monitoring',
-    activeTier: 'team',
-    description: 'Compliance drift detection, policy rule analysis, unacknowledged alert follow-up.',
-    severities: ['routine', 'informational'],
-    categories: ['compliance', 'policy_analysis', 'followup'],
-  },
-  {
-    id: 'oversight',
-    title: 'Continuous Oversight',
-    activeTier: 'institution',
-    description: 'Custom alert thresholds, scheduled governance reviews, named contact.',
-    severities: ['informational'],
-    categories: ['scheduled_review', 'custom_threshold', 'named_contact'],
-  },
-];
+const MONITORING_PANES = ALERT_GROUPS;
 
 /** Severity display colors */
 const SEVERITY_COLORS = {
@@ -137,8 +79,8 @@ async function _loadData(state) {
       state.tierLevel = 0;
       state.tierName = 'Personal';
     } else {
-      state.tierLevel = TIER_LEVELS[tier] ?? 0;
-      state.tierName = TIER_NAMES[tier] || 'Personal';
+      state.tierLevel = tierLevel(tier);
+      state.tierName = tierLabel(tier);
     }
   }
 
@@ -183,7 +125,7 @@ function _renderAll(state) {
 
   // Tiered monitoring panes
   for (const paneDef of MONITORING_PANES) {
-    const paneLevel = TIER_LEVELS[paneDef.activeTier] ?? 0;
+    const paneLevel = tierLevel(paneDef.activeTier);
     const isActive = state.tierLevel >= paneLevel;
     const alerts = alertsByPane[paneDef.id] || [];
     _renderMonitoringPane(el, paneDef, isActive, alerts, state);
@@ -306,7 +248,7 @@ function _renderMonitoringPane(el, paneDef, isActive, alerts, state) {
   title.textContent = paneDef.title;
   header.appendChild(title);
 
-  const badgeTierName = TIER_NAMES[paneDef.activeTier] || paneDef.activeTier;
+  const badgeTierName = tierLabel(paneDef.activeTier);
   const badge = document.createElement('span');
   badge.className = `al-plan-badge ${isActive ? 'al-badge-active' : 'al-badge-inactive'}`;
   badge.textContent = `Active at ${badgeTierName}`;

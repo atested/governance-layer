@@ -1,7 +1,8 @@
 # Tier Features
 
-Features available in each Atested plan. These are pulled from the running
-code, not marketing materials.
+Features available in each Atested plan. The authoritative runtime registry is
+`dashboard/ui-next/tier-feature-registry.json`; dashboard server behavior and UI
+feature gates read from that registry.
 
 ## History Window
 
@@ -16,7 +17,8 @@ Controls how far back reports and activity views can query.
 | Institution | Unlimited | None |
 
 Selecting a restricted range shows a title bar message explaining which tier
-removes the restriction.
+removes the restriction. Custom report ranges beyond the rolling history window
+are rejected by the dashboard server for Personal and Personal Plus.
 
 ## Reports
 
@@ -92,4 +94,29 @@ Features that vary by tier:
 - **Personal Plus and above**: Multi-machine support and machine-scoped reporting
 - **Crew and above**: Unlimited machines, multi-user governance, team activity view
 - **Team and above**: Role-based governance, advanced reporting, access control
-- **Institution**: Custom integrations, compliance reporting, enterprise analytics, dedicated support
+- **Institution**: Custom integrations, compliance reporting, institutional analytics, dedicated support
+
+## Registry Feature Flags
+
+The runtime registry represents the same gates as feature flags:
+
+| Feature Flag | First Active Tier |
+|---|---|
+| `governance_chain` | Personal |
+| `policy_evaluation` | Personal |
+| `dashboard_access` | Personal |
+| `audit_trail` | Personal |
+| `evidence_export` | Personal |
+| `reports` | Personal |
+| `multi_machine` | Personal Plus |
+| `multi_user` | Crew |
+| `shared_governance` | Crew |
+| `team_activity` | Crew |
+| `role_based_governance` | Team |
+| `access_control` | Team |
+| `advanced_reporting` | Team |
+| `priority_feedback` | Team |
+| `compliance_reporting` | Institution |
+| `custom_integrations` | Institution |
+| `dedicated_feedback` | Institution |
+| `continuous_oversight` | Institution |

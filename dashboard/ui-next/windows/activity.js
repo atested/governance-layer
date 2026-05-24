@@ -11,6 +11,7 @@ import { openRecordDetail } from './record-detail.js';
 import { installWindowTooltips, setTooltip, setTooltips } from '../tooltip-utils.js';
 import { authorizeExport, downloadExport } from '../export-utils.js';
 import { setTitleMessage } from '../window-messaging.js';
+import { REPORT_RANGE_LIMITS, tierLabel } from '../tier-definitions.js';
 
 // ---------- Column definitions ----------
 
@@ -956,14 +957,9 @@ function _applySelectedRow(state) {
 
 // ---------- Tier enforcement ----------
 
-const _AW_TIER_RANGE_CONFIG = {
-  personal:      { maxDays: 10, restricted: ['30d', 'all'], unlocksAt: 'Crew' },
-  personal_plus: { maxDays: 30, restricted: ['all'],        unlocksAt: 'Crew' },
-};
-
 function _enforceRangeTier(state) {
-  const config = _AW_TIER_RANGE_CONFIG[state.tier];
-  const restrictedSet = config ? new Set(config.restricted) : new Set();
+  const config = REPORT_RANGE_LIMITS[state.tier];
+  const restrictedSet = config ? new Set(config.restrictedRanges || []) : new Set();
   state.el.querySelectorAll('.aw-quick-btn').forEach(btn => {
     const isRestricted = restrictedSet.has(btn.dataset.range);
     btn.classList.toggle('aw-range-restricted', isRestricted);
@@ -972,12 +968,12 @@ function _enforceRangeTier(state) {
 }
 
 function _showTierRestriction(state, rangeKey) {
-  const config = _AW_TIER_RANGE_CONFIG[state.tier];
+  const config = REPORT_RANGE_LIMITS[state.tier];
   if (!config) return;
   const isDemo = typeof api.getScenario === 'function';
   const label = rangeKey === '30d' ? 'Last 30 days' : 'All time';
-  const tierLabel = state.tier === 'personal' ? 'Personal tier' : 'Personal Plus';
-  const text = `${tierLabel} includes a ${config.maxDays}-day rolling history. ${label} is available on ${config.unlocksAt} and above.`;
+  const labelForTier = state.tier === 'personal' ? 'Personal tier' : tierLabel(state.tier);
+  const text = `${labelForTier} includes a ${config.maxDays}-day rolling history. ${label} is available on ${config.unlocksAt} and above.`;
   let action;
   if (!isDemo) {
     const actionLabel = state._licensingStatus === 'licensed' ? 'See Licensing to upgrade.' : 'See Licensing to choose a plan.';

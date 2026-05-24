@@ -1,195 +1,51 @@
 /**
- * Tier definitions and translation templates — static data module.
+ * Tier definitions and translation templates.
  *
- * This module defines:
- * - Tier capability sets (features per tier, grouped by category)
- * - Commercial terms (pricing, billing, support, dating)
- * - Translation templates (feature ID → buyer-facing text)
- * - Capacity ranges per tier
- *
- * Content is placeholder.  Real content replaces this module without
- * changing the case document assembly or tier display code.
- *
- * Spec v1 sections 2, 4.3.  Dispatch 027-D-2026-0417 Phase 3.
+ * Tier gates, pricing, capacity, communications slots, and alert activation
+ * are sourced from tier-feature-registry.js. This module keeps the existing
+ * exports used by questionnaire and licensing UI code, and owns only the
+ * explanatory translation templates.
  */
 
-// ---------- Payment Links (Stripe) ----------
+import {
+  PAYMENT_LINKS,
+  CHARTER,
+  CHARTER_ACTIVE,
+  CAPACITY_RANGES,
+  COMMERCIAL_TERMS,
+  CATEGORIES,
+  TIER_CAPABILITIES,
+  FEATURE_FLAGS,
+  MACHINE_CAPS,
+  REPORT_RANGE_LIMITS,
+  COMMUNICATIONS_SLOTS,
+  ALERT_GROUPS,
+  tierLabel,
+  tierLevel,
+} from './tier-feature-registry.js';
 
-export const PAYMENT_LINKS = {
-  personal:      'https://buy.stripe.com/dRmdR166q2Wi7WbdVq5Vu00',
-  personal_plus: 'https://buy.stripe.com/00w6oz3Yi2Wi7Wb9Fa5Vu03',
-  crew:          'https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01',
-  team:          'https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02',
+// tierLabel and tierLevel live in tier-feature-registry.js as the canonical
+// source. They are re-exported here so existing importers (app.js,
+// windows/activity.js, windows/alerts.js) continue to resolve without
+// requiring a wider refactor. Removing either re-export breaks the module
+// graph and renders the dashboard a blank page — see QS-025 report.
+export {
+  PAYMENT_LINKS,
+  CHARTER,
+  CHARTER_ACTIVE,
+  CAPACITY_RANGES,
+  COMMERCIAL_TERMS,
+  CATEGORIES,
+  TIER_CAPABILITIES,
+  FEATURE_FLAGS,
+  MACHINE_CAPS,
+  REPORT_RANGE_LIMITS,
+  COMMUNICATIONS_SLOTS,
+  ALERT_GROUPS,
+  tierLabel,
+  tierLevel,
 };
 
-// Charter pricing — limited availability, 50% off first year for Crew and Team.
-// Set CHARTER_ACTIVE to false to hide charter pricing and show only list prices.
-export const CHARTER_ACTIVE = true;
-
-export const CHARTER = {
-  promo_code: 'CHARTER2026',
-  crew: {
-    price: '$2,498',
-    renewal: '$4,995/yr',
-    link: 'https://buy.stripe.com/4gM5kvbqKeF05O33gM5Vu01?prefilled_promo_code=CHARTER2026',
-  },
-  team: {
-    price: '$24,998',
-    renewal: '$49,995/yr',
-    link: 'https://buy.stripe.com/cNibIT7au7cy7Wb5oU5Vu02?prefilled_promo_code=CHARTER2026',
-  },
-  copy: 'Charter pricing. Limited availability. 50% off your first year. Standard pricing at renewal. We reserve the right to limit quantities.',
-};
-
-// ---------- Capacity ranges ----------
-
-export const CAPACITY_RANGES = {
-  personal:      '1 user, 1 machine',
-  personal_plus: '1 user, up to 3 machines',
-  crew:          '2\u201312 users',
-  team:          '13\u201350 users',
-  institution:   '51+ users (negotiated)',
-};
-
-// ---------- Commercial terms ----------
-
-export const COMMERCIAL_TERMS = {
-  personal: {
-    price: 'Free',
-    billing: 'N/A',
-    support: 'Documentation & Feedback',
-    dating: 'From registration',
-    summary: 'Single operator, full governance chain, documentation and feedback system support.',
-  },
-  personal_plus: {
-    price: '$99/yr',
-    billing: 'Annual',
-    support: 'Feedback System',
-    dating: 'From purchase',
-    summary: 'Single operator, multi-machine, support through the Atested feedback system.',
-  },
-  crew: {
-    price: '$4,995/yr',
-    billing: 'Annual',
-    support: 'Feedback System',
-    dating: 'From trial completion',
-    summary: '2\u201312 operators, shared governance chain, team visibility.',
-  },
-  team: {
-    price: '$49,995/yr',
-    billing: 'Annual',
-    support: 'Priority Feedback',
-    dating: 'From trial completion',
-    summary: '13\u201350 operators, role-based governance, priority support.',
-  },
-  institution: {
-    price: 'Negotiated',
-    billing: 'Annual',
-    support: 'Dedicated Feedback',
-    dating: 'From trial completion',
-    summary: '51+ operators, enterprise governance, dedicated support through the Atested feedback system.',
-  },
-};
-
-// ---------- Capability categories ----------
-
-export const CATEGORIES = [
-  'Governance',
-  'Visibility',
-  'Operations',
-  'Support',
-];
-
-// ---------- Capabilities per tier ----------
-
-/**
- * Each capability has:
- *   id       — stable identifier (matches translation template keys)
- *   name     — human-readable short name
- *   category — one of CATEGORIES
- *   isNew    — true if this capability is new at this tier (not in the tier below)
- *
- * Capabilities accumulate: higher tiers include all lower-tier capabilities
- * plus their own new ones.
- */
-export const TIER_CAPABILITIES = {
-  personal: [
-    { id: 'gov_chain',       name: 'Governance Chain',         category: 'Governance', isNew: true },
-    { id: 'gov_policy',      name: 'Policy Evaluation',        category: 'Governance', isNew: true },
-    { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: true },
-    { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: true },
-    { id: 'ops_single',      name: 'Single-Operator Mode',     category: 'Operations', isNew: true },
-    { id: 'sup_docs_feedback', name: 'Documentation & Feedback Support', category: 'Support', isNew: true },
-  ],
-
-  personal_plus: [
-    { id: 'gov_chain',       name: 'Governance Chain',         category: 'Governance', isNew: false },
-    { id: 'gov_policy',      name: 'Policy Evaluation',        category: 'Governance', isNew: false },
-    { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: false },
-    { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: false },
-    { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: true },
-    { id: 'ops_single',      name: 'Single-Operator Mode',     category: 'Operations', isNew: false },
-    { id: 'sup_feedback',    name: 'Feedback System Support',  category: 'Support',    isNew: true },
-  ],
-
-  crew: [
-    { id: 'gov_chain',       name: 'Governance Chain',         category: 'Governance', isNew: false },
-    { id: 'gov_policy',      name: 'Policy Evaluation',        category: 'Governance', isNew: false },
-    { id: 'gov_shared',      name: 'Shared Governance Chain',  category: 'Governance', isNew: true },
-    { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: false },
-    { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: false },
-    { id: 'vis_team',        name: 'Team Activity View',       category: 'Visibility', isNew: true },
-    { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: false },
-    { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: true },
-    { id: 'sup_feedback',    name: 'Feedback System Support',  category: 'Support',    isNew: false },
-  ],
-
-  team: [
-    { id: 'gov_chain',       name: 'Governance Chain',         category: 'Governance', isNew: false },
-    { id: 'gov_policy',      name: 'Policy Evaluation',        category: 'Governance', isNew: false },
-    { id: 'gov_shared',      name: 'Shared Governance Chain',  category: 'Governance', isNew: false },
-    { id: 'gov_roles',       name: 'Role-Based Governance',    category: 'Governance', isNew: true },
-    { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: false },
-    { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: false },
-    { id: 'vis_team',        name: 'Team Activity View',       category: 'Visibility', isNew: false },
-    { id: 'vis_reports',     name: 'Advanced Reporting',        category: 'Visibility', isNew: true },
-    { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: false },
-    { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: false },
-    { id: 'ops_rbac',        name: 'Access Control',           category: 'Operations', isNew: true },
-    { id: 'sup_priority_feedback', name: 'Priority Feedback Support', category: 'Support', isNew: true },
-  ],
-
-  institution: [
-    { id: 'gov_chain',       name: 'Governance Chain',         category: 'Governance', isNew: false },
-    { id: 'gov_policy',      name: 'Policy Evaluation',        category: 'Governance', isNew: false },
-    { id: 'gov_shared',      name: 'Shared Governance Chain',  category: 'Governance', isNew: false },
-    { id: 'gov_roles',       name: 'Role-Based Governance',    category: 'Governance', isNew: false },
-    { id: 'gov_compliance',  name: 'Compliance Reporting',     category: 'Governance', isNew: true },
-    { id: 'vis_dashboard',   name: 'Dashboard',                category: 'Visibility', isNew: false },
-    { id: 'vis_audit',       name: 'Audit Trail',              category: 'Visibility', isNew: false },
-    { id: 'vis_team',        name: 'Team Activity View',       category: 'Visibility', isNew: false },
-    { id: 'vis_reports',     name: 'Advanced Reporting',        category: 'Visibility', isNew: false },
-    { id: 'vis_enterprise',  name: 'Enterprise Analytics',     category: 'Visibility', isNew: true },
-    { id: 'ops_multi_machine', name: 'Multi-Machine Support',  category: 'Operations', isNew: false },
-    { id: 'ops_multi_user',  name: 'Multi-User Governance',    category: 'Operations', isNew: false },
-    { id: 'ops_rbac',        name: 'Access Control',           category: 'Operations', isNew: false },
-    { id: 'ops_custom_int',  name: 'Custom Integrations',      category: 'Operations', isNew: true },
-    { id: 'sup_dedicated_feedback', name: 'Dedicated Feedback Support', category: 'Support', isNew: true },
-  ],
-};
-
-// ---------- Translation templates ----------
-
-/**
- * Translation templates convert feature IDs into buyer-facing descriptions.
- * Each template has:
- *   name            — human-readable feature name
- *   description     — generic description (independent of operator context)
- *   justification   — buyer-facing value justification
- *
- * Placeholder content.  Real templates are downstream product work and
- * replace this object without changing the assembly or rendering code.
- */
 export const TRANSLATION_TEMPLATES = {
   gov_chain: {
     name: 'Governance Chain',
@@ -237,9 +93,9 @@ export const TRANSLATION_TEMPLATES = {
     justification: 'Supports executive reporting on AI governance maturity and operational risk management.',
   },
   vis_enterprise: {
-    name: 'Enterprise Analytics',
-    description: 'Enterprise-grade analytics with custom dashboards, data export APIs, and integration with existing BI tools.',
-    justification: 'Embeds AI governance data into existing enterprise analytics workflows for comprehensive oversight.',
+    name: 'Institutional Analytics',
+    description: 'Institution-scale analytics with custom dashboards, data export APIs, and integration with existing BI tools.',
+    justification: 'Embeds AI governance data into existing institutional analytics workflows for comprehensive oversight.',
   },
   ops_single: {
     name: 'Single-Operator Mode',
@@ -263,7 +119,7 @@ export const TRANSLATION_TEMPLATES = {
   },
   ops_custom_int: {
     name: 'Custom Integrations',
-    description: 'API access for integrating Atested governance data with existing enterprise systems (SIEM, GRC, CI/CD).',
+    description: 'API access for integrating Atested governance data with existing institutional systems (SIEM, GRC, CI/CD).',
     justification: 'Enables AI governance to be part of existing security and compliance workflows rather than a standalone console.',
   },
   sup_docs_feedback: {

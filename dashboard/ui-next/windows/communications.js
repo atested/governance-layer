@@ -20,14 +20,6 @@ export function openCommunicationsWindowWithCompose(trigger, composeData) {
   openCommunicationsWindow(trigger);
 }
 
-const SLOT_ALLOC = {
-  personal:      { medium: 0, high: 0 },
-  personal_plus: { medium: 2, high: 0 },
-  crew:          { medium: 4, high: 2 },
-  team:          { medium: 8, high: 4 },
-  institution:   { medium: 16, high: 8 },
-};
-
 /**
  * Open the Communications window.
  * @param {HTMLElement|null} trigger
@@ -304,7 +296,7 @@ function _buildSlotPane(state, level, title, activeSlots, totalSlots, tooltip) {
 function _buildTelemetryPane(state, d) {
   const pane = document.createElement('div');
   pane.className = 'cm-pane cm-pane-clickable';
-  const tooltip = 'Shows current telemetry participation and recent summary transmissions. Telemetry is separate from the governance chain.';
+  const tooltip = 'Shows current telemetry participation and recent summary transmissions. Payload content stays out of the governance chain; remote submissions record destination, payload hash, and payload size.';
 
   const traffic = d.telemetry_traffic || [];
   const lastSent = traffic.find(t => t.direction !== 'inbound');

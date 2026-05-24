@@ -8,6 +8,8 @@
  * Spec v1 section 3.  Dispatch 026-D-2026-0417 Phase 2.
  */
 
+import { TIERS, TIER_LABELS } from './tier-feature-registry.js';
+
 // ---------- Capacity questions ----------
 
 /**
@@ -36,15 +38,7 @@ export const CAPACITY_QUESTIONS = [
 
 // ---------- Tier definitions for the procedure ----------
 
-export const TIERS = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
-
-export const TIER_LABELS = {
-  personal: 'Personal',
-  personal_plus: 'Personal Plus',
-  crew: 'Crew',
-  team: 'Team',
-  institution: 'Institution',
-};
+export { TIERS, TIER_LABELS };
 
 // ---------- Climbing questions (per boundary) ----------
 
@@ -131,7 +125,7 @@ export const CLIMBING_QUESTIONS = {
     {
       id: 'climb_inst_scale',
       text: 'Does your organization have more than 50 people using AI applications?',
-      context: 'Institution supports 51+ operators with enterprise governance.',
+      context: 'Institution supports 51+ operators with institutional governance.',
       boundary: 'team_to_institution',
       options: [
         { value: 'yes', label: 'Yes' },
@@ -274,7 +268,7 @@ export const PHASE_TWO_QUESTIONS = {
     },
     {
       id: 'p2_inst_integration',
-      text: 'What existing enterprise systems need to integrate with AI governance?',
+      text: 'What existing institutional systems need to integrate with AI governance?',
       context: 'This documents integration requirements for the case document.',
       options: [
         { value: 'siem', label: 'SIEM / security tools' },

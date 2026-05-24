@@ -9,6 +9,8 @@
  * { ok: true, data } or { ok: false, error }.
  */
 
+import { COMMERCIAL_TERMS, TIERS, TIER_LABELS } from './tier-feature-registry.js';
+
 // ---------- Configuration ----------
 
 /** Base URL for the licensing server. Set once the server exists. */
@@ -34,17 +36,15 @@ function _mockNotReady() {
  * Spec v1 section 2 (tier display).
  */
 export function getTierDefinitions() {
-  // Phase 1 mock — not currently used.  Canonical prices live in
-  // tier-definitions.js (COMMERCIAL_TERMS).  When the licensing server
-  // exists, this function will call it and the server will be the source.
+  // Phase 1 mock — not currently used. Canonical local fallback data comes
+  // from the shared tier feature registry.
   return _mockOk({
-    tiers: [
-      { id: 'personal', name: 'Personal', price: 'Free', description: 'Single operator, full governance.' },
-      { id: 'personal_plus', name: 'Personal Plus', price: '$99/yr', description: 'Single operator, multi-machine.' },
-      { id: 'crew', name: 'Crew', price: '$4,995/yr', description: '2\u201312 operators, shared governance.' },
-      { id: 'team', name: 'Team', price: '$49,995/yr', description: '13\u201350 operators, role-based governance.' },
-      { id: 'institution', name: 'Institution', price: 'Negotiated', description: '51+ operators, enterprise governance.' },
-    ],
+    tiers: TIERS.map((id) => ({
+      id,
+      name: TIER_LABELS[id],
+      price: COMMERCIAL_TERMS[id]?.price || '',
+      description: COMMERCIAL_TERMS[id]?.summary || '',
+    })),
   });
 }
 
