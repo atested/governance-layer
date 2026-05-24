@@ -4,7 +4,7 @@ Tests for the licensing posture system.
 
 1. New installation defaults to trial with 30-day expiry.
 2. Governance records during trial include license_status=trial.
-3. Governance records after trial expiry include license_status=unlicensed (no lockout).
+3. Governance records after trial expiry include license_status=personal (no lockout).
 4. License activation changes status to licensed with correct tier.
 5. Personal single-user detection works correctly.
 """
@@ -113,8 +113,8 @@ def test_trial_initialization():
     print("PASS: trial initialization")
 
 
-def test_trial_expiry_unlicensed():
-    """After trial expiry with no license: status becomes unlicensed."""
+def test_trial_expiry_personal_multi_user():
+    """After trial expiry with no license: status becomes personal."""
     with tempfile.TemporaryDirectory() as tmpdir:
         runtime = Path(tmpdir)
 
@@ -129,10 +129,11 @@ def test_trial_expiry_unlicensed():
         }
         save_license(runtime, expired_config)
 
-        # Resolve with >1 user (not personal)
+        # Resolve with >1 user. Governance continues at Personal.
         posture = resolve_posture(runtime, unique_user_count=3)
-        assert posture["license_status"] == "unlicensed", posture
-    print("PASS: trial expiry → unlicensed")
+        assert posture["license_status"] == "personal", posture
+        assert posture["license_tier"] == "personal", posture
+    print("PASS: trial expiry → personal")
 
 
 def test_trial_expiry_personal():
@@ -399,7 +400,7 @@ if __name__ == "__main__":
     test_v3_new_tiers()
     test_v3_activation()
     test_trial_initialization()
-    test_trial_expiry_unlicensed()
+    test_trial_expiry_personal_multi_user()
     test_trial_expiry_personal()
     test_license_activation()
     test_invalid_activation()

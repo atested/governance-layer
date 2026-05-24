@@ -625,7 +625,7 @@ class TestLicenseKeyValidation:
         assert result is None
 
     def test_expired_license_key_detected(self, tmp_path):
-        """License with past expiry date transitions to unlicensed posture."""
+        """License with past expiry date transitions to personal posture."""
         token = self._licensing.generate_license_token(
             "team", "20200101", org="expired-org"  # already expired
         )
@@ -634,11 +634,12 @@ class TestLicenseKeyValidation:
         assert result is not None
         assert result["expiry_date"] == "20200101"
 
-        # But posture resolution shows it as expired/unlicensed
+        # But posture resolution shows it as expired/personal
         activation = self._licensing.activate_license(tmp_path, token)
         assert activation["ok"] is True
         posture = self._licensing.resolve_posture(tmp_path, unique_user_count=2)
-        assert posture["license_status"] == "unlicensed"
+        assert posture["license_status"] == "personal"
+        assert posture["license_tier"] == "personal"
 
 
 # ===========================================================================

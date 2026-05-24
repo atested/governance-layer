@@ -43,7 +43,7 @@ from typing import Any, Dict, Optional
 LICENSE_FILENAME = "license.json"
 TRIAL_DAYS = 30
 
-VALID_STATUSES = ("trial", "licensed", "unlicensed", "personal", "clock_anomaly")
+VALID_STATUSES = ("trial", "licensed", "personal", "clock_anomaly")
 VALID_TIERS = ("personal", "personal_plus", "crew", "team", "institution",
                 "business", "enterprise")  # last two are legacy v2 names
 
@@ -321,10 +321,10 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0,
     try:
         config = load_license(runtime_dir)
     except ValueError:
-        # C2: corrupted license.json → fail closed to unlicensed, do NOT
+        # C2: corrupted license.json → fail closed to Personal, do NOT
         # silently reset to trial.
         return {
-            "license_status": "unlicensed",
+            "license_status": "personal",
             "license_tier": "personal",
             "organization_id": "",
             "license_expiry": "",
@@ -361,19 +361,20 @@ def resolve_posture(runtime_dir: Path, unique_user_count: int = 0,
     # Check trial expiry
     if status == "trial" and expiry_dt is not None:
         if now >= expiry_dt:
-            if unique_user_count <= 1 and not config.get("license_key"):
-                status = "personal"
-            else:
-                status = "unlicensed"
+            status = "personal"
             config["license_status"] = status
+            config["license_tier"] = "personal"
             save_license(runtime_dir, config)
+            tier = "personal"
 
-    # C3: Check licensed expiry — expired licensed → unlicensed
+    # C3: Check licensed expiry — expired licensed → Personal
     if status == "licensed" and expiry_dt is not None:
         if now >= expiry_dt:
-            status = "unlicensed"
+            status = "personal"
             config["license_status"] = status
+            config["license_tier"] = "personal"
             save_license(runtime_dir, config)
+            tier = "personal"
 
     return {
         "license_status": status,

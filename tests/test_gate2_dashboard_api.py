@@ -589,22 +589,22 @@ class TestRecordDetailEventTypes:
 # ===========================================================================
 
 class TestTelemetryTroubleBoundary:
-    """Verify telemetry and trouble reports are outside the governance chain."""
+    """Verify telemetry payloads and trouble reports are outside the governance chain."""
 
     def test_telemetry_reads_from_summary_json(self, dashboard_env):
         """_load_telemetry_summary reads from TELEMETRY_SUMMARY file."""
         summary = ds._load_telemetry_summary()
         assert summary["artifact_type"] == "anonymous_summary_telemetry"
         assert summary["privacy_model"]["governance_chain"] == \
-            "telemetry is never written to the governance chain"
+            "telemetry payload content is not written to the governance chain; remote submissions record only destination, payload_hash, and payload_size metadata"
 
     def test_telemetry_privacy_model_states_no_chain(self, dashboard_env):
-        """Telemetry privacy model explicitly states no chain writes."""
+        """Telemetry privacy model states only transmission metadata is chained."""
         template = ds._new_telemetry_summary()
         assert template["privacy_model"]["raw_events_stored"] is False
         assert template["privacy_model"]["raw_events_transmitted"] is False
         assert template["privacy_model"]["governance_chain"] == \
-            "telemetry is never written to the governance chain"
+            "telemetry payload content is not written to the governance chain; remote submissions record only destination, payload_hash, and payload_size metadata"
 
     def test_trouble_report_stored_outside_chain(self, dashboard_env):
         """Trouble report content stores to LOGS/trouble/, not chain.
