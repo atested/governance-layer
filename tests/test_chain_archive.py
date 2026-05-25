@@ -45,7 +45,7 @@ def test_archive_chain_moves_chain_writes_manifest_and_sidecar_event(tmp_path):
         sidecar_events_path=sidecar_path,
     )
 
-    assert chain_path.exists() is False
+    # The archived copy preserves the original records...
     archive_path = Path(manifest["archive_chain_path"])
     assert archive_path.exists()
     assert archive_path.read_text(encoding="utf-8").count("\n") == 2
@@ -53,6 +53,19 @@ def test_archive_chain_moves_chain_writes_manifest_and_sidecar_event(tmp_path):
     assert manifest["last_record_hash"] == "sha256:" + "2" * 64
     assert manifest["chain_existed"] is True
     assert manifest["sidecar_only_terminal_event"] is True
+
+    # ...and the live chain is never left missing: it now holds a single
+    # chain_started_after_archive provenance record documenting the archive.
+    assert chain_path.exists()
+    genesis = json.loads(chain_path.read_text(encoding="utf-8").strip())
+    assert genesis["event_type"] == "chain_started_after_archive"
+    assert genesis["archive_reason"] == "chain_integrity_violation"
+    assert genesis["archived_record_count"] == 2
+    assert genesis["prior_chain_last_hash"] == "sha256:" + "2" * 64
+    assert genesis["archive_manifest_path"] == manifest["manifest_path"]
+    assert genesis["archive_manifest_hash"].startswith("sha256:")
+    assert genesis["prev_record_hash"] is None
+    assert genesis["record_hash"] == manifest["genesis_record_hash"]
 
     listed = list_archives(chain_path)
     assert [item["archive_id"] for item in listed] == [manifest["archive_id"]]
@@ -90,7 +103,11 @@ def test_walker_query_reads_archived_chain_source(tmp_path):
 def test_fresh_chain_can_record_archive_reference_event(tmp_path):
     chain_path = tmp_path / "decision-chain.jsonl"
     _write_chain(chain_path, [_record("chain_file_truncated", "evt-bad", "sha256:" + "c" * 64)])
-    manifest = archive_chain(chain_path, reason="startup_integrity_violation")
+    # write_genesis=False: this models the proxy startup path, where the proxy
+    # appends its own signed genesis after archiving (archive_chain must not
+    # also write one, or the chain would carry two genesis records).
+    manifest = archive_chain(chain_path, reason="startup_integrity_violation", write_genesis=False)
+    assert chain_path.exists() is False
 
     recorder = ChainRecorder(chain_path)
     event = recorder.append_integrity_event(
@@ -120,3 +137,42 @@ def test_chain_started_after_archive_event_type_is_buildable():
     assert event["event_timestamp_utc"]
     assert event["approval_store_hash"].startswith("sha256:")
     assert event["policy_rules_hash"].startswith("sha256:")
+
+
+def test_qa_chain_genesis_is_signed_and_continues_sequence(tmp_path):
+    """A signed genesis for the QA chain must verify and continue the sequence.
+
+    The Rust quality service re-verifies the QA chain's record_hash on startup
+    using the shared canonical form, and resumes at genesis.sequence + 1. This
+    asserts the Python-written genesis is hash-valid, signed with the chain's
+    own key (matching key_id), and carries a continued sequence.
+    """
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    sys.path.insert(0, str(REPO / "scripts"))
+    from receipt_signing import _public_key_fingerprint
+    from cryptography.hazmat.primitives import serialization
+    from event_model import verify_non_action_event_hash
+
+    priv = Ed25519PrivateKey.generate()
+    key_id = _public_key_fingerprint(priv.public_key(), serialization)
+
+    chain_path = tmp_path / "qa-chain.jsonl"
+    # A QA-style chain whose last record carries a monotonic sequence.
+    last = _record("policy_rules_changed", "evt-seq", "sha256:" + "e" * 64)
+    last["sequence"] = 41
+    _write_chain(chain_path, [last])
+
+    manifest = archive_chain(
+        chain_path,
+        reason="qa_chain_env005_hash_linkage_corruption",
+        signing_key=priv,
+        signing_key_id=key_id,
+    )
+
+    genesis = json.loads(chain_path.read_text(encoding="utf-8").strip())
+    assert genesis["event_type"] == "chain_started_after_archive"
+    assert genesis["sequence"] == 42  # 41 + 1
+    assert genesis["signing_key_id"] == key_id
+    assert genesis["signature"]
+    ok, err = verify_non_action_event_hash(genesis)
+    assert ok, err

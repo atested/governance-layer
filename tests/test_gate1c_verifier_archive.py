@@ -542,12 +542,15 @@ class TestArchiveOnIntegrityViolation:
 
         assert violation_raised, "Expected IntegrityViolation for truncated chain"
 
-        # Archive the compromised chain (as proxy startup does)
+        # Archive the compromised chain (as proxy startup does). The proxy
+        # appends its own signed genesis next, so archive_chain must not write
+        # one (write_genesis=False).
         manifest = archive_chain(
             chain,
             reason="startup_integrity_violation",
             payload={"error": "chain truncated"},
             sidecar_events_path=sidecar,
+            write_genesis=False,
         )
 
         # Archive manifest should exist
@@ -599,7 +602,7 @@ class TestFreshChainAfterArchiveFields:
         """Event has archive_id matching the archive manifest."""
         chain = tmp_path / "decision-chain.jsonl"
         _append_event(chain, "pre-archive")
-        manifest = archive_chain(chain, reason="field_test")
+        manifest = archive_chain(chain, reason="field_test", write_genesis=False)
 
         recorder = ChainRecorder(chain)
         event = recorder.append_integrity_event(
@@ -620,7 +623,7 @@ class TestFreshChainAfterArchiveFields:
         """Event has archive_manifest_path pointing to existing manifest."""
         chain = tmp_path / "decision-chain.jsonl"
         _append_event(chain, "manifest-path-test")
-        manifest = archive_chain(chain, reason="manifest_path_test")
+        manifest = archive_chain(chain, reason="manifest_path_test", write_genesis=False)
 
         recorder = ChainRecorder(chain)
         event = recorder.append_integrity_event(
@@ -642,7 +645,7 @@ class TestFreshChainAfterArchiveFields:
         chain = tmp_path / "decision-chain.jsonl"
         _append_event(chain, "chain-ref-test")
         _append_event(chain, "chain-ref-test-2")
-        manifest = archive_chain(chain, reason="chain_ref_test")
+        manifest = archive_chain(chain, reason="chain_ref_test", write_genesis=False)
 
         recorder = ChainRecorder(chain)
         event = recorder.append_integrity_event(
@@ -668,7 +671,7 @@ class TestFreshChainAfterArchiveFields:
         chain = tmp_path / "decision-chain.jsonl"
         for i in range(3):
             _append_event(chain, f"reason-{i}")
-        manifest = archive_chain(chain, reason="reason_count_test")
+        manifest = archive_chain(chain, reason="reason_count_test", write_genesis=False)
 
         recorder = ChainRecorder(chain)
         event = recorder.append_integrity_event(
@@ -689,7 +692,7 @@ class TestFreshChainAfterArchiveFields:
         """The chain_started_after_archive record itself passes integrity check."""
         chain = tmp_path / "decision-chain.jsonl"
         _append_event(chain, "valid-test")
-        manifest = archive_chain(chain, reason="validity_test")
+        manifest = archive_chain(chain, reason="validity_test", write_genesis=False)
 
         recorder = ChainRecorder(chain)
         recorder.append_integrity_event(

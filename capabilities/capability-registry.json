@@ -1,7 +1,12 @@
 {
   "version": "0.1",
   "governance_posture": {
-    "mode": "production"
+    "mode": "production",
+    "allowed_modes": ["production", "developer"],
+    "mode_semantics": {
+      "production": "Full enforcement. Unexaminable request/response formats and every quality-service integrity failure (active conditions, QA chain staleness, hash mismatch, absent QA chain) block the operation and are recorded as a governance_integrity_error.",
+      "developer": "Relaxed enforcement for local development and for repairing the governance system itself. Unexaminable formats forward instead of blocking. QA gate failures of class integrity_active_condition and integrity_qa_chain_staleness forward instead of blocking, and every resulting record carries developer_mode: true plus a developer_mode_qa_relaxation annotation naming the bypassed condition. Hash mismatch and an absent QA chain STILL block in developer mode, because they mean the governance configuration or the QA chain itself cannot be trusted."
+    }
   },
   "tools": [
     {

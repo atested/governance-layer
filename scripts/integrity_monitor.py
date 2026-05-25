@@ -385,11 +385,18 @@ class IntegrityMonitor:
         archived = False
         try:
             from chain_archive import archive_chain
+            # write_genesis=False: this tamper response records metadata that
+            # the chain is gone (chain_existed=False, count=0). The proxy then
+            # starts fresh and writes its own signed genesis on next startup.
+            # A decision-chain genesis here would contradict that metadata; the
+            # QA chain instead gets its genesis from `atested archive`, where no
+            # such metadata contract applies.
             archive_chain(
                 self.chain_path,
                 reason=reason,
                 payload=payload,
                 sidecar_events_path=self.events_path,
+                write_genesis=False,
             )
             archived = True
         except Exception as exc:

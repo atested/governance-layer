@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -57,11 +58,29 @@ def archive_chain(
     reason: str,
     payload: Optional[dict[str, Any]] = None,
     sidecar_events_path: Optional[Path] = None,
+    write_genesis: bool = True,
+    signing_key: Any = None,
+    signing_key_id: Optional[str] = None,
+    genesis_extra: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Preserve the current chain and write an archive manifest.
 
     If the chain is missing, the manifest still records the terminal condition
     as a sidecar-only archive event.
+
+    When the chain existed and ``write_genesis`` is true (the default), the
+    archived chain is replaced with a fresh chain whose only record is a
+    ``chain_started_after_archive`` provenance record (see
+    :func:`write_chain_genesis`). The chain is therefore never left missing,
+    which is what previously crash-looped the Rust quality service on the QA
+    chain: a missing/empty file gave the restarted writer nothing to link to.
+
+    Callers that write their own genesis (the proxy, which signs the
+    decision-chain genesis with full request context) pass
+    ``write_genesis=False`` and append the genesis themselves afterwards.
+    Pass ``signing_key``/``signing_key_id`` to sign the genesis with the
+    chain's own key (the decision key for the decision chain, the QA key for
+    the QA chain) so the genesis is consistent with the records that follow.
     """
 
     payload = dict(payload or {})
@@ -80,6 +99,7 @@ def archive_chain(
     existed = chain_path.exists()
     record_count = _count_records(chain_path) if existed else 0
     last_hash = _last_hash(chain_path) if existed else None
+    last_sequence = _last_sequence(chain_path) if existed else 0
 
     if existed:
         shutil.move(str(chain_path), str(archive_chain_path))
@@ -102,7 +122,79 @@ def archive_chain(
     _write_json(manifest_path, manifest)
     if sidecar_events_path is not None:
         _append_sidecar(sidecar_events_path, "chain_archived_after_integrity_violation", manifest)
+
+    # Replace the moved chain with a single provenance record so the chain is
+    # never left missing. Only when the chain actually existed (and was moved):
+    # if there was nothing to archive there is no missing-file hazard to repair.
+    if write_genesis and existed:
+        genesis = write_chain_genesis(
+            chain_path,
+            manifest=manifest,
+            manifest_path=manifest_path,
+            prior_chain_last_hash=last_hash,
+            prior_sequence=last_sequence,
+            signing_key=signing_key,
+            signing_key_id=signing_key_id,
+            genesis_extra=genesis_extra,
+        )
+        manifest["genesis_record_hash"] = genesis.get("record_hash")
     return manifest
+
+
+def write_chain_genesis(
+    chain_path: Path,
+    *,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    prior_chain_last_hash: Optional[str],
+    prior_sequence: int = 0,
+    signing_key: Any = None,
+    signing_key_id: Optional[str] = None,
+    genesis_extra: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Write a ``chain_started_after_archive`` record as a fresh chain's first line.
+
+    The record documents the provenance of the new chain: the reason the prior
+    chain was archived, how many records it held, where the archive manifest
+    lives, that manifest's hash, and the prior chain's last record hash. It is
+    a registered non-action event, hashed with the shared canonical form so the
+    Rust quality service re-verifies the QA-chain genesis identically.
+
+    ``sequence`` continues the prior chain's count (prior + 1) so the QA chain's
+    monotonic sequence never moves backwards across an archive.
+    """
+    # Imported lazily: chain_archive is a low-level utility imported very early
+    # by the proxy, and event_model pulls in the policy/identity stack.
+    try:
+        from event_model import build_non_action_event
+    except ImportError:  # pragma: no cover - path-dependent import
+        from scripts.event_model import build_non_action_event
+
+    payload: dict[str, Any] = {
+        "archive_reason": manifest.get("reason", ""),
+        "archived_record_count": manifest.get("record_count", 0),
+        "archive_manifest_path": str(manifest_path),
+        "archive_manifest_hash": _sha256_file(manifest_path) or "",
+        "prior_chain_last_hash": prior_chain_last_hash,
+        "archive_id": manifest.get("archive_id", ""),
+        "archive_chain_path": manifest.get("archive_chain_path", ""),
+        "sequence": int(prior_sequence) + 1,
+    }
+    if genesis_extra:
+        payload.update(genesis_extra)
+
+    genesis = build_non_action_event(
+        "chain_started_after_archive",
+        payload,
+        prev_record_hash=None,
+        signing_key=signing_key,
+        signing_key_id=signing_key_id,
+    )
+    line = json.dumps(genesis, sort_keys=True, separators=(",", ":"))
+    chain_path.parent.mkdir(parents=True, exist_ok=True)
+    with chain_path.open("w", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+    return genesis
 
 
 def _safe_archive_id(value: str) -> str:
@@ -134,6 +226,38 @@ def _last_hash(path: Path) -> Optional[str]:
         return None
     value = rec.get("record_hash")
     return value if isinstance(value, str) else None
+
+
+def _last_sequence(path: Path) -> int:
+    """Return the sequence of the last record, or 0 if absent/unreadable.
+
+    The QA chain (written by the Rust quality service) carries a monotonic
+    ``sequence``. The genesis continues that count so a restart never sees the
+    sequence move backwards across an archive.
+    """
+    last_line = ""
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    last_line = line.strip()
+    except OSError:
+        return 0
+    if not last_line:
+        return 0
+    try:
+        rec = json.loads(last_line)
+    except json.JSONDecodeError:
+        return 0
+    seq = rec.get("sequence")
+    return seq if isinstance(seq, int) and seq >= 0 else 0
+
+
+def _sha256_file(path: Path) -> Optional[str]:
+    try:
+        return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:

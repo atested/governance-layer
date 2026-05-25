@@ -477,21 +477,53 @@ def mediate_decision(
     to ALLOW with resolution "approved_lookup".
     """
     provider_name = provider_name or "unknown"
+    qa_relaxation: Optional[dict] = None
     if qa_gate is not None:
         qa_result = qa_gate.check()
         if not qa_result.ok:
-            record = _build_governance_integrity_error_record(
-                tool_name,
-                condition_source=qa_result.condition_source or "qa_chain_absent",
-                condition_detail=qa_result.condition_detail,
-                user_identity=user_identity,
-                session_id=session_id,
-                provider_name=provider_name,
-                condition_id=qa_result.condition_id or "",
+            # Developer mode relaxes two classes of QA integrity failure so a
+            # build agent can keep working while it repairs the governance
+            # system itself: active conditions (the quality service reporting
+            # unhealthy / critical conditions) and QA chain staleness. When
+            # relaxed, the operation forwards and EVERY resulting record is
+            # annotated with developer_mode_qa_relaxation naming the bypassed
+            # condition — the audit trail still shows what was wrong.
+            #
+            # A hash mismatch or an absent QA chain still block, even in
+            # developer mode: those mean the governance configuration or the
+            # QA chain itself cannot be trusted, so relaxing them would be
+            # silently governing against the wrong rules. In production mode,
+            # nothing is relaxed — all integrity failures block as before.
+            relaxable = qa_result.condition_source in (
+                "active_condition",
+                "qa_chain_staleness",
             )
-            if chain_recorder is not None:
-                chain_recorder.append_atomic(record)
-            return record
+            if developer_mode_active() and relaxable:
+                qa_relaxation = {
+                    "condition_source": qa_result.condition_source,
+                    "condition_id": qa_result.condition_id
+                    or f"QA-GATE:{qa_result.condition_source}",
+                    "condition_detail": qa_result.condition_detail,
+                }
+                logger.warning(
+                    "Developer mode: forwarding despite QA gate failure "
+                    "(%s): %s",
+                    qa_result.condition_source,
+                    qa_result.condition_detail,
+                )
+            else:
+                record = _build_governance_integrity_error_record(
+                    tool_name,
+                    condition_source=qa_result.condition_source or "qa_chain_absent",
+                    condition_detail=qa_result.condition_detail,
+                    user_identity=user_identity,
+                    session_id=session_id,
+                    provider_name=provider_name,
+                    condition_id=qa_result.condition_id or "",
+                )
+                if chain_recorder is not None:
+                    chain_recorder.append_atomic(record)
+                return record
 
     classification = classify(tool_name, args)
 
@@ -507,6 +539,8 @@ def mediate_decision(
     record["provider"] = provider_name
     if developer_mode_active():
         record["developer_mode"] = True
+    if qa_relaxation is not None:
+        record["developer_mode_qa_relaxation"] = qa_relaxation
     record["record_hash"] = _compute_record_hash(record)
 
     # Check approval store for denied operations
@@ -2126,11 +2160,17 @@ def main():
         logger.error("Startup chain integrity violation; archiving and starting fresh: %s", exc)
         try:
             from chain_archive import archive_chain
+            # write_genesis=False: the proxy appends its own signed
+            # chain_started_after_archive below (lines that follow), with the
+            # decision signing key and full request context. archive_chain
+            # must not also write an unsigned genesis or the decision chain
+            # would carry two genesis records.
             startup_archive_manifest = archive_chain(
                 chain_path,
                 reason="startup_integrity_violation",
                 payload={"error": str(exc)},
                 sidecar_events_path=integrity_monitor.events_path,
+                write_genesis=False,
             )
             integrity_monitor = IntegrityMonitor(chain_path)
             integrity_monitor.save_chain_summary(integrity_monitor.summarize_chain())

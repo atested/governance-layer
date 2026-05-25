@@ -17,6 +17,7 @@ Subcommands:
   init          First-run setup
   start         Start governance services
   stop          Stop governance services
+  archive       Archive both chains and start each fresh (stops services first)
   sync          Run or request sync
   machine       Machine registry operations
   restore       Primary restore operations
@@ -1939,6 +1940,131 @@ def cmd_stop(args) -> int:
     return 0
 
 
+def _load_signing_key_for(path: Path):
+    """Load an Ed25519 private key and its key_id, or (None, None) if unavailable.
+
+    A missing key is not fatal: the genesis is still written, just unsigned.
+    """
+    if not path.exists():
+        return None, None
+    try:
+        from receipt_signing import _read_private_key, _public_key_fingerprint
+        priv, serialization = _read_private_key(path)
+        return priv, _public_key_fingerprint(priv.public_key(), serialization)
+    except Exception as exc:
+        print(f"  warning: could not load signing key {path.name}: {exc}", file=sys.stderr)
+        return None, None
+
+
+def cmd_archive(args) -> int:
+    """Archive both governance chains and start each fresh with a provenance record.
+
+    Services are stopped FIRST so no process holds or appends to either chain
+    during the archive. This is the fix for the QA-chain crash loop: a live
+    quality-service writer that kept appending by path after the chain file was
+    moved out from under it forked the chain into two interleaved sequences,
+    failing the Rust startup hash-linkage check (ENV-005) on every restart.
+
+    After stopping, each chain is moved into archive/ and replaced with a single
+    chain_started_after_archive record signed with that chain's own key (the
+    decision key for the decision chain, the QA key for the QA chain). The chain
+    is never left missing, and the restarted single writer resumes cleanly from
+    the genesis. Chains that are absent or empty are skipped gracefully.
+    """
+    from chain_archive import archive_chain
+
+    reason = (getattr(args, "reason", None) or "operator_archive").strip() or "operator_archive"
+    runtime = _runtime()
+    logs = runtime / "LOGS"
+
+    # 1. Stop everything so no writer survives the archive.
+    if not getattr(args, "json", False):
+        print("Stopping services before archive...")
+    service_records = _collect_recorded_services()
+    supervisor = _stop_supervisor()
+    _stop_recorded_services(service_records)
+    if not supervisor.get("stopped"):
+        pid = int(supervisor.get("pid") or 0)
+        if pid:
+            supervisor["stopped"] = _terminate_pid(pid, timeout=2.0)
+    _sweep_orphan_ports()
+
+    targets = [
+        ("decision", logs / "decision-chain.jsonl", runtime / SIGNING_KEY_NAME),
+        ("qa", logs / "qa-chain.jsonl", runtime / ".atested-qa-signing-key.pem"),
+    ]
+
+    results = []
+    for label, chain_path, key_path in targets:
+        if not chain_path.exists():
+            results.append({"chain": label, "status": "absent", "path": str(chain_path)})
+            continue
+        try:
+            has_content = any(
+                line.strip() for line in chain_path.read_text(encoding="utf-8").splitlines()
+            )
+        except OSError as exc:
+            results.append({"chain": label, "status": "error", "error": f"unreadable: {exc}"})
+            continue
+        if not has_content:
+            results.append({"chain": label, "status": "empty", "path": str(chain_path)})
+            continue
+
+        signing_key, signing_key_id = _load_signing_key_for(key_path)
+        events_path = Path(str(chain_path) + ".integrity.events.jsonl")
+        try:
+            manifest = archive_chain(
+                chain_path,
+                reason=reason,
+                payload={"trigger": "atested_archive_cli", "chain": label},
+                sidecar_events_path=events_path,
+                write_genesis=True,
+                signing_key=signing_key,
+                signing_key_id=signing_key_id,
+                genesis_extra={"archived_chain": label},
+            )
+            results.append({
+                "chain": label,
+                "status": "archived",
+                "archive_id": manifest.get("archive_id"),
+                "archived_record_count": manifest.get("record_count"),
+                "archive_chain_path": manifest.get("archive_chain_path"),
+                "genesis_record_hash": manifest.get("genesis_record_hash"),
+                "genesis_signed": bool(signing_key_id),
+            })
+        except Exception as exc:
+            results.append({"chain": label, "status": "error", "error": str(exc)})
+
+    payload = {"reason": reason, "results": results}
+    if getattr(args, "json", False):
+        _emit(args, payload)
+    else:
+        print("Atested archive complete.")
+        print(f"  Reason: {reason}")
+        for r in results:
+            label = r["chain"]
+            status = r["status"]
+            if status == "archived":
+                signed = "signed" if r.get("genesis_signed") else "UNSIGNED (no key found)"
+                print(
+                    f"  {label} chain: archived {r['archived_record_count']} record(s) "
+                    f"as {r.get('archive_id')}"
+                )
+                print(
+                    f"      fresh chain started with chain_started_after_archive [{signed}]"
+                )
+            elif status in ("absent", "empty"):
+                print(f"  {label} chain: {status} — nothing to archive")
+            else:
+                print(f"  {label} chain: ERROR — {r.get('error')}")
+        print("")
+        print("Run `atested start` to bring services back up on the fresh chains.")
+
+    if any(r["status"] == "error" for r in results):
+        return 1
+    return 0
+
+
 def cmd_sync(args) -> int:
     from machine_identity import load_machine_identity
     from sync_client import SyncClient, SyncClientError
@@ -2254,6 +2380,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_stop = sub.add_parser("stop", help="Stop Atested governance services")
     p_stop.set_defaults(func=cmd_stop)
+
+    p_archive = sub.add_parser(
+        "archive",
+        help="Archive both governance chains and start each fresh (stops services first)",
+    )
+    p_archive.add_argument(
+        "--reason",
+        default=None,
+        help="Reason recorded in the archive manifest and the chain_started_after_archive record",
+    )
+    p_archive.set_defaults(func=cmd_archive)
 
     p_sync = sub.add_parser("sync", help="Run or request sync")
     p_sync.add_argument("--primary-url", default=None, help="Override configured primary sync service URL")
