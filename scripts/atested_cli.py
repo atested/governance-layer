@@ -734,6 +734,54 @@ def _terminate_pid(pid: int, *, timeout: float = 5.0) -> bool:
     return not _pid_alive(pid)
 
 
+def _managed_service_ports() -> list[tuple[str, int]]:
+    """QS-042 #2: ports the atested services bind, for stop-path orphan
+    reaping. Mirrors build_service_specs in process_supervisor."""
+    try:
+        proxy_port = int(os.environ.get("GOV_PROXY_PORT", "8080") or "8080")
+    except ValueError:
+        proxy_port = 8080
+    try:
+        dashboard_port = int(os.environ.get("DASHBOARD_PORT", "9700") or "9700")
+    except ValueError:
+        dashboard_port = 9700
+    sync_port = 8765
+    sync_config = _read_json_file(_sync_config_path(), {})
+    if isinstance(sync_config, dict):
+        try:
+            sync_port = int(sync_config.get("sync_service_port") or 8765)
+        except (TypeError, ValueError):
+            sync_port = 8765
+    return [("proxy", proxy_port), ("dashboard", dashboard_port), ("sync_service", sync_port)]
+
+
+def _sweep_orphan_ports() -> list[dict]:
+    """QS-042 #2: after PID-based teardown, free any managed port still held
+    by a process the supervisor failed to reap (stale/mislabeled PID file).
+
+    Reuses the QS-041 start-path orphan killer (process_supervisor.
+    clear_orphan_on_port) for identical kill behavior and the same warning
+    log. At stop time there is no live supervisor, so every remaining
+    listener on a managed port is an orphan; only this CLI's own PID is
+    treated as managed and spared.
+    """
+    try:
+        from process_supervisor import clear_orphan_on_port, _pids_listening_on_port
+    except Exception:
+        return []
+    me = os.getpid()
+    results: list[dict] = []
+    for name, port in _managed_service_ports():
+        before = [p for p in _pids_listening_on_port(port) if p != me]
+        if before:
+            clear_orphan_on_port(port, name, managed_pids={me})
+        after = [p for p in _pids_listening_on_port(port) if p != me]
+        results.append(
+            {"name": name, "port": port, "orphans_killed": before, "still_occupied": after}
+        )
+    return results
+
+
 def _load_services() -> dict:
     data = _read_json_file(_services_path(), {})
     return data if isinstance(data, dict) else {}
@@ -1753,11 +1801,16 @@ def cmd_stop(args) -> int:
             supervisor["stopped"] = _terminate_pid(pid, timeout=2.0)
             if supervisor["stopped"]:
                 supervisor.pop("reason", None)
+    # QS-042 #2: PID-based teardown above can miss children when the
+    # supervisor PID file is stale or mislabeled. Sweep the managed ports and
+    # kill any orphan still listening, so stop guarantees the ports are free.
+    orphan_sweep = _sweep_orphan_ports()
     payload = {
         "stopped": True,
         "role": (identity or {}).get("machine_role"),
         "supervisor": supervisor,
         "services": stopped,
+        "port_sweep": orphan_sweep,
     }
     if getattr(args, "json", False):
         _emit(args, payload)
@@ -1774,6 +1827,16 @@ def cmd_stop(args) -> int:
                 name = record.get("name", "service")
                 state = "stopped" if record.get("stopped") else record.get("reason", "not_running")
                 print(f"    {name}: {state}")
+        swept = [s for s in orphan_sweep if s.get("orphans_killed")]
+        if swept:
+            print("  Orphans cleared:")
+            for s in swept:
+                print(f"    port {s['port']} ({s['name']}): killed {s['orphans_killed']}")
+        still = [s for s in orphan_sweep if s.get("still_occupied")]
+        if still:
+            print("  WARNING — ports still occupied after sweep:")
+            for s in still:
+                print(f"    port {s['port']} ({s['name']}): {s['still_occupied']}")
     return 0
 
 

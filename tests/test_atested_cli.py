@@ -310,6 +310,34 @@ def test_supervisor_status_ignores_stale_service_snapshot(tmp_path, monkeypatch)
     assert status.get("services") == {}
 
 
+def test_qs042_stop_sweep_kills_untracked_orphan(tmp_path, monkeypatch):
+    """QS-042 #2: the stop-path port sweep kills an untracked occupant of a
+    managed port and reports it."""
+    monkeypatch.setenv("GOV_PROXY_PORT", "8080")
+    # Probe sequence per port: sweep's `before`, clear's kill scan, clear's
+    # wait loop, sweep's `after`. 8080 holds orphan 55555 until it's killed.
+    probes = {
+        8080: iter([[55555], [55555], [], []]),
+        9700: iter([[], [], [], []]),
+        8765: iter([[], [], [], []]),
+    }
+    monkeypatch.setattr(
+        process_supervisor, "_pids_listening_on_port",
+        lambda port: next(probes.get(port, iter([[]])), []),
+    )
+    killed = []
+    monkeypatch.setattr(process_supervisor, "_terminate_orphan", lambda pid: killed.append(pid))
+    monkeypatch.setattr(process_supervisor, "_log", lambda msg: None)
+    monkeypatch.setattr(process_supervisor.time, "sleep", lambda *_a, **_k: None)
+
+    results = atested_cli._sweep_orphan_ports()
+    proxy_result = next(r for r in results if r["name"] == "proxy")
+    assert 55555 in proxy_result["orphans_killed"]
+    assert proxy_result["still_occupied"] == []
+    assert 55555 in killed
+    print("PASS: test_qs042_stop_sweep_kills_untracked_orphan")
+
+
 def test_service_status_uses_live_pid_over_stale_running_flag(tmp_path, monkeypatch):
     runtime = _make_isolated_runtime(tmp_path)
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
