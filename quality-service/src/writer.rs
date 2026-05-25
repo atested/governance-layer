@@ -240,6 +240,37 @@ impl QaChainWriter {
         self.append_record(Value::Object(record))
     }
 
+    /// QS-039 #18: Mode 5 warm-up record. Written instead of an anomaly
+    /// analysis when the governance chain has too few decisions for
+    /// behavioral findings to be meaningful. anomaly_count is 0 (so it never
+    /// drives the conformance state to "attention"); warm_up + the
+    /// decisions_analyzed/minimum_required counts let the dashboard render a
+    /// distinct "warming up (N/M)" state.
+    pub fn append_behavioral_warmup(
+        &mut self,
+        analysis_window: &str,
+        decisions_analyzed: usize,
+        minimum_required: usize,
+    ) -> Result<Value, String> {
+        let mut record = base_event("qa_behavioral_analysis", self.next_sequence);
+        record.insert(
+            "analysis_window".to_string(),
+            Value::String(analysis_window.to_string()),
+        );
+        record.insert("anomaly_count".to_string(), Value::from(0u64));
+        record.insert("findings".to_string(), Value::Array(Vec::new()));
+        record.insert("warm_up".to_string(), Value::Bool(true));
+        record.insert(
+            "decisions_analyzed".to_string(),
+            Value::from(decisions_analyzed as u64),
+        );
+        record.insert(
+            "minimum_required".to_string(),
+            Value::from(minimum_required as u64),
+        );
+        self.append_record(Value::Object(record))
+    }
+
     pub fn append_element_verification(
         &mut self,
         spec_id: &str,

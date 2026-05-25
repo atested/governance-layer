@@ -52,6 +52,15 @@ pub fn run_behavioral_analysis(
     records: &[Value],
     writer: &mut QaChainWriter,
 ) -> Result<Vec<BehavioralFinding>, String> {
+    // QS-039 #18: below the configured minimum, behavioral findings are
+    // artifacts of insufficient data (e.g. "new tool appeared" when every
+    // tool is new). Emit a warm-up record instead of anomalies so the
+    // dashboard shows "warming up (N/M)" rather than flagging conditions.
+    let decision_count = records.iter().filter(|record| is_decision(record)).count();
+    if decision_count < config.behavioral_min_decisions {
+        writer.append_behavioral_warmup("1h", decision_count, config.behavioral_min_decisions)?;
+        return Ok(Vec::new());
+    }
     let findings = analyze_behavior(config, records);
     writer.append_behavioral_analysis(
         "1h",
@@ -622,7 +631,9 @@ mod tests {
     #[test]
     fn behavioral_analysis_writes_qa_record() {
         let dir = tempfile::tempdir().unwrap();
-        let config = config(dir.path());
+        let mut config = config(dir.path());
+        // Run the full analysis path with only a couple of decisions.
+        config.behavioral_min_decisions = 1;
         let mut writer = writer(dir.path());
         let records = vec![
             decision_record(
@@ -649,6 +660,31 @@ mod tests {
             .contains("qa_behavioral_analysis"));
     }
 
+    #[test]
+    fn behavioral_warmup_below_minimum() {
+        // QS-039 #18: with fewer decisions than behavioral_min_decisions,
+        // run_behavioral_analysis emits a warm-up record (no findings)
+        // instead of flagging artifacts of thin data.
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = config(dir.path());
+        config.behavioral_min_decisions = 100;
+        let mut writer = writer(dir.path());
+        let records = vec![
+            decision_record("Tool", "read", "ALLOW", "rule-a", "2026-05-23T12:00:00Z", None),
+            decision_record("Other", "write", "DENY", "rule-b", "2026-05-23T12:01:00Z", None),
+        ];
+        let findings = run_behavioral_analysis(&config, &records, &mut writer).unwrap();
+        assert!(findings.is_empty(), "warm-up must not produce findings");
+        let chain = fs::read_to_string(dir.path().join("qa-chain.jsonl")).unwrap();
+        let last: serde_json::Value =
+            serde_json::from_str(chain.lines().last().unwrap()).unwrap();
+        assert_eq!(last["event_type"], "qa_behavioral_analysis");
+        assert_eq!(last["warm_up"], serde_json::Value::Bool(true));
+        assert_eq!(last["anomaly_count"], 0);
+        assert_eq!(last["decisions_analyzed"], 2);
+        assert_eq!(last["minimum_required"], 100);
+    }
+
     fn has_subtype(findings: &[BehavioralFinding], subtype: &str) -> bool {
         findings.iter().any(|finding| finding.subtype == subtype)
     }
@@ -673,6 +709,7 @@ mod tests {
             spc_min_decisions: 100,
             spc_baseline_path: root.join("quality-service/spc-baselines.json"),
             behavioral_interval: Duration::from_secs(3600),
+            behavioral_min_decisions: 100,
             element_interval: Duration::from_secs(600),
             element_tail_records: 100,
             chain_events_spec_path: root.join("chain-events-v1.yaml"),

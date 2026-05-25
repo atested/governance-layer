@@ -434,6 +434,22 @@ def _behavioral_status(records: list[dict]) -> dict:
     if not records:
         return {"status": "not_active", "note": "Mode 5 not yet implemented"}
     latest = records[-1]
+    # QS-039 #18: warm-up window. Below the configured minimum decision
+    # count the quality service emits a warm-up record rather than flagging
+    # anomalies that are artifacts of thin data. Render it as a distinct
+    # state so the operator sees "warming up (N/M)" instead of an alarm.
+    if latest.get("warm_up"):
+        analyzed = int(latest.get("decisions_analyzed") or 0)
+        minimum = int(latest.get("minimum_required") or 0)
+        return {
+            "status": "warming_up",
+            "last_run": latest.get("timestamp_utc") or latest.get("timestamp"),
+            "decisions_analyzed": analyzed,
+            "minimum_required": minimum,
+            "anomaly_count": 0,
+            "latest": latest,
+            "detail": f"warming up ({analyzed}/{minimum} decisions)",
+        }
     anomaly_count = int(latest.get("anomaly_count") or 0)
     return {
         "status": "finding" if anomaly_count else "active",

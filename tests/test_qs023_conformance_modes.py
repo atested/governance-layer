@@ -60,6 +60,27 @@ def test_conformance_surfaces_behavioral_findings(tmp_path):
     assert payload["modes"]["behavioral"]["findings"][0]["subtype"] == "new_tool_appeared"
 
 
+def test_conformance_renders_behavioral_warmup(tmp_path):
+    # QS-039 #18: a warm-up behavioral record renders as a distinct
+    # "warming_up" mode state with "warming up (N/M decisions)" detail, and
+    # does NOT drive the overall conformance state to attention.
+    qa_chain = tmp_path / "qa-chain.jsonl"
+    warmup = _behavioral_analysis(2, anomaly_count=0)
+    warmup["warm_up"] = True
+    warmup["decisions_analyzed"] = 12
+    warmup["minimum_required"] = 100
+    _write_records(qa_chain, [_snapshot(1), warmup])
+
+    payload = build_conformance_payload(DashboardQAChainReader(qa_chain))
+
+    assert payload["state"] == "verified"
+    behavioral = payload["modes"]["behavioral"]
+    assert behavioral["status"] == "warming_up"
+    assert behavioral["decisions_analyzed"] == 12
+    assert behavioral["minimum_required"] == 100
+    assert behavioral["detail"] == "warming up (12/100 decisions)"
+
+
 def test_conformance_surfaces_element_verification_results(tmp_path):
     qa_chain = tmp_path / "qa-chain.jsonl"
     _write_records(

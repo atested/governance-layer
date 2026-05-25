@@ -808,6 +808,7 @@ mod tests {
             spc_min_decisions: 100,
             spc_baseline_path: root.join("quality-service/spc-baselines.json"),
             behavioral_interval: Duration::from_secs(3600),
+            behavioral_min_decisions: 100,
             element_interval: Duration::from_secs(600),
             element_tail_records: 100,
             chain_events_spec_path: root.join("chain-events-v1.yaml"),

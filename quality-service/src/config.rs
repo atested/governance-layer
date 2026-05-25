@@ -42,6 +42,7 @@ pub struct Config {
     pub spc_min_decisions: usize,
     pub spc_baseline_path: PathBuf,
     pub behavioral_interval: Duration,
+    pub behavioral_min_decisions: usize,
     pub element_interval: Duration,
     pub element_tail_records: usize,
     pub chain_events_spec_path: PathBuf,
@@ -145,6 +146,13 @@ impl Config {
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(60 * 60);
+        // QS-039 #18: below this decision count, Mode 5 reports a warm-up
+        // state instead of flagging anomalies that are artifacts of thin
+        // data. Defaults to 100, matching the SPC baseline minimum.
+        let behavioral_min_decisions = env::var("ATESTED_QS_BEHAVIORAL_MIN_DECISIONS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(100);
         let element_interval_seconds = env::var("ATESTED_QS_ELEMENT_INTERVAL_SECONDS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
@@ -186,6 +194,7 @@ impl Config {
             spc_min_decisions: spc_min_decisions.max(1),
             spc_baseline_path,
             behavioral_interval: Duration::from_secs(behavioral_interval_seconds.max(1)),
+            behavioral_min_decisions,
             element_interval: Duration::from_secs(element_interval_seconds.max(1)),
             element_tail_records: element_tail_records.max(2),
             chain_events_spec_path,
