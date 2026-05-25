@@ -952,6 +952,96 @@ class TestQS052ProxyPosture(unittest.TestCase):
         self.assertNotIn("developer_mode", rows[0])
         chain_path.unlink(missing_ok=True)
 
+    # QS-053: every request through the proxy produces a chain record, including
+    # streaming Anthropic responses that carry no tool_use blocks. Before the
+    # repair the streaming handlers only recorded mediated tool calls, so a
+    # text-only stream left no governed record at all.
+    _TEXT_ONLY_SSE = "\r\n".join([
+        "event: message_start",
+        'data: {"type":"message_start","message":{"id":"msg_x","role":"assistant","content":[]}}',
+        "",
+        "event: content_block_start",
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        "",
+        "event: content_block_delta",
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi."}}',
+        "",
+        "event: content_block_stop",
+        'data: {"type":"content_block_stop","index":0}',
+        "",
+        "event: message_delta",
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}',
+        "",
+        "event: message_stop",
+        'data: {"type":"message_stop"}',
+        "",
+    ]).encode("utf-8")
+
+    def _mock_streaming_client(self, sse_body: bytes):
+        async def mock_aiter_lines():
+            for line in sse_body.decode("utf-8").split("\r\n"):
+                yield line
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"content-type": "text/event-stream"}
+        mock_resp.aiter_lines = mock_aiter_lines
+        mock_resp.aread = AsyncMock(return_value=b"")
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_client = AsyncMock()
+        mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        return mock_client
+
+    def test_anthropic_streaming_text_only_is_observed_buffered(self):
+        proxy, chain_path = self._proxy_with_chain("qs053-stream-buffered-observed.jsonl")
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value = self._mock_streaming_client(self._TEXT_ONLY_SSE)
+            status, _, _ = _run(proxy.handle_request(
+                "POST", "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": True}).encode(),
+            ))
+        self.assertEqual(status, 200)
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "proxy_request_observed")
+        self.assertEqual(rows[0]["provider"], "anthropic")
+        self.assertTrue(rows[0]["examined"])
+        self.assertTrue(rows[0]["forwarded"])
+        chain_path.unlink(missing_ok=True)
+
+    def test_anthropic_streaming_text_only_is_observed_to_writer(self):
+        proxy, chain_path = self._proxy_with_chain("qs053-stream-writer-observed.jsonl")
+
+        class _FakeWriter:
+            def __init__(self):
+                self.buf = bytearray()
+
+            def write(self, data: bytes):
+                self.buf.extend(data)
+
+            async def drain(self):
+                return None
+
+        writer = _FakeWriter()
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value = self._mock_streaming_client(self._TEXT_ONLY_SSE)
+            _run(proxy.handle_streaming_to_writer(
+                "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": True}).encode(), writer,
+            ))
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "proxy_request_observed")
+        self.assertEqual(rows[0]["provider"], "anthropic")
+        self.assertTrue(rows[0]["examined"])
+        chain_path.unlink(missing_ok=True)
+
 
 # ===================================================================
 # Privacy — no content storage

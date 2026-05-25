@@ -1106,6 +1106,14 @@ class GovernanceProxy:
             ) as resp:
                 if resp.status_code != 200:
                     content = await resp.aread()
+                    # QS-053: every request through the proxy produces a chain
+                    # record, including streaming non-200s.
+                    self._append_request_observed(
+                        provider_name="anthropic", method="POST", path=url,
+                        status_code=resp.status_code, tool_endpoint=is_messages,
+                        examined=False, forwarded=True, request_body=body,
+                        detail="streaming upstream non-200 response",
+                    )
                     writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
                     writer.write(b"content-type: application/json\r\n")
                     writer.write(f"content-length: {len(content)}\r\n".encode())
@@ -1213,6 +1221,19 @@ class GovernanceProxy:
                             )
                             await writer.drain()
 
+        # QS-053: a streaming response with no tool_use blocks still produces
+        # a chain record (mirrors the non-streaming no-tool-blocks path), so
+        # every request through the proxy is recorded — not just those that
+        # carry a governed tool call. Fires on normal stream end regardless of
+        # whether the upstream emitted a [DONE] sentinel.
+        if _tool_use_count == 0:
+            self._append_request_observed(
+                provider_name="anthropic", method="POST", path=url,
+                status_code=200, tool_endpoint=is_messages,
+                examined=True, forwarded=True, request_body=body,
+                detail="recognized streaming response contained no tool_use blocks",
+            )
+
     async def _handle_streaming_to_writer_provider(
         self, path: str, headers: dict, body: bytes,
         writer: asyncio.StreamWriter,
@@ -1234,6 +1255,13 @@ class GovernanceProxy:
             ) as resp:
                 if resp.status_code != 200:
                     content = await resp.aread()
+                    # QS-053: record every request, including streaming non-200s.
+                    self._append_request_observed(
+                        provider_name=provider.name, method="POST", path=url,
+                        status_code=resp.status_code, tool_endpoint=is_tool_ep,
+                        examined=False, forwarded=True, request_body=body,
+                        detail="streaming upstream non-200 response",
+                    )
                     writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
                     writer.write(b"content-type: application/json\r\n")
                     writer.write(f"content-length: {len(content)}\r\n".encode())
@@ -1331,6 +1359,15 @@ class GovernanceProxy:
                     elif stream_action.action == "pass":
                         writer.write(event_bytes)
                         await writer.drain()
+
+        # QS-053: record the request even when the stream carried no tool call.
+        if _tool_call_count == 0:
+            self._append_request_observed(
+                provider_name=provider.name, method="POST", path=url,
+                status_code=200, tool_endpoint=is_tool_ep,
+                examined=True, forwarded=True, request_body=body,
+                detail="recognized streaming response contained no tool calls",
+            )
 
     async def _handle_non_streaming(
         self, url: str, method: str, headers: dict, body: bytes,
@@ -1576,6 +1613,7 @@ class GovernanceProxy:
         buffered_events: dict[int, list[bytes]] = {}
         resp_status = 200
         resp_headers: dict = {}
+        tool_block_count = 0
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -1586,6 +1624,13 @@ class GovernanceProxy:
 
                 if resp_status != 200:
                     content = await resp.aread()
+                    # QS-053: record every request, including buffered-streaming non-200s.
+                    self._append_request_observed(
+                        provider_name="anthropic", method="POST", path=url,
+                        status_code=resp_status, tool_endpoint=True,
+                        examined=False, forwarded=True, request_body=body,
+                        detail="buffered streaming upstream non-200 response",
+                    )
                     return resp_status, self._forward_response_headers(resp_headers, content), content
 
                 current_event_type = ""
@@ -1618,6 +1663,8 @@ class GovernanceProxy:
 
                         if action == "buffer":
                             idx = data.get("index", 0)
+                            if data.get("type") == "content_block_start":
+                                tool_block_count += 1
                             buffered_events.setdefault(idx, []).append(
                                 f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                             )
@@ -1645,6 +1692,15 @@ class GovernanceProxy:
 
         full_body = b"".join(output_chunks)
 
+        # QS-053: record the request even when the buffered stream carried no tool call.
+        if tool_block_count == 0:
+            self._append_request_observed(
+                provider_name="anthropic", method="POST", path=url,
+                status_code=resp_status, tool_endpoint=True,
+                examined=True, forwarded=True, request_body=body,
+                detail="recognized buffered streaming response contained no tool_use blocks",
+            )
+
         stream_headers = {
             "content-type": "text/event-stream",
             "cache-control": "no-cache",
@@ -1666,6 +1722,7 @@ class GovernanceProxy:
         resp_status = 200
         resp_headers: dict = {}
         approval_store = self._get_approval_store()
+        tool_call_count = 0
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -1676,6 +1733,13 @@ class GovernanceProxy:
 
                 if resp_status != 200:
                     content = await resp.aread()
+                    # QS-053: record every request, including buffered-streaming non-200s.
+                    self._append_request_observed(
+                        provider_name=provider.name, method="POST", path=url,
+                        status_code=resp_status, tool_endpoint=True,
+                        examined=False, forwarded=True, request_body=body,
+                        detail="buffered streaming upstream non-200 response",
+                    )
                     return resp_status, self._forward_response_headers(resp_headers, content), content
 
                 current_event_type = ""
@@ -1719,6 +1783,7 @@ class GovernanceProxy:
                     if stream_action.action == "buffer":
                         collector.add_buffered_event(stream_action.index, event_bytes)
                         if stream_action.completed_tool_call:
+                            tool_call_count += 1
                             tc = stream_action.completed_tool_call
                             record = mediate_decision(
                                 tc.tool_name, tc.args,
@@ -1749,6 +1814,15 @@ class GovernanceProxy:
                         output_chunks.append(event_bytes)
 
         full_body = b"".join(output_chunks)
+
+        # QS-053: record the request even when the buffered stream carried no tool call.
+        if tool_call_count == 0:
+            self._append_request_observed(
+                provider_name=provider.name, method="POST", path=url,
+                status_code=resp_status, tool_endpoint=True,
+                examined=True, forwarded=True, request_body=body,
+                detail="recognized buffered streaming response contained no tool calls",
+            )
 
         stream_headers = {
             "content-type": "text/event-stream",
