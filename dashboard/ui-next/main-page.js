@@ -661,15 +661,13 @@ function _renderConformance(result) {
   const data = result.data || {};
   const state = String(data.state || 'halted').toLowerCase();
   const label = state.toUpperCase();
-  const seq = data.latest_snapshot?.sequence;
   const timestamp = data.latest_snapshot?.timestamp;
-  const summary = state === 'verified'
-    ? `Verified · sequence ${seq ?? '--'} · ${_formatTime24(timestamp)}`
-    : state === 'attention'
-      ? `Attention · ${data.active_conditions?.length || 0} active findings`
-      : state === 'intervention'
-        ? `Intervention · ${data.active_conditions?.length || 0} active conditions`
-        : data.detail || 'Quality service unavailable';
+  // QS-043: the left state badge already communicates VERIFIED/ATTENTION/etc.,
+  // so the right side shows only when health was last confirmed — no repeated
+  // state word and no internal sequence number.
+  const summary = timestamp
+    ? `Last verified ${_formatTime24(timestamp)}`
+    : (data.detail || 'Quality service unavailable');
   _setConformanceShell(state, label, summary);
   _renderConformanceModes(data.modes || {});
   _renderConformanceConditions(data.active_conditions || []);
@@ -692,16 +690,58 @@ function _renderConformanceModes(modes) {
   if (!root) return;
   root.innerHTML = '';
   for (const key of ['environmental', 'post_hoc', 'spc', 'element', 'behavioral']) {
-    const mode = modes[key] || { status: 'not_active' };
+    const mode = modes[key] || { status: 'idle' };
     const row = document.createElement('div');
     row.className = 'mp-conformance-row';
+    const tip = _modeTooltip(key);
+    const labelAttr = tip ? ` title="${_esc(tip)}"` : '';
     row.innerHTML = `
-      <span>${_esc(_modeLabel(key))}</span>
-      <strong>${_esc(String(mode.status || 'unknown'))}</strong>
-      ${mode.detail || mode.note ? `<em>${_esc(mode.detail || mode.note)}</em>` : ''}
+      <span${labelAttr}>${_esc(_modeLabel(key))}</span>
+      <strong>${_esc(_statusLabel(mode.status))}</strong>
+      ${mode.detail || mode.note ? `<em>${_esc(mode.detail || mode.note)}</em>` : '<em></em>'}
+      <small class="mp-row-desc">${_esc(_modeDescription(key))}</small>
     `;
     root.appendChild(row);
   }
+}
+
+// QS-043: operator-facing "what this mode checks" copy, shown under each row.
+function _modeDescription(key) {
+  return {
+    environmental: 'Pre-flight checks that the governance environment is sound before any decision is governed.',
+    post_hoc: 'Re-verifies recorded decisions against current policy to catch drift between what was decided and what the rules now say.',
+    spc: 'Tracks decision-stream metrics (ALLOW rate, classification mix) and flags statistically significant shifts.',
+    element: 'Verifies chain record schemas, hash linkage, signatures, and configuration state.',
+    behavioral: 'Looks for behavioral anomalies: classification consistency, decision reversals, temporal patterns, approval provenance, and policy-rule coverage.',
+  }[key] || '';
+}
+
+// QS-043: tooltips for terms an operator may not know on sight.
+function _modeTooltip(key) {
+  return {
+    spc: 'Statistical Process Control — detects systemic changes in the decision stream.',
+    post_hoc: 'After-the-fact re-verification of past decisions.',
+    element: 'Element verification — structural integrity checks on the governance chain.',
+  }[key] || '';
+}
+
+// QS-043: friendly status words for the operator (maps internal tokens).
+function _statusLabel(status) {
+  const s = String(status || 'idle').toLowerCase();
+  return {
+    healthy: 'healthy',
+    verified: 'verified',
+    active: 'active',
+    idle: 'idle',
+    warming_up: 'warming up',
+    learning: 'warming up',
+    finding: 'finding',
+    behind: 'behind',
+    attention: 'attention',
+    unavailable: 'unavailable',
+    condition_detected: 'condition',
+    not_active: 'idle',
+  }[s] || s;
 }
 
 function _renderConformanceConditions(conditions) {
@@ -737,13 +777,33 @@ function _renderConformanceChecks(checks) {
     const status = String(check?.status || 'unknown');
     const row = document.createElement('div');
     row.className = `mp-check-row status-${_classToken(status)}`;
+    const desc = _envDescription(id);
+    // The check's own detail (failure reason) takes the inline slot; the
+    // static one-line description goes on a full-width line below.
     row.innerHTML = `
       <span>${_esc(id)}</span>
       <strong>${_esc(status)}</strong>
       <em>${_esc(check?.detail || '')}</em>
+      ${desc ? `<small class="mp-row-desc">${_esc(desc)}</small>` : ''}
     `;
     root.appendChild(row);
   }
+}
+
+// QS-043: one-line operator-facing description per environmental check.
+function _envDescription(id) {
+  return {
+    'ENV-001': 'Policy rules match what the proxy loaded',
+    'ENV-002': 'Signing key present and valid',
+    'ENV-003': 'Chain files writable',
+    'ENV-004': 'Capability registry current',
+    'ENV-005': 'QA chain integrity (hash linkage)',
+    'ENV-006': 'Governance chain integrity',
+    'ENV-007': 'Disk space adequate',
+    'ENV-008': 'Proxy process running',
+    'ENV-009': 'Dashboard process running',
+    'ENV-010': 'Configuration integrity',
+  }[String(id || '').toUpperCase()] || '';
 }
 
 function _renderConformanceLiveness(data) {
@@ -753,8 +813,7 @@ function _renderConformanceLiveness(data) {
   root.innerHTML = `
     <div class="mp-conformance-row"><span>QA chain</span><strong>${data.qa_chain_present ? 'present' : 'absent'}</strong></div>
     <div class="mp-conformance-row"><span>Quality service</span><strong>${data.quality_service_alive ? 'alive' : 'unavailable'}</strong></div>
-    <div class="mp-conformance-row"><span>Sequence</span><strong>${_esc(String(snap.sequence ?? '--'))}</strong></div>
-    <div class="mp-conformance-row"><span>Last snapshot</span><strong>${_esc(_formatTime24(snap.timestamp))}</strong></div>
+    <div class="mp-conformance-row"><span>Last verified</span><strong>${_esc(_formatTime24(snap.timestamp))}</strong></div>
     <div class="mp-conformance-row"><span>Policy hash</span><strong>${_esc(_shortHash(snap.policy_rules_hash))}</strong></div>
     <div class="mp-conformance-row"><span>Capability hash</span><strong>${_esc(_shortHash(snap.capability_registry_hash))}</strong></div>
   `;
@@ -973,6 +1032,14 @@ mpStyles.textContent = `
   .mp-conformance-condition em {
     color: #8b919a;
     font-style: normal;
+  }
+  /* QS-043: full-width "what this checks" description line under a row. */
+  .mp-conformance-row .mp-row-desc,
+  .mp-check-row .mp-row-desc {
+    grid-column: 1 / -1;
+    color: #6e7681;
+    font-size: 0.72rem;
+    line-height: 1.35;
   }
   .mp-check-row.status-pass strong { color: #3fb950; }
   .mp-check-row.status-fail strong,

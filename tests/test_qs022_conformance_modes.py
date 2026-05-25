@@ -108,7 +108,7 @@ def test_conformance_mode3_learning_and_attention(tmp_path):
         ],
     )
     learning = build_conformance_payload(DashboardQAChainReader(learning_chain))
-    assert learning["modes"]["spc"]["status"] == "learning"
+    assert learning["modes"]["spc"]["status"] == "warming_up"
     assert learning["modes"]["spc"]["decisions_collected"] == 42
 
     attention_chain = tmp_path / "qa-attention.jsonl"

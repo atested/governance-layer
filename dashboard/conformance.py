@@ -305,10 +305,10 @@ def _halted_payload(
         "state": "halted",
         "modes": {
             "environmental": {"status": "unavailable", "checks": {}, "conditions": []},
-            "post_hoc": {"status": "not_active", "note": "Mode 2 not yet implemented"},
-            "spc": {"status": "not_active", "note": "Mode 3 not yet implemented"},
-            "element": {"status": "not_active", "note": "Mode 4 not yet implemented"},
-            "behavioral": {"status": "not_active", "note": "Mode 5 not yet implemented"},
+            "post_hoc": {"status": "unavailable", "note": "unavailable while the quality service is halted"},
+            "spc": {"status": "unavailable", "note": "unavailable while the quality service is halted"},
+            "element": {"status": "unavailable", "note": "unavailable while the quality service is halted"},
+            "behavioral": {"status": "unavailable", "note": "unavailable while the quality service is halted"},
         },
         "active_conditions": [],
         "latest_snapshot": _snapshot_summary(snapshot) if snapshot else None,
@@ -344,7 +344,7 @@ def _mode_status(records: list[dict], not_active_note: str) -> dict:
 
 def _post_hoc_status(verifications: list[dict], skipped: list[dict], backlog: list[dict]) -> dict:
     if not verifications and not skipped and not backlog:
-        return {"status": "not_active", "note": "Mode 2 not yet implemented"}
+        return {"status": "idle", "note": "no governance decisions to verify yet"}
     latest_backlog = backlog[-1] if backlog else None
     if latest_backlog and int(latest_backlog.get("queue_depth") or 0) > 0:
         return {
@@ -377,18 +377,18 @@ def _post_hoc_status(verifications: list[dict], skipped: list[dict], backlog: li
 
 def _spc_status(findings: list[dict]) -> dict:
     if not findings:
-        return {"status": "not_active", "note": "Mode 3 not yet implemented"}
+        return {"status": "idle", "note": "no decisions yet to baseline"}
     latest = findings[-1]
     status = str(latest.get("status") or "").lower()
     if status == "learning":
         collected = latest.get("decisions_collected")
         minimum = latest.get("minimum_required")
         return {
-            "status": "learning",
+            "status": "warming_up",
             "decisions_collected": collected,
             "minimum_required": minimum,
             "latest": latest,
-            "detail": f"Baseline learning: {collected}/{minimum} decisions",
+            "detail": f"warming up ({collected}/{minimum} decisions)",
         }
     if status in {"above_ucl", "below_lcl", "outside_limits", "alert"}:
         return {
@@ -410,7 +410,7 @@ def _spc_status(findings: list[dict]) -> dict:
 
 def _element_status(records: list[dict]) -> dict:
     if not records:
-        return {"status": "not_active", "note": "Mode 4 not yet implemented"}
+        return {"status": "idle", "note": "no element verification run yet"}
     latest = records[-1]
     flagged = int(latest.get("elements_flagged") or 0)
     payload = {
@@ -433,7 +433,7 @@ def _element_status(records: list[dict]) -> dict:
 
 def _behavioral_status(records: list[dict]) -> dict:
     if not records:
-        return {"status": "not_active", "note": "Mode 5 not yet implemented"}
+        return {"status": "idle", "note": "no behavioral analysis run yet"}
     latest = records[-1]
     # QS-039 #18: warm-up window. Below the configured minimum decision
     # count the quality service emits a warm-up record rather than flagging

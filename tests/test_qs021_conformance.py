@@ -44,8 +44,8 @@ def test_conformance_verified_with_healthy_qa_chain(tmp_path):
     assert payload["quality_service_alive"] is True
     assert payload["qa_chain_present"] is True
     assert payload["modes"]["environmental"]["status"] == "healthy"
-    assert payload["modes"]["post_hoc"]["status"] == "not_active"
-    assert payload["modes"]["spc"]["status"] == "not_active"
+    assert payload["modes"]["post_hoc"]["status"] == "idle"
+    assert payload["modes"]["spc"]["status"] == "idle"
     assert payload["latest_snapshot"]["sequence"] == 1
 
 
@@ -128,7 +128,7 @@ def test_conformance_api_route_returns_payload(tmp_path, monkeypatch):
     assert handler.status == 200
     assert payload["state"] == "verified"
     assert payload["modes"]["environmental"]["status"] == "healthy"
-    assert payload["modes"]["post_hoc"]["status"] == "not_active"
+    assert payload["modes"]["post_hoc"]["status"] == "idle"
 
 
 def test_ui_indicator_is_present():
@@ -140,4 +140,4 @@ def test_ui_indicator_is_present():
     assert "getConformance" in api_source
     assert "mp-conformance-indicator" in main_source
     assert "mp-conformance-panel" in main_source
-    assert "Mode 3 not yet implemented" in main_source or "Future modes" in main_source
+    assert "_renderConformanceModes" in main_source and "_modeDescription" in main_source
