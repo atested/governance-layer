@@ -129,7 +129,7 @@ function _modeDetail(modeKey, mode, data) {
 // QS-047: one detail item, two lines — "ID/name — Status" then a
 // description line. An optional extra line carries a failure reason or
 // live value. Used consistently across all five windows.
-function _item(id, statusText, statusToken, desc, extra) {
+function _item(id, statusText, statusToken, desc, extra, guidance) {
   return `
     <div class="cfm-item cfm-item-${_token(statusToken)}">
       <div class="cfm-item-head">
@@ -139,6 +139,22 @@ function _item(id, statusText, statusToken, desc, extra) {
       </div>
       <div class="cfm-item-desc">${_esc(desc)}</div>
       ${extra ? `<div class="cfm-item-extra">${_esc(extra)}</div>` : ''}
+      ${_guidanceBlock(guidance)}
+    </div>`;
+}
+
+// QS-055 #6: operator-facing guidance — why it happened and what to do.
+// `desc` already carries the plain-language "what is wrong", so the block
+// adds the remaining two lines when guidance is present.
+function _guidanceBlock(guidance) {
+  if (!guidance || (!guidance.why && !guidance.what_to_do)) return '';
+  const line = (label, text) => text
+    ? `<div class="cfm-guide-line"><span class="cfm-guide-label">${_esc(label)}</span><span class="cfm-guide-text">${_esc(text)}</span></div>`
+    : '';
+  return `
+    <div class="cfm-item-guide">
+      ${line('Why', guidance.why)}
+      ${line('What to do', guidance.what_to_do)}
     </div>`;
 }
 
@@ -160,12 +176,22 @@ function _environmental(data) {
   const checks = (data.latest_snapshot && data.latest_snapshot.checks)
     || (data.modes && data.modes.environmental && data.modes.environmental.checks)
     || {};
-  const ids = Object.keys(ENV_DESCRIPTION);
+  // QS-055 #6: the server catalog is the authoritative source for what each
+  // ENV check means (the old local ENV_DESCRIPTION had drifted from the Rust
+  // checks). Fall back to ENV_DESCRIPTION only if the catalog is unavailable.
+  const catalog = data.condition_guidance || {};
+  const ids = Object.keys(catalog).filter((k) => /^ENV-\d{3}$/.test(k));
   for (const k of Object.keys(checks)) if (!ids.includes(k)) ids.push(k);
+  ids.sort();
   const items = ids.map((id) => {
     const check = checks[id] || {};
     const [stText, stTok] = _checkStatus(check.status, 'No data');
-    return _item(id, stText, stTok, ENV_DESCRIPTION[id] || '', check.detail || '');
+    const guide = catalog[id] || null;
+    const what = (guide && guide.what) || ENV_DESCRIPTION[id] || '';
+    // Show full guidance (why / what to do) only when the check needs the
+    // operator's attention — on a passing check it would just be noise.
+    const needsAttention = stTok === 'attention' || stTok === 'warning';
+    return _item(id, stText, stTok, what, check.detail || '', needsAttention ? guide : null);
   });
   return _itemList(items);
 }
@@ -275,10 +301,14 @@ export function openConformanceConditionsWindow(conditions, trigger) {
       const sev = String(c.severity || 'medium');
       const tok = /critical|fail/.test(sev.toLowerCase()) ? 'attention'
         : /high|warn/.test(sev.toLowerCase()) ? 'warning' : 'idle';
-      const desc = c.detail || c.condition_type || '';
+      // QS-055 #6: lead with the plain-language "what is wrong", keep the
+      // technical detail as a secondary line, and render why / what-to-do.
+      const guide = c.guidance_detail || (c.guidance ? { what_to_do: c.guidance } : null);
+      const desc = (guide && guide.what) || c.detail || c.condition_type || '';
       const when = c.detected_at ? `detected ${c.detected_at}` : '';
-      const extra = [c.guidance || '', when].filter(Boolean).join(' · ');
-      return _item(id, sev, tok, desc, extra);
+      const techDetail = (c.detail && (!guide || c.detail !== guide.what)) ? c.detail : '';
+      const extra = [techDetail, when].filter(Boolean).join(' · ');
+      return _item(id, sev, tok, desc, extra, guide);
     });
     parts.push(_itemList(items));
   }
@@ -340,6 +370,20 @@ cfmStyles.textContent = `
   .cfm-item-status { font-family: "JetBrains Mono", monospace; font-size: 0.72rem; }
   .cfm-item-desc { color: #9aa3ad; font-size: 0.74rem; line-height: 1.4; margin-top: 3px; }
   .cfm-item-extra { color: #6e7681; font-size: 0.71rem; line-height: 1.35; margin-top: 3px; }
+  .cfm-item-guide {
+    margin-top: 7px; padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .cfm-guide-line {
+    display: grid; grid-template-columns: minmax(72px, max-content) 1fr; gap: 8px;
+    font-size: 0.72rem; line-height: 1.4;
+  }
+  .cfm-guide-label {
+    color: #8b9bb0; font-weight: 600; text-transform: uppercase;
+    font-size: 0.64rem; letter-spacing: 0.03em; padding-top: 1px;
+  }
+  .cfm-guide-text { color: #c2c8d0; }
   .cfm-item-ok { border-left-color: #3fb950; }
   .cfm-item-ok .cfm-item-status { color: #3fb950; }
   .cfm-item-attention { border-left-color: #f85149; }

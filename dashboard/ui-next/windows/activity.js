@@ -58,11 +58,19 @@ export function openActivityWindow(trigger, opts = {}) {
   const result = _openAsChild('Activity', 'Decision log for all Atested operations', trigger, content);
   if (!result) return;
 
+  // QS-055 #7: default the time range to the last hour in the operator's
+  // local time. Skip the default only when navigating to a specific record
+  // (scrollToRecord) — that record may be older than an hour and must not be
+  // filtered out — or when an explicit range was passed in.
+  const _range = (!opts.startTime && !opts.endTime && !opts.scrollToRecord)
+    ? _defaultLastHour()
+    : { from: opts.startTime || '', to: opts.endTime || '' };
+
   const state = {
     el: content,
     // Filters — accept pre-set values from opts (for cross-window navigation)
-    startTime: opts.startTime || '',
-    endTime: opts.endTime || '',
+    startTime: _range.from,
+    endTime: _range.to,
     decisionFilter: opts.decisionFilter || '',       // '', 'ALLOW', 'DENY'
     eventTypeFilter: opts.eventTypeFilter || '',
     toolFilter: opts.toolFilter || '',
@@ -459,12 +467,35 @@ function _wireControls(state) {
 
 }
 
+// QS-055 #7: FROM = now - 1h, TO = now as absolute ISO instants. The inputs
+// render these in local time via _isoToLocal; an hour apart, they are never
+// identical.
+function _defaultLastHour() {
+  const now = Date.now();
+  return {
+    from: new Date(now - 3600000).toISOString(),
+    to: new Date(now).toISOString(),
+  };
+}
+
+// QS-055 #7: FROM and TO must never be identical (an empty instant matches
+// nothing). If a manual entry makes them equal, nudge TO forward by a second
+// so the chosen instant is still included.
+function _ensureDistinctRange(state) {
+  if (state.startTime && state.endTime && state.startTime === state.endTime) {
+    state.endTime = new Date(new Date(state.endTime).getTime() + 1000).toISOString();
+    const toEl = state.el.querySelector('#aw-to');
+    if (toEl) toEl.value = _isoToLocal(state.endTime);
+  }
+}
+
 function _readFilters(state) {
   const el = state.el;
   const fromVal = el.querySelector('#aw-from').value;
   const toVal = el.querySelector('#aw-to').value;
   state.startTime = fromVal ? new Date(fromVal).toISOString() : '';
   state.endTime = toVal ? new Date(toVal).toISOString() : '';
+  _ensureDistinctRange(state);
   state.eventTypeFilter = el.querySelector('#aw-event-type').value;
   state.toolFilter = el.querySelector('#aw-tool-filter').value;
   state.ruleFilter = el.querySelector('#aw-rule-filter').value;

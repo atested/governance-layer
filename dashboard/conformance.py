@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,18 +26,116 @@ QA_EVENT_TYPES = {
     "qa_element_verification",
 }
 
-GUIDANCE = {
-    "stale_rules": "Policy rules were updated on disk but the proxy is using a previous version. Restart the proxy to load current rules.",
-    "CR-CRIT-001": "Policy rules were updated on disk but the proxy is using a previous version. Restart the proxy to load current rules.",
-    "stale_capability_registry": "Capability registry was updated on disk. Restart the proxy to load the current registry.",
-    "CR-CRIT-004": "Capability registry was updated on disk. Restart the proxy to load the current registry.",
-    "signing_key_fingerprint_change": "The governance signing key has changed without a recorded rotation event. Verify key integrity.",
-    "CR-CRIT-006": "The governance signing key has changed without a recorded rotation event. Verify key integrity.",
-    "operator_session_expiry": "An approval references an operator session that may have exceeded the maximum age. Review and reissue if needed.",
-    "CR-CRIT-007": "An approval references an operator session that may have exceeded the maximum age. Review and reissue if needed.",
-    "developer_mode": "Proxy operating in developer mode — governance posture is relaxed for unrecognized formats. Restore production mode in capability-registry.json.",
-    "CR-HIGH-003": "Proxy operating in developer mode — governance posture is relaxed for unrecognized formats. Restore production mode in capability-registry.json.",
+# QS-055 #6: operator-facing guidance for every condition and environmental
+# check. Each entry answers three questions for a non-technical operator:
+#   what     — what is wrong, in plain language (no hashes or condition IDs)
+#   why      — the common causes
+#   what_to_do — the specific action to take
+#
+# Keyed by the canonical condition/check ID. The environmental ENV-* meanings
+# match the Rust quality service's run_all_checks (quality-service/src/checks.rs),
+# which is authoritative — the earlier UI descriptions had drifted from it.
+CONDITION_GUIDANCE = {
+    "ENV-001": {
+        "what": "The proxy is enforcing a different version of the policy rules than the one on disk.",
+        "why": "The policy rules file was edited while the proxy was running, or the proxy hasn't been restarted since the last change.",
+        "what_to_do": "Restart Atested (`atested stop` then `atested start`) so the proxy reloads the current policy rules.",
+    },
+    "ENV-002": {
+        "what": "The governance signing key is missing or invalid, so new decisions can't be signed.",
+        "why": "The key file was moved, deleted, or replaced, or its file permissions changed.",
+        "what_to_do": "Restore the signing key from your backup, or re-run `atested init` to generate one, then restart.",
+    },
+    "ENV-003": {
+        "what": "The quality service's own signing key is missing or invalid.",
+        "why": "The QA key file was moved or deleted, or its file permissions changed.",
+        "what_to_do": "Restart Atested — the quality service regenerates its key on startup if it's absent. If it persists, check the runtime directory permissions.",
+    },
+    "ENV-004": {
+        "what": "The decision chain — the tamper-evident record of every governance decision — failed its integrity check.",
+        "why": "The chain file was edited or truncated outside Atested, or a previous run was interrupted mid-write.",
+        "what_to_do": "Run `atested archive` to preserve the affected chain and start a fresh one, then `atested start`.",
+    },
+    "ENV-005": {
+        "what": "The quality service's record chain failed its hash-linkage check, so it can't safely continue writing to it.",
+        "why": "The chain was edited outside Atested, or two quality-service instances wrote to it at once (for example, the chain was archived while the service was still running).",
+        "what_to_do": "Run `atested archive` to preserve the chain and start a fresh one, then `atested start`.",
+    },
+    "ENV-006": {
+        "what": "The record of approvals doesn't line up with the decision chain.",
+        "why": "An approval or revocation event is missing, duplicated, or out of order.",
+        "what_to_do": "Review recent approvals in the Activity view. If the chain itself is damaged, run `atested archive` and restart.",
+    },
+    "ENV-007": {
+        "what": "The disk holding Atested's records is running low on free space.",
+        "why": "The chains and archives have grown over time, or other software has filled the disk.",
+        "what_to_do": "Free up disk space. Archived chains are safe to move elsewhere — Atested never deletes them. Then restart.",
+    },
+    "ENV-008": {
+        "what": "The tool classifier the proxy uses to categorize operations isn't in a usable state.",
+        "why": "The policy or capability configuration is incomplete or failed to load.",
+        "what_to_do": "Confirm capability-registry.json and policy-rules.json are present and valid, then restart.",
+    },
+    "ENV-009": {
+        "what": "The quality service can't confirm the governance proxy is running.",
+        "why": "The proxy hasn't started yet, has exited, or is still coming up.",
+        "what_to_do": "Check `atested status`. If the proxy isn't running, run `atested start`.",
+    },
+    "ENV-010": {
+        "what": "The proxy is using a different version of the capability registry than the one on disk.",
+        "why": "capability-registry.json was edited while the proxy was running, or the proxy hasn't been restarted since.",
+        "what_to_do": "Restart Atested so the proxy reloads the current capability registry.",
+    },
+    "ENV-011": {
+        "what": "Atested is running in developer mode, which relaxes some governance enforcement.",
+        "why": "governance_posture in capability-registry.json is set to \"developer\" — usually on purpose, for local development or for repairing the governance system.",
+        "what_to_do": "If this machine should be fully enforced, set governance_posture.mode back to \"production\" in capability-registry.json and restart.",
+    },
+    "CR-CRIT-001": {
+        "what": "Critical: the proxy is enforcing stale policy rules that no longer match the file on disk.",
+        "why": "The policy rules were changed but the proxy is still running the previous version.",
+        "what_to_do": "Restart Atested (`atested stop` then `atested start`) to load the current rules.",
+    },
+    "CR-CRIT-004": {
+        "what": "Critical: the proxy is using a stale capability registry that no longer matches the file on disk.",
+        "why": "The capability registry was changed but the proxy hasn't reloaded it.",
+        "what_to_do": "Restart Atested to load the current capability registry.",
+    },
+    "CR-CRIT-006": {
+        "what": "Critical: the governance signing key's fingerprint changed without a recorded key-rotation event.",
+        "why": "The signing key was replaced outside Atested's rotation process. This can mean a manual key swap — or tampering.",
+        "what_to_do": "Confirm the key is the one you expect. If you rotated it on purpose, record the rotation. If not, treat this as a security event and investigate before continuing.",
+    },
+    "CR-CRIT-007": {
+        "what": "Critical: an approval relies on an operator session that may be older than the allowed maximum age.",
+        "why": "The approval was issued under a session that has since aged out.",
+        "what_to_do": "Review the approval in the Activity view and reissue it under a current session if it's still valid.",
+    },
+    "CR-HIGH-003": {
+        "what": "Atested is operating in developer mode, so governance enforcement is relaxed.",
+        "why": "governance_posture is set to \"developer\" in capability-registry.json.",
+        "what_to_do": "For full enforcement, set governance_posture.mode back to \"production\" in capability-registry.json and restart.",
+    },
+    "environment_critical": {
+        "what": "A critical environmental check failed, so the quality service has halted enforcement.",
+        "why": "One of the ENV checks below reports a critical problem. The specific check names the cause.",
+        "what_to_do": "Open Environmental Health, find the failing check, and follow its guidance.",
+    },
 }
+
+# condition_type aliases resolve to the same guidance as their canonical ID.
+_CONDITION_TYPE_ALIASES = {
+    "stale_rules": "CR-CRIT-001",
+    "stale_capability_registry": "CR-CRIT-004",
+    "signing_key_fingerprint_change": "CR-CRIT-006",
+    "operator_session_expiry": "CR-CRIT-007",
+    "developer_mode": "CR-HIGH-003",
+}
+
+# Back-compat flat guidance string (the action line) for JSON/CLI consumers
+# that still read condition["guidance"].
+GUIDANCE = {key: val["what_to_do"] for key, val in CONDITION_GUIDANCE.items()}
+GUIDANCE.update({alias: CONDITION_GUIDANCE[cid]["what_to_do"] for alias, cid in _CONDITION_TYPE_ALIASES.items()})
 
 
 @dataclass(frozen=True)
@@ -290,6 +389,7 @@ def build_conformance_payload(reader: DashboardQAChainReader) -> dict:
         },
         "active_conditions": active_conditions,
         "latest_snapshot": latest_snapshot,
+        "condition_guidance": CONDITION_GUIDANCE,
         "qa_chain_present": True,
         "quality_service_alive": True,
         "detail": "",
@@ -314,6 +414,7 @@ def _halted_payload(
         },
         "active_conditions": [],
         "latest_snapshot": _snapshot_summary(snapshot) if snapshot else None,
+        "condition_guidance": CONDITION_GUIDANCE,
         "qa_chain_present": qa_chain_present,
         "quality_service_alive": False,
         "detail": detail,
@@ -483,7 +584,8 @@ def _active_conditions(snapshot: dict, records: list[dict]) -> list[dict]:
         condition.setdefault("severity", _condition_severity(condition_id, condition))
         condition.setdefault("detail", condition_id)
         condition.setdefault("detected_at", condition.get("timestamp_utc") or condition.get("timestamp") or snapshot.get("timestamp_utc"))
-        condition["guidance"] = _guidance_for(condition)
+        condition["guidance_detail"] = _guidance_detail_for(condition)
+        condition["guidance"] = condition["guidance_detail"]["what_to_do"]
         conditions.append(condition)
 
     if not conditions and snapshot.get("overall") not in {"healthy", None}:
@@ -494,23 +596,27 @@ def _active_conditions(snapshot: dict, records: list[dict]) -> list[dict]:
             severity = str(check.get("severity") or "high").lower()
             condition_type = "environment_critical" if severity == "critical" else "environmental_warning"
             detail = f"{check_id}: {check.get('detail') or 'environmental check failed'}"
-            conditions.append({
+            entry = {
                 "condition_id": f"{condition_type}:{check_id}",
                 "condition_type": condition_type,
                 "severity": severity,
                 "detail": detail,
                 "detected_at": snapshot.get("timestamp_utc") or snapshot.get("timestamp"),
-                "guidance": _guidance_for({"condition_type": condition_type, "detail": detail}),
-            })
+            }
+            entry["guidance_detail"] = _guidance_detail_for(entry)
+            entry["guidance"] = entry["guidance_detail"]["what_to_do"]
+            conditions.append(entry)
         if not conditions:
-            conditions.append({
+            entry = {
                 "condition_id": "environment_critical",
                 "condition_type": "environment_critical",
                 "severity": "critical",
                 "detail": f"Environmental snapshot overall status is {snapshot.get('overall')}",
                 "detected_at": snapshot.get("timestamp_utc") or snapshot.get("timestamp"),
-                "guidance": "Review the failing environmental checks below and correct the reported condition.",
-            })
+            }
+            entry["guidance_detail"] = _guidance_detail_for(entry)
+            entry["guidance"] = entry["guidance_detail"]["what_to_do"]
+            conditions.append(entry)
     return conditions
 
 
@@ -537,12 +643,40 @@ def _condition_severity(condition_id: str, condition: dict) -> str:
     return "medium"
 
 
-def _guidance_for(condition: dict) -> str:
-    condition_type = str(condition.get("condition_type") or "")
+def _resolve_guidance_key(condition: dict) -> str:
+    """Resolve a condition to a CONDITION_GUIDANCE key.
+
+    environment_critical conditions are wrapped ENV-check failures
+    (e.g. "CR-CRIT-005:ENV-007" or "environment_critical:ENV-007"); surface the
+    underlying ENV check's guidance so the operator sees the specific cause.
+    """
     condition_id = str(condition.get("condition_id") or "")
-    if condition_type == "environment_critical":
-        return f"Review and resolve the failing environmental check: {condition.get('detail', condition_id)}"
-    return GUIDANCE.get(condition_type) or GUIDANCE.get(condition_id) or "Review the quality service detail and resolve the reported condition."
+    condition_type = str(condition.get("condition_type") or "")
+    for token in (condition_id, str(condition.get("detail") or "")):
+        match = re.search(r"ENV-\d{3}", token)
+        if match and match.group(0) in CONDITION_GUIDANCE:
+            return match.group(0)
+    if condition_id in CONDITION_GUIDANCE:
+        return condition_id
+    if condition_type in CONDITION_GUIDANCE:
+        return condition_type
+    return _CONDITION_TYPE_ALIASES.get(condition_type) or _CONDITION_TYPE_ALIASES.get(condition_id) or ""
+
+
+def _guidance_detail_for(condition: dict) -> dict:
+    """Return {what, why, what_to_do} operator guidance for a condition."""
+    key = _resolve_guidance_key(condition)
+    if key:
+        return dict(CONDITION_GUIDANCE[key])
+    return {
+        "what": str(condition.get("detail") or "The quality service reported a condition that affects how the system operates."),
+        "why": "",
+        "what_to_do": "Review the condition detail and the Environmental Health checks below, then correct the reported problem.",
+    }
+
+
+def _guidance_for(condition: dict) -> str:
+    return _guidance_detail_for(condition).get("what_to_do") or "Review the quality service detail and resolve the reported condition."
 
 
 def _stale_seconds() -> float:

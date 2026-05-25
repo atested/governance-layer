@@ -970,6 +970,87 @@ def _profile_path_for_shell(shell_path: str | None = None, home: Path | None = N
     return None
 
 
+def _shell_profile_targets(home: Path | None = None) -> list[Path]:
+    """Profiles to write proxy routing into.
+
+    QS-055 #8: cover zsh (interactive .zshrc and login .zprofile) and bash
+    (.bash_profile) so the proxy URLs are picked up regardless of which shell —
+    and which kind of session — the operator launches. A shell counts as "in
+    use" when it is the login shell, its binary is installed, or one of its
+    profiles already exists.
+    """
+    import shutil as _shutil
+
+    home_dir = home or Path.home()
+    shell_name = Path(os.environ.get("SHELL", "")).name
+    targets: list[Path] = []
+
+    zsh_in_use = (
+        shell_name == "zsh"
+        or bool(_shutil.which("zsh"))
+        or (home_dir / ".zshrc").exists()
+        or (home_dir / ".zprofile").exists()
+    )
+    bash_in_use = (
+        shell_name == "bash"
+        or bool(_shutil.which("bash"))
+        or (home_dir / ".bash_profile").exists()
+        or (home_dir / ".bashrc").exists()
+    )
+    if zsh_in_use:
+        targets.append(home_dir / ".zshrc")
+        targets.append(home_dir / ".zprofile")
+    if bash_in_use:
+        targets.append(home_dir / ".bash_profile")
+
+    # Always cover the current shell's primary profile even if detection missed it.
+    primary = _profile_path_for_shell(home=home_dir)
+    if primary is not None and primary not in targets:
+        targets.append(primary)
+
+    seen: set = set()
+    ordered: list[Path] = []
+    for target in targets:
+        if target not in seen:
+            seen.add(target)
+            ordered.append(target)
+    return ordered
+
+
+def _set_launchd_env() -> dict:
+    """QS-055 #9: publish the proxy URLs to the macOS GUI session via
+    ``launchctl setenv`` so GUI-launched apps (not just terminals) route through
+    the governance proxy. No-op off macOS; never fails the caller.
+    """
+    if sys.platform != "darwin":
+        return {"applied": False, "reason": "not_macos"}
+    results: dict = {}
+    for name, value in PROXY_ROUTE_EXPORTS:
+        try:
+            subprocess.run(["launchctl", "setenv", name, value],
+                           check=True, capture_output=True, timeout=5)
+            results[name] = "set"
+        except Exception as exc:  # noqa: BLE001 - report, never block start
+            results[name] = f"error: {exc}"
+    return {"applied": True, "vars": results}
+
+
+def _unset_launchd_env() -> dict:
+    """QS-055 #9: remove the proxy URLs from the macOS GUI session. No-op off
+    macOS; never fails the caller."""
+    if sys.platform != "darwin":
+        return {"applied": False, "reason": "not_macos"}
+    results: dict = {}
+    for name, _value in PROXY_ROUTE_EXPORTS:
+        try:
+            subprocess.run(["launchctl", "unsetenv", name],
+                           check=False, capture_output=True, timeout=5)
+            results[name] = "unset"
+        except Exception as exc:  # noqa: BLE001
+            results[name] = f"error: {exc}"
+    return {"applied": True, "vars": results}
+
+
 PROXY_ROUTE_EXPORTS = (
     ("ANTHROPIC_BASE_URL", "http://localhost:8080/anthropic"),
     ("OPENAI_BASE_URL", "http://localhost:8080/openai"),
@@ -1205,13 +1286,17 @@ def _clean_runtime_ephemeral(runtime: Path) -> list[str]:
 
 def _configure_shell_profile(args) -> dict:
     if getattr(args, "no_shell_profile", False):
-        return {"offered": False, "updated": False, "reason": "disabled_by_flag"}
-    profile_path = _profile_path_for_shell()
-    if profile_path is None:
-        return {"offered": False, "updated": False, "reason": "unsupported_shell"}
-    result = _configure_provider_base_urls(profile_path)
-    result["offered"] = True
-    return result
+        return {"offered": False, "updated": False, "reason": "disabled_by_flag", "profiles": []}
+    targets = _shell_profile_targets()
+    if not targets:
+        return {"offered": False, "updated": False, "reason": "unsupported_shell", "profiles": []}
+    profiles = [_configure_provider_base_urls(target) for target in targets]
+    return {
+        "offered": True,
+        "updated": any(p.get("updated") for p in profiles),
+        "routes": dict(PROXY_ROUTE_EXPORTS),
+        "profiles": profiles,
+    }
 
 
 def _collect_base_dirs(args) -> list[str]:
@@ -1280,10 +1365,17 @@ def _print_proxy_routes(profile_result: dict) -> None:
     print("Configured proxy routes:")
     for name, value in PROXY_ROUTE_EXPORTS:
         print(f"  {name}={value}")
-    profile = profile_result.get("profile_display") or profile_result.get("profile")
-    if profile:
-        if profile_result.get("reason") == "write_failed":
-            print(f"  Could not add to {profile}: {profile_result.get('error')}")
+    # New multi-profile shape carries a "profiles" list; fall back to the
+    # single-profile shape for back-compat.
+    profiles = profile_result.get("profiles")
+    if profiles is None:
+        profiles = [profile_result]
+    for pr in profiles:
+        profile = pr.get("profile_display") or pr.get("profile")
+        if not profile:
+            continue
+        if pr.get("reason") == "write_failed":
+            print(f"  Could not add to {profile}: {pr.get('error')}")
         else:
             print(f"  Added to {profile}")
     print("")
@@ -1825,8 +1917,15 @@ def cmd_start(args) -> int:
     sync_config = _set_sync_config(sync_config)
     _clear_degraded()
 
+    # QS-055 #8/#9: establish governed routing on every start, not just first
+    # run — the full archive→start recovery cycle restarts an already-initialized
+    # runtime and must still (re)assert routing. Write the proxy URLs into the
+    # operator's shell profiles (.zshrc, .zprofile, .bash_profile) and publish
+    # them to the macOS GUI session via launchctl. Both are idempotent.
+    profile_result = _configure_shell_profile(args)
+    launchd_result = _set_launchd_env()
+
     if first_run:
-        profile_result = _configure_shell_profile(args)
         if not getattr(args, "json", False):
             print("Atested is initialized.")
             if configured_base_dirs:
@@ -1835,6 +1934,10 @@ def cmd_start(args) -> int:
                     print(f"  Working directory: {d}")
             _print_proxy_routes(profile_result)
             _print_first_run_guidance()
+    elif profile_result.get("updated") and not getattr(args, "json", False):
+        # Routing was re-established (e.g. after the operator removed the block);
+        # show what changed so it isn't a silent edit to their shell profiles.
+        _print_proxy_routes(profile_result)
 
     _flush_terminal_output()
 
@@ -1854,6 +1957,7 @@ def cmd_start(args) -> int:
         "public_key_pem": bootstrap["public_key_pem"],
         "configured_base_dirs": configured_base_dirs,
         "shell_profile": profile_result,
+        "launchd_env": launchd_result,
         "sync_config": sync_config,
         "supervisor": supervisor or _supervisor_status().get("supervisor", {}),
         "services": services or _service_statuses(),
@@ -1905,12 +2009,16 @@ def cmd_stop(args) -> int:
     # supervisor PID file is stale or mislabeled. Sweep the managed ports and
     # kill any orphan still listening, so stop guarantees the ports are free.
     orphan_sweep = _sweep_orphan_ports()
+    # QS-055 #9: clear the GUI-session proxy URLs so GUI apps don't keep routing
+    # to a now-stopped proxy. No-op off macOS.
+    launchd_result = _unset_launchd_env()
     payload = {
         "stopped": True,
         "role": (identity or {}).get("machine_role"),
         "supervisor": supervisor,
         "services": stopped,
         "port_sweep": orphan_sweep,
+        "launchd_env": launchd_result,
     }
     if getattr(args, "json", False):
         _emit(args, payload)
@@ -2281,14 +2389,17 @@ def cmd_uninstall(args) -> int:
         errors.append({"step": "stop", "error": str(exc)})
         result["steps"]["stop"] = {"error": str(exc)}
 
-    # --- Step 2: Remove shell profile entry ---
+    # --- Step 2: Remove shell profile entries + clear GUI-session env ---
+    # QS-055 #8/#9: start now writes to every shell profile and publishes the
+    # proxy URLs via launchctl; uninstall reverses both across all of them.
     try:
-        profile_path = _profile_path_for_shell()
-        if profile_path is not None:
-            profile_result = _remove_shell_profile_entry(profile_path)
-        else:
-            profile_result = {"removed": False, "reason": "unsupported_shell"}
-        result["steps"]["shell_profile"] = profile_result
+        targets = _shell_profile_targets()
+        profile_results = [_remove_shell_profile_entry(p) for p in targets] if targets else []
+        result["steps"]["shell_profile"] = {
+            "removed": any(r.get("removed") for r in profile_results),
+            "profiles": profile_results,
+        } if profile_results else {"removed": False, "reason": "unsupported_shell"}
+        result["steps"]["launchd_env"] = _unset_launchd_env()
     except Exception as exc:
         errors.append({"step": "shell_profile", "error": str(exc)})
         result["steps"]["shell_profile"] = {"error": str(exc)}

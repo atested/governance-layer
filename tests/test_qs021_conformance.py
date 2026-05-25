@@ -55,9 +55,18 @@ def test_conformance_intervention_with_condition_fixture(tmp_path):
 
     assert payload["state"] == "intervention"
     assert payload["modes"]["environmental"]["status"] == "condition_detected"
-    assert payload["active_conditions"][0]["condition_id"] == "CR-CRIT-001"
-    assert payload["active_conditions"][0]["condition_type"] == "stale_rules"
-    assert "Restart the proxy" in payload["active_conditions"][0]["guidance"]
+    cond = payload["active_conditions"][0]
+    assert cond["condition_id"] == "CR-CRIT-001"
+    assert cond["condition_type"] == "stale_rules"
+    # QS-055 #6: operator-facing guidance — the flat string is the action line,
+    # and structured what/why/what-to-do is attached as guidance_detail.
+    assert "Restart Atested" in cond["guidance"]
+    detail = cond["guidance_detail"]
+    assert detail["what"] and detail["why"] and detail["what_to_do"]
+    assert "stale policy rules" in detail["what"].lower()
+    # The payload carries the full catalog so the Environmental Health window
+    # can render per-check guidance.
+    assert "ENV-005" in payload["condition_guidance"]
 
 
 def test_conformance_halted_with_absent_qa_chain(tmp_path):
