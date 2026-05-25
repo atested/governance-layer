@@ -177,9 +177,9 @@ def _quality_service_degraded_reason() -> Optional[dict]:
     """Read the supervisor's quality-service degraded marker if present.
 
     The supervisor writes {runtime}/supervisor/quality-service.degraded.json
-    when it cannot produce a runnable binary (e.g., the Rust toolchain is
-    missing). Surface that reason in the conformance payload so the operator
-    sees something more useful than "HALTED".
+    when the prebuilt quality-service binary is missing, unsupported, or fails
+    manifest verification. Surface that reason in the conformance payload so
+    the operator sees something more useful than "HALTED".
     """
     runtime = os.environ.get("GOV_RUNTIME_DIR")
     if not runtime:
@@ -196,14 +196,14 @@ def _quality_service_degraded_reason() -> Optional[dict]:
 
 def _degraded_detail_message(degraded: dict) -> str:
     reason = str(degraded.get("reason") or "")
-    if reason.startswith("rust_toolchain_missing"):
-        return (
-            "Quality service cannot start: Rust toolchain not found. Install "
-            "Rust (https://rustup.rs) and restart Atested, or set "
-            "ATESTED_QUALITY_SERVICE_BIN to a prebuilt binary."
-        )
-    if reason.startswith("cargo build"):
-        return f"Quality service build failed during startup. {reason}"
+    if reason.startswith("quality_service_binary_missing"):
+        return f"Quality service binary is missing. Reinstall Atested or restore the shipped binary. {reason}"
+    if reason.startswith("quality_service_binary_hash_mismatch"):
+        return f"Quality service binary failed manifest verification. Reinstall Atested from a trusted release. {reason}"
+    if reason.startswith("quality_service_platform_unsupported"):
+        return f"Quality service is not available for this platform. {reason}"
+    if reason.startswith("quality_service_manifest"):
+        return f"Quality service manifest is unavailable or invalid. Reinstall Atested from a trusted release. {reason}"
     if reason:
         return f"Quality service unavailable: {reason}"
     return "Quality service is unavailable; check supervisor logs."
@@ -214,8 +214,9 @@ def build_conformance_payload(reader: DashboardQAChainReader) -> dict:
     stale_seconds = _stale_seconds()
     degraded = _quality_service_degraded_reason()
     if degraded is not None:
-        # Auto-provisioning could not produce a binary. Operator-actionable
-        # message takes precedence over the generic "QA chain unavailable".
+        # The shipped prebuilt binary is missing or failed verification.
+        # Operator-actionable message takes precedence over the generic
+        # "QA chain unavailable".
         return _halted_payload(
             _degraded_detail_message(degraded),
             qa_chain_present=False,

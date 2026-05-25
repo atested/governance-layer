@@ -1,9 +1,9 @@
-"""Tests for QS-026 — quality service self-provisioning.
+"""Tests for quality service prebuilt-binary provisioning.
 
 Covers:
   1. Auto-keygen: QS binary generates a PKCS#8 PEM key on first run.
-  2. Supervisor auto-build behavior (mocked).
-  3. Rust-toolchain-missing degraded path (mocked).
+  2. Supervisor prebuilt binary manifest verification (mocked).
+  3. Missing/hash-mismatch degraded paths (mocked).
   4. Dashboard conformance reader surfaces the degraded marker.
   5. End-to-end fresh-runtime startup produces a healthy QA chain snapshot.
 """
@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
+import hashlib
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -30,7 +29,12 @@ import process_supervisor as ps  # noqa: E402
 import conformance as cf  # noqa: E402
 
 
-QS_BINARY = REPO / "quality-service" / "target" / "release" / "quality-service"
+QS_TARGET = ps.quality_service_target_triple()
+QS_BINARY = (
+    REPO / "quality-service" / "prebuilt" / f"quality-service-{QS_TARGET}"
+    if QS_TARGET
+    else REPO / "quality-service" / "prebuilt" / "quality-service-unsupported"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +101,7 @@ def test_qa_signing_key_reused_across_restarts(tmp_path):
 
 @pytest.mark.skipif(not _qs_binary_available(), reason="QS binary not built")
 def test_first_run_produces_healthy_snapshot(tmp_path):
-    """Fresh runtime → QS writes a snapshot whose 'overall' is 'healthy'."""
+    """Fresh runtime → QS writes a healthy snapshot with binary provenance."""
     runtime = tmp_path / "runtime"
     (runtime / "LOGS").mkdir(parents=True)
     (runtime / "LOGS" / "decision-chain.jsonl").touch()
@@ -119,128 +123,104 @@ def test_first_run_produces_healthy_snapshot(tmp_path):
     assert snapshots, "expect at least one environmental snapshot"
     assert snapshots[0]["sequence"] == 1
     assert snapshots[0]["overall"] == "healthy", f"snapshot reports {snapshots[0]['overall']}"
+    manifest = json.loads(
+        (REPO / "quality-service" / "prebuilt" / "quality-service-manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert snapshots[0]["binary_sha256"] == manifest["binaries"][QS_TARGET]["sha256"]
 
 
 # ---------------------------------------------------------------------------
-# Supervisor auto-build — mocked
+# Supervisor prebuilt binary verification — mocked
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_binary_returns_existing_when_present(tmp_path, monkeypatch):
-    """If the binary exists and source files aren't newer, no build is triggered."""
+def _sha256(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_manifest(repo: Path, target: str, rel_path: str, sha256: str | None) -> Path:
+    manifest = repo / "quality-service" / "prebuilt" / "quality-service-manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "binaries": {
+                    target: {
+                        "status": "available",
+                        "target_triple": target,
+                        "path": rel_path,
+                        "sha256": sha256,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def test_ensure_binary_returns_existing_when_manifest_matches(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    fake_bin = tmp_path / "fakebin"
+    repo = tmp_path / "repo"
+    target = "aarch64-apple-darwin"
+    rel_path = f"quality-service/prebuilt/quality-service-{target}"
+    fake_bin = repo / rel_path
+    fake_bin.parent.mkdir(parents=True)
     fake_bin.write_bytes(b"#!/bin/sh\nexit 0\n")
     fake_bin.chmod(0o755)
-    monkeypatch.setenv("ATESTED_QUALITY_SERVICE_BIN", str(fake_bin))
+    _write_manifest(repo, target, rel_path, _sha256(fake_bin))
+    monkeypatch.setattr(ps, "REPO", repo)
+    monkeypatch.setattr(ps, "quality_service_target_triple", lambda: target)
 
-    # Custom binary path is trusted as-is; no build attempted.
     binary, err = ps.ensure_quality_service_binary(runtime)
     assert binary == fake_bin
     assert err is None
 
 
-def test_ensure_binary_custom_path_missing_reports_error(tmp_path, monkeypatch):
+def test_ensure_binary_missing_reports_error(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    missing = tmp_path / "not-there"
-    monkeypatch.setenv("ATESTED_QUALITY_SERVICE_BIN", str(missing))
-
-    binary, err = ps.ensure_quality_service_binary(runtime)
-    assert binary == missing
-    assert err is not None
-    assert "not found" in err
-
-
-def test_ensure_binary_builds_when_default_missing(tmp_path, monkeypatch):
-    """If default binary is missing and cargo is available, cargo build runs."""
-    runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    monkeypatch.delenv("ATESTED_QUALITY_SERVICE_BIN", raising=False)
-
-    fake_src = tmp_path / "quality-service"
-    (fake_src / "src").mkdir(parents=True)
-    (fake_src / "src" / "main.rs").write_text("fn main() {}\n")
-    (fake_src / "Cargo.toml").write_text("[package]\nname='q'\nversion='0.1.0'\nedition='2021'\n")
-    fake_target = fake_src / "target" / "release"
-
-    monkeypatch.setattr(ps, "quality_service_source_dir", lambda: fake_src)
-    monkeypatch.setattr(
-        ps,
-        "default_quality_service_bin",
-        lambda: fake_target / "quality-service",
-    )
-    monkeypatch.setattr(
-        ps,
-        "quality_service_bin_path",
-        lambda: fake_target / "quality-service",
-    )
-
-    captured = {}
-
-    def fake_run(argv, **kwargs):
-        captured["argv"] = argv
-        fake_target.mkdir(parents=True, exist_ok=True)
-        (fake_target / "quality-service").write_bytes(b"#!/bin/sh\nexit 0\n")
-        (fake_target / "quality-service").chmod(0o755)
-        return subprocess.CompletedProcess(argv, 0, b"", b"")
-
-    monkeypatch.setattr(ps.shutil, "which", lambda name: "/usr/bin/cargo" if name == "cargo" else None)
-    monkeypatch.setattr(ps.subprocess, "run", fake_run)
-
-    binary, err = ps.ensure_quality_service_binary(runtime)
-    assert err is None, err
-    assert captured["argv"][:3] == ["/usr/bin/cargo", "build", "--release"]
-    assert binary.exists()
-
-
-def test_ensure_binary_rust_missing_returns_explicit_reason(tmp_path, monkeypatch):
-    """Without `cargo` on PATH, the supervisor reports rust_toolchain_missing."""
-    runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    monkeypatch.delenv("ATESTED_QUALITY_SERVICE_BIN", raising=False)
-
-    fake_src = tmp_path / "quality-service"
-    (fake_src / "src").mkdir(parents=True)
-    (fake_src / "Cargo.toml").write_text("[package]\nname='q'\nversion='0.1.0'\nedition='2021'\n")
-
-    monkeypatch.setattr(ps, "quality_service_source_dir", lambda: fake_src)
-    nonexistent = tmp_path / "no-binary"
-    monkeypatch.setattr(ps, "default_quality_service_bin", lambda: nonexistent)
-    monkeypatch.setattr(ps, "quality_service_bin_path", lambda: nonexistent)
-    monkeypatch.setattr(ps.shutil, "which", lambda name: None)
+    repo = tmp_path / "repo"
+    target = "aarch64-apple-darwin"
+    rel_path = f"quality-service/prebuilt/quality-service-{target}"
+    _write_manifest(repo, target, rel_path, "sha256:" + "0" * 64)
+    monkeypatch.setattr(ps, "REPO", repo)
+    monkeypatch.setattr(ps, "quality_service_target_triple", lambda: target)
 
     binary, err = ps.ensure_quality_service_binary(runtime)
     assert err is not None
-    assert err.startswith("rust_toolchain_missing")
+    assert binary == repo / rel_path
+    assert err.startswith("quality_service_binary_missing")
 
 
-def test_ensure_binary_writes_log_on_build_failure(tmp_path, monkeypatch):
-    """A failed cargo build leaves a usable log file path in the error message."""
+def test_ensure_binary_hash_mismatch_reports_error(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    monkeypatch.delenv("ATESTED_QUALITY_SERVICE_BIN", raising=False)
-
-    fake_src = tmp_path / "quality-service"
-    (fake_src / "src").mkdir(parents=True)
-    (fake_src / "Cargo.toml").write_text("[package]\nname='q'\nversion='0.1.0'\nedition='2021'\n")
-    fake_bin = tmp_path / "no-binary"
-
-    monkeypatch.setattr(ps, "quality_service_source_dir", lambda: fake_src)
-    monkeypatch.setattr(ps, "default_quality_service_bin", lambda: fake_bin)
-    monkeypatch.setattr(ps, "quality_service_bin_path", lambda: fake_bin)
-    monkeypatch.setattr(ps.shutil, "which", lambda name: "/usr/bin/cargo")
-
-    def fail_run(argv, **kwargs):
-        return subprocess.CompletedProcess(argv, 101, b"", b"compile error")
-
-    monkeypatch.setattr(ps.subprocess, "run", fail_run)
+    repo = tmp_path / "repo"
+    target = "aarch64-apple-darwin"
+    rel_path = f"quality-service/prebuilt/quality-service-{target}"
+    fake_bin = repo / rel_path
+    fake_bin.parent.mkdir(parents=True)
+    fake_bin.write_bytes(b"#!/bin/sh\nexit 0\n")
+    fake_bin.chmod(0o755)
+    _write_manifest(repo, target, rel_path, "sha256:" + "0" * 64)
+    monkeypatch.setattr(ps, "REPO", repo)
+    monkeypatch.setattr(ps, "quality_service_target_triple", lambda: target)
 
     binary, err = ps.ensure_quality_service_binary(runtime)
     assert err is not None
-    assert "cargo build" in err
-    assert "exit 101" in err
+    assert binary == fake_bin
+    assert err.startswith("quality_service_binary_hash_mismatch")
+
+
+def test_ensure_binary_unsupported_platform_reports_error(tmp_path, monkeypatch):
+    runtime = tmp_path / "runtime"
+    monkeypatch.setattr(ps, "quality_service_target_triple", lambda: None)
+
+    _binary, err = ps.ensure_quality_service_binary(runtime)
+    assert err is not None
+    assert err.startswith("quality_service_platform_unsupported")
 
 
 # ---------------------------------------------------------------------------
@@ -252,10 +232,10 @@ def test_degraded_marker_written_then_cleared(tmp_path):
     runtime = tmp_path / "runtime"
     marker = runtime / "supervisor" / "quality-service.degraded.json"
 
-    ps.write_quality_service_degraded_marker(runtime, "rust_toolchain_missing: cargo not found")
+    ps.write_quality_service_degraded_marker(runtime, "quality_service_binary_missing: not found")
     assert marker.exists()
     data = json.loads(marker.read_text(encoding="utf-8"))
-    assert data["reason"].startswith("rust_toolchain_missing")
+    assert data["reason"].startswith("quality_service_binary_missing")
     assert "updated_utc" in data
 
     ps.write_quality_service_degraded_marker(runtime, None)
@@ -267,7 +247,7 @@ def test_degraded_marker_written_then_cleared(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_conformance_surfaces_rust_toolchain_missing(tmp_path, monkeypatch):
+def test_conformance_surfaces_missing_prebuilt_binary(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
     (runtime / "supervisor").mkdir(parents=True)
     (runtime / "LOGS").mkdir(parents=True)
@@ -275,7 +255,7 @@ def test_conformance_surfaces_rust_toolchain_missing(tmp_path, monkeypatch):
 
     # Write the supervisor's degraded marker
     ps.write_quality_service_degraded_marker(
-        runtime, "rust_toolchain_missing: cargo not found on PATH"
+        runtime, "quality_service_binary_missing: expected prebuilt binary"
     )
 
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
@@ -284,26 +264,26 @@ def test_conformance_surfaces_rust_toolchain_missing(tmp_path, monkeypatch):
     payload = cf.build_conformance_payload(reader)
 
     assert payload["state"] == "halted"
-    assert "Rust toolchain not found" in payload["detail"]
+    assert "binary is missing" in payload["detail"]
     assert payload["quality_service_alive"] is False
-    assert payload["quality_service_degraded"]["reason"].startswith("rust_toolchain_missing")
+    assert payload["quality_service_degraded"]["reason"].startswith("quality_service_binary_missing")
 
 
-def test_conformance_surfaces_build_failure(tmp_path, monkeypatch):
+def test_conformance_surfaces_hash_mismatch(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
     (runtime / "supervisor").mkdir(parents=True)
     (runtime / "LOGS").mkdir(parents=True)
     qa_chain = runtime / "LOGS" / "qa-chain.jsonl"
 
     ps.write_quality_service_degraded_marker(
-        runtime, "cargo build --release failed (exit 101); see /tmp/log"
+        runtime, "quality_service_binary_hash_mismatch: expected sha256:a actual sha256:b"
     )
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
 
     reader = cf.DashboardQAChainReader(qa_chain)
     payload = cf.build_conformance_payload(reader)
     assert payload["state"] == "halted"
-    assert "build failed" in payload["detail"].lower()
+    assert "manifest verification" in payload["detail"].lower()
 
 
 def test_conformance_no_degraded_marker_uses_standard_halted(tmp_path, monkeypatch):
@@ -326,25 +306,18 @@ def test_conformance_no_degraded_marker_uses_standard_halted(tmp_path, monkeypat
 # ---------------------------------------------------------------------------
 
 
-def test_build_service_specs_disables_quality_service_when_rust_missing(tmp_path, monkeypatch):
+def test_build_service_specs_disables_quality_service_when_binary_missing(tmp_path, monkeypatch):
     runtime = tmp_path / "runtime"
-    (runtime / "supervisor" / "logs").mkdir(parents=True)
-    monkeypatch.delenv("ATESTED_QUALITY_SERVICE_BIN", raising=False)
-
-    fake_src = tmp_path / "quality-service"
-    (fake_src / "src").mkdir(parents=True)
-    (fake_src / "Cargo.toml").write_text("[package]\nname='q'\nversion='0.1.0'\nedition='2021'\n")
-    fake_bin = tmp_path / "no-binary"
-
-    monkeypatch.setattr(ps, "quality_service_source_dir", lambda: fake_src)
-    monkeypatch.setattr(ps, "default_quality_service_bin", lambda: fake_bin)
-    monkeypatch.setattr(ps, "quality_service_bin_path", lambda: fake_bin)
-    monkeypatch.setattr(ps.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        ps,
+        "ensure_quality_service_binary",
+        lambda runtime: (tmp_path / "no-binary", "quality_service_binary_missing: expected prebuilt binary"),
+    )
 
     specs = ps.build_service_specs("primary", "127.0.0.1", 8765, runtime)
     qs_spec = next(s for s in specs if s["name"] == "quality_service")
     assert qs_spec.get("disabled_at_start") is True
-    assert "rust_toolchain_missing" in qs_spec["disabled_reason"]
+    assert "quality_service_binary_missing" in qs_spec["disabled_reason"]
 
     # Degraded marker should have been written.
     marker = runtime / "supervisor" / "quality-service.degraded.json"
@@ -359,11 +332,11 @@ def test_managed_service_honors_disabled_at_start(tmp_path):
         "name": "quality_service",
         "argv": ["/nonexistent"],
         "disabled_at_start": True,
-        "disabled_reason": "rust_toolchain_missing: cargo not found",
+        "disabled_reason": "quality_service_binary_missing: not found",
     }
     svc = ps.ManagedService(spec, runtime, log_dir, {})
     assert svc.disabled is True
-    assert svc.disabled_reason.startswith("rust_toolchain_missing")
+    assert svc.disabled_reason.startswith("quality_service_binary_missing")
     # poll() on a disabled, never-started service is a no-op
     svc.poll()
     assert svc.proc is None

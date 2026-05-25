@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
-import shutil
+import platform
 import signal
 import subprocess
 import sys
@@ -21,7 +22,6 @@ SIGNING_KEY_NAME = ".atested-signing-key.pem"
 MAX_RESTARTS = 3
 RESTART_WINDOW_SECONDS = 60
 STATUS_INTERVAL_SECONDS = 1.0
-QUALITY_SERVICE_BUILD_TIMEOUT = 300  # seconds; cargo --release first build can take a few minutes
 
 _stopping = False
 
@@ -80,92 +80,77 @@ def detach_kwargs() -> dict:
     return {"start_new_session": True}
 
 
-def default_quality_service_bin() -> Path:
-    return REPO / "quality-service" / "target" / "release" / "quality-service"
+SUPPORTED_QUALITY_SERVICE_TARGETS = {
+    ("Darwin", "arm64"): "aarch64-apple-darwin",
+    ("Darwin", "aarch64"): "aarch64-apple-darwin",
+    ("Darwin", "x86_64"): "x86_64-apple-darwin",
+    ("Linux", "x86_64"): "x86_64-unknown-linux-gnu",
+    ("Linux", "amd64"): "x86_64-unknown-linux-gnu",
+    ("Linux", "aarch64"): "aarch64-unknown-linux-gnu",
+    ("Linux", "arm64"): "aarch64-unknown-linux-gnu",
+}
 
 
-def quality_service_bin_path() -> Path:
-    return Path(
-        os.environ.get(
-            "ATESTED_QUALITY_SERVICE_BIN",
-            str(default_quality_service_bin()),
-        )
-    )
+def quality_service_manifest_path() -> Path:
+    return REPO / "quality-service" / "prebuilt" / "quality-service-manifest.json"
 
 
-def quality_service_source_dir() -> Path:
-    return REPO / "quality-service"
+def quality_service_target_triple() -> str | None:
+    return SUPPORTED_QUALITY_SERVICE_TARGETS.get((platform.system(), platform.machine().lower()))
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
 
 
 def ensure_quality_service_binary(runtime: Path) -> tuple[Path, str | None]:
-    """Ensure the quality-service binary exists. Build it if missing/stale.
+    """Return the manifest-verified prebuilt quality-service binary.
 
     Returns (binary_path, error). If error is None, the binary is ready to
     exec. If error is set, the supervisor must disable the quality-service
     spec and surface the reason to the operator via the degraded marker.
-
-    Auto-build policy:
-      - Custom ATESTED_QUALITY_SERVICE_BIN: trusted as-is; no build attempted.
-      - Default path under quality-service/target/release/: build with
-        `cargo build --release` if absent OR if any source file is newer
-        than the binary mtime.
-      - If `cargo` is not on PATH (no Rust toolchain installed), the
-        quality service is disabled with reason 'rust_toolchain_missing'.
-
-    Logs go to {runtime}/supervisor/logs/quality_service.build.log.
     """
-    custom_path = os.environ.get("ATESTED_QUALITY_SERVICE_BIN")
-    binary = quality_service_bin_path()
-    log_path = runtime / "supervisor" / "logs" / "quality_service.build.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if custom_path:
-        if not binary.exists():
-            return binary, f"custom ATESTED_QUALITY_SERVICE_BIN not found: {binary}"
-        return binary, None
-
-    src_dir = quality_service_source_dir()
-    cargo_toml = src_dir / "Cargo.toml"
-    if not cargo_toml.exists():
-        return binary, f"quality-service crate missing at {src_dir}"
-
-    needs_build = not binary.exists()
-    if binary.exists():
-        bin_mtime = binary.stat().st_mtime
-        for src_file in src_dir.glob("src/**/*.rs"):
-            if src_file.stat().st_mtime > bin_mtime:
-                needs_build = True
-                break
-        if not needs_build and cargo_toml.stat().st_mtime > bin_mtime:
-            needs_build = True
-
-    if not needs_build:
-        return binary, None
-
-    cargo = shutil.which("cargo")
-    if cargo is None:
+    manifest_path = quality_service_manifest_path()
+    target = quality_service_target_triple()
+    fallback_binary = REPO / "quality-service" / "prebuilt" / "quality-service-unknown"
+    if target is None:
+        return (
+            fallback_binary,
+            f"quality_service_platform_unsupported: {platform.system()} {platform.machine()} is not a supported quality-service platform",
+        )
+    if not manifest_path.exists():
+        return fallback_binary, f"quality_service_manifest_missing: {manifest_path}"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return fallback_binary, f"quality_service_manifest_invalid: {manifest_path}: {exc}"
+    binaries = manifest.get("binaries")
+    if not isinstance(binaries, dict):
+        return fallback_binary, f"quality_service_manifest_invalid: missing binaries object in {manifest_path}"
+    entry = binaries.get(target)
+    if not isinstance(entry, dict):
+        return fallback_binary, f"quality_service_binary_missing: manifest has no entry for {target}"
+    rel_path = entry.get("path")
+    expected_hash = entry.get("sha256")
+    if not isinstance(rel_path, str) or not rel_path:
+        return fallback_binary, f"quality_service_manifest_invalid: missing path for {target}"
+    binary = REPO / rel_path
+    if not binary.exists():
+        return binary, f"quality_service_binary_missing: expected prebuilt binary at {binary}"
+    if not os.access(binary, os.X_OK):
+        return binary, f"quality_service_binary_not_executable: {binary}"
+    if not isinstance(expected_hash, str) or not expected_hash.startswith("sha256:"):
+        return binary, f"quality_service_manifest_invalid: missing sha256 for {target}"
+    actual_hash = _file_sha256(binary)
+    if actual_hash != expected_hash:
         return (
             binary,
-            "rust_toolchain_missing: cargo not found on PATH; install Rust to enable the quality service",
+            f"quality_service_binary_hash_mismatch: {target} expected {expected_hash} actual {actual_hash}",
         )
-
-    with log_path.open("a", encoding="utf-8") as log:
-        log.write(f"\n=== {now_utc_z()} cargo build --release ===\n")
-        try:
-            result = subprocess.run(
-                [cargo, "build", "--release", "--manifest-path", str(cargo_toml)],
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=QUALITY_SERVICE_BUILD_TIMEOUT,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return binary, f"cargo build timed out after {QUALITY_SERVICE_BUILD_TIMEOUT}s; see {log_path}"
-
-    if result.returncode != 0:
-        return binary, f"cargo build --release failed (exit {result.returncode}); see {log_path}"
-    if not binary.exists():
-        return binary, f"cargo build reported success but binary missing at {binary}"
     return binary, None
 
 
@@ -177,7 +162,7 @@ def write_quality_service_degraded_marker(runtime: Path, reason: str | None) -> 
 
     The dashboard's conformance reader inspects this marker to distinguish
     a normal HALTED state (quality service running but stale) from a
-    self-provisioning failure (toolchain missing, build failed, etc.).
+    prebuilt-binary provisioning failure (missing binary, hash mismatch, etc.).
     Removed when the binary is ready.
     """
     marker = runtime / "supervisor" / "quality-service.degraded.json"
@@ -453,8 +438,8 @@ def main(argv=None) -> int:
 
     for service in services:
         if service.disabled:
-            # Auto-provisioning could not produce a runnable binary (e.g., the
-            # Rust toolchain is missing). Skip ready-file gating; downstream
+            # The prebuilt quality-service binary is missing or failed manifest
+            # verification. Skip ready-file gating; downstream
             # services start anyway so the dashboard can render and explain
             # the degraded state to the operator.
             continue

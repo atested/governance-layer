@@ -1,0 +1,143 @@
+name: Quality Service Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-13
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: |
+          cargo build \
+            --manifest-path quality-service/Cargo.toml \
+            --release \
+            --target "${{ matrix.target }}"
+
+      - name: Strip binary
+        run: |
+          strip "quality-service/target/${{ matrix.target }}/release/quality-service"
+
+      - name: Package binary and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="release/${{ matrix.target }}"
+          mkdir -p "$out_dir"
+          cp "quality-service/target/${{ matrix.target }}/release/quality-service" \
+            "$out_dir/quality-service-${{ matrix.target }}"
+          chmod 755 "$out_dir/quality-service-${{ matrix.target }}"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import subprocess
+          from datetime import datetime, timezone
+
+          target = "${{ matrix.target }}"
+          out_dir = pathlib.Path("release") / target
+          binary = out_dir / f"quality-service-{target}"
+          digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+          metadata = {
+              "status": "available",
+              "target_triple": target,
+              "path": f"quality-service/prebuilt/quality-service-{target}",
+              "sha256": f"sha256:{digest}",
+              "size_bytes": binary.stat().st_size,
+              "rust_toolchain": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+              "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "build_timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+          (out_dir / "metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-service-${{ matrix.target }}
+          path: release/${{ matrix.target }}/*
+          if-no-files-found: error
+
+  manifest:
+    name: Generate manifest and attach release assets
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Generate aggregate manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          from datetime import datetime, timezone
+
+          targets = [
+              "aarch64-apple-darwin",
+              "x86_64-apple-darwin",
+              "x86_64-unknown-linux-gnu",
+              "aarch64-unknown-linux-gnu",
+          ]
+          root = pathlib.Path("release-artifacts")
+          binaries = {}
+          for target in targets:
+              metadata_files = list(root.glob(f"quality-service-{target}/metadata.json"))
+              if len(metadata_files) != 1:
+                  raise SystemExit(f"missing metadata for {target}")
+              binaries[target] = json.loads(metadata_files[0].read_text())
+
+          manifest = {
+              "schema_version": 1,
+              "product": "atested-quality-service",
+              "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "binaries": binaries,
+          }
+          pathlib.Path("quality-service-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - name: Attach binaries to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            quality-service-manifest.json
+            release-artifacts/**/quality-service-*
