@@ -12,19 +12,19 @@
 import { modalManager } from '../modal-manager.js';
 
 const MODE_LABEL = {
-  environmental: 'Environmental',
-  post_hoc: 'Post-hoc verification',
-  spc: 'SPC',
-  element: 'Element verification',
-  behavioral: 'Behavioral analysis',
+  environmental: 'Environmental Health',
+  post_hoc: 'Decision Re-verification',
+  spc: 'Statistical Process Control',
+  element: 'Structural Verification',
+  behavioral: 'Behavioral Anomalies',
 };
 
 const MODE_DESCRIPTION = {
-  environmental: 'Pre-flight checks that the governance environment is sound before any decision is governed.',
-  post_hoc: 'Re-verifies recorded decisions against current policy to catch drift between what was decided and what the rules now say.',
-  spc: 'Statistical Process Control — tracks decision-stream metrics (ALLOW rate, classification mix) and flags statistically significant shifts.',
-  element: 'Verifies chain record schemas, hash linkage, signatures, and configuration state.',
-  behavioral: 'Looks for behavioral anomalies across recent decisions.',
+  environmental: 'Pre-flight checks that the governance environment is sound: policy rules, signing keys, chain files, disk space, process health.',
+  post_hoc: 'Re-verifies recorded decisions against current policy: structural integrity, classification consistency, approval provenance, negative constraints.',
+  spc: 'Statistical Process Control over the decision stream: ALLOW rate, classification mix, rule concentration, decision throughput, tool diversity.',
+  element: 'Structural verification of the governance chain: chain record schemas, hash linkage, signatures, configuration state.',
+  behavioral: 'Behavioral anomaly detection: classification consistency, decision reversals, temporal patterns, approval provenance, policy-rule coverage.',
 };
 
 const ENV_DESCRIPTION = {

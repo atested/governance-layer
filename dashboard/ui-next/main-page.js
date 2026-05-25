@@ -700,14 +700,15 @@ function _renderConformanceModes(modes) {
   }
 }
 
-// QS-043: operator-facing "what this mode checks" copy, shown under each row.
+// QS-043/QS-045: operator-facing "what this mode checks" copy with concrete
+// examples, shown under each row.
 function _modeDescription(key) {
   return {
-    environmental: 'Pre-flight checks that the governance environment is sound before any decision is governed.',
-    post_hoc: 'Re-verifies recorded decisions against current policy to catch drift between what was decided and what the rules now say.',
-    spc: 'Tracks decision-stream metrics (ALLOW rate, classification mix) and flags statistically significant shifts.',
-    element: 'Verifies chain record schemas, hash linkage, signatures, and configuration state.',
-    behavioral: 'Looks for behavioral anomalies: classification consistency, decision reversals, temporal patterns, approval provenance, and policy-rule coverage.',
+    environmental: 'policy rules, signing keys, chain files, disk space, process health',
+    post_hoc: 'structural integrity, classification consistency, approval provenance, negative constraints',
+    spc: 'ALLOW rate, classification mix, rule concentration, decision throughput, tool diversity',
+    element: 'chain record schemas, hash linkage, signatures, configuration state',
+    behavioral: 'classification consistency, decision reversals, temporal patterns, approval provenance, policy-rule coverage',
   }[key] || '';
 }
 
@@ -715,8 +716,6 @@ function _modeDescription(key) {
 function _modeTooltip(key) {
   return {
     spc: 'Statistical Process Control — detects systemic changes in the decision stream.',
-    post_hoc: 'After-the-fact re-verification of past decisions.',
-    element: 'Element verification — structural integrity checks on the governance chain.',
   }[key] || '';
 }
 
@@ -764,11 +763,11 @@ function _renderConformanceConditions(conditions) {
 
 function _modeLabel(key) {
   return {
-    environmental: 'Environmental',
-    post_hoc: 'Post-hoc',
-    spc: 'SPC',
-    element: 'Element',
-    behavioral: 'Behavioral',
+    environmental: 'Environmental Health',
+    post_hoc: 'Decision Re-verification',
+    spc: 'Statistical Process Control',
+    element: 'Structural Verification',
+    behavioral: 'Behavioral Anomalies',
   }[key] || key;
 }
 
@@ -934,17 +933,22 @@ mpStyles.textContent = `
     flex-direction: column;
     gap: 6px;
   }
-  .mp-conformance-row,
-  .mp-conformance-condition {
-    background: rgba(255,255,255,0.03);
-    border: 1px dashed rgba(255,255,255,0.08);
-    border-radius: 2px;
-    padding: 8px 10px;
+  /* QS-045: mode rows are light, clickable summary lines (not heavy blocks),
+     aligned to the header content rather than filled full-width cards. */
+  .mp-conformance-row {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-radius: 0;
+    padding: 7px 4px;
     display: grid;
-    grid-template-columns: 130px 110px 1fr auto;
+    grid-template-columns: 190px 90px 1fr auto;
     gap: 8px;
     align-items: center;
     font-size: 0.78rem;
+  }
+  .mp-conformance-row:last-child {
+    border-bottom: none;
   }
   /* QS-044: mode rows are buttons that open a detail window. */
   .mp-conformance-row-clickable {
@@ -956,8 +960,8 @@ mpStyles.textContent = `
   }
   .mp-conformance-row-clickable:hover,
   .mp-conformance-row-clickable:focus-visible {
-    background: rgba(102,153,204,0.10);
-    border-color: rgba(102,153,204,0.35);
+    background: rgba(102,153,204,0.08);
+    border-radius: 2px;
     outline: none;
   }
   .mp-conformance-row-chevron {
@@ -966,12 +970,26 @@ mpStyles.textContent = `
     justify-self: end;
   }
   .mp-conformance-condition {
+    background: rgba(255,255,255,0.03);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 2px;
+    padding: 8px 10px;
+    display: grid;
     grid-template-columns: 130px 1fr;
+    gap: 8px;
+    align-items: start;
+    font-size: 0.78rem;
   }
   .mp-conformance-condition em {
     grid-column: 1 / -1;
   }
-  .mp-conformance-row span {
+  /* QS-045: the mode name reads as a label (lighter, not grey); the chevron
+     stays accent-colored. */
+  .mp-conformance-row span:not(.mp-conformance-row-chevron) {
+    color: #c9d1d9;
+    font-weight: 500;
+  }
+  .mp-conformance-condition span {
     color: #8b919a;
   }
   .mp-conformance-row strong,
@@ -985,10 +1003,10 @@ mpStyles.textContent = `
     color: #8b919a;
     font-style: normal;
   }
-  /* QS-043: full-width "what this checks" description line under a row. */
+  /* QS-043/QS-045: full-width "what this checks" example line under a row. */
   .mp-conformance-row .mp-row-desc {
     grid-column: 1 / -1;
-    color: #6e7681;
+    color: #8b919a;
     font-size: 0.72rem;
     line-height: 1.35;
   }
