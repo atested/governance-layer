@@ -743,58 +743,6 @@ def _compute_deny_rate(chain_path: Path, window: int = 100, _rows: list = None) 
     }
 
 
-def _observation_gap(chain_path: Path, _rows: list = None) -> Dict[str, Any]:
-    """Detect gaps in observation data (transparency metric drop)."""
-    if _rows is None:
-        if not chain_path.exists():
-            return {"has_observations": False, "gap_detected": False}
-        _rows = _load_chain_rows_raw(chain_path)
-
-    last_governed_ts = None
-    last_observation_ts = None
-    governed_count = 0
-    observation_count = 0
-
-    for rec in _rows:
-        ts = rec.get("timestamp_utc")
-        if rec.get("event_type") == "ungoverned_operation_observed":
-            observation_count += 1
-            last_observation_ts = ts
-        elif rec.get("policy_decision") in ("ALLOW", "DENY"):
-            governed_count += 1
-            last_governed_ts = ts
-
-    if observation_count == 0:
-        return {"has_observations": False, "gap_detected": False, "governed_count": governed_count}
-
-    # Gap: governed operations happening but no recent observations
-    gap_detected = False
-    hours_since_last = None
-    now_utc = datetime.now(timezone.utc)
-    if last_observation_ts:
-        obs_dt = _parse_utc(last_observation_ts)
-        if obs_dt:
-            hours_since_last = round((now_utc - obs_dt).total_seconds() / 3600, 1)
-    if last_governed_ts and last_observation_ts:
-        gov_dt = _parse_utc(last_governed_ts)
-        obs_dt = _parse_utc(last_observation_ts)
-        if gov_dt and obs_dt:
-            gap_hours = (gov_dt - obs_dt).total_seconds() / 3600
-            if gap_hours > 24:
-                gap_detected = True
-
-    return {
-        "has_observations": True,
-        "gap_detected": gap_detected,
-        "governed_count": governed_count,
-        "observation_count": observation_count,
-        "ungoverned_operation_count": observation_count,
-        "hours_since_last": hours_since_last,
-        "last_governed": last_governed_ts,
-        "last_observation": last_observation_ts,
-    }
-
-
 def _user_activity(chain_path: Path, _rows: list = None) -> Dict[str, Any]:
     """Analyze user activity for anomalies."""
     if _rows is None:
@@ -948,10 +896,6 @@ def collect_health_signals(
     # User activity
     users = _user_activity(chain_path, _rows=_shared_rows)
 
-    # Legacy health contract retained for CLI/tests; the v3 dashboard no longer
-    # renders this as a Transparency card.
-    observations = _observation_gap(chain_path, _rows=_shared_rows)
-
     # License
     license_info = _license_health(runtime_root)
 
@@ -1046,7 +990,6 @@ def collect_health_signals(
         "storage": storage,
         "integrity": integrity,
         "background_verification": background_verification,
-        "observations": observations,
         "users": users,
         "license": license_info,
         "recent_stability_events": recent_events,

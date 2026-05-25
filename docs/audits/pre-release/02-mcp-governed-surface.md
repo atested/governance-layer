@@ -3,7 +3,7 @@
 ### Scope
 - Files reviewed: `mcp/server.py`, `mcp/remote_server.py`, `mcp/v2_proxy.py`, `mcp/registry_integrity.py`, `mcp/capabilities/registry.py`, `mcp/licensing.py`, `mcp/storage_contract.py`
 - Design docs referenced: `docs/design/atested-v3-design.md` (sections 3-5, 10), `docs/INVARIANTS.md` (INV-001, INV-002, INV-004, INV-006, INV-009, INV-010)
-- Tests examined: `tests/test_api_evaluate_endpoint.py`, `tests/test_v2_proxy.py`, `tests/test_registry_integrity.py`, `tests/test_mcp_remote_*`, `tests/test_observation_endpoint.py`
+- Tests examined: `tests/test_api_evaluate_endpoint.py`, `tests/test_v2_proxy.py`, `tests/test_registry_integrity.py`, `tests/test_mcp_remote_*`
 
 ### Confirmed Working As Designed
 - `/api/evaluate` implements unknown-tool auto-classification and persists learned mappings (`mcp/remote_server.py:844-860`, `mcp/remote_server.py:669-752`), consistent with INV-009.

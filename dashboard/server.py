@@ -1475,9 +1475,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if not self._check_auth():
                 _json_response(self, {"error": "Unauthorized"}, 401)
                 return
-            if path == "/api/observe":
-                self._handle_observe()
-            elif path == "/api/approvals/add":
+            if path == "/api/approvals/add":
                 self._handle_approve()
             elif path == "/api/approvals/revoke":
                 self._handle_revoke()
@@ -1563,59 +1561,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.end_headers()
 
-
-    def _handle_observe(self):
-        """POST /api/observe — record an ungoverned operation observation.
-
-        Accepts JSON body: {"operation_type": "...", "target": "...", "source": "..."}
-        This is the HTTP endpoint for non-MCP integrations.
-        """
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length > 4096:
-                _json_response(self, {"error": "payload too large"}, 413)
-                return
-            body = self.rfile.read(length)
-            data = json.loads(body) if body else {}
-        except (json.JSONDecodeError, ValueError):
-            _json_response(self, {"error": "invalid JSON"}, 400)
-            return
-
-        op_type = str(data.get("operation_type", "")).strip().lower()
-        from event_model import UNGOVERNED_OPERATION_TYPES, build_non_action_event
-        if op_type not in UNGOVERNED_OPERATION_TYPES:
-            _json_response(self, {
-                "error": "INVALID_OPERATION_TYPE",
-                "valid_types": sorted(UNGOVERNED_OPERATION_TYPES),
-            }, 400)
-            return
-
-        payload = {"operation_type": op_type}
-        target = str(data.get("target", "")).strip()
-        source = str(data.get("source", "")).strip()
-        observed_at = str(data.get("observed_at", "")).strip()
-        if target:
-            payload["target"] = target
-        if source:
-            payload["source"] = source
-        if observed_at:
-            payload["observed_at"] = observed_at
-
-        # Append to chain (lightweight — no policy eval)
-        try:
-            event = build_non_action_event(
-                "ungoverned_operation_observed",
-                payload,
-                prev_record_hash=None,
-            )
-            _append_chain_record_atomic(event)
-            _json_response(self, {
-                "recorded": True,
-                "event_id": event.get("event_id"),
-                "operation_type": op_type,
-            })
-        except Exception as exc:
-            _json_response(self, {"error": str(exc)}, 500)
 
     def _handle_approve(self):
         """POST /api/approvals/add — approve a file (record approval event)."""
@@ -2888,16 +2833,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "severity": "critical",
                     "title": "DENY Rate Anomaly",
                     "message": "The recent DENY rate is significantly above the historical average.",
-                    "persistent": False,
-                })
-
-            # Observation gap
-            if h.get("observations", {}).get("gap_detected"):
-                notifications.append({
-                    "id": "observation_gap",
-                    "severity": "critical",
-                    "title": "Observation Gap Detected",
-                    "message": "No ungoverned operation observations received recently. Check hook configuration.",
                     "persistent": False,
                 })
 
@@ -4982,16 +4917,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     pass  # Fail open — serve live data if archive merge fails
             _json_response(self, data)
             _maybe_trigger_archive()
-
-        elif path == "/api/transparency":
-            from readout import load_chain_rows, compute_transparency_metric
-            rows = load_chain_rows(CHAIN)
-            data = compute_transparency_metric(
-                rows,
-                start_time=qs("start_time") or None,
-                end_time=qs("end_time") or None,
-            )
-            _json_response(self, data)
 
         elif path == "/api/health":
             # DEPRECATED: legacy health surface. Operator-facing health/state is

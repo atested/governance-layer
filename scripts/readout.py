@@ -277,7 +277,6 @@ def assemble_governance_status_record(
             "opaque_path_encounter_frequency": opacity_metrics["opaque_path_encounter_frequency"],
             "opaque_resolution_distribution": opacity_metrics["resolution_distribution"],
         },
-        "transparency_metric": compute_transparency_metric(metrics_rows),
     }
 
 
@@ -353,7 +352,6 @@ EVENT_CATEGORIES = frozenset([
     "opaque_approval",
     "opaque_revocation",
     "opaque_invocation_decision",
-    "ungoverned_observation",
     "policy_rules_changed",
     "policy_acknowledged",
     "integrity",
@@ -364,7 +362,6 @@ _EVENT_TYPE_TO_CATEGORY = {
     "opaque_artifact_approval": "opaque_approval",
     "opaque_artifact_revocation": "opaque_revocation",
     "opaque_invocation_decision": "opaque_invocation_decision",
-    "ungoverned_operation_observed": "ungoverned_observation",
     "usage_attestation": "usage_attestation",
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
@@ -511,21 +508,6 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "record_hash": rec.get("record_hash", ""),
         }
 
-    elif category == "ungoverned_observation":
-        op_type = rec.get("operation_type", "")
-        target = rec.get("target", "")
-        source = rec.get("source", "")
-        summary = f"ungoverned {op_type}" + (f" on {target}" if target else "")
-        detail = {
-            "operation_type": op_type,
-            "target": target,
-            "source": source,
-        }
-        evidence = {
-            "event_id": rec.get("event_id", ""),
-            "record_hash": rec.get("record_hash", ""),
-        }
-
     elif category == "policy_rules_changed":
         governed_family = rec.get("governed_family", "")
         summary = "Policy Changed"
@@ -601,17 +583,6 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
     return entry
 
 
-# Map from classifier action_type to hook operation_type for dedup matching.
-_ACTION_TO_OP = {
-    "read": {"read"},
-    "write": {"write", "edit"},
-    "list": {"list", "glob", "grep"},
-    "execute": {"execute"},
-    "delete": {"delete"},
-    "network": {"execute"},
-}
-
-
 def _parse_ts(ts: str) -> Optional[datetime]:
     """Parse an ISO-8601 UTC timestamp, returning None on failure."""
     try:
@@ -619,54 +590,6 @@ def _parse_ts(ts: str) -> Optional[datetime]:
         return datetime.fromisoformat(s)
     except (ValueError, AttributeError):
         return None
-
-
-def _deduplicate_proxy_and_hook(entries: list[dict]) -> list[dict]:
-    """Remove ungoverned observations that duplicate a nearby mediated decision.
-
-    When the API proxy is active, both the proxy and the hook record the same
-    tool call. The proxy's mediated decision (pre-execution) is authoritative;
-    the hook's observation (post-execution) is redundant.
-
-    Match criteria: same target, action type compatible, within 10 seconds.
-
-    Uses a dict keyed by target for O(n+m) instead of O(n×m) scanning.
-    """
-    # Build a dict index: target → list of (action_type, parsed_ts)
-    mediated_by_target: dict[str, list[tuple[str, Optional[datetime]]]] = {}
-    for e in entries:
-        if e["event_category"] == "action_decision":
-            target = e["detail"].get("target", "")
-            action_type = e["detail"].get("action_type", "")
-            if target:
-                ts = _parse_ts(e["timestamp_utc"])
-                mediated_by_target.setdefault(target, []).append((action_type, ts))
-
-    if not mediated_by_target:
-        return entries
-
-    def _is_duplicate_observation(entry: dict) -> bool:
-        if entry["event_category"] != "ungoverned_observation":
-            return False
-        obs_target = entry["detail"].get("target", "")
-        if not obs_target or obs_target not in mediated_by_target:
-            return False
-        obs_op = entry["detail"].get("operation_type", "")
-        obs_ts = _parse_ts(entry["timestamp_utc"])
-        for m_action, m_ts in mediated_by_target[obs_target]:
-            compatible_ops = _ACTION_TO_OP.get(m_action, set())
-            if obs_op and obs_op not in compatible_ops:
-                continue
-            if obs_ts is not None and m_ts is not None:
-                delta = abs((obs_ts - m_ts).total_seconds())
-                if delta <= 10:
-                    return True
-            else:
-                return True
-        return False
-
-    return [e for e in entries if not _is_duplicate_observation(e)]
-
 
 def governance_activity_view(
     chain_path: Path,
@@ -699,12 +622,6 @@ def governance_activity_view(
         entry = _normalize_activity_entry(rec, sequence_position=i + 1)
         if entry is not None:
             entries.append(entry)
-
-    # Deduplicate: suppress ungoverned observations that overlap with a
-    # nearby mediated decision (same target, within a short time window).
-    # When the API proxy governs pre-execution, the hook's post-execution
-    # observation of the same operation is redundant.
-    entries = _deduplicate_proxy_and_hook(entries)
 
     # Apply filters (conjunctive).
     if governed_family:
@@ -783,54 +700,6 @@ def governance_activity_view(
             "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
         },
         "unified_view": unified_context,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Transparency metric
-# ---------------------------------------------------------------------------
-
-
-def compute_transparency_metric(
-    rows: list[dict],
-    *,
-    start_time: Optional[str] = None,
-    end_time: Optional[str] = None,
-) -> dict:
-    """Compute the transparency metric from chain rows.
-
-    Transparency = governed_operations / (governed_operations + ungoverned_observations).
-    If no ungoverned observations exist, returns observation_data=False so the
-    dashboard can show "No observation data" instead of a misleading 100%.
-    """
-    governed_count = 0
-    ungoverned_count = 0
-
-    for row in rows:
-        ts = row.get("timestamp_utc", "")
-        if not _in_time_range(ts, start_time, end_time):
-            continue
-        event_type = row.get("event_type")
-        if event_type == "ungoverned_operation_observed":
-            ungoverned_count += 1
-        elif event_type is None:
-            # Action records (governed operations) have no event_type field
-            governed_count += 1
-
-    has_observation_data = ungoverned_count > 0
-    total = governed_count + ungoverned_count
-
-    if total == 0:
-        transparency_pct = None
-    else:
-        transparency_pct = round(governed_count / total, 6)
-
-    return {
-        "observation_data": has_observation_data,
-        "governed_operations": governed_count,
-        "ungoverned_observations": ungoverned_count,
-        "total_observed": total,
-        "transparency_pct": transparency_pct,
     }
 
 
@@ -972,10 +841,6 @@ def audit_query(
             entry["user_identity"] = rec["user_identity"]
 
         entries.append(entry)
-
-    # Deduplicate: suppress ungoverned observations that overlap with a
-    # nearby mediated decision (same operation recorded by both proxy and hook).
-    entries = _deduplicate_proxy_and_hook(entries)
 
     entries.reverse()
     total_matching = len(entries)

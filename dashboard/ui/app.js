@@ -175,7 +175,6 @@ function categoryLabel(cat) {
     "opaque_approval": "Operation Approval",
     "opaque_revocation": "Operation Revocation",
     "opaque_invocation_decision": "Invocation Decision",
-    "ungoverned_observation": "Boundary Observation",
     "usage_attestation": "Usage Attestation",
   };
   return map[cat] || cat || "\u2014";
@@ -193,12 +192,12 @@ function tierBadge(tier) {
 
 function globalNav(currentPath) {
   const tabs = [
-    { path: "/overview", label: "Overview", tip: "High-level governance posture: chain health, user counts, transparency, and denied actions." },
-    { path: "/activity", label: "Activity", tip: "Chronological feed of every governed event — actions, approvals, verifications, and observations." },
+    { path: "/overview", label: "Overview", tip: "High-level governance posture: chain health, user counts, and denied actions." },
+    { path: "/activity", label: "Activity", tip: "Chronological feed of governed events — actions, approvals, and verifications." },
     { path: "/approvals", label: "Approvals", tip: "Manage approved operations — add new approvals, review existing ones, or revoke access." },
     { path: "/audit", label: "Audit", tip: "Query the governance chain by time, user, tool, decision, or event category. Export results as JSON." },
     { path: "/report", label: "Reports", tip: "Aggregate views of governance activity grouped by tool, user, decision, or category." },
-    { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, observation coverage, and license." },
+    { path: "/health", label: "Health", tip: "Infrastructure status: chain integrity, policy trends, storage, and license." },
     { path: "/configuration", label: "Configuration", tip: "View and manage the capability registry — governed tool directories, constraints, and hard caps." },
     { path: "/feedback", label: "Feedback", tip: "Send feedback, view telemetry history, and control what data leaves your installation." },
   ];
@@ -240,10 +239,6 @@ async function renderOverview() {
     ? '<span class="status-ok">OK</span>'
     : '<span class="status-warn">BROKEN</span>';
 
-  const hasObsData = status.transparency_metric && status.transparency_metric.observation_data;
-  const noObsHtml = '<span class="muted" style="font-size:0.75rem">No observation data</span>';
-  const noObsTip = "Observation hooks are not configured. Install the PostToolUse hook so ungoverned operations are recorded and this metric has data.";
-
   const updateBanner = (updateInfo && updateInfo.update_available && !_updateDismissed)
     ? `<div class="update-banner">
          <span>Atested <strong>v${escapeHtml(updateInfo.latest_version)}</strong> is available. You are running v${escapeHtml(ATESTED_VERSION)}.</span>
@@ -271,7 +266,7 @@ async function renderOverview() {
         <div class="overview-section-title">Chain Health</div>
         <div class="overview-metrics">
           <div class="status-card">
-            <span class="eyebrow">${tip("Chain Events", "Total number of records in the governance chain, including governed actions, approvals, verifications, and observations.")}</span>
+            <span class="eyebrow">${tip("Chain Events", "Total number of records in the governance chain, including governed actions, approvals, and verifications.")}</span>
             <span class="status-value">${status.chain_event_count}</span>
           </div>
           <div class="status-card">
@@ -299,32 +294,6 @@ async function renderOverview() {
           <div class="status-card">
             <span class="eyebrow">${tip("Approval-Gated Operations", "Operations requiring operator approval (Tier 3/4 confidence). Recorded in the governance chain.")}</span>
             <span class="status-value">${status.opacity_posture.opaque_count}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="overview-section">
-        <div class="overview-section-title">Transparency & Coverage</div>
-        <div class="overview-metrics">
-          <div class="status-card">
-            <span class="eyebrow">${tip("Governed Operations", "Operations that passed through governance policy evaluation and were recorded in the chain.")}</span>
-            <span class="status-value">${status.transparency_metric ? status.transparency_metric.governed_operations : 0}</span>
-          </div>
-          <div class="status-card">
-            <span class="eyebrow">${tip("Ungoverned Operations", hasObsData ? "Operations reported by observation hooks that bypassed governance. These were detected but not policy-evaluated." : noObsTip)}</span>
-            <span class="status-value">${hasObsData ? status.transparency_metric.ungoverned_observations : noObsHtml}</span>
-          </div>
-          <div class="status-card">
-            <span class="eyebrow">${tip("Total Operations", hasObsData ? "Sum of governed operations and ungoverned observations. The denominator for the transparency percentage." : noObsTip)}</span>
-            <span class="status-value">${hasObsData ? status.transparency_metric.total_observed : noObsHtml}</span>
-          </div>
-          <div class="status-card">
-            <span class="eyebrow">${tip("Transparency Rate", "Percentage of total observed operations that flowed through governance. Higher is better. Requires observation hooks to be configured.")}</span>
-            <span class="status-value">${hasObsData ? Math.round(status.transparency_metric.transparency_pct * 100) + "%" : noObsHtml}</span>
-          </div>
-          <div class="status-card">
-            <span class="eyebrow">${tip("Unique Users", "Distinct user identities that have generated governed actions or events in the chain.")}</span>
-            <span class="status-value">${users.unique_users}</span>
           </div>
         </div>
       </div>
@@ -371,7 +340,7 @@ async function renderOverview() {
           const href = rid ? navHref("/record", { record_id: rid, from: "activity" }) : "";
           return `
             <div class="activity-entry${href ? " clickable" : ""}" ${href ? `data-nav-href="${escapeHtml(href)}"` : ""}>
-              <strong>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : (e.event_category === "ungoverned_observation" ? _renderUngovernedDetail(e) : escapeHtml(e.summary))}</strong>
+              <strong>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : escapeHtml(e.summary)}</strong>
               <span class="muted"> \u00b7 ${categoryLabel(e.event_category)} \u00b7 ${formatTime(e.timestamp_utc)}</span>
             </div>
           `;
@@ -423,18 +392,6 @@ function _sortEntries(entries) {
     if (va > vb) return dir;
     return 0;
   });
-}
-
-function _renderUngovernedDetail(entry) {
-  const detail = entry.detail || {};
-  const opType = detail.operation_type || "";
-  const target = detail.target || "";
-  const source = detail.source || "";
-  return `<div class="ungoverned-detail">
-    <span class="ungoverned-op">${escapeHtml(opType)}</span>
-    ${target ? `<span class="ungoverned-target" title="${escapeHtml(target)}">${escapeHtml(truncate(target, 40))}</span>` : ""}
-    ${source ? `<span class="ungoverned-source">via ${escapeHtml(truncate(source, 20))}</span>` : ""}
-  </div>`;
 }
 
 function _renderMediatedDetail(entry) {
@@ -493,16 +450,15 @@ async function renderActivity() {
                 const rid = e.evidence?.request_id || e.evidence?.event_id || e.evidence?.record_hash || "";
                 const decision = e.evidence?.policy_decision || "";
                 const isDeny = decision === "DENY" || e.summary?.includes("DENY");
-                const isUngoverned = e.event_category === "ungoverned_observation";
                 const tier = e.detail?.confidence_tier;
-                const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : "", isUngoverned ? "ungoverned-row" : ""].filter(Boolean).join(" ");
+                const rowCls = [rid ? "clickable-row" : "", isDeny ? "deny-row" : ""].filter(Boolean).join(" ");
                 return `
                   <tr class="${rowCls}" ${rid ? `data-nav-href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}"` : ""}>
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
                     <td>${decision ? (isDeny ? '<span class="deny-badge">PREVENTED</span>' : `<span class="status-ok">${decision}</span>`) : "\u2014"} ${tierBadge(tier)}</td>
-                    <td>${isUngoverned ? _renderUngovernedDetail(e) : (e.event_category === "action_decision" ? _renderMediatedDetail(e) : escapeHtml(e.summary))}</td>
+                    <td>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.governed_family || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "activity" }))}">View</a>` : "\u2014"}</td>
                   </tr>
@@ -731,7 +687,7 @@ async function renderAudit() {
                     <td>${e.sequence_position}</td>
                     <td>${formatTime(e.timestamp_utc)}</td>
                     <td>${categoryLabel(e.event_category)}</td>
-                    <td>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : (e.event_category === "ungoverned_observation" ? _renderUngovernedDetail(e) : escapeHtml(e.summary))}</td>
+                    <td>${e.event_category === "action_decision" ? _renderMediatedDetail(e) : escapeHtml(e.summary)}</td>
                     <td>${escapeHtml(e.user_identity || "\u2014")}</td>
                     <td>${rid ? `<a href="${escapeHtml(navHref("/record", { record_id: rid, from: "audit" }))}">View</a>` : "\u2014"}</td>
                   </tr>
@@ -778,7 +734,6 @@ async function renderAudit() {
               <option value="opaque_approval" ${ctx.category === "opaque_approval" ? "selected" : ""}>Operation Approval</option>
               <option value="opaque_revocation" ${ctx.category === "opaque_revocation" ? "selected" : ""}>File Revocation</option>
               <option value="opaque_invocation_decision" ${ctx.category === "opaque_invocation_decision" ? "selected" : ""}>Invocation Decision</option>
-              <option value="ungoverned_observation" ${ctx.category === "ungoverned_observation" ? "selected" : ""}>Boundary Observation</option>
             </select>
           </label>
           <button type="submit">Search</button>
@@ -804,24 +759,6 @@ function _recordBackLink(ctx) {
   if (from === "activity") return `<a class="pill" href="${navHref("/activity")}">Back to Activity</a>`;
   if (from === "audit") return `<a class="pill" href="${navHref("/audit")}">Back to Audit</a>`;
   return `<a class="pill" href="${navHref("/activity")}">Back to Activity</a>`;
-}
-
-function _renderUngovernedRecord(rec) {
-  const opType = rec.operation_type || "";
-  const target = rec.target || "";
-  const source = rec.source || "";
-
-  return `
-    <div class="card record-context">
-      <h3>Boundary Observation</h3>
-      <p class="record-warning">This operation was observed outside the mediation boundary and was not policy-evaluated.</p>
-      <ul class="kv">
-        <li><span>Operation</span><strong class="ungoverned-op">${escapeHtml(opType)}</strong></li>
-        ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
-        ${source ? `<li><span>Source</span><strong>${escapeHtml(source)}</strong></li>` : ""}
-        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
-      </ul>
-    </div>`;
 }
 
 function _renderGovernedRecord(rec) {
@@ -915,9 +852,7 @@ async function renderRecordDetail() {
   const eventType = rec.event_type || null;
 
   let contextCard = "";
-  if (eventType === "ungoverned_operation_observed") {
-    contextCard = _renderUngovernedRecord(rec);
-  } else if (eventType === "opaque_artifact_approval" || eventType === "opaque_artifact_revocation") {
+  if (eventType === "opaque_artifact_approval" || eventType === "opaque_artifact_revocation") {
     contextCard = _renderApprovalRecord(rec);
   } else if (eventType === "verification_state_transition") {
     contextCard = _renderVerificationRecord(rec);
@@ -1074,7 +1009,6 @@ async function renderHealth() {
 
   const deny = data.deny_rate || {};
   const storage = data.storage || {};
-  const obs = data.observations || {};
   const users = data.users || {};
   const license = data.license || {};
   const retention = data.retention || {};
@@ -1088,7 +1022,7 @@ async function renderHealth() {
         <h2>Atested Infrastructure Status</h2>
         <p class="explainer">
           Monitors the health of your governance infrastructure: chain integrity, policy trends,
-          storage, observation coverage, and license status. Issues are classified and, where safe,
+          storage and license status. Issues are classified and, where safe,
           auto-repaired.
         </p>
         <div class="status-grid" style="margin-top:12px">
@@ -1143,29 +1077,6 @@ async function renderHealth() {
             </div>
           </div>
         </div>
-
-        <div class="card">
-          <h3>${tip("Transparency Trend", "Ratio of governed operations to total observed AI activity over time. Higher means more of your operations are under governance.")}</h3>
-          <div class="status-grid">
-            <div class="status-card">
-              <span class="eyebrow">${tip("Hook Data", "Whether any observation hooks are reporting ungoverned operations.")}</span>
-              <span class="status-value">${obs.has_observations ? '<span class="status-ok">Active</span>' : '<span class="muted">None</span>'}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">${tip("Gap Detected", "A gap means governed operations are happening but no observations are being reported. Hooks may have stopped.")}</span>
-              <span class="status-value">${obs.gap_detected ? '<span class="status-warn">Yes</span>' : '<span class="status-ok">No</span>'}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">Governed</span>
-              <span class="status-value">${obs.governed_count || 0}</span>
-            </div>
-            <div class="status-card">
-              <span class="eyebrow">Observed</span>
-              <span class="status-value">${obs.observation_count || 0}</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div class="status-grid">
         <div class="card">

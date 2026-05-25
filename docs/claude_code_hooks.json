@@ -1,30 +1,3 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Read",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      },
-      {
-        "matcher": "Write",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      },
-      {
-        "matcher": "Edit",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      },
-      {
-        "matcher": "Bash",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      },
-      {
-        "matcher": "Glob",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      },
-      {
-        "matcher": "Grep",
-        "hook": "/Volumes/SSD/archive/gov/governance-layer/scripts/observe-hook.sh"
-      }
-    ]
-  }
+  "hooks": {}
 }

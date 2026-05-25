@@ -8,13 +8,11 @@ The dashboard launches alongside the proxy. Once running, open `http://localhost
 
 ## The main page
 
-The main page is what you see between workflows. It shows governance state at a glance: chain health, activity counts, transparency metrics, verification state, machine role, and a feed of recent events. On a primary, it also shows connected remotes and version warnings. On a remote, it shows sync status, pending records, and approval/policy freshness.
+The main page is what you see between workflows. It shows governance state at a glance: chain health, activity counts, verification state, machine role, and a feed of recent events. On a primary, it also shows connected remotes and version warnings. On a remote, it shows sync status, pending records, and approval/policy freshness.
 
 **Chain health** shows the event count and chain integrity status. If the chain is intact, this is a green indicator. If a break has been detected, the indicator turns red and tells you where.
 
 **Governance activity** gives you four numbers: mediated operations (total tool calls evaluated by policy), denied actions, approved operations, and approval-gated operations. These are your high-level signal for what the proxy is doing.
-
-**Transparency and coverage** shows governed operations, ungoverned operations, the transparency rate, and unique user count. If you have observation hooks configured, the ungoverned count reflects operations that happened outside the mediation boundary. Without hooks, this section shows "No observation data."
 
 **Verification state** appears when certification data exists. It shows which governed surfaces have been certified, which are unverified, and whether drift has been detected.
 
@@ -22,9 +20,9 @@ The main page is what you see between workflows. It shows governance state at a 
 
 ## Activity
 
-Activity is the chronological feed. Every governed event appears here: mediated decisions, ungoverned observations, approvals, revocations, verification changes, and imported remote records.
+Activity is the chronological feed. Every governed event appears here: mediated decisions, approvals, revocations, verification changes, and imported remote records.
 
-The table includes sequence number, timestamp, machine, event type, decision, summary, category, and a detail link. DENY rows get a red-tinted background. Ungoverned observations get amber.
+The table includes sequence number, timestamp, machine, event type, decision, summary, category, and a detail link. DENY rows get a red-tinted background.
 
 Controls: date range filter, machine filter, column sorting, and pagination. Click any row to open the full record detail.
 
@@ -54,8 +52,6 @@ The view adapts to the record type:
 
 **Mediated decisions** show the ALLOW or DENY decision, tool name, target path, user, confidence tier, action type, scope, the policy rule that matched, denial reason (if DENY), verification state, and timestamp.
 
-**Boundary observations** show a warning that the operation was observed outside the mediation boundary and was not policy-evaluated. Fields: operation type, target, source, timestamp.
-
 **Approval and revocation records** show the operation, operator, scope, context, and timestamp.
 
 **Verification changes** show the surface name, previous state, new state, and timestamp.
@@ -79,8 +75,6 @@ Health shows infrastructure status for the governance system itself.
 **Chain integrity** shows whether the chain is intact, the record count, and verification status. If a break exists, you see the break location, reason, classification, and any auto-repair information.
 
 **DENY rate trend** shows ALLOW and DENY counts, the DENY rate as a percentage, and whether an anomaly has been detected.
-
-**Transparency trend** shows whether hook data is active, whether gaps have been detected, and the governed vs. observed operation counts.
 
 **Storage** shows chain size, stability log size, archive size, and archive count.
 

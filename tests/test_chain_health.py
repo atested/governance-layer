@@ -255,7 +255,6 @@ def test_collect_health_signals_structure():
         assert "chain" in result
         assert "deny_rate" in result
         assert "storage" in result
-        assert "observations" in result
         assert "users" in result
         assert "license" in result
         assert "retention" in result

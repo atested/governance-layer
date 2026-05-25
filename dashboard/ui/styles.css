@@ -1443,69 +1443,6 @@ pre {
   font-size: 0.78rem;
 }
 
-/* Activity tab — ungoverned observation rows */
-
-.ungoverned-row td {
-  background: rgba(255, 170, 50, 0.04);
-}
-
-.ungoverned-detail {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.84rem;
-}
-
-.ungoverned-op {
-  font-weight: 600;
-  color: var(--warn, #e6a320);
-  text-transform: uppercase;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(255, 170, 50, 0.1);
-}
-
-.ungoverned-target {
-  color: var(--fg);
-  font-family: "SF Mono", "Fira Code", monospace;
-  font-size: 0.78rem;
-}
-
-.ungoverned-source {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.ungoverned-alt {
-  font-size: 0.76rem;
-  color: var(--accent);
-}
-
-.ungoverned-alt code {
-  font-size: 0.76rem;
-  background: var(--accent-soft, rgba(96, 165, 250, 0.08));
-  padding: 1px 5px;
-  border-radius: 3px;
-}
-
-.ungoverned-approve-link {
-  font-size: 0.76rem;
-  color: var(--accent);
-  text-decoration: none;
-  padding: 1px 6px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.ungoverned-approve-link:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
 /* Approval management form */
 
 .approve-form {

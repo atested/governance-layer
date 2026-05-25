@@ -598,8 +598,7 @@
         "deny_rate",
         "health",
         "version",
-        "stale_approval",
-        "observation_gap"
+        "stale_approval"
       ]
     },
     {

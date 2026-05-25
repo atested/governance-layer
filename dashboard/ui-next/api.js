@@ -170,15 +170,6 @@ export function getAuditReport(opts = {}) {
 }
 
 /**
- * Transparency metrics.
- * GET /api/transparency
- * @param {Object} opts - { start_time, end_time }
- */
-export function getTransparency(opts = {}) {
-  return _request('GET', '/transparency', { params: opts });
-}
-
-/**
  * Verification state.
  * GET /api/verification
  * @param {Object} opts - { governed_family }
@@ -244,14 +235,6 @@ export function getTelemetryStatus() {
 }
 
 // ---------- POST endpoints ----------
-
-/**
- * Record runtime operation observation.
- * POST /api/observe
- */
-export function postObserve({ operation_type, target, source, observed_at } = {}) {
-  return _request('POST', '/observe', { body: { operation_type, target, source, observed_at } });
-}
 
 /**
  * Add an approval.

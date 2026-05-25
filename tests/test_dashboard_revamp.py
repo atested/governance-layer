@@ -144,7 +144,7 @@ def test_app_js_tooltips():
     # Check that key metrics have tooltips
     assert "Chain Events" in js, "Missing Chain Events tooltip"
     assert "Chain Integrity" in js, "Missing Chain Integrity tooltip"
-    assert "Transparency" in js, "Missing Transparency tooltip"
+    assert "DENY Rate" in js, "Missing DENY Rate tooltip"
     print("PASS: app_js_tooltips")
 
 
@@ -155,7 +155,7 @@ def test_app_js_terminology():
     assert '"Mediated Decision"' in js, "Missing 'Mediated Decision' label"
     assert '"Verification Change"' in js, "Missing 'Verification Change' label"
     assert '"Invocation Decision"' in js, "Missing 'Invocation Decision' label"
-    assert '"Boundary Observation"' in js, "Missing 'Boundary Observation' label"
+    assert '"Boundary Observation"' not in js, "Removed v2 observation label should not be present"
     # Confirm v2 terminology in overview
     assert "Mediated Operations" in js, "Missing 'Mediated Operations' card label"
     assert "Approval-Gated Operations" in js, "Missing 'Approval-Gated Operations' card label"

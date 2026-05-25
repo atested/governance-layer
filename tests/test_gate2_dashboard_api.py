@@ -265,7 +265,7 @@ class TestMutationEndpointAuth:
         source = inspect.getsource(ds.DashboardHandler.do_POST)
         auth_pos = source.find("_check_auth")
         # All POST handlers are after auth check
-        first_handler_pos = source.find("/api/observe")
+        first_handler_pos = source.find("/api/approvals/add")
         assert auth_pos > 0
         assert first_handler_pos > 0
         assert auth_pos < first_handler_pos, "Auth check must come before POST handlers"
@@ -281,20 +281,6 @@ class TestMutationEndpointAuth:
         assert api_check > 0
         assert serve_index > 0
         assert serve_index > api_check
-
-    def test_observe_writes_to_chain(self, dashboard_env):
-        """POST /api/observe is a mutation endpoint (writes chain record)."""
-        chain_before = dashboard_env["chain"].read_text()
-        from event_model import build_non_action_event, UNGOVERNED_OPERATION_TYPES
-        assert "read" in UNGOVERNED_OPERATION_TYPES
-        event = build_non_action_event("ungoverned_operation_observed", {
-            "operation_type": "read", "target": "/test", "source": "test",
-        })
-        ds._append_chain_record_atomic(event)
-        chain_after = dashboard_env["chain"].read_text()
-        assert len(chain_after) > len(chain_before)
-        last_line = chain_after.strip().splitlines()[-1]
-        assert "ungoverned_operation_observed" in last_line
 
     def test_approval_add_writes_to_chain(self, dashboard_env):
         """POST /api/approvals/add writes opaque_artifact_approval to chain."""

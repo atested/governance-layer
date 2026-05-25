@@ -430,9 +430,6 @@ function _describeTrigger(alert) {
   if (cat === 'deny_rate' || msg.includes('deny rate') || msg.includes('deny count')) {
     return 'The DENY rate exceeded the historical average threshold, indicating an anomalous pattern of denied operations.';
   }
-  if (cat === 'observation_gap' || msg.includes('observation gap')) {
-    return 'A gap in governance observations was detected. Operations may be occurring outside the governed action boundary.';
-  }
   if (cat === 'security' || msg.includes('vulnerability') || msg.includes('security')) {
     return 'A security-relevant condition was detected that may require immediate attention.';
   }
@@ -454,9 +451,6 @@ function _describeGuidance(alert) {
   }
   if (cat === 'deny_rate' || msg.includes('deny rate') || msg.includes('deny count')) {
     return 'Review the DENY pattern in the Activity log. Frequent DENYs to the same action or path may indicate a policy rule that needs adjustment or an agent attempting unauthorized operations.';
-  }
-  if (cat === 'observation_gap' || msg.includes('observation gap')) {
-    return 'Check that provider proxy routing is active and all governed applications are sending requests through Atested.';
   }
   if (cat === 'security' || msg.includes('vulnerability') || msg.includes('security')) {
     return 'Review the alert details immediately. Security alerts may require changes to your policy rules or infrastructure configuration.';
