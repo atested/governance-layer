@@ -2048,6 +2048,57 @@ def cmd_stop(args) -> int:
     return 0
 
 
+def _pids_matching(pattern: str) -> list[int]:
+    """Return PIDs whose command line contains *pattern* (excluding this process)."""
+    try:
+        out = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True, timeout=5)
+    except Exception:  # noqa: BLE001 - pgrep absent or failed
+        return []
+    pids: list[int] = []
+    for token in out.stdout.split():
+        try:
+            pid = int(token)
+        except ValueError:
+            continue
+        if pid != os.getpid():
+            pids.append(pid)
+    return pids
+
+
+def _terminate_quality_service(timeout: float = 5.0) -> dict:
+    """Kill any running quality-service binary and wait for it to exit.
+
+    QS-055: the quality service binds no port, so the orphan-port sweep can't
+    catch a crash-loop respawn that outlives the supervisor stop. A surviving
+    writer that appends one more snapshot after the QA chain is archived
+    re-forks the chain (its in-memory prev_record_hash points at the moved
+    chain's tail, not the new genesis). Terminate by binary path and confirm
+    none remain before the chain is moved.
+    """
+    pattern = "quality-service/prebuilt/quality-service-"
+    killed: list[int] = []
+    deadline = _time_mod.time() + timeout
+    while _time_mod.time() < deadline:
+        pids = _pids_matching(pattern)
+        if not pids:
+            break
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed.append(pid)
+            except OSError:
+                pass
+        _time_mod.sleep(0.2)
+    for pid in _pids_matching(pattern):  # SIGKILL stragglers
+        try:
+            os.kill(pid, signal.SIGKILL)
+            killed.append(pid)
+        except OSError:
+            pass
+    _time_mod.sleep(0.2)
+    return {"terminated": sorted(set(killed)), "remaining": _pids_matching(pattern)}
+
+
 def _load_signing_key_for(path: Path):
     """Load an Ed25519 private key and its key_id, or (None, None) if unavailable.
 
@@ -2096,6 +2147,15 @@ def cmd_archive(args) -> int:
         if pid:
             supervisor["stopped"] = _terminate_pid(pid, timeout=2.0)
     _sweep_orphan_ports()
+    # The quality service binds no port; kill it explicitly so it can't append
+    # one more snapshot after the chain is moved (which would re-fork the chain).
+    qs_termination = _terminate_quality_service()
+    if qs_termination.get("remaining"):
+        print(
+            "  warning: a quality-service process is still running "
+            f"({qs_termination['remaining']}); archiving anyway may re-fork the QA chain",
+            file=sys.stderr,
+        )
 
     targets = [
         ("decision", logs / "decision-chain.jsonl", runtime / SIGNING_KEY_NAME),
@@ -2143,7 +2203,7 @@ def cmd_archive(args) -> int:
         except Exception as exc:
             results.append({"chain": label, "status": "error", "error": str(exc)})
 
-    payload = {"reason": reason, "results": results}
+    payload = {"reason": reason, "results": results, "quality_service_termination": qs_termination}
     if getattr(args, "json", False):
         _emit(args, payload)
     else:
