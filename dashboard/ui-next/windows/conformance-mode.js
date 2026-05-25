@@ -19,12 +19,13 @@ const MODE_LABEL = {
   behavioral: 'Behavioral Anomalies',
 };
 
+// QS-047: a sentence or two on what the mode DOES (not a list of categories).
 const MODE_DESCRIPTION = {
-  environmental: 'Pre-flight checks that the governance environment is sound: policy rules, signing keys, chain files, disk space, process health.',
-  post_hoc: 'Re-verifies recorded decisions against current policy: structural integrity, classification consistency, approval provenance, negative constraints.',
-  spc: 'Statistical Process Control over the decision stream: ALLOW rate, classification mix, rule concentration, decision throughput, tool diversity.',
-  element: 'Structural verification of the governance chain: chain record schemas, hash linkage, signatures, configuration state.',
-  behavioral: 'Behavioral anomaly detection: classification consistency, decision reversals, temporal patterns, approval provenance, policy-rule coverage.',
+  environmental: 'Pre-flight and continuous verification that the governance environment is sound. All checks must pass before the system accepts its first decision, and they run continuously while the system operates.',
+  post_hoc: 'Independently re-verifies every governance decision after the fact, comparing what was decided against current policy to catch drift.',
+  spc: 'Monitors the decision stream for statistically significant shifts that no single decision check would catch.',
+  element: 'Verifies the running system conforms to its specifications at the structural level.',
+  behavioral: 'Detects patterns across the decision stream that indicate drift, misconfiguration, or unexpected behavior.',
 };
 
 const ENV_DESCRIPTION = {
@@ -42,16 +43,6 @@ const ENV_DESCRIPTION = {
 
 // QS-046: each mode's detail is organized around the categories its
 // description names, so the description and the detail never disconnect.
-
-// Environmental: the 10 ENV checks grouped under the 6 named categories.
-const ENV_CATEGORIES = [
-  ['Policy rules', ['ENV-001']],
-  ['Signing keys', ['ENV-002']],
-  ['Chain files', ['ENV-003', 'ENV-005', 'ENV-006']],
-  ['Disk space', ['ENV-007']],
-  ['Process health', ['ENV-008', 'ENV-009']],
-  ['Configuration', ['ENV-004', 'ENV-010']],
-];
 
 // Decision Re-verification: four categories the post-hoc verifier covers.
 // The API exposes only aggregate counts/findings (no per-category split),
@@ -75,10 +66,10 @@ const SPC_METRICS = [
 // Structural Verification: four categories, mapped to element_id prefixes
 // the element verifier emits.
 const ELEMENT_CATEGORIES = [
-  ['Chain record schemas', ['CHAIN_RECORD_SCHEMA']],
-  ['Hash linkage', ['HASH_LINKAGE']],
-  ['Signatures', ['SIGNATURE_VALIDITY']],
-  ['Configuration state', ['CONFIGURATION_STATE', 'TIER_REGISTRY_CONSISTENCY', 'NEGATIVE_CONSTRAINTS']],
+  ['Chain record schemas', ['CHAIN_RECORD_SCHEMA'], 'Each chain record carries its required fields.'],
+  ['Hash linkage', ['HASH_LINKAGE'], 'Every record links to its predecessor by hash.'],
+  ['Signatures', ['SIGNATURE_VALIDITY'], 'Signed records verify against the signing key.'],
+  ['Configuration state', ['CONFIGURATION_STATE', 'TIER_REGISTRY_CONSISTENCY', 'NEGATIVE_CONSTRAINTS'], 'Policy, capability registry, and tier registry are well-formed.'],
 ];
 
 // Behavioral Anomalies: five categories, mapped to behavioral finding types.
@@ -135,75 +126,61 @@ function _modeDetail(modeKey, mode, data) {
   }
 }
 
-// Worst-of status across a set of check statuses (fail > warning > pass).
-function _worst(statuses) {
-  if (statuses.some((s) => /fail|critical|flag/.test(s))) return ['fail', 'attention'];
-  if (statuses.some((s) => /warn|high/.test(s))) return ['warning', 'warning'];
-  if (statuses.some((s) => /pass|ok|healthy/.test(s))) return ['pass', 'ok'];
-  return ['unknown', 'idle'];
-}
-
-// One category card: name, status pill, and a list of detail lines.
-function _categoryCard(name, statusText, statusToken, lines) {
-  const body = (lines && lines.length)
-    ? lines.map((l) => `<div class="cfm-cat-line">${l}</div>`).join('')
-    : '';
+// QS-047: one detail item, two lines — "ID/name — Status" then a
+// description line. An optional extra line carries a failure reason or
+// live value. Used consistently across all five windows.
+function _item(id, statusText, statusToken, desc, extra) {
   return `
-    <div class="cfm-cat cfm-cat-${_token(statusToken)}">
-      <div class="cfm-cat-head">
-        <strong>${_esc(name)}</strong>
-        <span class="cfm-cat-status">${_esc(statusText)}</span>
+    <div class="cfm-item cfm-item-${_token(statusToken)}">
+      <div class="cfm-item-head">
+        <span class="cfm-item-id">${_esc(id)}</span>
+        <span class="cfm-item-dash">—</span>
+        <span class="cfm-item-status">${_esc(statusText)}</span>
       </div>
-      ${body}
+      <div class="cfm-item-desc">${_esc(desc)}</div>
+      ${extra ? `<div class="cfm-item-extra">${_esc(extra)}</div>` : ''}
     </div>`;
 }
 
-function _grid(cards) {
-  return `<div class="cfm-cat-grid">${cards.join('')}</div>`;
+function _itemList(items) {
+  return `<div class="cfm-items">${items.join('')}</div>`;
+}
+
+// Pass/Fail/Warning-style label + color token from a raw check status.
+function _checkStatus(raw, fallback) {
+  const s = String(raw || '').toLowerCase();
+  if (!s) return [fallback || 'No data', 'idle'];
+  if (/fail|critical|flag/.test(s)) return ['Fail', 'attention'];
+  if (/warn|high/.test(s)) return ['Warning', 'warning'];
+  if (/pass|ok|healthy/.test(s)) return ['Pass', 'ok'];
+  return [raw, 'idle'];
 }
 
 function _environmental(data) {
   const checks = (data.latest_snapshot && data.latest_snapshot.checks)
     || (data.modes && data.modes.environmental && data.modes.environmental.checks)
     || {};
-  const haveSnapshot = Object.keys(checks).length > 0;
-  const cards = ENV_CATEGORIES.map(([name, ids]) => {
-    const lines = ids.map((id) => {
-      const check = checks[id] || {};
-      const status = String(check.status || (haveSnapshot ? 'unknown' : 'no data'));
-      const reason = check.detail ? ` — ${_esc(check.detail)}` : '';
-      return `<span class="cfm-check-id">${_esc(id)}</span> <span class="cfm-check-st cfm-status-${_token(status)}">${_esc(status)}</span> <span class="cfm-check-desc">${_esc(ENV_DESCRIPTION[id] || '')}</span>${reason}`;
-    });
-    const [stText, stTok] = haveSnapshot
-      ? _worst(ids.map((id) => String((checks[id] || {}).status || 'unknown')))
-      : ['no data', 'idle'];
-    return _categoryCard(name, stText, stTok, lines);
+  const ids = Object.keys(ENV_DESCRIPTION);
+  for (const k of Object.keys(checks)) if (!ids.includes(k)) ids.push(k);
+  const items = ids.map((id) => {
+    const check = checks[id] || {};
+    const [stText, stTok] = _checkStatus(check.status, 'No data');
+    return _item(id, stText, stTok, ENV_DESCRIPTION[id] || '', check.detail || '');
   });
-  return _grid(cards);
+  return _itemList(items);
 }
 
 function _postHoc(mode) {
   const s = String(mode.status || '').toLowerCase();
   const idle = s === 'idle' || s === 'unavailable';
   const findings = Array.isArray(mode.findings) ? mode.findings : [];
-  let summary = '';
-  if (!idle) {
-    const kvs = [];
-    if (mode.decisions_verified != null) kvs.push(_kv('Decisions verified', mode.decisions_verified));
-    if (mode.skipped != null) kvs.push(_kv('Skipped', mode.skipped));
-    if (mode.queue_depth != null) kvs.push(_kv('Verification queue', `${mode.queue_depth} of ${mode.queue_capacity ?? '?'}`));
-    if (kvs.length) summary = `<div class="cfm-kvs">${kvs.join('')}</div>`;
-  }
-  const cards = POSTHOC_CATEGORIES.map(([name, what]) => {
-    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
-    let stText = idle ? 'awaiting decisions' : 'verified';
+  const items = POSTHOC_CATEGORIES.map(([name, what]) => {
+    let stText = idle ? 'Awaiting decisions' : 'Verified';
     let stTok = idle ? 'idle' : 'ok';
-    // The API does not break findings down per category; surface any
-    // findings as a window-level list below rather than per card.
-    if (!idle && findings.length) { stText = 'see findings'; stTok = 'warning'; }
-    return _categoryCard(name, stText, stTok, lines);
+    if (!idle && findings.length) { stText = 'See findings'; stTok = 'warning'; }
+    return _item(name, stText, stTok, what);
   });
-  let body = summary + _grid(cards);
+  let body = _itemList(items);
   body += _findings(findings, (f) => `${_esc(f.check || f.type || 'finding')}: ${_esc(f.detail || '')}`);
   return body;
 }
@@ -211,25 +188,25 @@ function _postHoc(mode) {
 function _spc(mode) {
   const s = String(mode.status || '').toLowerCase();
   const warming = s === 'warming_up' || s === 'learning';
+  const idle = s === 'idle' || s === 'unavailable';
   const activeName = String(mode.metric_name || mode.metric_id || '').toLowerCase();
-  const cards = SPC_METRICS.map(([name, what]) => {
-    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
-    let stText; let stTok;
+  const items = SPC_METRICS.map(([name, what]) => {
+    let stText; let stTok; let extra = '';
     if (warming) {
-      stText = `warming up (${mode.decisions_collected ?? 0}/${mode.minimum_required ?? 100})`;
+      stText = `Warming up (${mode.decisions_collected ?? 0}/${mode.minimum_required ?? 100})`;
       stTok = 'idle';
     } else if (activeName && name.toLowerCase() === activeName) {
-      if (mode.current_value != null) lines.push(`<span class="cfm-cat-line">current ${_esc(mode.current_value)}</span>`);
-      if (mode.ucl != null || mode.lcl != null) lines.push(`<span class="cfm-cat-line">limits ${_esc(mode.lcl ?? '--')} … ${_esc(mode.ucl ?? '--')}</span>`);
-      stText = mode.status || 'active'; stTok = 'attention';
-    } else if (s === 'idle' || s === 'unavailable') {
-      stText = 'awaiting decisions'; stTok = 'idle';
+      stText = mode.status || 'Active'; stTok = 'attention';
+      const lim = (mode.lcl != null || mode.ucl != null) ? ` · limits ${mode.lcl ?? '--'} … ${mode.ucl ?? '--'}` : '';
+      extra = `current ${mode.current_value ?? '--'}${lim}`;
+    } else if (idle) {
+      stText = 'Awaiting decisions'; stTok = 'idle';
     } else {
-      stText = 'within limits'; stTok = 'ok';
+      stText = 'Within limits'; stTok = 'ok';
     }
-    return _categoryCard(name, stText, stTok, lines);
+    return _item(name, stText, stTok, what, extra);
   });
-  return _grid(cards);
+  return _itemList(items);
 }
 
 function _element(mode) {
@@ -240,16 +217,16 @@ function _element(mode) {
   if (!idle && mode.elements_checked != null) {
     summary = `<div class="cfm-kvs">${_kv('Elements', `${mode.elements_checked} checked · ${mode.elements_passed ?? '?'} passed · ${mode.elements_flagged ?? 0} flagged · ${mode.elements_skipped ?? 0} skipped`)}</div>`;
   }
-  const cards = ELEMENT_CATEGORIES.map(([name, ids]) => {
+  const items = ELEMENT_CATEGORIES.map(([name, ids, what]) => {
     const hits = findings.filter((f) => ids.includes(String(f.element_id || '').toUpperCase()));
-    const lines = hits.map((f) => `<span class="cfm-cat-line">${_esc(f.severity || '')}: ${_esc(f.detail || '')}</span>`);
     let stText; let stTok;
-    if (idle) { stText = 'awaiting verification'; stTok = 'idle'; }
+    if (idle) { stText = 'Awaiting verification'; stTok = 'idle'; }
     else if (hits.length) { stText = `${hits.length} flagged`; stTok = 'attention'; }
-    else { stText = 'pass'; stTok = 'ok'; }
-    return _categoryCard(name, stText, stTok, lines);
+    else { stText = 'Pass'; stTok = 'ok'; }
+    const extra = hits.map((f) => `${f.severity || ''}: ${f.detail || ''}`).join('; ');
+    return _item(name, stText, stTok, what || '', extra);
   });
-  return summary + _grid(cards);
+  return summary + _itemList(items);
 }
 
 function _behavioral(mode) {
@@ -263,24 +240,50 @@ function _behavioral(mode) {
   } else if (mode.anomaly_count != null) {
     summary = `<div class="cfm-kvs">${_kv('Anomalies', mode.anomaly_count)}</div>`;
   }
-  const cards = BEHAVIORAL_CATEGORIES.map(([name, types, what]) => {
+  const items = BEHAVIORAL_CATEGORIES.map(([name, types, what]) => {
     const hits = findings.filter((f) => types.includes(String(f.type || f.finding_type || '')));
-    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
-    for (const f of hits) lines.push(`<span class="cfm-cat-line">${_esc(f.subtype || f.detail || 'anomaly')}</span>`);
     let stText; let stTok;
-    if (warming) { stText = 'warming up'; stTok = 'idle'; }
-    else if (idle) { stText = 'awaiting decisions'; stTok = 'idle'; }
+    if (warming) { stText = 'Warming up'; stTok = 'idle'; }
+    else if (idle) { stText = 'Awaiting decisions'; stTok = 'idle'; }
     else if (hits.length) { stText = `${hits.length} finding(s)`; stTok = 'attention'; }
-    else { stText = 'clear'; stTok = 'ok'; }
-    return _categoryCard(name, stText, stTok, lines);
+    else { stText = 'Clear'; stTok = 'ok'; }
+    const extra = hits.map((f) => f.subtype || f.detail || 'anomaly').join('; ');
+    return _item(name, stText, stTok, what, extra);
   });
-  return summary + _grid(cards);
+  return summary + _itemList(items);
 }
 
 function _findings(findings, fmt) {
   if (!Array.isArray(findings) || !findings.length) return '';
   const items = findings.map((f) => `<li>${fmt(f)}</li>`).join('');
   return `<h4>Findings</h4><ul class="cfm-findings">${items}</ul>`;
+}
+
+// QS-047: Active Conditions detail window — one item per condition in the
+// same two-line format (condition id — severity, then detail; guidance below).
+export function openConformanceConditionsWindow(conditions, trigger) {
+  const list = Array.isArray(conditions) ? conditions : [];
+  const content = document.createElement('div');
+  content.className = 'cfm-root';
+  const parts = [];
+  parts.push('<p class="cfm-desc">Active conditions are findings from the quality service that affect how the system operates. When a condition is detected, the proxy responds according to its built-in procedures.</p>');
+  if (!list.length) {
+    parts.push('<div class="cfm-empty">No active conditions.</div>');
+  } else {
+    const items = list.map((c) => {
+      const id = c.condition_id || c.condition_type || 'condition';
+      const sev = String(c.severity || 'medium');
+      const tok = /critical|fail/.test(sev.toLowerCase()) ? 'attention'
+        : /high|warn/.test(sev.toLowerCase()) ? 'warning' : 'idle';
+      const desc = c.detail || c.condition_type || '';
+      const when = c.detected_at ? `detected ${c.detected_at}` : '';
+      const extra = [c.guidance || '', when].filter(Boolean).join(' · ');
+      return _item(id, sev, tok, desc, extra);
+    });
+    parts.push(_itemList(items));
+  }
+  content.innerHTML = parts.join('');
+  _openAsChild('Active Conditions', 'Quality service findings', trigger, content);
 }
 
 function _kv(label, value) {
@@ -322,37 +325,29 @@ cfmStyles.textContent = `
   .cfm-status strong { color: #e4e6eb; font-family: "JetBrains Mono", monospace; }
   .cfm-status-detail { color: #8b919a; }
 
-  /* Category grid: fills available width with content-sized columns. */
-  .cfm-cat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
+  /* QS-047: consistent two-line item — "ID — Status" then description.
+     A status-colored left accent and status text carry the color. */
+  .cfm-items { display: flex; flex-direction: column; gap: 6px; }
+  .cfm-item {
+    padding: 8px 10px; border-radius: 3px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-left: 3px solid rgba(255,255,255,0.14);
   }
-  .cfm-cat {
-    padding: 8px 10px; border-radius: 2px;
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-left: 2px solid rgba(255,255,255,0.12);
-  }
-  .cfm-cat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .cfm-cat-head strong { color: #e4e6eb; font-size: 0.78rem; }
-  .cfm-cat-status { color: #8b919a; font-family: "JetBrains Mono", monospace; font-size: 0.68rem; white-space: nowrap; }
-  .cfm-cat-what { display: block; color: #8b919a; font-size: 0.72rem; line-height: 1.35; margin-top: 3px; }
-  .cfm-cat-line { display: block; color: #c9d1d9; font-size: 0.72rem; margin-top: 3px; }
-  .cfm-cat-line .cfm-check-id { color: #8b919a; font-family: "JetBrains Mono", monospace; }
-  .cfm-cat-line .cfm-check-desc { color: #c9d1d9; }
-  .cfm-cat-line .cfm-check-st { font-family: "JetBrains Mono", monospace; font-size: 0.68rem; }
-  /* status accents on the left border + status pill */
-  .cfm-cat-ok { border-left-color: #3fb950; }
-  .cfm-cat-ok .cfm-cat-status { color: #3fb950; }
-  .cfm-cat-attention { border-left-color: #f85149; }
-  .cfm-cat-attention .cfm-cat-status { color: #f85149; }
-  .cfm-cat-warning { border-left-color: #d29922; }
-  .cfm-cat-warning .cfm-cat-status { color: #d29922; }
-  .cfm-cat-idle { border-left-color: rgba(255,255,255,0.18); }
-  .cfm-status-pass { color: #3fb950; }
-  .cfm-status-fail { color: #f85149; }
-  .cfm-status-warning { color: #d29922; }
+  .cfm-item-head { display: flex; align-items: baseline; gap: 6px; }
+  .cfm-item-id { color: #e4e6eb; font-family: "JetBrains Mono", monospace; font-size: 0.76rem; font-weight: 600; }
+  .cfm-item-dash { color: #6e7681; }
+  .cfm-item-status { font-family: "JetBrains Mono", monospace; font-size: 0.72rem; }
+  .cfm-item-desc { color: #9aa3ad; font-size: 0.74rem; line-height: 1.4; margin-top: 3px; }
+  .cfm-item-extra { color: #6e7681; font-size: 0.71rem; line-height: 1.35; margin-top: 3px; }
+  .cfm-item-ok { border-left-color: #3fb950; }
+  .cfm-item-ok .cfm-item-status { color: #3fb950; }
+  .cfm-item-attention { border-left-color: #f85149; }
+  .cfm-item-attention .cfm-item-status { color: #f85149; }
+  .cfm-item-warning { border-left-color: #d29922; }
+  .cfm-item-warning .cfm-item-status { color: #d29922; }
+  .cfm-item-idle { border-left-color: #6699cc; }
+  .cfm-item-idle .cfm-item-status { color: #8b9bb0; }
 
   .cfm-kvs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
   .cfm-kv { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 10px; padding: 2px 0; }

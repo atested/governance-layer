@@ -26,7 +26,7 @@ import { openConfigWindow } from './windows/configuration.js';
 import { openFeedbackWindow } from './windows/communications.js';
 import { openAlertsWindow } from './windows/alerts.js';
 import { openLicensingWindow } from './windows/licensing.js';
-import { openConformanceModeWindow } from './windows/conformance-mode.js';
+import { openConformanceModeWindow, openConformanceConditionsWindow } from './windows/conformance-mode.js';
 
 /** Map launcher IDs to window open functions */
 const WINDOW_OPENERS = {
@@ -158,6 +158,7 @@ export function renderMainPage() {
       <div class="mp-conformance-panel" id="mp-conformance-panel" hidden>
         <div class="mp-conformance-section">
           <h3>Active Conditions</h3>
+          <p class="mp-conformance-explain">Active conditions are findings from the quality service that affect how the system operates. When a condition is detected, the proxy responds according to its built-in procedures.</p>
           <div id="mp-conformance-conditions" class="mp-conformance-list"></div>
         </div>
         <div class="mp-conformance-section">
@@ -680,18 +681,20 @@ function _renderConformanceModes(modes) {
   root.innerHTML = '';
   for (const key of ['environmental', 'post_hoc', 'spc', 'element', 'behavioral']) {
     const mode = modes[key] || { status: 'idle' };
-    // QS-044: each mode row is a button that opens its detail window.
+    // QS-044/QS-047: each mode is a bordered, clickable card. The card shows
+    // what the mode DOES plus a status badge — no operational data (counts,
+    // progress, idle messages); that detail lives in the child window.
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'mp-conformance-row mp-conformance-row-clickable';
+    row.className = `mp-conformance-row mp-conformance-row-clickable mp-mode-${_statusToken(mode.status)}`;
     const tip = _modeTooltip(key);
     const labelAttr = tip ? ` title="${_esc(tip)}"` : '';
     row.innerHTML = `
-      <span${labelAttr}>${_esc(_modeLabel(key))}</span>
-      <strong>${_esc(_statusLabel(mode.status))}</strong>
-      ${mode.detail || mode.note ? `<em>${_esc(mode.detail || mode.note)}</em>` : '<em></em>'}
-      <small class="mp-row-desc">${_esc(_modeDescription(key))}</small>
-      <span class="mp-conformance-row-chevron" aria-hidden="true">›</span>
+      <div class="mp-mode-head">
+        <span class="mp-mode-name"${labelAttr}>${_esc(_modeLabel(key))}</span>
+        <span class="mp-mode-badge mp-badge-${_statusToken(mode.status)}">${_esc(_statusLabel(mode.status))}</span>
+      </div>
+      <p class="mp-mode-desc">${_esc(_modeDescription(key))}</p>
     `;
     row.addEventListener('click', () => {
       openConformanceModeWindow(key, _conformanceData, row);
@@ -700,16 +703,25 @@ function _renderConformanceModes(modes) {
   }
 }
 
-// QS-043/QS-045: operator-facing "what this mode checks" copy with concrete
-// examples, shown under each row.
+// QS-047: one or two sentences describing what each mode DOES (function),
+// not a list of what it checks.
 function _modeDescription(key) {
   return {
-    environmental: 'policy rules, signing keys, chain files, disk space, process health',
-    post_hoc: 'structural integrity, classification consistency, approval provenance, negative constraints',
-    spc: 'ALLOW rate, classification mix, rule concentration, decision throughput, tool diversity',
-    element: 'chain record schemas, hash linkage, signatures, configuration state',
-    behavioral: 'classification consistency, decision reversals, temporal patterns, approval provenance, policy-rule coverage',
+    environmental: 'Verifies the governance environment is sound before any decision is made. Checks run continuously and must all pass before the system accepts its first request.',
+    post_hoc: 'Independently re-verifies every governance decision after the fact, comparing what was decided against current policy to catch drift.',
+    spc: 'Monitors the decision stream for statistically significant shifts that no single decision check would catch.',
+    element: 'Verifies the running system conforms to its specifications at the structural level.',
+    behavioral: 'Detects patterns across the decision stream that indicate drift, misconfiguration, or unexpected behavior.',
   }[key] || '';
+}
+
+// QS-047: map a mode/check status to a color token for badges + card accents.
+function _statusToken(status) {
+  const s = String(status || 'idle').toLowerCase();
+  if (s === 'healthy' || s === 'verified' || s === 'active') return 'ok';
+  if (s === 'warming_up' || s === 'learning') return 'warm';
+  if (s === 'finding' || s === 'attention' || s === 'behind' || s === 'condition_detected') return 'attention';
+  return 'idle';
 }
 
 // QS-043: tooltips for terms an operator may not know on sight.
@@ -746,16 +758,33 @@ function _renderConformanceConditions(conditions) {
     root.innerHTML = '<div class="mp-conformance-muted">No active conditions</div>';
     return;
   }
-  for (const condition of conditions) {
-    const item = document.createElement('div');
-    item.className = `mp-conformance-condition severity-${_classToken(condition.severity || 'medium')}`;
-    item.innerHTML = `
-      <strong>${_esc(condition.condition_id || condition.condition_type || 'condition')}</strong>
-      <span>${_esc(condition.detail || '')}</span>
-      <em>${_esc(condition.guidance || '')}</em>
-    `;
-    root.appendChild(item);
+  // QS-047: when conditions exist, the section is a clickable summary card
+  // that opens a child window with the per-condition detail.
+  const sev = _highestSeverity(conditions);
+  const n = conditions.length;
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = `mp-conformance-row mp-conformance-row-clickable mp-mode-attention severity-${_classToken(sev)}`;
+  card.innerHTML = `
+    <div class="mp-mode-head">
+      <span class="mp-mode-name">${n} active condition${n === 1 ? '' : 's'}</span>
+      <span class="mp-mode-badge mp-badge-attention">${_esc(sev)}</span>
+    </div>
+    <p class="mp-mode-desc">Findings that change how the proxy is operating. Open for condition details.</p>
+  `;
+  card.addEventListener('click', () => openConformanceConditionsWindow(conditions, card));
+  root.appendChild(card);
+}
+
+// QS-047: highest severity across active conditions (critical > high > medium).
+function _highestSeverity(conditions) {
+  const order = { critical: 3, high: 2, medium: 1 };
+  let best = 'medium';
+  for (const c of conditions) {
+    const s = String(c.severity || 'medium').toLowerCase();
+    if ((order[s] || 0) > (order[best] || 0)) best = s;
   }
+  return best;
 }
 
 // QS-044: environmental checks and liveness hashes moved out of the main
@@ -928,97 +957,80 @@ mpStyles.textContent = `
     margin: 0 0 8px;
     text-transform: uppercase;
   }
-  /* QS-046: the verification modes sit in a content-width grid, not stretched
-     edge-to-edge across the full dashboard. */
+  /* QS-046: content-width column. QS-047: rows are bordered, colored,
+     clickable cards. */
   .mp-conformance-list {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 4px;
+    gap: 8px;
     max-width: 720px;
   }
-  /* QS-045: mode rows are light, clickable summary lines (not heavy blocks),
-     aligned to the header content rather than filled full-width cards. */
+  .mp-conformance-explain {
+    color: #8b919a;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    margin: 0 0 8px;
+    max-width: 720px;
+  }
+  /* QS-047: each mode (and the conditions summary) is a bordered card with a
+     status-colored left accent and a hover state — the shape signals it's
+     clickable; no chevron needed. */
   .mp-conformance-row {
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    border-radius: 0;
-    padding: 7px 4px;
-    display: grid;
-    grid-template-columns: 190px 90px 1fr auto;
-    gap: 8px;
-    align-items: center;
-    font-size: 0.78rem;
-  }
-  .mp-conformance-row:last-child {
-    border-bottom: none;
-  }
-  /* QS-044: mode rows are buttons that open a detail window. */
-  .mp-conformance-row-clickable {
+    display: block;
     width: 100%;
     text-align: left;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-left-width: 3px;
+    border-radius: 4px;
+    padding: 10px 12px;
     cursor: pointer;
     font-family: inherit;
     color: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
   }
-  .mp-conformance-row-clickable:hover,
-  .mp-conformance-row-clickable:focus-visible {
-    background: rgba(102,153,204,0.08);
-    border-radius: 2px;
+  .mp-conformance-row:hover,
+  .mp-conformance-row:focus-visible {
+    background: rgba(102,153,204,0.10);
+    border-color: rgba(102,153,204,0.45);
+    transform: translateY(-1px);
     outline: none;
   }
-  .mp-conformance-row-chevron {
-    color: #6699cc;
-    font-size: 1rem;
-    justify-self: end;
+  .mp-mode-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
   }
-  .mp-conformance-condition {
-    background: rgba(255,255,255,0.03);
-    border: 1px dashed rgba(255,255,255,0.08);
-    border-radius: 2px;
-    padding: 8px 10px;
-    display: grid;
-    grid-template-columns: 130px 1fr;
-    gap: 8px;
-    align-items: start;
-    font-size: 0.78rem;
-  }
-  .mp-conformance-condition em {
-    grid-column: 1 / -1;
-  }
-  /* QS-045: the mode name reads as a label (lighter, not grey); the chevron
-     stays accent-colored. */
-  .mp-conformance-row span:not(.mp-conformance-row-chevron) {
-    color: #c9d1d9;
-    font-weight: 500;
-  }
-  .mp-conformance-condition span {
-    color: #8b919a;
-  }
-  .mp-conformance-row strong,
-  .mp-conformance-condition strong {
-    color: #e4e6eb;
+  .mp-mode-name { color: #e4e6eb; font-weight: 600; font-size: 0.82rem; }
+  .mp-mode-desc { color: #9aa3ad; font-size: 0.76rem; line-height: 1.45; margin: 0; }
+  .mp-mode-badge {
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.72rem;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    border: 1px solid transparent;
   }
-  .mp-conformance-row em,
-  .mp-conformance-condition em {
-    color: #8b919a;
-    font-style: normal;
-  }
-  /* QS-043/QS-045: full-width "what this checks" example line under a row. */
-  .mp-conformance-row .mp-row-desc {
-    grid-column: 1 / -1;
-    color: #8b919a;
-    font-size: 0.72rem;
-    line-height: 1.35;
-  }
-  .mp-conformance-condition.severity-critical strong { color: #f85149; }
-  .mp-conformance-condition.severity-high strong { color: #d29922; }
+  .mp-mode-ok { border-left-color: #3fb950; }
+  .mp-badge-ok { color: #3fb950; background: rgba(63,185,80,0.12); border-color: rgba(63,185,80,0.30); }
+  .mp-mode-warm { border-left-color: #d29922; }
+  .mp-badge-warm { color: #d29922; background: rgba(210,153,34,0.12); border-color: rgba(210,153,34,0.30); }
+  .mp-mode-attention { border-left-color: #f85149; }
+  .mp-badge-attention { color: #f85149; background: rgba(248,81,73,0.12); border-color: rgba(248,81,73,0.30); }
+  .mp-mode-idle { border-left-color: #6699cc; }
+  .mp-badge-idle { color: #8b9bb0; background: rgba(102,153,204,0.10); border-color: rgba(102,153,204,0.25); }
   .mp-conformance-muted {
     color: #8b919a;
     font-size: 0.82rem;
-    padding: 8px 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 4px;
+    max-width: 720px;
   }
 
   /* ---- Top display panes ---- */
