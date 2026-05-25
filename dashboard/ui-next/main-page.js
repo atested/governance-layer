@@ -26,6 +26,7 @@ import { openConfigWindow } from './windows/configuration.js';
 import { openFeedbackWindow } from './windows/communications.js';
 import { openAlertsWindow } from './windows/alerts.js';
 import { openLicensingWindow } from './windows/licensing.js';
+import { openConformanceModeWindow } from './windows/conformance-mode.js';
 
 /** Map launcher IDs to window open functions */
 const WINDOW_OPENERS = {
@@ -123,6 +124,8 @@ const ACTIVITY_TOOLTIPS = {
 /** DOM references populated during render */
 let _page = null;
 let _refreshTimer = null;
+/** QS-044: latest conformance payload, for mode-row detail windows */
+let _conformanceData = null;
 
 /** Cached state for dynamic accent colors */
 let _healthState = 'unknown';  // 'healthy', 'degraded', 'critical', 'unknown'
@@ -153,28 +156,13 @@ export function renderMainPage() {
         <span class="mp-conformance-detail" id="mp-conformance-summary-text">Loading conformance state</span>
       </button>
       <div class="mp-conformance-panel" id="mp-conformance-panel" hidden>
-        <div class="mp-conformance-grid">
-          <div>
-            <h3>Verification Modes</h3>
-            <div id="mp-conformance-modes" class="mp-conformance-list"></div>
-          </div>
-          <div>
-            <h3>Active Conditions</h3>
-            <div id="mp-conformance-conditions" class="mp-conformance-list"></div>
-          </div>
+        <div class="mp-conformance-section">
+          <h3>Active Conditions</h3>
+          <div id="mp-conformance-conditions" class="mp-conformance-list"></div>
         </div>
-        <div class="mp-conformance-grid">
-          <div>
-            <h3>Environmental Checks</h3>
-            <div id="mp-conformance-checks" class="mp-conformance-checks"></div>
-          </div>
-          <div>
-            <h3>Liveness</h3>
-            <div id="mp-conformance-liveness" class="mp-conformance-list"></div>
-          </div>
-        </div>
-        <div class="mp-conformance-future">
-          <strong>Future modes:</strong> SPC charts, behavioral findings, post-hoc decision verification, and element verification will appear here when those quality-service modes are implemented.
+        <div class="mp-conformance-section">
+          <h3>Verification Modes</h3>
+          <div id="mp-conformance-modes" class="mp-conformance-list"></div>
         </div>
       </div>
     </div>
@@ -669,10 +657,11 @@ function _renderConformance(result) {
     ? `Last verified ${_formatTime24(timestamp)}`
     : (data.detail || 'Quality service unavailable');
   _setConformanceShell(state, label, summary);
-  _renderConformanceModes(data.modes || {});
+  // QS-044: stash the latest payload so a mode row click can hand the
+  // mode's data to its detail window without another fetch.
+  _conformanceData = data;
   _renderConformanceConditions(data.active_conditions || []);
-  _renderConformanceChecks(data.latest_snapshot?.checks || data.modes?.environmental?.checks || {});
-  _renderConformanceLiveness(data);
+  _renderConformanceModes(data.modes || {});
 }
 
 function _setConformanceShell(state, label, summary) {
@@ -691,8 +680,10 @@ function _renderConformanceModes(modes) {
   root.innerHTML = '';
   for (const key of ['environmental', 'post_hoc', 'spc', 'element', 'behavioral']) {
     const mode = modes[key] || { status: 'idle' };
-    const row = document.createElement('div');
-    row.className = 'mp-conformance-row';
+    // QS-044: each mode row is a button that opens its detail window.
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'mp-conformance-row mp-conformance-row-clickable';
     const tip = _modeTooltip(key);
     const labelAttr = tip ? ` title="${_esc(tip)}"` : '';
     row.innerHTML = `
@@ -700,7 +691,11 @@ function _renderConformanceModes(modes) {
       <strong>${_esc(_statusLabel(mode.status))}</strong>
       ${mode.detail || mode.note ? `<em>${_esc(mode.detail || mode.note)}</em>` : '<em></em>'}
       <small class="mp-row-desc">${_esc(_modeDescription(key))}</small>
+      <span class="mp-conformance-row-chevron" aria-hidden="true">›</span>
     `;
+    row.addEventListener('click', () => {
+      openConformanceModeWindow(key, _conformanceData, row);
+    });
     root.appendChild(row);
   }
 }
@@ -764,60 +759,8 @@ function _renderConformanceConditions(conditions) {
   }
 }
 
-function _renderConformanceChecks(checks) {
-  const root = _page?.querySelector('#mp-conformance-checks');
-  if (!root) return;
-  root.innerHTML = '';
-  const entries = Object.entries(checks || {});
-  if (!entries.length) {
-    root.innerHTML = '<div class="mp-conformance-muted">No environmental snapshot available</div>';
-    return;
-  }
-  for (const [id, check] of entries) {
-    const status = String(check?.status || 'unknown');
-    const row = document.createElement('div');
-    row.className = `mp-check-row status-${_classToken(status)}`;
-    const desc = _envDescription(id);
-    // The check's own detail (failure reason) takes the inline slot; the
-    // static one-line description goes on a full-width line below.
-    row.innerHTML = `
-      <span>${_esc(id)}</span>
-      <strong>${_esc(status)}</strong>
-      <em>${_esc(check?.detail || '')}</em>
-      ${desc ? `<small class="mp-row-desc">${_esc(desc)}</small>` : ''}
-    `;
-    root.appendChild(row);
-  }
-}
-
-// QS-043: one-line operator-facing description per environmental check.
-function _envDescription(id) {
-  return {
-    'ENV-001': 'Policy rules match what the proxy loaded',
-    'ENV-002': 'Signing key present and valid',
-    'ENV-003': 'Chain files writable',
-    'ENV-004': 'Capability registry current',
-    'ENV-005': 'QA chain integrity (hash linkage)',
-    'ENV-006': 'Governance chain integrity',
-    'ENV-007': 'Disk space adequate',
-    'ENV-008': 'Proxy process running',
-    'ENV-009': 'Dashboard process running',
-    'ENV-010': 'Configuration integrity',
-  }[String(id || '').toUpperCase()] || '';
-}
-
-function _renderConformanceLiveness(data) {
-  const root = _page?.querySelector('#mp-conformance-liveness');
-  if (!root) return;
-  const snap = data.latest_snapshot || {};
-  root.innerHTML = `
-    <div class="mp-conformance-row"><span>QA chain</span><strong>${data.qa_chain_present ? 'present' : 'absent'}</strong></div>
-    <div class="mp-conformance-row"><span>Quality service</span><strong>${data.quality_service_alive ? 'alive' : 'unavailable'}</strong></div>
-    <div class="mp-conformance-row"><span>Last verified</span><strong>${_esc(_formatTime24(snap.timestamp))}</strong></div>
-    <div class="mp-conformance-row"><span>Policy hash</span><strong>${_esc(_shortHash(snap.policy_rules_hash))}</strong></div>
-    <div class="mp-conformance-row"><span>Capability hash</span><strong>${_esc(_shortHash(snap.capability_registry_hash))}</strong></div>
-  `;
-}
+// QS-044: environmental checks and liveness hashes moved out of the main
+// view into the Environmental detail window (windows/conformance-mode.js).
 
 function _modeLabel(key) {
   return {
@@ -831,12 +774,6 @@ function _modeLabel(key) {
 
 function _classToken(value) {
   return String(value || 'unknown').toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
-}
-
-function _shortHash(value) {
-  if (!value) return '--';
-  const text = String(value);
-  return text.length > 22 ? `${text.slice(0, 14)}...${text.slice(-6)}` : text;
 }
 
 function _formatTime24(isoStr) {
@@ -977,11 +914,12 @@ mpStyles.textContent = `
     border-top: 1px dashed rgba(255,255,255,0.12);
     padding: 14px 16px 16px;
   }
-  .mp-conformance-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+  /* QS-044: active conditions and verification modes stack full width. */
+  .mp-conformance-section {
     margin-bottom: 16px;
+  }
+  .mp-conformance-section:last-child {
+    margin-bottom: 0;
   }
   .mp-conformance h3 {
     color: #6699cc;
@@ -991,24 +929,41 @@ mpStyles.textContent = `
     margin: 0 0 8px;
     text-transform: uppercase;
   }
-  .mp-conformance-list,
-  .mp-conformance-checks {
+  .mp-conformance-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
   .mp-conformance-row,
-  .mp-check-row,
   .mp-conformance-condition {
     background: rgba(255,255,255,0.03);
     border: 1px dashed rgba(255,255,255,0.08);
     border-radius: 2px;
     padding: 8px 10px;
     display: grid;
-    grid-template-columns: 120px 120px 1fr;
+    grid-template-columns: 130px 110px 1fr auto;
     gap: 8px;
-    align-items: start;
+    align-items: center;
     font-size: 0.78rem;
+  }
+  /* QS-044: mode rows are buttons that open a detail window. */
+  .mp-conformance-row-clickable {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+  }
+  .mp-conformance-row-clickable:hover,
+  .mp-conformance-row-clickable:focus-visible {
+    background: rgba(102,153,204,0.10);
+    border-color: rgba(102,153,204,0.35);
+    outline: none;
+  }
+  .mp-conformance-row-chevron {
+    color: #6699cc;
+    font-size: 1rem;
+    justify-self: end;
   }
   .mp-conformance-condition {
     grid-template-columns: 130px 1fr;
@@ -1016,46 +971,33 @@ mpStyles.textContent = `
   .mp-conformance-condition em {
     grid-column: 1 / -1;
   }
-  .mp-conformance-row span,
-  .mp-check-row span {
+  .mp-conformance-row span {
     color: #8b919a;
   }
   .mp-conformance-row strong,
-  .mp-check-row strong,
   .mp-conformance-condition strong {
     color: #e4e6eb;
     font-family: "JetBrains Mono", monospace;
     font-size: 0.72rem;
   }
   .mp-conformance-row em,
-  .mp-check-row em,
   .mp-conformance-condition em {
     color: #8b919a;
     font-style: normal;
   }
   /* QS-043: full-width "what this checks" description line under a row. */
-  .mp-conformance-row .mp-row-desc,
-  .mp-check-row .mp-row-desc {
+  .mp-conformance-row .mp-row-desc {
     grid-column: 1 / -1;
     color: #6e7681;
     font-size: 0.72rem;
     line-height: 1.35;
   }
-  .mp-check-row.status-pass strong { color: #3fb950; }
-  .mp-check-row.status-fail strong,
   .mp-conformance-condition.severity-critical strong { color: #f85149; }
-  .mp-check-row.status-warning strong,
   .mp-conformance-condition.severity-high strong { color: #d29922; }
   .mp-conformance-muted {
     color: #8b919a;
     font-size: 0.82rem;
     padding: 8px 10px;
-  }
-  .mp-conformance-future {
-    border-top: 1px dashed rgba(255,255,255,0.08);
-    color: #8b919a;
-    font-size: 0.78rem;
-    padding-top: 12px;
   }
 
   /* ---- Top display panes ---- */
