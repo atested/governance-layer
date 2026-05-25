@@ -23,12 +23,24 @@ SIGNING_KEY_NAME = ".atested-signing-key.pem"
 MAX_RESTARTS = 3
 RESTART_WINDOW_SECONDS = 60
 STATUS_INTERVAL_SECONDS = 1.0
+# QS-041 #16: after the crash-restart limit trips, the service is disabled
+# for a backoff period and then re-enabled, rather than disabled for the
+# supervisor's whole lifetime. Backoff starts here and doubles on each
+# subsequent disable, capped, and resets to the initial value after a clean
+# run of RESTART_WINDOW_SECONDS.
+INITIAL_BACKOFF_SECONDS = 120
+MAX_BACKOFF_SECONDS = 30 * 60
 
 _stopping = False
 
 
 def now_utc_z() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _log(message: str) -> None:
+    """Supervisor-level log line to stderr (lands in supervisor.err.log)."""
+    print(f"[{now_utc_z()}] supervisor: {message}", file=sys.stderr, flush=True)
 
 
 def write_json_atomic(path: Path, data: dict) -> None:
@@ -262,6 +274,12 @@ class ManagedService:
         self.restart_count = 0
         self.disabled = bool(spec.get("disabled_at_start", False))
         self.disabled_reason = str(spec.get("disabled_reason", "") or "")
+        # QS-041 #16: disabled_at_start (e.g. a missing/invalid prebuilt
+        # binary) is permanent — never re-enabled by backoff. Only a
+        # crash-limit disable participates in the backoff/re-enable cycle.
+        self.permanently_disabled = bool(spec.get("disabled_at_start", False))
+        self.disabled_until: float | None = None
+        self.backoff_seconds = INITIAL_BACKOFF_SECONDS
         self.started_at_epoch: float | None = None
         self.started_utc: str | None = None
         self.last_exit_code: int | None = None
@@ -292,13 +310,21 @@ class ManagedService:
         self.started_utc = now_utc_z()
 
     def poll(self) -> None:
-        if self.disabled:
+        if self.permanently_disabled:
             return
+        if self.disabled:
+            # QS-041 #16: a crash-limit disable re-enables once the backoff
+            # timer expires; until then the service stays down.
+            if self.disabled_until is not None and time.time() >= self.disabled_until:
+                self._re_enable()
+            else:
+                return
         if self.proc is None:
             self.start()
             return
         exit_code = self.proc.poll()
         if exit_code is None:
+            self._maybe_reset_backoff()
             return
 
         self.last_exit_code = exit_code
@@ -308,11 +334,51 @@ class ManagedService:
         self.restart_times = [ts for ts in self.restart_times if now - ts <= RESTART_WINDOW_SECONDS]
         self.restart_times.append(now)
         if len(self.restart_times) > MAX_RESTARTS:
-            self.disabled = True
-            self.disabled_reason = f"crashed more than {MAX_RESTARTS} times in {RESTART_WINDOW_SECONDS}s"
+            self._enter_backoff()
             return
         self.restart_count += 1
         self.start()
+
+    def _enter_backoff(self) -> None:
+        """QS-041 #16: crash limit tripped — disable for the current backoff,
+        then double it (capped) for the next disable."""
+        self.disabled = True
+        delay = self.backoff_seconds
+        self.disabled_until = time.time() + delay
+        self.disabled_reason = (
+            f"crashed more than {MAX_RESTARTS} times in {RESTART_WINDOW_SECONDS}s; "
+            f"backing off {int(delay)}s before retry"
+        )
+        _log(
+            f"{self.name} disabled after {MAX_RESTARTS} crashes in "
+            f"{RESTART_WINDOW_SECONDS}s; retry in {int(delay)}s"
+        )
+        self.backoff_seconds = min(self.backoff_seconds * 2, MAX_BACKOFF_SECONDS)
+
+    def _re_enable(self) -> None:
+        """QS-041 #16: backoff elapsed — clear the disable and let poll restart
+        the service. Backoff stays elevated until a clean run resets it."""
+        _log(
+            f"{self.name} re-enabling after backoff "
+            f"(next backoff {int(self.backoff_seconds)}s if it crashes again)"
+        )
+        self.disabled = False
+        self.disabled_until = None
+        self.disabled_reason = ""
+        self.restart_times = []
+
+    def _maybe_reset_backoff(self) -> None:
+        """QS-041 #16: a full clean run window resets the backoff to initial."""
+        if (
+            self.backoff_seconds > INITIAL_BACKOFF_SECONDS
+            and self.started_at_epoch is not None
+            and time.time() - self.started_at_epoch >= RESTART_WINDOW_SECONDS
+        ):
+            _log(
+                f"{self.name} ran cleanly for {RESTART_WINDOW_SECONDS}s; "
+                f"resetting backoff to {INITIAL_BACKOFF_SECONDS}s"
+            )
+            self.backoff_seconds = INITIAL_BACKOFF_SECONDS
 
     def terminate(self) -> None:
         if self.proc is None:
@@ -357,6 +423,9 @@ class ManagedService:
             "last_exit_utc": self.last_exit_utc,
             "disabled": self.disabled,
             "disabled_reason": self.disabled_reason,
+            "permanently_disabled": self.permanently_disabled,
+            "disabled_until_epoch": self.disabled_until,
+            "backoff_seconds": self.backoff_seconds,
             "log_stdout": str(self.log_dir / f"{self.name}.out.log"),
             "log_stderr": str(self.log_dir / f"{self.name}.err.log"),
         }
