@@ -543,13 +543,34 @@ def _supervisor_status() -> dict:
     if pid_record_pid and status_pid and status_pid != pid_record_pid:
         supervisor_data = {}
         status["services"] = {}
-    running = _supervisor_record_valid(pid_record)
+    validated = _supervisor_record_valid(pid_record)
     pid = int(supervisor_data.get("pid") or pid_record_pid or 0)
     supervisor = dict(supervisor_data)
     if pid:
         supervisor["pid"] = pid
     supervisor.pop("token", None)
+    # QS-042 #3: report ACTUAL PID liveness, not just the state file.
+    # `state_claim` is what status.json last recorded; `pid_alive` is the
+    # ground truth (os.kill(pid, 0)). When they disagree, report the live
+    # truth and annotate why, so a crashed-but-"running" supervisor reads as
+    # stopped and a live-but-"stopped"/unverified one reads as running.
+    state_claim = bool(supervisor_data.get("running"))
+    pid_alive = bool(pid) and _pid_alive(pid)
+    liveness_note = None
+    if pid and state_claim and not pid_alive:
+        running = False
+        liveness_note = f"stale state — supervisor PID {pid} no longer running"
+    elif pid and pid_alive and not (state_claim and validated):
+        # PID is alive but the state file said stopped, or validation
+        # (token/command match) could not confirm it — both are mislabels.
+        running = True
+        liveness_note = f"state mislabeled — supervisor PID {pid} still alive"
+    else:
+        running = validated
     supervisor["running"] = running
+    supervisor["pid_alive"] = pid_alive
+    if liveness_note:
+        supervisor["liveness_note"] = liveness_note
     supervisor.setdefault("pid_file", str(_supervisor_pid_path()))
     supervisor.setdefault("status_path", str(_supervisor_status_path()))
     status["supervisor"] = supervisor
@@ -1223,8 +1244,13 @@ def _print_status_summary(data: dict) -> None:
     print("Atested status")
     print(f"  Role:       {machine.get('role') or 'uninitialized'}")
     print(f"  Runtime:    {machine.get('runtime') or _runtime()}")
-    print(f"  Supervisor: {'running' if supervisor.get('running') else 'stopped'}"
-          f"{' pid ' + str(supervisor.get('pid')) if supervisor.get('pid') else ''}")
+    _supervisor_line = (
+        f"  Supervisor: {'running' if supervisor.get('running') else 'stopped'}"
+        f"{' pid ' + str(supervisor.get('pid')) if supervisor.get('pid') else ''}"
+    )
+    if supervisor.get("liveness_note"):
+        _supervisor_line += f" ({supervisor['liveness_note']})"
+    print(_supervisor_line)
     print(f"  Chain:      {chain_health} ({data.get('chain_event_count', 0)} records)")
     if services:
         print("  Services:")

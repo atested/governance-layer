@@ -310,6 +310,54 @@ def test_supervisor_status_ignores_stale_service_snapshot(tmp_path, monkeypatch)
     assert status.get("services") == {}
 
 
+def test_qs042_status_stale_state_reports_stopped(tmp_path, monkeypatch):
+    """QS-042 #3: status.json says running but the PID is dead -> report
+    stopped with a stale-state note."""
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps({
+        "pid": 424242, "token": "t", "runtime": str(runtime),
+        "created_utc": "2026-05-25T00:00:00Z",
+    }), encoding="utf-8")
+    (supervisor_dir / "status.json").write_text(json.dumps({
+        "supervisor": {"pid": 424242, "token": "t", "runtime": str(runtime), "running": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_alive", lambda pid: False)
+
+    sup = atested_cli._supervisor_status()["supervisor"]
+    assert sup["running"] is False
+    assert sup["pid_alive"] is False
+    assert "stale state" in sup.get("liveness_note", "")
+    print("PASS: test_qs042_status_stale_state_reports_stopped")
+
+
+def test_qs042_status_mislabeled_reports_running(tmp_path, monkeypatch):
+    """QS-042 #3: status.json says stopped (or validation can't confirm) but
+    the PID is alive -> report running with a mislabeled note."""
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    supervisor_dir = runtime / "supervisor"
+    supervisor_dir.mkdir(parents=True)
+    (supervisor_dir / "supervisor.pid").write_text(json.dumps({
+        "pid": 424242, "token": "t", "runtime": str(runtime),
+        "created_utc": "2026-05-25T00:00:00Z",
+    }), encoding="utf-8")
+    (supervisor_dir / "status.json").write_text(json.dumps({
+        "supervisor": {"pid": 424242, "token": "t", "runtime": str(runtime), "running": False},
+    }), encoding="utf-8")
+    monkeypatch.setattr(atested_cli, "_pid_alive", lambda pid: pid == 424242)
+    # command-match can't confirm (sandbox ps failure) — the QS-041 case.
+    monkeypatch.setattr(atested_cli, "_pid_command_matches", lambda pid, token: False)
+
+    sup = atested_cli._supervisor_status()["supervisor"]
+    assert sup["running"] is True
+    assert sup["pid_alive"] is True
+    assert "mislabeled" in sup.get("liveness_note", "")
+    print("PASS: test_qs042_status_mislabeled_reports_running")
+
+
 def test_qs042_stop_sweep_kills_untracked_orphan(tmp_path, monkeypatch):
     """QS-042 #2: the stop-path port sweep kills an untracked occupant of a
     managed port and reports it."""
