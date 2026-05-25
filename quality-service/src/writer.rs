@@ -22,6 +22,10 @@ pub struct QaChainWriter {
     key: QaSigningKey,
     next_sequence: u64,
     prev_record_hash: Option<String>,
+    // QS-039 Adv #13: stamped onto the first qa_environmental_snapshot only
+    // (sequence == 1). Informational provenance for "what binary ran".
+    startup_binary_sha256: Option<String>,
+    startup_toolchain_version: Option<String>,
 }
 
 impl QaChainWriter {
@@ -32,7 +36,17 @@ impl QaChainWriter {
             key,
             next_sequence,
             prev_record_hash,
+            startup_binary_sha256: None,
+            startup_toolchain_version: None,
         })
+    }
+
+    /// QS-039 Adv #13: provide binary/toolchain provenance to be stamped on
+    /// the first environmental snapshot. No effect once the chain has
+    /// advanced past sequence 1.
+    pub fn set_startup_metadata(&mut self, binary_sha256: String, toolchain_version: String) {
+        self.startup_binary_sha256 = Some(binary_sha256);
+        self.startup_toolchain_version = Some(toolchain_version);
     }
 
     pub fn append_environmental_snapshot(
@@ -73,6 +87,21 @@ impl QaChainWriter {
             "overall".to_string(),
             Value::String(snapshot.overall.clone()),
         );
+        // QS-039 Adv #13: stamp binary + toolchain provenance onto the first
+        // snapshot only (sequence == 1). Informational fields; they do not
+        // participate in the environmental gate, which runs in service.rs
+        // before any record is written.
+        if self.next_sequence == 1 {
+            if let Some(hash) = &self.startup_binary_sha256 {
+                record.insert("binary_sha256".to_string(), Value::String(hash.clone()));
+            }
+            if let Some(version) = &self.startup_toolchain_version {
+                record.insert(
+                    "toolchain_version".to_string(),
+                    Value::String(version.clone()),
+                );
+            }
+        }
         self.append_record(Value::Object(record))
     }
 

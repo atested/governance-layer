@@ -47,6 +47,24 @@ pub struct Config {
     pub chain_events_spec_path: PathBuf,
     pub chain_integrity_spec_path: PathBuf,
     pub tier_registry_path: PathBuf,
+    /// QS-039 Adv #13: sha256 of the running quality-service binary and the
+    /// toolchain that built it. Stamped into the first qa_environmental_snapshot
+    /// for the "what binary actually ran?" audit trail. Informational only —
+    /// never consulted by the environmental gate.
+    pub binary_sha256: String,
+    pub toolchain_version: String,
+}
+
+/// sha256 of the currently-running executable, "sha256:" prefixed to match
+/// the chain's hash convention. Returns "unknown" if the binary cannot be
+/// located or read (e.g. an unusual exec environment) — this is an
+/// informational field and must never block startup.
+fn current_binary_sha256() -> String {
+    use sha2::{Digest, Sha256};
+    match env::current_exe().and_then(std::fs::read) {
+        Ok(bytes) => format!("sha256:{:x}", Sha256::digest(&bytes)),
+        Err(_) => "unknown".to_string(),
+    }
 }
 
 impl Config {
@@ -173,6 +191,8 @@ impl Config {
             chain_events_spec_path,
             chain_integrity_spec_path,
             tier_registry_path,
+            binary_sha256: current_binary_sha256(),
+            toolchain_version: env!("ATESTED_RUSTC_VERSION").to_string(),
         })
     }
 }

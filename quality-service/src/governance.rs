@@ -813,6 +813,8 @@ mod tests {
             chain_events_spec_path: root.join("chain-events-v1.yaml"),
             chain_integrity_spec_path: root.join("chain-integrity-spec-v1.yaml"),
             tier_registry_path: root.join("tier-feature-registry.json"),
+            binary_sha256: "sha256:test".to_string(),
+            toolchain_version: "rustc-test".to_string(),
         }
     }
 

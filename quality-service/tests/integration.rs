@@ -42,6 +42,18 @@ fn quality_service_writes_snapshots_and_proxy_reader_reads_them() {
     let initial = read_records(&env.qa_chain);
     assert_snapshot_valid(&initial[0], 1, None);
     assert_eq!(initial[0]["overall"], "healthy");
+    // QS-039 Adv #13: the first snapshot (sequence 1) carries binary +
+    // toolchain provenance. These are informational and do not affect the
+    // gate (the run reached "healthy" above).
+    assert!(
+        initial[0]["binary_sha256"].as_str().unwrap_or("").starts_with("sha256:"),
+        "first snapshot missing binary_sha256: {:?}",
+        initial[0].get("binary_sha256"),
+    );
+    assert!(
+        !initial[0]["toolchain_version"].as_str().unwrap_or("").is_empty(),
+        "first snapshot missing toolchain_version",
+    );
 
     let python_status = Command::new("python3")
         .arg("-c")

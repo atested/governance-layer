@@ -14,6 +14,7 @@ use std::time::Instant;
 pub fn run_once(config: &Config) -> Result<(), String> {
     let key = QaSigningKey::load_or_generate(&config.qa_signing_key_path)?;
     let mut writer = QaChainWriter::new(config.qa_chain_path.clone(), key)?;
+    writer.set_startup_metadata(config.binary_sha256.clone(), config.toolchain_version.clone());
     let mut watcher = GovernanceChainWatcher::new(config.governance_chain_path.clone());
     let new_records = watcher.poll_new_records()?;
     let mut spc = SpcMonitor::new(config.spc_min_decisions, config.spc_baseline_path.clone());
@@ -56,6 +57,7 @@ pub fn run_once(config: &Config) -> Result<(), String> {
 pub fn run_loop(config: Config) -> Result<(), String> {
     let key = QaSigningKey::load_or_generate(&config.qa_signing_key_path)?;
     let mut writer = QaChainWriter::new(config.qa_chain_path.clone(), key)?;
+    writer.set_startup_metadata(config.binary_sha256.clone(), config.toolchain_version.clone());
     let mut chain_watcher = GovernanceChainWatcher::new(config.governance_chain_path.clone());
     let initial_records = chain_watcher.poll_new_records()?;
     let mut spc = SpcMonitor::new(config.spc_min_decisions, config.spc_baseline_path.clone());
