@@ -40,14 +40,54 @@ const ENV_DESCRIPTION = {
   'ENV-010': 'Configuration integrity',
 };
 
-// Behavioral analysis categories the mode evaluates (static — describes what
-// the mode does even when idle/warming up).
+// QS-046: each mode's detail is organized around the categories its
+// description names, so the description and the detail never disconnect.
+
+// Environmental: the 10 ENV checks grouped under the 6 named categories.
+const ENV_CATEGORIES = [
+  ['Policy rules', ['ENV-001']],
+  ['Signing keys', ['ENV-002']],
+  ['Chain files', ['ENV-003', 'ENV-005', 'ENV-006']],
+  ['Disk space', ['ENV-007']],
+  ['Process health', ['ENV-008', 'ENV-009']],
+  ['Configuration', ['ENV-004', 'ENV-010']],
+];
+
+// Decision Re-verification: four categories the post-hoc verifier covers.
+// The API exposes only aggregate counts/findings (no per-category split),
+// so each card shows the shared status + what it covers.
+const POSTHOC_CATEGORIES = [
+  ['Structural integrity', 'Record hash and prev-link of each verified decision.'],
+  ['Classification consistency', 'Recorded classification matches the governed decision.'],
+  ['Approval provenance', 'Approvals trace to a valid operator and approval event.'],
+  ['Negative constraints', 'No plaintext secrets or disallowed content in the record.'],
+];
+
+// Statistical Process Control: five tracked metrics.
+const SPC_METRICS = [
+  ['ALLOW rate', 'Share of decisions resolving to ALLOW.'],
+  ['Classification mix', 'Distribution across classification tiers.'],
+  ['Rule concentration', 'Concentration of matches on individual policy rules.'],
+  ['Decision throughput', 'Decisions processed per unit time.'],
+  ['Tool diversity', 'Spread of distinct tools in the decision stream.'],
+];
+
+// Structural Verification: four categories, mapped to element_id prefixes
+// the element verifier emits.
+const ELEMENT_CATEGORIES = [
+  ['Chain record schemas', ['CHAIN_RECORD_SCHEMA']],
+  ['Hash linkage', ['HASH_LINKAGE']],
+  ['Signatures', ['SIGNATURE_VALIDITY']],
+  ['Configuration state', ['CONFIGURATION_STATE', 'TIER_REGISTRY_CONSISTENCY', 'NEGATIVE_CONSTRAINTS']],
+];
+
+// Behavioral Anomalies: five categories, mapped to behavioral finding types.
 const BEHAVIORAL_CATEGORIES = [
-  ['Classification consistency', 'Same tool reclassified differently without a visible cause.'],
-  ['Decision reversals', 'A tool flips ALLOW/DENY with no intervening policy or approval change.'],
-  ['Temporal patterns', 'Off-hours activity relative to the historical baseline.'],
-  ['Approval provenance', 'Aged approvals or operators with no prior approval history.'],
-  ['Policy rule coverage', 'Dead rules (never matched) or overly broad rules (match everything).'],
+  ['Classification consistency', ['classification_inconsistency'], 'Same tool reclassified without a visible cause.'],
+  ['Decision reversals', ['decision_reversal'], 'A tool flips ALLOW/DENY with no intervening change.'],
+  ['Temporal patterns', ['temporal_pattern'], 'Off-hours activity relative to the baseline.'],
+  ['Approval provenance', ['approval_provenance'], 'Aged approvals or operators with no prior history.'],
+  ['Policy-rule coverage', ['policy_rule_coverage'], 'Dead rules or overly broad rules.'],
 ];
 
 const STATUS_LABEL = {
@@ -95,83 +135,146 @@ function _modeDetail(modeKey, mode, data) {
   }
 }
 
+// Worst-of status across a set of check statuses (fail > warning > pass).
+function _worst(statuses) {
+  if (statuses.some((s) => /fail|critical|flag/.test(s))) return ['fail', 'attention'];
+  if (statuses.some((s) => /warn|high/.test(s))) return ['warning', 'warning'];
+  if (statuses.some((s) => /pass|ok|healthy/.test(s))) return ['pass', 'ok'];
+  return ['unknown', 'idle'];
+}
+
+// One category card: name, status pill, and a list of detail lines.
+function _categoryCard(name, statusText, statusToken, lines) {
+  const body = (lines && lines.length)
+    ? lines.map((l) => `<div class="cfm-cat-line">${l}</div>`).join('')
+    : '';
+  return `
+    <div class="cfm-cat cfm-cat-${_token(statusToken)}">
+      <div class="cfm-cat-head">
+        <strong>${_esc(name)}</strong>
+        <span class="cfm-cat-status">${_esc(statusText)}</span>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function _grid(cards) {
+  return `<div class="cfm-cat-grid">${cards.join('')}</div>`;
+}
+
 function _environmental(data) {
   const checks = (data.latest_snapshot && data.latest_snapshot.checks)
     || (data.modes && data.modes.environmental && data.modes.environmental.checks)
     || {};
-  const ids = Object.keys(ENV_DESCRIPTION);
-  // include any extra checks present in the payload beyond the known 10
-  for (const k of Object.keys(checks)) if (!ids.includes(k)) ids.push(k);
-  if (!ids.length) return '<div class="cfm-empty">No environmental snapshot available.</div>';
-  const rows = ids.map((id) => {
-    const check = checks[id] || {};
-    const status = String(check.status || 'unknown');
-    const desc = ENV_DESCRIPTION[id] || '';
-    const reason = check.detail ? `<span class="cfm-check-detail">${_esc(check.detail)}</span>` : '';
-    return `
-      <div class="cfm-check cfm-status-${_token(status)}">
-        <span class="cfm-check-id">${_esc(id)}</span>
-        <strong class="cfm-check-status">${_esc(status)}</strong>
-        <span class="cfm-check-desc">${_esc(desc)}</span>
-        ${reason}
-      </div>`;
-  }).join('');
-  return `<h4>Checks</h4><div class="cfm-checks">${rows}</div>`;
+  const haveSnapshot = Object.keys(checks).length > 0;
+  const cards = ENV_CATEGORIES.map(([name, ids]) => {
+    const lines = ids.map((id) => {
+      const check = checks[id] || {};
+      const status = String(check.status || (haveSnapshot ? 'unknown' : 'no data'));
+      const reason = check.detail ? ` — ${_esc(check.detail)}` : '';
+      return `<span class="cfm-check-id">${_esc(id)}</span> <span class="cfm-check-st cfm-status-${_token(status)}">${_esc(status)}</span> <span class="cfm-check-desc">${_esc(ENV_DESCRIPTION[id] || '')}</span>${reason}`;
+    });
+    const [stText, stTok] = haveSnapshot
+      ? _worst(ids.map((id) => String((checks[id] || {}).status || 'unknown')))
+      : ['no data', 'idle'];
+    return _categoryCard(name, stText, stTok, lines);
+  });
+  return _grid(cards);
 }
 
 function _postHoc(mode) {
-  const rows = [];
-  if (mode.decisions_verified != null) rows.push(_kv('Decisions verified', mode.decisions_verified));
-  if (mode.skipped != null) rows.push(_kv('Skipped', mode.skipped));
-  if (mode.queue_depth != null) rows.push(_kv('Verification queue', `${mode.queue_depth} of ${mode.queue_capacity ?? '?'}`));
-  let body = rows.length ? `<div class="cfm-kvs">${rows.join('')}</div>` : '';
-  body += _findings(mode.findings, (f) => `${_esc(f.check || f.type || 'finding')}: ${_esc(f.detail || '')}`);
-  if (!body) body = '<div class="cfm-empty">No governance decisions to verify yet.</div>';
+  const s = String(mode.status || '').toLowerCase();
+  const idle = s === 'idle' || s === 'unavailable';
+  const findings = Array.isArray(mode.findings) ? mode.findings : [];
+  let summary = '';
+  if (!idle) {
+    const kvs = [];
+    if (mode.decisions_verified != null) kvs.push(_kv('Decisions verified', mode.decisions_verified));
+    if (mode.skipped != null) kvs.push(_kv('Skipped', mode.skipped));
+    if (mode.queue_depth != null) kvs.push(_kv('Verification queue', `${mode.queue_depth} of ${mode.queue_capacity ?? '?'}`));
+    if (kvs.length) summary = `<div class="cfm-kvs">${kvs.join('')}</div>`;
+  }
+  const cards = POSTHOC_CATEGORIES.map(([name, what]) => {
+    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
+    let stText = idle ? 'awaiting decisions' : 'verified';
+    let stTok = idle ? 'idle' : 'ok';
+    // The API does not break findings down per category; surface any
+    // findings as a window-level list below rather than per card.
+    if (!idle && findings.length) { stText = 'see findings'; stTok = 'warning'; }
+    return _categoryCard(name, stText, stTok, lines);
+  });
+  let body = summary + _grid(cards);
+  body += _findings(findings, (f) => `${_esc(f.check || f.type || 'finding')}: ${_esc(f.detail || '')}`);
   return body;
 }
 
 function _spc(mode) {
   const s = String(mode.status || '').toLowerCase();
-  if (s === 'warming_up' || s === 'learning') {
-    return `<div class="cfm-kvs">${_kv('Baseline progress', `${mode.decisions_collected ?? 0} / ${mode.minimum_required ?? 100} decisions`)}</div>`;
-  }
-  if (s === 'attention' || mode.metric_id) {
-    return `<div class="cfm-kvs">
-      ${_kv('Metric', `${_esc(mode.metric_name || mode.metric_id || '')}`)}
-      ${mode.current_value != null ? _kv('Current value', mode.current_value) : ''}
-      ${mode.ucl != null ? _kv('Upper control limit', mode.ucl) : ''}
-      ${mode.lcl != null ? _kv('Lower control limit', mode.lcl) : ''}
-    </div>`;
-  }
-  return '<div class="cfm-empty">No decisions yet to baseline. Metrics tracked: ALLOW rate, classification mix.</div>';
+  const warming = s === 'warming_up' || s === 'learning';
+  const activeName = String(mode.metric_name || mode.metric_id || '').toLowerCase();
+  const cards = SPC_METRICS.map(([name, what]) => {
+    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
+    let stText; let stTok;
+    if (warming) {
+      stText = `warming up (${mode.decisions_collected ?? 0}/${mode.minimum_required ?? 100})`;
+      stTok = 'idle';
+    } else if (activeName && name.toLowerCase() === activeName) {
+      if (mode.current_value != null) lines.push(`<span class="cfm-cat-line">current ${_esc(mode.current_value)}</span>`);
+      if (mode.ucl != null || mode.lcl != null) lines.push(`<span class="cfm-cat-line">limits ${_esc(mode.lcl ?? '--')} … ${_esc(mode.ucl ?? '--')}</span>`);
+      stText = mode.status || 'active'; stTok = 'attention';
+    } else if (s === 'idle' || s === 'unavailable') {
+      stText = 'awaiting decisions'; stTok = 'idle';
+    } else {
+      stText = 'within limits'; stTok = 'ok';
+    }
+    return _categoryCard(name, stText, stTok, lines);
+  });
+  return _grid(cards);
 }
 
 function _element(mode) {
-  const rows = [];
-  if (mode.elements_checked != null) rows.push(_kv('Elements checked', mode.elements_checked));
-  if (mode.elements_passed != null) rows.push(_kv('Passed', mode.elements_passed));
-  if (mode.elements_flagged != null) rows.push(_kv('Flagged', mode.elements_flagged));
-  if (mode.elements_skipped != null) rows.push(_kv('Skipped', mode.elements_skipped));
-  let body = rows.length ? `<div class="cfm-kvs">${rows.join('')}</div>` : '';
-  body += _findings(mode.findings, (f) => `${_esc(f.element_id || 'element')} (${_esc(f.severity || '')}): ${_esc(f.detail || '')}`);
-  if (!body) body = '<div class="cfm-empty">No element verification run yet. Checks chain schemas, hash linkage, signatures, configuration state.</div>';
-  return body;
+  const s = String(mode.status || '').toLowerCase();
+  const idle = s === 'idle' || s === 'unavailable';
+  const findings = Array.isArray(mode.findings) ? mode.findings : [];
+  let summary = '';
+  if (!idle && mode.elements_checked != null) {
+    summary = `<div class="cfm-kvs">${_kv('Elements', `${mode.elements_checked} checked · ${mode.elements_passed ?? '?'} passed · ${mode.elements_flagged ?? 0} flagged · ${mode.elements_skipped ?? 0} skipped`)}</div>`;
+  }
+  const cards = ELEMENT_CATEGORIES.map(([name, ids]) => {
+    const hits = findings.filter((f) => ids.includes(String(f.element_id || '').toUpperCase()));
+    const lines = hits.map((f) => `<span class="cfm-cat-line">${_esc(f.severity || '')}: ${_esc(f.detail || '')}</span>`);
+    let stText; let stTok;
+    if (idle) { stText = 'awaiting verification'; stTok = 'idle'; }
+    else if (hits.length) { stText = `${hits.length} flagged`; stTok = 'attention'; }
+    else { stText = 'pass'; stTok = 'ok'; }
+    return _categoryCard(name, stText, stTok, lines);
+  });
+  return summary + _grid(cards);
 }
 
 function _behavioral(mode) {
   const s = String(mode.status || '').toLowerCase();
-  let body = '';
-  if (s === 'warming_up') {
-    body += `<div class="cfm-kvs">${_kv('Warm-up progress', `${mode.decisions_analyzed ?? 0} / ${mode.minimum_required ?? 100} decisions`)}</div>`;
+  const warming = s === 'warming_up';
+  const idle = s === 'idle' || s === 'unavailable';
+  const findings = Array.isArray(mode.findings) ? mode.findings : [];
+  let summary = '';
+  if (warming) {
+    summary = `<div class="cfm-kvs">${_kv('Warm-up progress', `${mode.decisions_analyzed ?? 0} / ${mode.minimum_required ?? 100} decisions`)}</div>`;
   } else if (mode.anomaly_count != null) {
-    body += `<div class="cfm-kvs">${_kv('Anomalies', mode.anomaly_count)}</div>`;
+    summary = `<div class="cfm-kvs">${_kv('Anomalies', mode.anomaly_count)}</div>`;
   }
-  body += _findings(mode.findings, (f) => `${_esc(f.subtype || f.type || 'finding')}: ${_esc(f.detail || '')}`);
-  const cats = BEHAVIORAL_CATEGORIES.map(
-    ([name, desc]) => `<div class="cfm-cat"><strong>${_esc(name)}</strong><span>${_esc(desc)}</span></div>`
-  ).join('');
-  body += `<h4>Analysis categories</h4><div class="cfm-cats">${cats}</div>`;
-  return body;
+  const cards = BEHAVIORAL_CATEGORIES.map(([name, types, what]) => {
+    const hits = findings.filter((f) => types.includes(String(f.type || f.finding_type || '')));
+    const lines = [`<span class="cfm-cat-what">${_esc(what)}</span>`];
+    for (const f of hits) lines.push(`<span class="cfm-cat-line">${_esc(f.subtype || f.detail || 'anomaly')}</span>`);
+    let stText; let stTok;
+    if (warming) { stText = 'warming up'; stTok = 'idle'; }
+    else if (idle) { stText = 'awaiting decisions'; stTok = 'idle'; }
+    else if (hits.length) { stText = `${hits.length} finding(s)`; stTok = 'attention'; }
+    else { stText = 'clear'; stTok = 'ok'; }
+    return _categoryCard(name, stText, stTok, lines);
+  });
+  return summary + _grid(cards);
 }
 
 function _findings(findings, fmt) {
@@ -201,7 +304,9 @@ function _esc(str) {
 
 const cfmStyles = document.createElement('style');
 cfmStyles.textContent = `
-  .cfm-root { padding: 4px 2px; font-size: 0.84rem; color: #c9d1d9; }
+  /* QS-046: content-sized layout — the window content caps its width so it
+     never floats in a vast empty frame, and categories tile in a grid. */
+  .cfm-root { padding: 4px 2px; font-size: 0.84rem; color: #c9d1d9; max-width: 760px; }
   .cfm-root h4 {
     color: #6699cc; font-size: 0.72rem; font-weight: 600;
     letter-spacing: 0.08em; text-transform: uppercase; margin: 16px 0 8px;
@@ -211,38 +316,50 @@ cfmStyles.textContent = `
     display: flex; align-items: baseline; gap: 10px;
     background: rgba(255,255,255,0.03);
     border: 1px dashed rgba(255,255,255,0.08);
-    border-radius: 2px; padding: 8px 10px;
+    border-radius: 2px; padding: 8px 10px; margin-bottom: 12px;
   }
   .cfm-status-label { color: #8b919a; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .cfm-status strong { color: #e4e6eb; font-family: "JetBrains Mono", monospace; }
   .cfm-status-detail { color: #8b919a; }
-  .cfm-checks { display: flex; flex-direction: column; gap: 6px; }
-  .cfm-check {
-    display: grid; grid-template-columns: 90px 80px 1fr; gap: 8px;
-    align-items: start; padding: 7px 10px; font-size: 0.78rem;
-    background: rgba(255,255,255,0.03);
-    border: 1px dashed rgba(255,255,255,0.08); border-radius: 2px;
+
+  /* Category grid: fills available width with content-sized columns. */
+  .cfm-cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
   }
-  .cfm-check-id { color: #8b919a; font-family: "JetBrains Mono", monospace; }
-  .cfm-check-status { color: #e4e6eb; font-family: "JetBrains Mono", monospace; font-size: 0.72rem; }
-  .cfm-check-desc { color: #c9d1d9; }
-  .cfm-check-detail { grid-column: 1 / -1; color: #6e7681; font-size: 0.72rem; }
-  .cfm-check.cfm-status-pass .cfm-check-status { color: #3fb950; }
-  .cfm-check.cfm-status-fail .cfm-check-status { color: #f85149; }
-  .cfm-check.cfm-status-warning .cfm-check-status { color: #d29922; }
-  .cfm-kvs { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-  .cfm-kv { display: grid; grid-template-columns: 200px 1fr; gap: 8px; padding: 4px 0; }
+  .cfm-cat {
+    padding: 8px 10px; border-radius: 2px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-left: 2px solid rgba(255,255,255,0.12);
+  }
+  .cfm-cat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .cfm-cat-head strong { color: #e4e6eb; font-size: 0.78rem; }
+  .cfm-cat-status { color: #8b919a; font-family: "JetBrains Mono", monospace; font-size: 0.68rem; white-space: nowrap; }
+  .cfm-cat-what { display: block; color: #8b919a; font-size: 0.72rem; line-height: 1.35; margin-top: 3px; }
+  .cfm-cat-line { display: block; color: #c9d1d9; font-size: 0.72rem; margin-top: 3px; }
+  .cfm-cat-line .cfm-check-id { color: #8b919a; font-family: "JetBrains Mono", monospace; }
+  .cfm-cat-line .cfm-check-desc { color: #c9d1d9; }
+  .cfm-cat-line .cfm-check-st { font-family: "JetBrains Mono", monospace; font-size: 0.68rem; }
+  /* status accents on the left border + status pill */
+  .cfm-cat-ok { border-left-color: #3fb950; }
+  .cfm-cat-ok .cfm-cat-status { color: #3fb950; }
+  .cfm-cat-attention { border-left-color: #f85149; }
+  .cfm-cat-attention .cfm-cat-status { color: #f85149; }
+  .cfm-cat-warning { border-left-color: #d29922; }
+  .cfm-cat-warning .cfm-cat-status { color: #d29922; }
+  .cfm-cat-idle { border-left-color: rgba(255,255,255,0.18); }
+  .cfm-status-pass { color: #3fb950; }
+  .cfm-status-fail { color: #f85149; }
+  .cfm-status-warning { color: #d29922; }
+
+  .cfm-kvs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .cfm-kv { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 10px; padding: 2px 0; }
   .cfm-kv span { color: #8b919a; }
   .cfm-kv strong { color: #e4e6eb; font-family: "JetBrains Mono", monospace; font-size: 0.74rem; }
-  .cfm-findings { margin: 0; padding-left: 18px; color: #d29922; }
+  .cfm-findings { margin: 8px 0 0; padding-left: 18px; color: #d29922; }
   .cfm-findings li { margin: 3px 0; }
-  .cfm-cats { display: flex; flex-direction: column; gap: 6px; }
-  .cfm-cat {
-    padding: 7px 10px; background: rgba(255,255,255,0.03);
-    border: 1px dashed rgba(255,255,255,0.08); border-radius: 2px;
-  }
-  .cfm-cat strong { display: block; color: #e4e6eb; font-size: 0.78rem; margin-bottom: 2px; }
-  .cfm-cat span { color: #8b919a; font-size: 0.76rem; }
   .cfm-empty { color: #8b919a; padding: 8px 10px; }
 `;
 document.head.appendChild(cfmStyles);

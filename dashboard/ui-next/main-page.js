@@ -928,10 +928,13 @@ mpStyles.textContent = `
     margin: 0 0 8px;
     text-transform: uppercase;
   }
+  /* QS-046: the verification modes sit in a content-width grid, not stretched
+     edge-to-edge across the full dashboard. */
   .mp-conformance-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    max-width: 720px;
   }
   /* QS-045: mode rows are light, clickable summary lines (not heavy blocks),
      aligned to the header content rather than filled full-width cards. */
