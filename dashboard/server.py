@@ -30,10 +30,12 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from storage_contract import runtime_root
+from env_compat import read_env_preferred  # QS-039 #14: ATESTED_*/GOV_* fallback
 
 RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
-QA_CHAIN = Path(os.environ.get("GOV_QA_CHAIN_PATH", "")).expanduser() if os.environ.get("GOV_QA_CHAIN_PATH") else RUNTIME / "LOGS" / "qa-chain.jsonl"
+_QA_CHAIN_ENV = read_env_preferred("ATESTED_QA_CHAIN_PATH", "GOV_QA_CHAIN_PATH")
+QA_CHAIN = Path(_QA_CHAIN_ENV).expanduser() if _QA_CHAIN_ENV else RUNTIME / "LOGS" / "qa-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 TELEMETRY_SUMMARY = RUNTIME / "LOGS" / "telemetry" / "summary.json"
 EXPORT_TOKEN_TTL_SECONDS = 10 * 60
@@ -5321,7 +5323,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 # Signing status
                 signing_info = {"active": False, "algorithm": "Ed25519"}
                 try:
-                    key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+                    key_path = (read_env_preferred("ATESTED_SIGNING_KEY_PATH", "GOV_SIGNING_KEY_PATH") or "").strip()
                     if key_path and Path(key_path).exists():
                         signing_info["active"] = True
                         signing_info["key_path"] = key_path
@@ -5438,7 +5440,7 @@ def main():
 
     # Persist the browser bearer token across dashboard restarts so a
     # stop/start cycle does not strand an open browser session with 401s.
-    runtime_dir = os.environ.get("GOV_RUNTIME_DIR", "")
+    runtime_dir = read_env_preferred("ATESTED_RUNTIME_DIR", "GOV_RUNTIME_DIR") or ""
     token_path = Path(runtime_dir) / "dashboard_token" if runtime_dir else None
     token = ""
     if token_path is not None:

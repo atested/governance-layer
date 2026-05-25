@@ -49,6 +49,7 @@ if str(SCRIPTS) not in sys.path:
 
 from classifier import classify
 from canonical_form import canonical_json as _canonical_form_json
+from env_compat import read_env_preferred  # QS-039 #14: ATESTED_*/GOV_* fallback
 from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash, compute_policy_rules_hash
 from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_chain
 from event_model import (
@@ -105,8 +106,9 @@ def _resolve_signing_key_path() -> str:
     2. Hidden dotfile in runtime directory (.atested-signing-key.pem)
     3. Legacy visible path in keys/ directory (migration fallback with warning)
     """
-    if "GOV_SIGNING_KEY_PATH" in os.environ:
-        return os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+    _explicit_key = read_env_preferred("ATESTED_SIGNING_KEY_PATH", "GOV_SIGNING_KEY_PATH")
+    if _explicit_key is not None:
+        return _explicit_key.strip()
 
     # Check hidden path in runtime directory
     try:
@@ -1744,7 +1746,7 @@ def main():
     # INV-005: Proxy records are trust-grade and MUST be signed.
     # Refuse to start without a valid signing key — no silent degradation.
     if _SIGNING_KEY is None:
-        key_path = os.environ.get("GOV_SIGNING_KEY_PATH", "").strip()
+        key_path = (read_env_preferred("ATESTED_SIGNING_KEY_PATH", "GOV_SIGNING_KEY_PATH") or "").strip()
         if not key_path:
             logger.error(
                 "No signing key found — proxy requires a signing key (INV-005). "
@@ -1870,7 +1872,7 @@ def main():
 
     policy = GovernanceProxy._load_default_policy()
     qa_chain_path = Path(
-        os.environ.get("GOV_QA_CHAIN_PATH", "").strip()
+        (read_env_preferred("ATESTED_QA_CHAIN_PATH", "GOV_QA_CHAIN_PATH") or "").strip()
         or runtime / "LOGS" / "qa-chain.jsonl"
     )
     qa_gate = ProxyQualityGate(
