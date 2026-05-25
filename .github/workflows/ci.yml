@@ -24,3 +24,19 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -m "not shell" -q
+
+  dashboard-module-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # QS-038 / Advisory #5: static import-graph resolution for the
+      # dashboard ES modules. Fails if any relative import is unresolved
+      # (the QS-025 black-screen class of bug). No browser, no UI test.
+      - name: Dashboard JS module-link smoke test
+        run: node scripts/check-module-links.mjs
