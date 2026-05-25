@@ -1076,6 +1076,37 @@ def test_main_reconfigures_stdout():
     print("PASS: test_main_reconfigures_stdout")
 
 
+def test_provider_routing_status_flags_bypass():
+    """QS-054: a provider base URL pointing off-host is reported as bypassing."""
+    result = atested_cli._provider_routing_status({
+        "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+        "OPENAI_BASE_URL": "http://localhost:8080/openai",
+        "GEMINI_BASE_URL": "http://localhost:8080/gemini",
+    })
+    assert result["any_bypass"] is True
+    by_provider = {p["provider"]: p for p in result["providers"]}
+    assert by_provider["anthropic"]["state"] == "bypassing"
+    assert by_provider["openai"]["state"] == "routed"
+    assert by_provider["gemini"]["state"] == "routed"
+    print("PASS: test_provider_routing_status_flags_bypass")
+
+
+def test_provider_routing_status_all_routed_and_unset():
+    """QS-054: localhost/127.0.0.1 hosts are routed; missing vars are 'unset'."""
+    routed = atested_cli._provider_routing_status({
+        "ANTHROPIC_BASE_URL": "http://localhost:8080/anthropic",
+        "OPENAI_BASE_URL": "http://127.0.0.1:8080/openai",
+        "GEMINI_BASE_URL": "http://localhost:8080/gemini",
+    })
+    assert routed["any_bypass"] is False
+    assert all(p["state"] == "routed" for p in routed["providers"])
+
+    unset = atested_cli._provider_routing_status({})
+    anthropic = next(p for p in unset["providers"] if p["provider"] == "anthropic")
+    assert anthropic["state"] == "unset"
+    print("PASS: test_provider_routing_status_all_routed_and_unset")
+
+
 def main():
     test_help()
     test_policy_list()

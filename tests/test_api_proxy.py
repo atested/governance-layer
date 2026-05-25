@@ -1042,6 +1042,65 @@ class TestQS052ProxyPosture(unittest.TestCase):
         self.assertTrue(rows[0]["examined"])
         chain_path.unlink(missing_ok=True)
 
+    # QS-054: the live Anthropic streaming provider path — the exact path that
+    # /anthropic/v1/messages with stream=true takes (handle_streaming_to_writer
+    # with an AnthropicProvider) — must produce a governed ALLOW/DENY record for
+    # a tool_use block, carrying the QS-052 provider field. No prior test drove
+    # this path with a tool call, which let a regression hide behind the proxy.
+    _TOOL_USE_SSE = "\r\n".join([
+        "event: message_start",
+        'data: {"type":"message_start","message":{"id":"msg_t","role":"assistant","content":[]}}',
+        "",
+        "event: content_block_start",
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}}',
+        "",
+        "event: content_block_delta",
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":'
+        + json.dumps(json.dumps({"file_path": os.path.join(_REPO_STR, "README.md")})) + "}}",
+        "",
+        "event: content_block_stop",
+        'data: {"type":"content_block_stop","index":0}',
+        "",
+        "event: message_delta",
+        'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}',
+        "",
+        "event: message_stop",
+        'data: {"type":"message_stop"}',
+        "",
+    ]).encode("utf-8")
+
+    def test_anthropic_streaming_tool_use_is_governed_to_writer(self):
+        from proxy.providers.anthropic import AnthropicProvider
+
+        proxy, chain_path = self._proxy_with_chain("qs054-stream-tool-governed.jsonl")
+
+        class _FakeWriter:
+            def __init__(self):
+                self.buf = bytearray()
+
+            def write(self, data: bytes):
+                self.buf.extend(data)
+
+            async def drain(self):
+                return None
+
+        writer = _FakeWriter()
+        with patch("httpx.AsyncClient") as MockClient:
+            MockClient.return_value = self._mock_streaming_client(self._TOOL_USE_SSE)
+            _run(proxy.handle_streaming_to_writer(
+                "/v1/messages", {"content-type": "application/json"},
+                json.dumps({"messages": [], "stream": True}).encode(), writer,
+                provider=AnthropicProvider(),
+            ))
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        actions = [r for r in rows if r.get("event_type") is None and "policy_decision" in r]
+        self.assertEqual(len(actions), 1, f"expected one governed decision, got rows={rows}")
+        self.assertEqual(actions[0]["original_tool"], "Read")
+        self.assertEqual(actions[0]["policy_decision"], "ALLOW")
+        self.assertEqual(actions[0]["provider"], "anthropic")  # QS-052 provider field intact
+        self.assertNotIn("developer_mode", actions[0])  # production posture, not watermarked
+        chain_path.unlink(missing_ok=True)
+
 
 # ===================================================================
 # Privacy — no content storage

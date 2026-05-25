@@ -980,6 +980,61 @@ def _proxy_route_lines() -> list[str]:
     return [f"export {name}={value}" for name, value in PROXY_ROUTE_EXPORTS]
 
 
+# Hosts that mean "the local governance proxy" rather than a provider's own API.
+_LOCAL_PROXY_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+
+
+def _provider_routing_status(env: Optional[dict] = None) -> dict:
+    """Report whether each provider's client base URL routes through the local
+    governance proxy or bypasses it.
+
+    A provider is ``routed`` only when its ``*_BASE_URL`` points at the local
+    proxy host. Any other host (e.g. ``api.anthropic.com``) means the agent's
+    traffic for that provider bypasses the proxy entirely and produces no
+    governed decision records.
+
+    QS-054: this surfaces the bypass class that QS-053 documented but deferred
+    to "runtime environment" — the same gap that silently severed Anthropic
+    governance while OpenAI and Gemini stayed routed.
+    """
+    from urllib.parse import urlsplit
+
+    environ = os.environ if env is None else env
+    providers: list[dict] = []
+    any_bypass = False
+    for name, expected in PROXY_ROUTE_EXPORTS:
+        provider = name.split("_", 1)[0].lower()  # ANTHROPIC_BASE_URL -> anthropic
+        value = environ.get(name)
+        if not value:
+            providers.append({
+                "provider": provider,
+                "env": name,
+                "value": None,
+                "expected": expected,
+                "routed": False,
+                "state": "unset",
+                "detail": "not set in process environment; relies on shell profile",
+            })
+            continue
+        host = (urlsplit(value).hostname or "").lower()
+        routed = host in _LOCAL_PROXY_HOSTS
+        if not routed:
+            any_bypass = True
+        providers.append({
+            "provider": provider,
+            "env": name,
+            "value": value,
+            "expected": expected,
+            "routed": routed,
+            "state": "routed" if routed else "bypassing",
+            "detail": "" if routed else (
+                f"traffic bypasses the proxy (host {host or '?'}); "
+                "governance produces no decision records for this provider"
+            ),
+        })
+    return {"any_bypass": any_bypass, "providers": providers}
+
+
 def _profile_display_path(profile_path: Path) -> str:
     try:
         home = Path.home().resolve()
@@ -1267,6 +1322,23 @@ def _print_status_summary(data: dict) -> None:
     last_sync = sync.get("last_successful_sync_utc") if isinstance(sync, dict) else None
     print(f"  Sync:       {pending} pending"
           f"{' last ' + str(last_sync) if last_sync else ''}")
+    routing = data.get("routing") if isinstance(data, dict) else None
+    if isinstance(routing, dict) and routing.get("providers"):
+        print("  Routing:")
+        for provider in routing["providers"]:
+            state = provider.get("state")
+            mark = {"routed": "ok", "unset": "unset"}.get(state, "BYPASS")
+            line = f"    {provider.get('provider')}: {mark}"
+            if provider.get("value"):
+                line += f" ({provider['value']})"
+            print(line)
+        if routing.get("any_bypass"):
+            print(
+                "  WARNING: one or more providers bypass the governance proxy — "
+                "those calls produce NO governed decision records. Point the "
+                "relevant *_BASE_URL at the local proxy "
+                "(e.g. http://localhost:8080/anthropic)."
+            )
 
 
 def _read_chain_records() -> list[dict]:
@@ -1479,6 +1551,7 @@ def cmd_status(args) -> int:
     if (identity or {}).get("machine_role") == "primary":
         machine["registry"] = _machine_registry_summary()
     data["machine"] = machine
+    data["routing"] = _provider_routing_status()
     if getattr(args, "json", False):
         _emit(args, data)
     else:
