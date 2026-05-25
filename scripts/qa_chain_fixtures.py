@@ -79,10 +79,17 @@ def qa_environmental_snapshot(
 def write_qa_chain(path: Path, records: list[dict]) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(canonical_json(record) + "\n" for record in records),
-        encoding="utf-8",
-    )
+    # QS-039 #22: enforce the 4KB QA-record invariant (parity with the Rust
+    # writer) before writing, so a Python QA-chain emitter never produces a
+    # record that the lock-free atomic append cannot write whole.
+    from qa_chain_limits import enforce_qa_record_size
+
+    lines = []
+    for record in records:
+        line = canonical_json(record)
+        enforce_qa_record_size(line, sequence=record.get("sequence"))
+        lines.append(line + "\n")
+    path.write_text("".join(lines), encoding="utf-8")
     return path
 
 
