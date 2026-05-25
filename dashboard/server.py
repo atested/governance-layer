@@ -996,11 +996,17 @@ def _maybe_trigger_archive():
         _archive_check_state["last_check"] = now
         if _archive_check_state["running"]:
             return
-    try:
-        size = CHAIN.stat().st_size
-    except OSError:
-        return
-    if size < 20 * 1024 * 1024:
+    # QS-038: the same trigger operation covers both the decision chain and
+    # the QA chain. Spawn the background archive if EITHER crosses the
+    # threshold; each chain's own size/quiet-period gate inside
+    # trigger_archive_if_needed decides whether it actually archives.
+    def _chain_size(path: Path) -> int:
+        try:
+            return path.stat().st_size
+        except OSError:
+            return 0
+
+    if _chain_size(CHAIN) < 20 * 1024 * 1024 and _chain_size(QA_CHAIN) < 20 * 1024 * 1024:
         return
     with _archive_check_lock:
         if _archive_check_state["running"]:
@@ -1010,7 +1016,16 @@ def _maybe_trigger_archive():
 
 
 def _do_archive_background():
-    """Background thread: trigger archive and generate artifacts."""
+    """Background thread: trigger archive and generate artifacts.
+
+    QS-038: a single archive operation covers both chains. The decision
+    chain archives with the summary/SQLite artifact callback (those
+    artifacts are indexed on decision-record fields). The QA chain
+    archives in the same pass via the same trigger function but WITHOUT
+    that callback — its event types (qa_*) are not decision records, so
+    the decision-artifact generator does not apply. Each chain keeps its
+    own size threshold and quiet period inside trigger_archive_if_needed.
+    """
     try:
         from chain_archiver_trigger import trigger_archive_if_needed
         from archive_artifacts import generate_artifacts
@@ -1020,6 +1035,7 @@ def _do_archive_background():
                 Path(m["archive_chain_path"]), m["archive_id"]
             ) if m.get("archive_chain_path") else None,
         )
+        trigger_archive_if_needed(QA_CHAIN)
     except Exception:
         pass
     finally:

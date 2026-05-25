@@ -923,3 +923,76 @@ class TestArchiveQueryMerging:
         # Here we confirm the raw_json is parseable for reconstruction.
         assert "tool_name" in entry
         assert entry["tool_name"] == "fs_write"
+
+
+class TestQaChainArchiveWiring:
+    """QS-038 (Outstanding Issue #23): a single archive operation covers
+    both the decision chain and the QA chain."""
+
+    def test_do_archive_background_triggers_both_chains(self, tmp_path, monkeypatch):
+        """_do_archive_background passes BOTH CHAIN and QA_CHAIN to the
+        archive trigger in one operation. The decision chain gets the
+        artifact callback; the QA chain does not (its qa_* events are not
+        decision records)."""
+        sys.path.insert(0, str(REPO / "dashboard"))
+        import server as ds
+        import chain_archiver_trigger
+
+        decision_chain = tmp_path / "decision-chain.jsonl"
+        qa_chain = tmp_path / "qa-chain.jsonl"
+        decision_chain.write_text("{}\n")
+        qa_chain.write_text("{}\n")
+        monkeypatch.setattr(ds, "CHAIN", decision_chain)
+        monkeypatch.setattr(ds, "QA_CHAIN", qa_chain)
+
+        calls = []
+
+        def fake_trigger(path, **kwargs):
+            calls.append((Path(path), "callback" in kwargs and kwargs["callback"] is not None))
+            return None
+
+        monkeypatch.setattr(
+            chain_archiver_trigger, "trigger_archive_if_needed", fake_trigger
+        )
+
+        ds._do_archive_background()
+
+        triggered_paths = [p for p, _ in calls]
+        assert decision_chain in triggered_paths, "decision chain not archived"
+        assert qa_chain in triggered_paths, "QA chain not archived in same operation"
+
+        # The decision chain carries the artifact-generation callback; the
+        # QA chain is archived without it.
+        by_path = dict(calls)
+        assert by_path[decision_chain] is True, "decision chain should pass artifact callback"
+        assert by_path[qa_chain] is False, "QA chain should NOT pass decision-artifact callback"
+
+    def test_maybe_trigger_archive_spawns_on_qa_chain_size(self, tmp_path, monkeypatch):
+        """The outer gate spawns the background archive when EITHER chain
+        crosses the threshold, not only the decision chain."""
+        sys.path.insert(0, str(REPO / "dashboard"))
+        import server as ds
+
+        small_decision = tmp_path / "decision-chain.jsonl"
+        big_qa = tmp_path / "qa-chain.jsonl"
+        small_decision.write_text("x")  # well under threshold
+        big_qa.write_bytes(b"x" * (21 * 1024 * 1024))  # over 20MB
+
+        monkeypatch.setattr(ds, "CHAIN", small_decision)
+        monkeypatch.setattr(ds, "QA_CHAIN", big_qa)
+        # Reset the 30s debounce so the gate evaluates this call.
+        ds._archive_check_state["last_check"] = 0.0
+        ds._archive_check_state["running"] = False
+
+        spawned = {"count": 0}
+
+        class _FakeThread:
+            def __init__(self, *a, **k):
+                spawned["count"] += 1
+
+            def start(self):
+                pass
+
+        monkeypatch.setattr(ds.threading, "Thread", _FakeThread)
+        ds._maybe_trigger_archive()
+        assert spawned["count"] == 1, "QA chain over threshold should spawn archive thread"
