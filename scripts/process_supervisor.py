@@ -11,6 +11,7 @@ import platform
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,10 +32,29 @@ def now_utc_z() -> str:
 
 
 def write_json_atomic(path: Path, data: dict) -> None:
+    # QS-041 #15: use a unique temp file per call. The previous fixed name
+    # (path.json.tmp) raced when two writers targeted the same path at once
+    # (e.g. the 1s status loop and a service-start status write): one writer's
+    # replace() consumed the shared temp file and the other's replace() then
+    # raised FileNotFoundError. A unique temp per call gives each writer its
+    # own file; whichever renames last wins, which is the correct
+    # last-write-wins atomic semantics for a status snapshot.
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+        os.replace(tmp_name, str(path))
+    except BaseException:
+        # Best-effort cleanup so a failed write does not leave temp litter.
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def read_pid_record(path: Path) -> dict | None:
