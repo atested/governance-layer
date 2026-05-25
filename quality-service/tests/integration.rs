@@ -217,6 +217,67 @@ fn startup_gate_failure_writes_zero_qa_records() {
 }
 
 #[test]
+fn rust_writer_output_verifies_with_python_verifier() {
+    // QS-039 #20: cross-language end-to-end. The Rust quality-service binary
+    // produces signed QA chain records from a synthetic governance chain;
+    // scripts/verify-qa-chain.py independently verifies them and must report
+    // zero failures. Scratch paths use ATESTED_* env vars (QS-032 lesson:
+    // never write the live runtime).
+    let env = TestEnv::new();
+    // Enough decisions to exercise post-hoc, SPC, behavioral (>= the 100
+    // warm-up threshold), and element verification.
+    seed_backlog_chain(
+        &env.governance_chain,
+        &env.policy_path,
+        &env.capability_path,
+        150,
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_quality-service"))
+        .arg("--once")
+        .env("ATESTED_REPO_ROOT", repo_root())
+        .env("ATESTED_RUNTIME_DIR", env.runtime.path())
+        .env("ATESTED_QA_SIGNING_KEY_PATH", &env.qa_key)
+        .env("ATESTED_POLICY_RULES_PATH", &env.policy_path)
+        .env("ATESTED_CAPABILITY_REGISTRY_PATH", &env.capability_path)
+        .env("ATESTED_DECISION_CHAIN_PATH", &env.governance_chain)
+        .env("ATESTED_QA_CHAIN_PATH", &env.qa_chain)
+        .output()
+        .expect("run quality service once");
+    assert!(
+        output.status.success(),
+        "quality-service --once failed: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let qa_records = read_records(&env.qa_chain);
+    assert!(
+        qa_records.len() >= 2,
+        "expected the Rust writer to emit QA records, got {}",
+        qa_records.len(),
+    );
+
+    // Independent Python verifier over the Rust-produced chain. The
+    // --qa-signing-key derives the public key so signatures are checked
+    // (not skipped). Exit code 0 == zero verification failures.
+    let verifier = format!("{}/scripts/verify-qa-chain.py", repo_root());
+    let verify = Command::new("python3")
+        .arg(&verifier)
+        .arg(env.qa_chain.display().to_string())
+        .arg("--qa-signing-key")
+        .arg(env.qa_key.display().to_string())
+        .output()
+        .expect("run verify-qa-chain.py");
+    assert!(
+        verify.status.success(),
+        "verify-qa-chain.py reported failures (exit {:?}):\nstdout: {}\nstderr: {}",
+        verify.status.code(),
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr),
+    );
+}
+
+#[test]
 fn no_qa_record_exceeds_4kb_under_backlog() {
     // QS-034 trust-surface guarantee: writer.rs:253 rejects any QA chain
     // record whose canonical-JSON line exceeds 4096 bytes (the POSIX
