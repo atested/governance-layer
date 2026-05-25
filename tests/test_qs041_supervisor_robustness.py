@@ -168,3 +168,50 @@ def test_permanently_disabled_never_re_enables(tmp_path, monkeypatch):
     svc.poll()
     assert svc.disabled is True
     assert svc.proc is None
+
+
+# ---------- #17 orphan port clearing ----------
+
+def test_clear_orphan_on_port_kills_untracked(tmp_path, monkeypatch):
+    """An untracked listener (orphan from a prior supervisor) is killed and
+    the warning is logged; the wait loop then sees the port free."""
+    # Port held by orphan 9999 on the first probe, free afterwards.
+    probes = iter([[9999], [9999], []])
+    monkeypatch.setattr(ps, "_pids_listening_on_port", lambda port: next(probes, []))
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    logs = []
+    monkeypatch.setattr(ps, "_log", lambda msg: logs.append(msg))
+    monkeypatch.setattr(ps.time, "sleep", lambda *_a, **_k: None)
+
+    ps.clear_orphan_on_port(8080, "proxy", managed_pids={ps.os.getpid()})
+
+    assert killed == [9999]
+    assert any("killed orphan process 9999 on port 8080" in m for m in logs)
+
+
+def test_clear_orphan_on_port_spares_managed_pid(tmp_path, monkeypatch):
+    """A listener whose PID is managed by the current supervisor is NOT killed;
+    a logic-error is logged and escalated instead."""
+    monkeypatch.setattr(ps, "_pids_listening_on_port", lambda port: [4321])
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    logs = []
+    monkeypatch.setattr(ps, "_log", lambda msg: logs.append(msg))
+    monkeypatch.setattr(ps.time, "sleep", lambda *_a, **_k: None)
+    # Bound the wait loop: managed pid keeps "remaining" empty, so it returns.
+    monkeypatch.setattr(ps.time, "time", lambda: 0.0)
+
+    ps.clear_orphan_on_port(8080, "proxy", managed_pids={4321})
+
+    assert killed == []  # never kill our own
+    assert any("IS managed by the current supervisor" in m for m in logs)
+
+
+def test_clear_orphan_on_port_noop_when_free(monkeypatch):
+    monkeypatch.setattr(ps, "_pids_listening_on_port", lambda port: [])
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    monkeypatch.setattr(ps, "_log", lambda msg: None)
+    ps.clear_orphan_on_port(9700, "dashboard", managed_pids=set())
+    assert killed == []

@@ -43,6 +43,84 @@ def _log(message: str) -> None:
     print(f"[{now_utc_z()}] supervisor: {message}", file=sys.stderr, flush=True)
 
 
+def _pids_listening_on_port(port: int) -> list[int]:
+    """Return PIDs holding a LISTEN socket on `port`.
+
+    Uses `lsof` (present on macOS and most Linux installs). On macOS:
+    `lsof -nP -iTCP:PORT -sTCP:LISTEN -t`. The same invocation works on Linux;
+    if a Linux host lacks lsof, this returns [] and the supervisor proceeds
+    (the service's own bind will then surface the conflict) — a Linux-native
+    fallback (ss/proc) is a noted follow-on if lsof-less hosts matter.
+    """
+    try:
+        result = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    pids: list[int] = []
+    for line in result.stdout.split():
+        try:
+            pids.append(int(line.strip()))
+        except ValueError:
+            continue
+    return pids
+
+
+def _terminate_orphan(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
+    for _ in range(20):  # up to ~2s for graceful exit
+        if not pid_alive(pid):
+            return
+        time.sleep(0.1)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+def clear_orphan_on_port(port: int, service_name: str, managed_pids: set[int]) -> None:
+    """QS-041 #17: before starting a port-binding service, free its port of
+    any orphan from a prior crashed supervisor.
+
+    A listener whose PID is NOT in `managed_pids` (the current supervisor and
+    the services it has already launched this run) is an orphan: kill it and
+    wait briefly for the port to free. A listener whose PID IS managed is a
+    logic error (we never start two services on one port) — log and escalate
+    rather than killing one of our own.
+    """
+    if not port:
+        return
+    for pid in _pids_listening_on_port(port):
+        if pid in managed_pids:
+            _log(
+                f"ERROR: port {port} for {service_name} is held by PID {pid}, "
+                f"which IS managed by the current supervisor — refusing to kill "
+                f"(logic error; not starting a second occupant)"
+            )
+            continue
+        _terminate_orphan(pid)
+        _log(
+            f"killed orphan process {pid} on port {port} "
+            f"(not managed by current supervisor)"
+        )
+    # Wait briefly for the port to actually free before the service binds it.
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        remaining = [p for p in _pids_listening_on_port(port) if p not in managed_pids]
+        if not remaining:
+            return
+        time.sleep(0.1)
+
+
 def write_json_atomic(path: Path, data: dict) -> None:
     # QS-041 #15: use a unique temp file per call. The previous fixed name
     # (path.json.tmp) raced when two writers targeted the same path at once
@@ -235,15 +313,24 @@ def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path
     # file is written AFTER the startup record is committed, so the
     # supervisor's ready-file wait is the synchronization point.
     proxy_ready_file = runtime / "supervisor" / "proxy.ready"
+    # QS-041 #17: record the listen port for each port-binding service so the
+    # supervisor can clear an orphaned occupant before launching. The quality
+    # service binds no port and has none.
+    dashboard_port = int(os.environ.get("DASHBOARD_PORT", "9700"))
     specs = [
         {
             "name": "proxy",
             "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port],
             "ready_file": str(proxy_ready_file),
             "startup_timeout_seconds": 30,
+            "port": int(proxy_port),
         },
         quality_spec,
-        {"name": "dashboard", "argv": [sys.executable, "dashboard/server.py"]},
+        {
+            "name": "dashboard",
+            "argv": [sys.executable, "dashboard/server.py"],
+            "port": dashboard_port,
+        },
     ]
     if role == "primary":
         specs.append({
@@ -256,6 +343,7 @@ def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path
                 "--port",
                 str(sync_port),
             ],
+            "port": int(sync_port),
         })
     return specs
 
@@ -264,6 +352,7 @@ class ManagedService:
     def __init__(self, spec: dict, runtime: Path, log_dir: Path, env: dict):
         self.name = str(spec["name"])
         self.argv = list(spec["argv"])
+        self.port = spec.get("port")  # QS-041 #17: listen port, if any
         self.ready_file = Path(spec["ready_file"]) if spec.get("ready_file") else None
         self.startup_timeout_seconds = int(spec.get("startup_timeout_seconds", 0) or 0)
         self.runtime = runtime
@@ -537,6 +626,14 @@ def main(argv=None) -> int:
                 service.ready_file.unlink()
             except FileNotFoundError:
                 pass
+        # QS-041 #17: clear any orphan holding this service's port (a leftover
+        # from a prior crashed supervisor) before launching. "Managed" PIDs are
+        # the supervisor itself plus services already started this run.
+        if service.port:
+            managed_pids = {os.getpid()} | {
+                svc.proc.pid for svc in services if svc.proc is not None
+            }
+            clear_orphan_on_port(service.port, service.name, managed_pids)
         service.start()
         if service.ready_file:
             deadline = time.time() + service.startup_timeout_seconds
