@@ -707,10 +707,10 @@ function _renderConformanceModes(modes) {
 // not a list of what it checks.
 function _modeDescription(key) {
   return {
-    environmental: 'Verifies the governance environment is sound before any decision is made. Checks run continuously and must all pass before the system accepts its first request.',
-    post_hoc: 'Independently re-verifies every governance decision after the fact, comparing what was decided against current policy to catch drift.',
+    environmental: 'Continuously verifies the governance environment is sound. These checks run before the system accepts its first decision and repeat throughout operation. All must pass for the system to remain operational.',
+    post_hoc: 'Independently re-verifies every governance decision after it has been made and recorded. Verification happens after the fact so decisions aren\'t slowed by the inspection process, and the verification is truly independent of the decision-maker.',
     spc: 'Monitors the decision stream for statistically significant shifts that no single decision check would catch.',
-    element: 'Verifies the running system conforms to its specifications at the structural level.',
+    element: 'Continually verifies the running system conforms to its specifications at the structural level.',
     behavioral: 'Detects patterns across the decision stream that indicate drift, misconfiguration, or unexpected behavior.',
   }[key] || '';
 }
@@ -963,14 +963,14 @@ mpStyles.textContent = `
     display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
-    max-width: 720px;
+    max-width: 520px;
   }
   .mp-conformance-explain {
     color: #8b919a;
     font-size: 0.74rem;
     line-height: 1.4;
     margin: 0 0 8px;
-    max-width: 720px;
+    max-width: 520px;
   }
   /* QS-047: each mode (and the conditions summary) is a bordered card with a
      status-colored left accent and a hover state — the shape signals it's
@@ -1030,7 +1030,7 @@ mpStyles.textContent = `
     background: rgba(255,255,255,0.02);
     border: 1px dashed rgba(255,255,255,0.08);
     border-radius: 4px;
-    max-width: 720px;
+    max-width: 520px;
   }
 
   /* ---- Top display panes ---- */

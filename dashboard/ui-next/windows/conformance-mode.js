@@ -21,10 +21,10 @@ const MODE_LABEL = {
 
 // QS-047: a sentence or two on what the mode DOES (not a list of categories).
 const MODE_DESCRIPTION = {
-  environmental: 'Pre-flight and continuous verification that the governance environment is sound. All checks must pass before the system accepts its first decision, and they run continuously while the system operates.',
-  post_hoc: 'Independently re-verifies every governance decision after the fact, comparing what was decided against current policy to catch drift.',
+  environmental: 'Continuously verifies the governance environment is sound. These checks run before the system accepts its first decision and repeat throughout operation. All must pass for the system to remain operational.',
+  post_hoc: 'Independently re-verifies every governance decision after it has been made and recorded. Verification happens after the fact so decisions aren\'t slowed by the inspection process, and the verification is truly independent of the decision-maker.',
   spc: 'Monitors the decision stream for statistically significant shifts that no single decision check would catch.',
-  element: 'Verifies the running system conforms to its specifications at the structural level.',
+  element: 'Continually verifies the running system conforms to its specifications at the structural level.',
   behavioral: 'Detects patterns across the decision stream that indicate drift, misconfiguration, or unexpected behavior.',
 };
 
@@ -309,7 +309,7 @@ const cfmStyles = document.createElement('style');
 cfmStyles.textContent = `
   /* QS-046: content-sized layout — the window content caps its width so it
      never floats in a vast empty frame, and categories tile in a grid. */
-  .cfm-root { padding: 4px 2px; font-size: 0.84rem; color: #c9d1d9; max-width: 760px; }
+  .cfm-root { padding: 4px 2px; font-size: 0.84rem; color: #c9d1d9; max-width: 540px; }
   .cfm-root h4 {
     color: #6699cc; font-size: 0.72rem; font-weight: 600;
     letter-spacing: 0.08em; text-transform: uppercase; margin: 16px 0 8px;
