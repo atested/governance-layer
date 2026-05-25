@@ -95,6 +95,7 @@ NON_ACTION_EVENT_TYPES = frozenset([
     "policy_rules_loaded",
     "policy_rules_changed",
     "policy_acknowledged",
+    "proxy_request_observed",
     "governance_integrity_error",
     "chain_started_after_archive",
     "chain_export_created",
@@ -123,6 +124,7 @@ INTEGRITY_ERROR_CONDITION_SOURCES = frozenset([
     "hash_mismatch",
     "active_condition",
     "qa_chain_absent",
+    "unsupported_provider_format",
 ])
 
 
@@ -451,6 +453,19 @@ def _validate_governance_integrity_error(event: dict) -> tuple[bool, Optional[st
     return True, None
 
 
+def _validate_proxy_request_observed(event: dict) -> tuple[bool, Optional[str]]:
+    return _validate_fields(event, (
+        ("provider", "str"),
+        ("method", "str"),
+        ("path", "str"),
+        ("status_code", "int"),
+        ("tool_endpoint", "bool"),
+        ("examined", "bool"),
+        ("forwarded", "bool"),
+        ("request_body_hash", "sha256"),
+    ))
+
+
 def _validate_trouble_or_telemetry_submitted(event: dict) -> tuple[bool, Optional[str]]:
     return _validate_fields(event, (
         ("destination", "str"),
@@ -518,6 +533,7 @@ _EVENT_TYPE_VALIDATORS = {
     "version_check_performed": _validate_version_check_performed,
     "policy_rules_changed": _validate_policy_rules_changed,
     "policy_acknowledged": _validate_policy_acknowledged,
+    "proxy_request_observed": _validate_proxy_request_observed,
     "governance_integrity_error": _validate_governance_integrity_error,
     "trouble_report_submitted": _validate_trouble_or_telemetry_submitted,
     "telemetry_submitted": _validate_trouble_or_telemetry_submitted,

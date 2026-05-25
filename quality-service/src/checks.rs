@@ -116,6 +116,10 @@ pub fn run_all_checks(config: &Config) -> EnvironmentSnapshot {
         "ENV-010".to_string(),
         check_capability_registry_currency(config, &capability_registry_hash),
     );
+    checks.insert(
+        "ENV-011".to_string(),
+        check_governance_posture(&config.capability_registry_path),
+    );
 
     let mut active_conditions = Vec::new();
     if checks
@@ -131,6 +135,13 @@ pub fn run_all_checks(config: &Config) -> EnvironmentSnapshot {
         .unwrap_or(false)
     {
         active_conditions.push("CR-CRIT-004".to_string());
+    }
+    if checks
+        .get("ENV-011")
+        .map(|r| r.status == CheckStatus::Fail)
+        .unwrap_or(false)
+    {
+        active_conditions.push("CR-HIGH-003".to_string());
     }
     for (id, result) in &checks {
         if result.status == CheckStatus::Fail && result.severity.as_deref() == Some("critical") {
@@ -248,6 +259,51 @@ fn check_capability_registry_currency(config: &Config, current_hash: &str) -> Ch
         Ok(None) => CheckResult::pass(),
         Err(err) => CheckResult::fail("high", err),
     }
+}
+
+fn check_governance_posture(path: &Path) -> CheckResult {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(err) => {
+            return CheckResult::fail(
+                "high",
+                format!("failed to read capability registry {}: {err}", path.display()),
+            );
+        }
+    };
+    let value: Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(err) => {
+            return CheckResult::fail(
+                "high",
+                format!("failed to parse capability registry {}: {err}", path.display()),
+            );
+        }
+    };
+    let mode = value
+        .get("governance_posture")
+        .and_then(|posture| {
+            if let Some(obj) = posture.as_object() {
+                obj.get("mode").and_then(Value::as_str)
+            } else {
+                posture.as_str()
+            }
+        })
+        .unwrap_or("production")
+        .trim()
+        .to_ascii_lowercase();
+    let mut result = if mode == "developer" {
+        CheckResult::fail(
+            "high",
+            "Proxy operating in developer mode — governance posture is relaxed for unrecognized formats",
+        )
+    } else {
+        CheckResult::pass()
+    };
+    result
+        .metrics
+        .insert("mode".to_string(), Value::String(mode));
+    result
 }
 
 fn check_chain_health(path: &Path, tail_records: usize) -> CheckResult {

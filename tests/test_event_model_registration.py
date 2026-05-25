@@ -99,8 +99,19 @@ def _payload_for(event_type):
         "governance_integrity_error": {
             "tool_name": "bash",
             "condition_source": "qa_chain_staleness",
+            "condition_id": "QA-GATE:qa_chain_staleness",
             "condition_detail": "latest QA snapshot sequence has not advanced",
             "action_taken": "integrity_error_returned",
+        },
+        "proxy_request_observed": {
+            "provider": "openai",
+            "method": "GET",
+            "path": "/v1/models",
+            "status_code": 200,
+            "tool_endpoint": False,
+            "examined": True,
+            "forwarded": True,
+            "request_body_hash": common_hash,
         },
     }
     return payloads.get(event_type, {"test": True})

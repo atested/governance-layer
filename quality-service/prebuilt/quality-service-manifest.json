@@ -2,16 +2,16 @@
   "schema_version": 1,
   "product": "atested-quality-service",
   "source_commit": "a8993b34e9100204114024a8a755a58cd59fde97",
-  "generated_at_utc": "2026-05-25T11:49:35Z",
+  "generated_at_utc": "2026-05-25T20:33:53Z",
   "binaries": {
     "aarch64-apple-darwin": {
       "status": "available",
       "target_triple": "aarch64-apple-darwin",
       "path": "quality-service/prebuilt/quality-service-aarch64-apple-darwin",
-      "sha256": "sha256:50070e5159fd5f8e3448987b2937f0fda6904604a398c230db85fc46df2430b0",
-      "size_bytes": 1262120,
+      "sha256": "sha256:04b7b2c1b0c6267e86af003d409d8c833177ad9a6490fabb217065c7c1b141fa",
+      "size_bytes": 1272928,
       "rust_toolchain": "rustc 1.93.0 (254b59607 2026-01-19)",
-      "build_timestamp_utc": "2026-05-25T11:49:35Z"
+      "build_timestamp_utc": "2026-05-25T20:33:53Z"
     },
     "x86_64-apple-darwin": {
       "status": "pending_ci_release",

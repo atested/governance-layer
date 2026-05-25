@@ -158,7 +158,7 @@ class TestMediateDecisionProviderField(unittest.TestCase):
         )
         self.assertEqual(record.get("provider"), "openai")
 
-    def test_no_provider_name_when_empty(self):
+    def test_provider_name_defaults_when_empty(self):
         policy = dict(load_policy_rules())
         policy["base_dirs"] = [str(REPO)]
 
@@ -168,7 +168,7 @@ class TestMediateDecisionProviderField(unittest.TestCase):
             policy=policy,
             provider_name="",
         )
-        self.assertNotIn("provider", record)
+        self.assertEqual(record.get("provider"), "unknown")
 
     def test_anthropic_provider_name(self):
         policy = dict(load_policy_rules())
@@ -195,6 +195,7 @@ class TestProviderEndpointDetection(unittest.TestCase):
     def test_openai_chat_completions(self):
         p = OpenAIProvider()
         self.assertTrue(p.is_tool_endpoint("/v1/chat/completions"))
+        self.assertTrue(p.is_tool_endpoint("/v1/responses"))
         self.assertFalse(p.is_tool_endpoint("/v1/models"))
         self.assertFalse(p.is_tool_endpoint("/v1/completions"))
 

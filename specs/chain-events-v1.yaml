@@ -4795,6 +4795,7 @@ elements:
       - hash_mismatch
       - active_condition
       - qa_chain_absent
+      - unsupported_provider_format
     condition_detail:
       type: string
     action_taken:
@@ -4842,3 +4843,89 @@ elements:
     - file: archive/gov/governance-layer/scripts/readout.py
       line: 372
   validator: event_model._validate_governance_integrity_error
+- element_type: chain_event_schema
+  id: EVT-GOV-002
+  event: proxy_request_observed
+  domain: GOV
+  severity: high
+  components:
+    producers:
+    - proxy
+    consumers:
+    - dashboard
+    - quality-service
+  fields:
+    event_model_version:
+      type: string
+    event_type:
+      type: string
+      const: proxy_request_observed
+    event_id:
+      type: string
+    timestamp_utc:
+      type: string
+      format: date-time
+    provider:
+      type: string
+    method:
+      type: string
+    path:
+      type: string
+    status_code:
+      type: integer
+    tool_endpoint:
+      type: boolean
+    examined:
+      type: boolean
+    forwarded:
+      type: boolean
+    request_body_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    developer_mode:
+      type: boolean
+    record_hash:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+  required:
+  - event_model_version
+  - event_type
+  - event_id
+  - timestamp_utc
+  - provider
+  - method
+  - path
+  - status_code
+  - tool_endpoint
+  - examined
+  - forwarded
+  - request_body_hash
+  - record_hash
+  additionalProperties: true
+  chain_constraints:
+  - hash_linked: true
+  - signed: true
+  - canonical_hash: true
+  check_type: event_triggered
+  verification_mode: runtime_monitor
+  observe:
+    source: chain_record
+    selector:
+      event_type: proxy_request_observed
+  verify: >
+    Record exists for proxied requests that do not produce a mediated decision
+    or governance integrity error, carries provider and posture metadata, and
+    validates against the common non-action event envelope.
+  status: active
+  implementation_status: implemented
+  verification_status: unverified
+  references:
+    legacy_spec:
+      file: QS-052 dispatch
+      section: 'Log everything'
+    code:
+    - file: archive/gov/governance-layer/proxy/server.py
+      line: 543
+    - file: archive/gov/governance-layer/scripts/event_model.py
+      line: 452
+  validator: event_model._validate_proxy_request_observed

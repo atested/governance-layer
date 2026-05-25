@@ -17,6 +17,7 @@ class ToolCall:
     args: dict
     call_id: str        # Provider-native ID (e.g., Anthropic tool_use id, OpenAI call id)
     raw_block: dict     # Original block for reconstruction
+    response_format: str = ""  # Provider-specific response family, e.g. chat_completions/responses
 
 
 @dataclass
@@ -59,6 +60,10 @@ class BaseProvider(ABC):
     @abstractmethod
     def extract_tool_calls(self, response_body: dict) -> list[ToolCall]:
         """Extract tool calls from a non-streaming response body."""
+
+    def response_format_known(self, response_body: dict) -> bool:
+        """Return True if the response is a recognized no-tool or tool-bearing shape."""
+        return True
 
     @abstractmethod
     def apply_denials(

@@ -169,6 +169,32 @@ MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10
 def compute_capability_registry_hash() -> str:
     return "sha256:" + hashlib.sha256(CAP_REGISTRY_PATH.read_bytes()).hexdigest()
 
+
+def governance_posture() -> str:
+    """Return production/developer posture from capability-registry.json.
+
+    The default is production. Any missing, malformed, or unrecognized value
+    fails closed into production posture.
+    """
+    try:
+        registry = json.loads(CAP_REGISTRY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "production"
+    posture = registry.get("governance_posture", {})
+    if isinstance(posture, dict):
+        mode = str(posture.get("mode", "production")).strip().lower()
+    else:
+        mode = str(posture or "production").strip().lower()
+    return "developer" if mode == "developer" else "production"
+
+
+def developer_mode_active() -> bool:
+    return governance_posture() == "developer"
+
+
+def _sha256_body(body: bytes) -> str:
+    return "sha256:" + hashlib.sha256(body or b"").hexdigest()
+
 # ---------------------------------------------------------------------------
 # Chain recorder (thread-safe, append-only JSONL)
 # ---------------------------------------------------------------------------
@@ -204,6 +230,11 @@ class ChainRecorder:
             try:
                 if self._integrity_monitor is not None:
                     self._integrity_monitor.verify_chain_writable()
+                record.setdefault("provider", "unknown")
+                if developer_mode_active():
+                    record["developer_mode"] = True
+                else:
+                    record.pop("developer_mode", None)
                 add_machine_identity_fields(record, REPO)
                 add_record_freshness_fields(record, REPO)
                 record["prev_record_hash"] = self._last_hash()
@@ -432,7 +463,7 @@ def mediate_decision(
     approval_store: Optional[ApprovalStore] = None,
     session_id: str = "",
     user_identity: str = "",
-    provider_name: str = "",
+    provider_name: str = "unknown",
     integrity_monitor: Optional[IntegrityMonitor] = None,
     qa_gate: Optional[ProxyQualityGate] = None,
 ) -> dict:
@@ -445,6 +476,7 @@ def mediate_decision(
     whether the operation has been approved. Approved operations are overridden
     to ALLOW with resolution "approved_lookup".
     """
+    provider_name = provider_name or "unknown"
     if qa_gate is not None:
         qa_result = qa_gate.check()
         if not qa_result.ok:
@@ -472,10 +504,10 @@ def mediate_decision(
         approval_store_hash=approval_store_hash(approval_store),
     )
 
-    # Add provider field to chain records
-    if provider_name:
-        record["provider"] = provider_name
-        record["record_hash"] = _compute_record_hash(record)
+    record["provider"] = provider_name
+    if developer_mode_active():
+        record["developer_mode"] = True
+    record["record_hash"] = _compute_record_hash(record)
 
     # Check approval store for denied operations
     if record["policy_decision"] == "DENY" and approval_store is not None:
@@ -507,7 +539,7 @@ def _build_governance_integrity_error_record(
     condition_detail: str,
     user_identity: str,
     session_id: str,
-    provider_name: str = "",
+    provider_name: str = "unknown",
     condition_id: str = "",
 ) -> dict:
     reason = f"Integrity error: {condition_detail}"
@@ -532,12 +564,52 @@ def _build_governance_integrity_error_record(
         "user_identity": user_identity,
         "session_id": session_id,
     }
-    if provider_name:
-        payload["provider"] = provider_name
+    payload["provider"] = provider_name or "unknown"
+    if developer_mode_active():
+        payload["developer_mode"] = True
     return build_non_action_event(
         "governance_integrity_error",
         payload,
     )
+
+
+def _build_proxy_request_observed_record(
+    *,
+    provider_name: str,
+    method: str,
+    path: str,
+    status_code: int,
+    tool_endpoint: bool,
+    examined: bool,
+    forwarded: bool,
+    request_body: bytes,
+    detail: str = "",
+) -> dict:
+    payload = {
+        "provider": provider_name or "unknown",
+        "method": method,
+        "path": path,
+        "status_code": status_code,
+        "tool_endpoint": bool(tool_endpoint),
+        "examined": bool(examined),
+        "forwarded": bool(forwarded),
+        "request_body_hash": _sha256_body(request_body),
+    }
+    if detail:
+        payload["detail"] = detail
+    if developer_mode_active():
+        payload["developer_mode"] = True
+    return build_non_action_event("proxy_request_observed", payload)
+
+
+def _integrity_error_response(record: dict, status_code: int = 502) -> tuple[int, dict, bytes]:
+    body = json.dumps({
+        "error": "governance_integrity_error",
+        "condition_source": record.get("condition_source"),
+        "condition_detail": record.get("condition_detail"),
+        "record_hash": record.get("record_hash"),
+    }).encode("utf-8")
+    return status_code, {"content-type": "application/json", "content-length": str(len(body))}, body
 
 
 def _is_blocking_record(record: dict) -> bool:
@@ -630,6 +702,7 @@ class StreamingToolCollector:
                     approval_store=self._approval_store,
                     session_id=self._session_id,
                     user_identity=self._user_identity,
+                    provider_name="anthropic",
                     integrity_monitor=self._integrity_monitor,
                     qa_gate=self._qa_gate,
                 )
@@ -812,6 +885,55 @@ class GovernanceProxy:
                             len(self._approval_store.all_approvals()))
         return self._approval_store
 
+    def _append_request_observed(
+        self,
+        *,
+        provider_name: str,
+        method: str,
+        path: str,
+        status_code: int,
+        tool_endpoint: bool,
+        examined: bool,
+        forwarded: bool,
+        request_body: bytes,
+        detail: str = "",
+    ) -> None:
+        if self._chain_recorder is None:
+            return
+        record = _build_proxy_request_observed_record(
+            provider_name=provider_name,
+            method=method,
+            path=path,
+            status_code=status_code,
+            tool_endpoint=tool_endpoint,
+            examined=examined,
+            forwarded=forwarded,
+            request_body=request_body,
+            detail=detail,
+        )
+        self._chain_recorder.append_atomic(record)
+
+    def _append_unexaminable_error(
+        self,
+        *,
+        provider_name: str,
+        method: str,
+        path: str,
+        detail: str,
+    ) -> dict:
+        record = _build_governance_integrity_error_record(
+            "__request__",
+            condition_source="unsupported_provider_format",
+            condition_detail=f"{method} {path}: {detail}",
+            user_identity=self._user_identity,
+            session_id=self._session_id,
+            provider_name=provider_name,
+            condition_id="QA-GATE:unsupported_provider_format",
+        )
+        if self._chain_recorder is not None:
+            self._chain_recorder.append_atomic(record)
+        return record
+
     @staticmethod
     def _load_default_policy() -> dict:
         policy_path = os.environ.get("GOV_POLICY_RULES_PATH", "").strip()
@@ -894,6 +1016,19 @@ class GovernanceProxy:
         url, fwd_headers, is_messages, is_streaming = self._prepare_request(
             method, path, headers, body
         )
+        if is_messages and body:
+            try:
+                json.loads(body)
+            except json.JSONDecodeError as exc:
+                if not developer_mode_active():
+                    record = self._append_unexaminable_error(
+                        provider_name="anthropic",
+                        method=method,
+                        path=path,
+                        detail=f"request JSON parse failed: {exc}",
+                    )
+                    return _integrity_error_response(record)
+                logger.warning("Developer mode forwarding unparseable legacy Anthropic request: %s", path)
         if is_messages and is_streaming:
             return await self._handle_streaming_buffered(
                 url, fwd_headers, body
@@ -911,6 +1046,19 @@ class GovernanceProxy:
         url, fwd_headers, is_tool_ep, is_streaming = self._prepare_request_with_provider(
             method, path, headers, body, provider
         )
+        if is_tool_ep and body:
+            try:
+                json.loads(body)
+            except json.JSONDecodeError as exc:
+                if not developer_mode_active():
+                    record = self._append_unexaminable_error(
+                        provider_name=provider.name,
+                        method=method,
+                        path=path,
+                        detail=f"request JSON parse failed: {exc}",
+                    )
+                    return _integrity_error_response(record)
+                logger.warning("Developer mode forwarding unparseable request body: %s %s", provider.name, path)
         if is_tool_ep and is_streaming:
             return await self._handle_streaming_buffered_provider(
                 url, fwd_headers, body, provider
@@ -1000,7 +1148,22 @@ class GovernanceProxy:
 
                     try:
                         data = json.loads(data_str)
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as exc:
+                        if not developer_mode_active():
+                            record = self._append_unexaminable_error(
+                                provider_name=provider.name,
+                                method="POST",
+                                path=url,
+                                detail=f"stream JSON parse failed: {exc}",
+                            )
+                            err = json.dumps({
+                                "error": "governance_integrity_error",
+                                "condition_source": record.get("condition_source"),
+                                "condition_detail": record.get("condition_detail"),
+                            })
+                            writer.write(f"event: error\ndata: {err}\n\n".encode())
+                            await writer.drain()
+                            return
                         chunk = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                         writer.write(chunk)
                         await writer.drain()
@@ -1184,17 +1347,58 @@ class GovernanceProxy:
 
         logger.info("Non-streaming response: status=%d is_messages=%s", resp.status_code, is_messages)
         if not is_messages or resp.status_code != 200:
+            self._append_request_observed(
+                provider_name="anthropic",
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=is_messages,
+                examined=not is_messages,
+                forwarded=True,
+                request_body=body,
+                detail="legacy non-messages endpoint" if not is_messages else "upstream non-200 response",
+            )
             return resp.status_code, resp_headers, resp_body
 
         try:
             data = json.loads(resp_body)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            if not developer_mode_active():
+                record = self._append_unexaminable_error(
+                    provider_name="anthropic",
+                    method=method,
+                    path=url,
+                    detail=f"response JSON parse failed: {exc}",
+                )
+                return _integrity_error_response(record)
+            self._append_request_observed(
+                provider_name="anthropic",
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=True,
+                examined=False,
+                forwarded=True,
+                request_body=body,
+                detail=f"developer mode forwarded response JSON parse failure: {exc}",
+            )
             return resp.status_code, resp_headers, resp_body
 
         content = data.get("content", [])
         tool_blocks = extract_tool_use_blocks(content)
 
         if not tool_blocks:
+            self._append_request_observed(
+                provider_name="anthropic",
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=True,
+                examined=True,
+                forwarded=True,
+                request_body=body,
+                detail="recognized response contained no tool_use blocks",
+            )
             return resp.status_code, resp_headers, resp_body
 
         modified = False
@@ -1208,6 +1412,7 @@ class GovernanceProxy:
                 approval_store=approval_store,
                 session_id=self._session_id,
                 user_identity=self._user_identity,
+                provider_name="anthropic",
                 integrity_monitor=self._integrity_monitor,
                 qa_gate=self._qa_gate,
             )
@@ -1252,15 +1457,79 @@ class GovernanceProxy:
         logger.info("Non-streaming response (%s): status=%d is_tool_ep=%s",
                      provider.name, resp.status_code, is_tool_ep)
         if not is_tool_ep or resp.status_code != 200:
+            self._append_request_observed(
+                provider_name=provider.name,
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=is_tool_ep,
+                examined=not is_tool_ep,
+                forwarded=True,
+                request_body=body,
+                detail="non-tool endpoint" if not is_tool_ep else "upstream non-200 response",
+            )
             return resp.status_code, resp_headers, resp_body
 
         try:
             data = json.loads(resp_body)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            if not developer_mode_active():
+                record = self._append_unexaminable_error(
+                    provider_name=provider.name,
+                    method=method,
+                    path=url,
+                    detail=f"response JSON parse failed: {exc}",
+                )
+                return _integrity_error_response(record)
+            self._append_request_observed(
+                provider_name=provider.name,
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=True,
+                examined=False,
+                forwarded=True,
+                request_body=body,
+                detail=f"developer mode forwarded response JSON parse failure: {exc}",
+            )
+            return resp.status_code, resp_headers, resp_body
+
+        if not provider.response_format_known(data):
+            detail = "provider response format is not recognized"
+            if not developer_mode_active():
+                record = self._append_unexaminable_error(
+                    provider_name=provider.name,
+                    method=method,
+                    path=url,
+                    detail=detail,
+                )
+                return _integrity_error_response(record)
+            self._append_request_observed(
+                provider_name=provider.name,
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=True,
+                examined=False,
+                forwarded=True,
+                request_body=body,
+                detail=f"developer mode forwarded: {detail}",
+            )
             return resp.status_code, resp_headers, resp_body
 
         tool_calls = provider.extract_tool_calls(data)
         if not tool_calls:
+            self._append_request_observed(
+                provider_name=provider.name,
+                method=method,
+                path=url,
+                status_code=resp.status_code,
+                tool_endpoint=True,
+                examined=True,
+                forwarded=True,
+                request_body=body,
+                detail="recognized response contained no tool calls",
+            )
             return resp.status_code, resp_headers, resp_body
 
         denials: list[tuple[ToolCall, str, str]] = []
@@ -1430,7 +1699,15 @@ class GovernanceProxy:
 
                     try:
                         data = json.loads(data_str)
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as exc:
+                        if not developer_mode_active():
+                            record = self._append_unexaminable_error(
+                                provider_name=provider.name,
+                                method="POST",
+                                path=url,
+                                detail=f"stream JSON parse failed: {exc}",
+                            )
+                            return _integrity_error_response(record)
                         output_chunks.append(
                             f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
                         )

@@ -104,6 +104,25 @@ class TestOpenAIExtraction(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].args, {"_raw": "not json"})
 
+    def test_extract_responses_function_call(self):
+        body = {
+            "id": "resp_1",
+            "object": "response",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Read",
+                "arguments": '{"file_path": "/tmp/test.txt"}',
+            }],
+        }
+        calls = self.provider.extract_tool_calls(body)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0].tool_name, "Read")
+        self.assertEqual(calls[0].args, {"file_path": "/tmp/test.txt"})
+        self.assertEqual(calls[0].call_id, "call_1")
+        self.assertEqual(calls[0].response_format, "responses")
+
 
 class TestOpenAIDenials(unittest.TestCase):
     """Test denial rewriting for OpenAI responses."""
@@ -171,6 +190,28 @@ class TestOpenAIDenials(unittest.TestCase):
         self.assertEqual(len(msg["tool_calls"]), 1)
         self.assertEqual(msg["tool_calls"][0]["id"], "call_1")
 
+    def test_deny_responses_function_call(self):
+        body = {
+            "id": "resp_1",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Write",
+                "arguments": '{"file_path": "/etc/passwd"}',
+            }],
+        }
+        tc = ToolCall(
+            tool_name="Write",
+            args={"file_path": "/etc/passwd"},
+            call_id="call_1",
+            raw_block=body["output"][0],
+            response_format="responses",
+        )
+        result = self.provider.apply_denials(body, [(tc, "outside base dirs", "deny_outside_base")])
+        self.assertEqual(result["output"][0]["type"], "message")
+        self.assertIn("[Governance] Operation denied", result["output"][0]["content"][0]["text"])
+
 
 class TestOpenAIProviderMethods(unittest.TestCase):
     """Test provider interface methods."""
@@ -181,6 +222,8 @@ class TestOpenAIProviderMethods(unittest.TestCase):
     def test_is_tool_endpoint(self):
         self.assertTrue(self.provider.is_tool_endpoint("/v1/chat/completions"))
         self.assertTrue(self.provider.is_tool_endpoint("/v1/chat/completions?foo=bar"))
+        self.assertTrue(self.provider.is_tool_endpoint("/v1/responses"))
+        self.assertTrue(self.provider.is_tool_endpoint("/v1/responses?foo=bar"))
         self.assertFalse(self.provider.is_tool_endpoint("/v1/models"))
         self.assertFalse(self.provider.is_tool_endpoint("/v1/embeddings"))
 
@@ -209,6 +252,11 @@ class TestOpenAIProviderMethods(unittest.TestCase):
         self.assertIn("content-type", fwd)
         self.assertNotIn("host", fwd)
         self.assertNotIn("x-api-key", fwd)
+
+    def test_response_format_known(self):
+        self.assertTrue(self.provider.response_format_known({"choices": []}))
+        self.assertTrue(self.provider.response_format_known({"output": []}))
+        self.assertFalse(self.provider.response_format_known({"unexpected": []}))
 
 
 class TestOpenAIStreamingCollector(unittest.TestCase):
@@ -274,6 +322,39 @@ class TestOpenAIStreamingCollector(unittest.TestCase):
         self.assertEqual(action4.completed_tool_call.tool_name, "Read")
         self.assertEqual(action4.completed_tool_call.args, {"file_path": "/tmp/t.txt"})
 
+    def test_collect_responses_function_call(self):
+        collector = OpenAIStreamingCollector()
+        added = collector.process_event("response.output_item.added", {
+            "type": "response.output_item.added",
+            "output_index": 0,
+            "item": {
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Read",
+                "arguments": "",
+            },
+        })
+        self.assertEqual(added.action, "buffer")
+        delta = collector.process_event("response.function_call_arguments.delta", {
+            "type": "response.function_call_arguments.delta",
+            "output_index": 0,
+            "item_id": "fc_1",
+            "delta": '{"file_path":',
+        })
+        self.assertEqual(delta.action, "buffer")
+        done = collector.process_event("response.function_call_arguments.done", {
+            "type": "response.function_call_arguments.done",
+            "output_index": 0,
+            "item_id": "fc_1",
+            "arguments": '{"file_path": "/tmp/test.txt"}',
+        })
+        self.assertEqual(done.action, "buffer")
+        self.assertIsNotNone(done.completed_tool_call)
+        self.assertEqual(done.completed_tool_call.tool_name, "Read")
+        self.assertEqual(done.completed_tool_call.args, {"file_path": "/tmp/test.txt"})
+        self.assertEqual(done.completed_tool_call.response_format, "responses")
+
     def test_pass_non_tool_events(self):
         collector = OpenAIStreamingCollector()
 
@@ -293,6 +374,21 @@ class TestOpenAIStreamingCollector(unittest.TestCase):
         data = json.loads(events[0].decode().split("data: ")[1].strip())
         self.assertIn("[Governance] Operation denied", data["choices"][0]["delta"]["content"])
         self.assertEqual(data["choices"][0]["finish_reason"], "stop")
+
+    def test_build_responses_denial_events(self):
+        collector = OpenAIStreamingCollector()
+        tc = ToolCall(
+            tool_name="Write",
+            args={},
+            call_id="call_1",
+            raw_block={},
+            response_format="responses",
+        )
+        events = collector.build_denial_events(0, tc, "policy denied", "deny_rule")
+        self.assertEqual(len(events), 1)
+        text = events[0].decode()
+        self.assertIn("response.output_text.delta", text)
+        self.assertIn("[Governance] Operation denied", text)
 
     def test_get_all_completed_tool_calls(self):
         collector = OpenAIStreamingCollector()

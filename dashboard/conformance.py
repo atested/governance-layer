@@ -34,6 +34,8 @@ GUIDANCE = {
     "CR-CRIT-006": "The governance signing key has changed without a recorded rotation event. Verify key integrity.",
     "operator_session_expiry": "An approval references an operator session that may have exceeded the maximum age. Review and reissue if needed.",
     "CR-CRIT-007": "An approval references an operator session that may have exceeded the maximum age. Review and reissue if needed.",
+    "developer_mode": "Proxy operating in developer mode — governance posture is relaxed for unrecognized formats. Restore production mode in capability-registry.json.",
+    "CR-HIGH-003": "Proxy operating in developer mode — governance posture is relaxed for unrecognized formats. Restore production mode in capability-registry.json.",
 }
 
 
@@ -518,6 +520,7 @@ def _condition_type(condition_id: str) -> str:
         "CR-CRIT-004": "stale_capability_registry",
         "CR-CRIT-006": "signing_key_fingerprint_change",
         "CR-CRIT-007": "operator_session_expiry",
+        "CR-HIGH-003": "developer_mode",
     }
     if condition_id.startswith("CR-CRIT-005"):
         return "environment_critical"

@@ -36,6 +36,8 @@ from proxy.server import (
     mediate_decision,
     replace_tool_use_with_denial,
 )
+import proxy.server as proxy_server
+from proxy.providers.openai import OpenAIProvider
 from classifier import classify
 from policy_eval_v2 import load_policy_rules
 
@@ -726,6 +728,228 @@ class TestNonStreamingProxy(unittest.TestCase):
         self.assertEqual(r2["policy_decision"], "DENY")
         self.assertEqual(r2["prev_record_hash"], r1["record_hash"])
 
+        chain_path.unlink(missing_ok=True)
+
+
+# ===================================================================
+# QS-052 trust posture and Responses API mediation
+# ===================================================================
+
+
+class TestQS052ProxyPosture(unittest.TestCase):
+    def _capability_registry(self, mode: str) -> Path:
+        path = Path(os.environ.get("TMPDIR", "/private/tmp")) / f"qs052-capability-{mode}.json"
+        path.write_text(json.dumps({
+            "version": "0.1",
+            "governance_posture": {"mode": mode},
+            "tools": [],
+        }), encoding="utf-8")
+        return path
+
+    def _proxy_with_chain(self, chain_name: str) -> tuple[GovernanceProxy, Path]:
+        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp")) / chain_name
+        chain_path.unlink(missing_ok=True)
+        recorder = ChainRecorder(chain_path)
+        proxy = GovernanceProxy(
+            upstream_base="http://fake-api.test",
+            policy=_make_policy(),
+            chain_recorder=recorder,
+        )
+        return proxy, chain_path
+
+    def test_openai_responses_tool_call_is_mediated(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-responses-mediated.jsonl")
+        response_body = json.dumps({
+            "id": "resp_1",
+            "object": "response",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Read",
+                "arguments": json.dumps({"file_path": os.path.join(_REPO_STR, "README.md")}),
+            }],
+        }).encode()
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "application/json"}
+            mock_resp.content = response_body
+            mock_client = AsyncMock()
+            mock_client.request = AsyncMock(return_value=mock_resp)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+
+            status, _, body = _run(proxy.handle_request(
+                "POST", "/v1/responses", {"content-type": "application/json"},
+                json.dumps({"input": [], "stream": False}).encode(),
+                provider=OpenAIProvider(),
+            ))
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["output"][0]["type"], "function_call")
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["record_type"], "mediated_decision")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertEqual(rows[0]["policy_decision"], "ALLOW")
+        self.assertNotIn("developer_mode", rows[0])
+        chain_path.unlink(missing_ok=True)
+
+    def test_openai_responses_denial_rewrites_output(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-responses-deny.jsonl")
+        response_body = json.dumps({
+            "id": "resp_1",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Read",
+                "arguments": '{"file_path": "/etc/shadow"}',
+            }],
+        }).encode()
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "application/json"}
+            mock_resp.content = response_body
+            mock_client = AsyncMock()
+            mock_client.request = AsyncMock(return_value=mock_resp)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+            status, _, body = _run(proxy.handle_request(
+                "POST", "/v1/responses", {"content-type": "application/json"},
+                json.dumps({"input": []}).encode(),
+                provider=OpenAIProvider(),
+            ))
+        self.assertEqual(status, 200)
+        output = json.loads(body)["output"]
+        self.assertEqual(output[0]["type"], "message")
+        self.assertIn("[Governance] Operation denied", output[0]["content"][0]["text"])
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(rows[0]["policy_decision"], "DENY")
+        self.assertEqual(rows[0]["provider"], "openai")
+        chain_path.unlink(missing_ok=True)
+
+    def test_production_blocks_unrecognized_tool_response(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-prod-block.jsonl")
+        with patch.object(proxy_server, "CAP_REGISTRY_PATH", self._capability_registry("production")):
+            with patch("httpx.AsyncClient") as MockClient:
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.headers = {"content-type": "application/json"}
+                mock_resp.content = b'{"unexpected": true}'
+                mock_client = AsyncMock()
+                mock_client.request = AsyncMock(return_value=mock_resp)
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=False)
+                MockClient.return_value = mock_client
+                status, _, body = _run(proxy.handle_request(
+                    "POST", "/v1/responses", {"content-type": "application/json"},
+                    json.dumps({"input": []}).encode(),
+                    provider=OpenAIProvider(),
+                ))
+        self.assertEqual(status, 502)
+        self.assertEqual(json.loads(body)["condition_source"], "unsupported_provider_format")
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "governance_integrity_error")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertNotIn("developer_mode", rows[0])
+        chain_path.unlink(missing_ok=True)
+
+    def test_developer_mode_forwards_unrecognized_and_watermarks_record(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-dev-forward.jsonl")
+        with patch.object(proxy_server, "CAP_REGISTRY_PATH", self._capability_registry("developer")):
+            with patch("httpx.AsyncClient") as MockClient:
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.headers = {"content-type": "application/json"}
+                mock_resp.content = b'{"unexpected": true}'
+                mock_client = AsyncMock()
+                mock_client.request = AsyncMock(return_value=mock_resp)
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=False)
+                MockClient.return_value = mock_client
+                status, _, body = _run(proxy.handle_request(
+                    "POST", "/v1/responses", {"content-type": "application/json"},
+                    json.dumps({"input": []}).encode(),
+                    provider=OpenAIProvider(),
+                ))
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"unexpected": True})
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "proxy_request_observed")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertTrue(rows[0]["developer_mode"])
+        self.assertFalse(rows[0]["examined"])
+        chain_path.unlink(missing_ok=True)
+
+    def test_developer_mode_watermarks_examined_mediated_record(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-dev-mediated.jsonl")
+        response_body = json.dumps({
+            "id": "resp_1",
+            "output": [{
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "Read",
+                "arguments": json.dumps({"file_path": os.path.join(_REPO_STR, "README.md")}),
+            }],
+        }).encode()
+        with patch.object(proxy_server, "CAP_REGISTRY_PATH", self._capability_registry("developer")):
+            with patch("httpx.AsyncClient") as MockClient:
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.headers = {"content-type": "application/json"}
+                mock_resp.content = response_body
+                mock_client = AsyncMock()
+                mock_client.request = AsyncMock(return_value=mock_resp)
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=False)
+                MockClient.return_value = mock_client
+                status, _, _ = _run(proxy.handle_request(
+                    "POST", "/v1/responses", {"content-type": "application/json"},
+                    json.dumps({"input": []}).encode(),
+                    provider=OpenAIProvider(),
+                ))
+        self.assertEqual(status, 200)
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(rows[0]["record_type"], "mediated_decision")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertTrue(rows[0]["developer_mode"])
+        chain_path.unlink(missing_ok=True)
+
+    def test_non_tool_request_is_observed_once(self):
+        proxy, chain_path = self._proxy_with_chain("qs052-non-tool-observed.jsonl")
+        with patch("httpx.AsyncClient") as MockClient:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.headers = {"content-type": "application/json"}
+            mock_resp.content = b'{"object": "list", "data": []}'
+            mock_client = AsyncMock()
+            mock_client.request = AsyncMock(return_value=mock_resp)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = mock_client
+            status, _, body = _run(proxy.handle_request(
+                "GET", "/v1/models", {"content-type": "application/json"},
+                b"",
+                provider=OpenAIProvider(),
+            ))
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"object": "list", "data": []})
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "proxy_request_observed")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertEqual(rows[0]["method"], "GET")
+        self.assertFalse(rows[0]["tool_endpoint"])
+        self.assertTrue(rows[0]["forwarded"])
+        self.assertNotIn("developer_mode", rows[0])
         chain_path.unlink(missing_ok=True)
 
 

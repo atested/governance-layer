@@ -124,6 +124,42 @@ fn quality_service_writes_snapshots_and_proxy_reader_reads_them() {
 }
 
 #[test]
+fn quality_service_flags_developer_governance_posture() {
+    let env = TestEnv::new();
+    fs::write(
+        &env.capability_path,
+        "{\"governance_posture\":{\"mode\":\"developer\"},\"capabilities\":[]}\n",
+    )
+    .unwrap();
+    write_governance_chain(&env.governance_chain, &env.policy_path, &env.capability_path);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_quality-service"))
+        .arg("--once")
+        .env("ATESTED_REPO_ROOT", repo_root())
+        .env("GOV_RUNTIME_DIR", env.runtime.path())
+        .env("ATESTED_QA_SIGNING_KEY_PATH", &env.qa_key)
+        .env("GOV_POLICY_RULES_PATH", &env.policy_path)
+        .env("GOV_CAPABILITY_REGISTRY_PATH", &env.capability_path)
+        .env("GOV_DECISION_CHAIN_PATH", &env.governance_chain)
+        .env("GOV_QA_CHAIN_PATH", &env.qa_chain)
+        .output()
+        .expect("run quality service once");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let snapshot = latest_snapshot(&env.qa_chain);
+    assert!(snapshot["active_conditions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value.as_str() == Some("CR-HIGH-003")));
+    assert_eq!(snapshot["checks"]["ENV-011"]["status"], "fail");
+    assert_eq!(snapshot["checks"]["ENV-011"]["severity"], "high");
+}
+
+#[test]
 fn startup_gate_aborts_on_critical_failure() {
     let env = TestEnv::new();
     fs::write(&env.governance_chain, "").unwrap();

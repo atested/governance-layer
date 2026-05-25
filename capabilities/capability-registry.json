@@ -1,5 +1,8 @@
 {
   "version": "0.1",
+  "governance_posture": {
+    "mode": "production"
+  },
   "tools": [
     {
       "tool": "FS_WRITE",

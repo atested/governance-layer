@@ -366,6 +366,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
     "policy_acknowledged": "policy_acknowledged",
+    "proxy_request_observed": "integrity",
     "governance_integrity_error": "integrity",
 }
 

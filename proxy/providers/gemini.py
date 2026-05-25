@@ -64,6 +64,9 @@ class GeminiProvider(BaseProvider):
                 ))
         return results
 
+    def response_format_known(self, response_body: dict) -> bool:
+        return "candidates" in response_body or "error" in response_body
+
     def apply_denials(
         self,
         response_body: dict,
