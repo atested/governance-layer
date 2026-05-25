@@ -457,6 +457,9 @@ def _validate_governance_integrity_error(event: dict) -> tuple[bool, Optional[st
     ok, err = _validate_fields(event, (
         ("tool_name", "str"),
         ("condition_source", "str"),
+        # QS-039 Adv #3: stable condition correlation id (CR-* registry id
+        # for known conditions, QA-GATE:<source> otherwise).
+        ("condition_id", "str"),
         ("condition_detail", "str"),
         ("action_taken", "str"),
     ))

@@ -20,6 +20,7 @@ def _payload(**overrides):
     payload = {
         "tool_name": "bash",
         "condition_source": "qa_chain_staleness",
+        "condition_id": "QA-GATE:qa_chain_staleness",
         "condition_detail": "qa_environmental_snapshot sequence did not advance",
         "action_taken": "integrity_error_returned",
     }

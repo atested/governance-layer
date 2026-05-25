@@ -453,6 +453,7 @@ def mediate_decision(
                 user_identity=user_identity,
                 session_id=session_id,
                 provider_name=provider_name,
+                condition_id=qa_result.condition_id or "",
             )
             if chain_recorder is not None:
                 chain_recorder.append_atomic(record)
@@ -505,12 +506,18 @@ def _build_governance_integrity_error_record(
     user_identity: str,
     session_id: str,
     provider_name: str = "",
+    condition_id: str = "",
 ) -> dict:
     reason = f"Integrity error: {condition_detail}"
     payload = {
         "tool_name": tool_name,
         "original_tool": tool_name,
         "condition_source": condition_source,
+        # QS-039 Adv #3: stable id correlating this error to a specific
+        # condition (registry CR-* for known conditions, QA-GATE:<source>
+        # for gate-internal staleness/absence). Falls back to the source
+        # name so the field is always present and non-empty.
+        "condition_id": condition_id or f"QA-GATE:{condition_source}",
         "condition_detail": condition_detail,
         "action_taken": "integrity_error_returned",
         "policy_decision": "INTEGRITY_ERROR",

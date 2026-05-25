@@ -27,6 +27,12 @@ class QualityGateResult:
     condition_source: Optional[str] = None
     condition_detail: str = ""
     snapshot: Optional[dict] = None
+    # QS-039 Adv #3: stable identifier for the condition that failed the
+    # gate, so a governance_integrity_error can be correlated to a specific
+    # condition. For active_condition this is the triggering registry id
+    # (e.g. CR-CRIT-001); for the gate-internal sources it is a stable
+    # QA-GATE:<source> identifier (no fabricated CR-* registry codes).
+    condition_id: Optional[str] = None
 
 
 class QAChainTailReader:
@@ -183,6 +189,7 @@ class ProxyQualityGate:
                 False,
                 "qa_chain_absent",
                 result.detail or "No QA environmental snapshot available",
+                condition_id="QA-GATE:qa_chain_absent",
             )
 
         snapshot = result.snapshot
@@ -193,6 +200,7 @@ class ProxyQualityGate:
                 "qa_chain_absent",
                 "Latest QA environmental snapshot has no integer sequence",
                 snapshot,
+                condition_id="QA-GATE:qa_chain_absent",
             )
 
         now = self._now()
@@ -205,6 +213,7 @@ class ProxyQualityGate:
                 "qa_chain_staleness",
                 f"QA sequence moved backwards: previous={self._last_sequence}, current={sequence}",
                 snapshot,
+                condition_id="QA-GATE:qa_chain_staleness",
             )
         else:
             elapsed = 0.0 if self._last_advance_at is None else now - self._last_advance_at
@@ -218,6 +227,7 @@ class ProxyQualityGate:
                         f"{elapsed:.1f}s; threshold is {stale_after:.1f}s"
                     ),
                     snapshot,
+                    condition_id="QA-GATE:qa_chain_staleness",
                 )
 
         overall = snapshot.get("overall")
@@ -227,6 +237,7 @@ class ProxyQualityGate:
                 "active_condition",
                 f"QA environmental snapshot overall status is {overall!r}, expected 'healthy'",
                 snapshot,
+                condition_id="QA-GATE:unhealthy_snapshot",
             )
 
         policy_hash = snapshot.get("policy_rules_hash")
@@ -239,6 +250,7 @@ class ProxyQualityGate:
                     f"qa_snapshot={policy_hash}"
                 ),
                 snapshot,
+                condition_id="CR-CRIT-001",
             )
 
         cap_hash = snapshot.get("capability_registry_hash")
@@ -251,6 +263,7 @@ class ProxyQualityGate:
                     f"qa_snapshot={cap_hash}"
                 ),
                 snapshot,
+                condition_id="CR-CRIT-004",
             )
 
         critical_conditions = self._critical_conditions(snapshot.get("active_conditions", []))
@@ -260,6 +273,9 @@ class ProxyQualityGate:
                 "active_condition",
                 f"Critical QA conditions active: {', '.join(critical_conditions)}",
                 snapshot,
+                # Pass through the triggering registry id (e.g. CR-CRIT-001)
+                # so the integrity error correlates to the specific condition.
+                condition_id=critical_conditions[0],
             )
 
         return QualityGateResult(True, snapshot=snapshot)
