@@ -1,0 +1,94 @@
+{
+  "approval_store_version": "0.2",
+  "description": "QS-060 rebuilt approval store for Cecil standard repository operations.",
+  "approvals": [
+    {
+      "event_type": "opaque_artifact_approval",
+      "artifact_identity": "qs-060:cecil:file-read-write-within-repo",
+      "approving_operator": "Cecil",
+      "governed_family": "mcp_tools_v1",
+      "deployment_context": "default",
+      "policy_version": "baseline-v1",
+      "event_id": "QS-060:file-read-write-within-repo",
+      "timestamp_utc": "2026-05-26T00:00:00Z",
+      "match": {
+        "tool_names": ["Read", "Write", "Edit", "MultiEdit"],
+        "target_roots": ["__GOV_CANONICAL_REPO_PATH__"],
+        "require_all_targets_within_roots": true
+      }
+    },
+    {
+      "event_type": "opaque_artifact_approval",
+      "artifact_identity": "qs-060:cecil:git-standard",
+      "approving_operator": "Cecil",
+      "governed_family": "mcp_tools_v1",
+      "deployment_context": "default",
+      "policy_version": "baseline-v1",
+      "event_id": "QS-060:git-standard",
+      "timestamp_utc": "2026-05-26T00:00:00Z",
+      "match": {
+        "tool_names": ["Bash"],
+        "command_patterns": [
+          "git status*",
+          "git diff*",
+          "git log*",
+          "git show*",
+          "git rev-parse*",
+          "git branch*",
+          "git add*",
+          "git commit*",
+          "git push*",
+          "git pull*",
+          "git fetch*",
+          "git merge*",
+          "git rebase*",
+          "git stash*",
+          "git tag*",
+          "git checkout*"
+        ]
+      }
+    },
+    {
+      "event_type": "opaque_artifact_approval",
+      "artifact_identity": "qs-060:cecil:python-and-pytest",
+      "approving_operator": "Cecil",
+      "governed_family": "mcp_tools_v1",
+      "deployment_context": "default",
+      "policy_version": "baseline-v1",
+      "event_id": "QS-060:python-and-pytest",
+      "timestamp_utc": "2026-05-26T00:00:00Z",
+      "match": {
+        "tool_names": ["Bash"],
+        "command_patterns": [
+          "pytest*",
+          "python -m pytest*",
+          "python3 -m pytest*",
+          "python -m unittest*",
+          "python3 -m unittest*",
+          "python scripts/*.py*",
+          "python3 scripts/*.py*",
+          "python tests/*.py*",
+          "python3 tests/*.py*"
+        ]
+      }
+    },
+    {
+      "event_type": "opaque_artifact_approval",
+      "artifact_identity": "qs-060:cecil:cargo-build-test",
+      "approving_operator": "Cecil",
+      "governed_family": "mcp_tools_v1",
+      "deployment_context": "default",
+      "policy_version": "baseline-v1",
+      "event_id": "QS-060:cargo-build-test",
+      "timestamp_utc": "2026-05-26T00:00:00Z",
+      "match": {
+        "tool_names": ["Bash"],
+        "command_patterns": [
+          "cargo build*",
+          "cargo test*",
+          "cargo check*"
+        ]
+      }
+    }
+  ]
+}

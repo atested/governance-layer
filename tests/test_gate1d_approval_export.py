@@ -33,6 +33,7 @@ from approval_store import (
     ApprovalStore,
     load_approval_store_from_events,
     load_approval_store_from_chain,
+    load_approval_store_from_runtime,
     _verify_event_signature,
 )
 from event_model import build_non_action_event, sign_non_action_event
@@ -243,6 +244,77 @@ class TestApprovalOverrideDeny:
         assert len(lines) == 3
         decisions = [json.loads(l)["policy_decision"] for l in lines]
         assert decisions == ["DENY", "ALLOW", "DENY"]
+
+    def test_runtime_sidecar_pattern_approvals_match_standard_ops(self, tmp_path, monkeypatch):
+        """Runtime approval-store sidecars approve scoped standard operations."""
+        monkeypatch.setenv("GOV_GOVERNED_FAMILY", "mcp_tools_v1")
+        monkeypatch.setenv("GOV_DEPLOYMENT_CONTEXT", "default")
+        monkeypatch.setenv("GOV_POLICY_VERSION", "baseline-v1")
+
+        runtime = tmp_path / "gov_runtime"
+        logs = runtime / "LOGS"
+        logs.mkdir(parents=True)
+        chain = logs / "decision-chain.jsonl"
+        chain.write_text("", encoding="utf-8")
+        sidecar = runtime / "approval-store.json"
+        sidecar.write_text(json.dumps({
+            "approval_store_version": "0.2",
+            "approvals": [
+                {
+                    "event_type": "opaque_artifact_approval",
+                    "artifact_identity": "qs-060:git-standard",
+                    "approving_operator": "Cecil",
+                    "governed_family": "mcp_tools_v1",
+                    "deployment_context": "default",
+                    "policy_version": "baseline-v1",
+                    "event_id": "QS-060:git-standard",
+                    "match": {
+                        "tool_names": ["Bash"],
+                        "command_patterns": ["git rev-parse*", "git push*"],
+                    },
+                },
+                {
+                    "event_type": "opaque_artifact_approval",
+                    "artifact_identity": "qs-060:file-repo",
+                    "approving_operator": "Cecil",
+                    "governed_family": "mcp_tools_v1",
+                    "deployment_context": "default",
+                    "policy_version": "baseline-v1",
+                    "event_id": "QS-060:file-repo",
+                    "match": {
+                        "tool_names": ["Write"],
+                        "target_roots": [str(REPO)],
+                    },
+                },
+            ],
+        }), encoding="utf-8")
+
+        store = load_approval_store_from_runtime(chain)
+        policy = _load_policy()
+        denied = mediate_decision(
+            "Bash",
+            {"command": "git rev-parse HEAD"},
+            policy=policy,
+        )
+        allowed = mediate_decision(
+            "Bash",
+            {"command": "git rev-parse HEAD"},
+            policy=policy,
+            approval_store=store,
+        )
+        assert denied["policy_decision"] == "DENY"
+        assert allowed["policy_decision"] == "ALLOW"
+        assert allowed["matched_rule"] == "approved_lookup"
+        assert allowed["approval_event_id"] == "QS-060:git-standard"
+
+        outside = mediate_decision(
+            "Write",
+            {"file_path": str(tmp_path / "outside.txt"), "content": "x"},
+            policy=policy,
+            approval_store=store,
+        )
+        assert outside["policy_decision"] == "DENY"
+        assert outside["matched_rule"] != "approved_lookup"
 
 
 # ===========================================================================

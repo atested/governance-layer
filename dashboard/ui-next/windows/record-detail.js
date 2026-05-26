@@ -238,16 +238,19 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     frag.appendChild(kv);
 
   } else if (_isBoundaryObservation(eventType)) {
+    const isProxyObservation = eventType === 'proxy_request_observed';
     const banner = document.createElement('div');
     banner.className = 'rd-warning-banner';
-    banner.textContent = 'This operation was observed outside the mediation boundary and was not policy-evaluated.';
+    banner.textContent = isProxyObservation
+      ? 'This request was examined by the proxy. No tool calls were present in the response — no policy evaluation was needed.'
+      : 'This operation was observed outside the mediation boundary and was not policy-evaluated.';
     frag.appendChild(banner);
 
     const kv = document.createElement('atd-kv-list');
     kv.items = [
-      { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014', tooltip: 'Observed operation type outside the mediation boundary.' },
-      { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Observed path, command, URL, or artifact.' },
-      { key: 'Source', value: rec.source || '\u2014', tooltip: 'Runtime source that reported the observation.' },
+      { key: 'Operation', value: rec.operation_type || rec.event_type || '\u2014', tooltip: isProxyObservation ? 'Proxy-observed request type.' : 'Observed operation type outside the mediation boundary.' },
+      { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: isProxyObservation ? 'Observed provider endpoint.' : 'Observed path, command, URL, or artifact.' },
+      { key: 'Source', value: rec.source || '\u2014', tooltip: isProxyObservation ? 'Runtime source that recorded the proxy observation.' : 'Runtime source that reported the observation.' },
       { key: 'Machine', value: _machineLabel(chain || rec), variant: 'code', tooltip: 'Machine that produced the governance record.' },
       { key: 'Record Hash', value: chain.record_hash || rec.record_hash || '\u2014', variant: 'code', tooltip: 'SHA-256 chain hash for this record.' },
       { key: 'Recorded', value: _formatTimestamp(rec.timestamp_utc || chain.timestamp_utc), tooltip: 'Timestamp written into the chain record.' },

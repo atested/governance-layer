@@ -8,10 +8,9 @@ excluded:
     pytest tests/ -m "not shell"     # skip shell tests
     pytest tests/ -m shell           # only shell tests
 
-Shell tests are included in the default pytest run but may fail if
-environment prerequisites are not met (MCP server running, specific
-fixtures present, etc.). Failures in shell tests are reported but
-do not block the Python test baseline.
+Shell tests require the production contract posture and several optional
+fixtures/services. In developer posture they are skipped by default. Set
+GOV_PROFILE=production or GOV_RUN_SHELL_CONTRACTS=1 to run them.
 """
 
 import os
@@ -45,6 +44,19 @@ _SYSTEM_SHELL = _discover_shell_tests(SYSTEM_TESTS_DIR)
 _ALL_SHELL = _TESTS_SHELL + _SYSTEM_SHELL
 
 
+def _shell_contracts_enabled() -> bool:
+    explicit = os.environ.get("GOV_RUN_SHELL_CONTRACTS", "").strip().lower()
+    if explicit in {"1", "true", "yes"}:
+        return True
+    posture = (
+        os.environ.get("GOV_PROFILE")
+        or os.environ.get("GOVERNANCE_POSTURE")
+        or os.environ.get("ATESTED_POSTURE")
+        or "developer"
+    ).strip().lower()
+    return posture in {"prod", "production"}
+
+
 @pytest.mark.shell
 @pytest.mark.parametrize(
     "script",
@@ -53,6 +65,9 @@ _ALL_SHELL = _TESTS_SHELL + _SYSTEM_SHELL
 )
 def test_shell_contract(script):
     """Run a shell test script and verify it exits 0."""
+    if not _shell_contracts_enabled():
+        pytest.skip("shell contracts require production posture or GOV_RUN_SHELL_CONTRACTS=1")
+
     if not os.access(script, os.X_OK):
         # Try running with bash if not executable
         cmd = ["bash", str(script)]

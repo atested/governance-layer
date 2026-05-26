@@ -33,7 +33,15 @@ class OpenAIProvider(BaseProvider):
 
     def is_tool_endpoint(self, path: str) -> bool:
         path_base = path.split("?")[0]
-        return path_base.rstrip("/").endswith("/v1/chat/completions")
+        return (
+            path_base.rstrip("/").endswith("/v1/chat/completions")
+            or path_base.rstrip("/").endswith("/v1/responses")
+            or path_base.rstrip("/").endswith("/v1/realtime")
+        )
+
+    def is_realtime_path(self, path: str) -> bool:
+        path_base = path.split("?")[0]
+        return path_base.rstrip("/").endswith("/v1/realtime")
 
     def is_streaming(self, body: bytes) -> bool:
         try:
@@ -43,6 +51,8 @@ class OpenAIProvider(BaseProvider):
 
     def extract_tool_calls(self, response_body: dict) -> list[ToolCall]:
         results = []
+        if "output" in response_body:
+            return self._extract_response_tool_calls(response_body)
         choices = response_body.get("choices", [])
         if not choices:
             return results
@@ -64,6 +74,47 @@ class OpenAIProvider(BaseProvider):
                 raw_block=tc,
             ))
         return results
+
+    def _extract_response_tool_calls(self, response_body: dict) -> list[ToolCall]:
+        results = []
+        for item in response_body.get("output", []) or []:
+            if item.get("type") not in {"function_call", "tool_call"}:
+                continue
+            args_str = item.get("arguments", "{}")
+            try:
+                args = json.loads(args_str)
+            except json.JSONDecodeError:
+                args = {"_raw": args_str}
+            results.append(ToolCall(
+                tool_name=item.get("name", ""),
+                args=args,
+                call_id=item.get("call_id") or item.get("id", ""),
+                raw_block=item,
+            ))
+        return results
+
+    def extract_realtime_tool_calls(self, event: dict) -> list[ToolCall]:
+        """Extract completed tool calls from OpenAI Realtime server events."""
+        item = event.get("item") if isinstance(event.get("item"), dict) else event
+        if item.get("type") not in {"function_call", "tool_call"}:
+            return []
+        if event.get("type") not in {
+            "response.output_item.done",
+            "response.function_call_arguments.done",
+            "response.done",
+        }:
+            return []
+        args_str = item.get("arguments") or event.get("arguments") or "{}"
+        try:
+            args = json.loads(args_str)
+        except json.JSONDecodeError:
+            args = {"_raw": args_str}
+        return [ToolCall(
+            tool_name=item.get("name", ""),
+            args=args,
+            call_id=item.get("call_id") or item.get("id", ""),
+            raw_block=item,
+        )]
 
     def apply_denials(
         self,

@@ -354,6 +354,7 @@ EVENT_CATEGORIES = frozenset([
     "opaque_revocation",
     "opaque_invocation_decision",
     "ungoverned_observation",
+    "proxy_observation",
     "policy_rules_changed",
     "policy_acknowledged",
 ])
@@ -364,6 +365,7 @@ _EVENT_TYPE_TO_CATEGORY = {
     "opaque_artifact_revocation": "opaque_revocation",
     "opaque_invocation_decision": "opaque_invocation_decision",
     "ungoverned_operation_observed": "ungoverned_observation",
+    "proxy_request_observed": "proxy_observation",
     "usage_attestation": "usage_attestation",
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
@@ -518,6 +520,23 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "operation_type": op_type,
             "target": target,
             "source": source,
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "proxy_observation":
+        provider = rec.get("provider", "")
+        target = rec.get("target") or rec.get("path", "")
+        source = rec.get("source", "proxy")
+        summary = f"proxy examined {provider or 'request'}; no tool calls"
+        detail = {
+            "operation_type": rec.get("operation_type", "proxy_request"),
+            "target": target,
+            "source": source,
+            "provider": provider,
+            "status": "no_policy_needed",
         }
         evidence = {
             "event_id": rec.get("event_id", ""),
