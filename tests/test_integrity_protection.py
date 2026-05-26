@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ for p in (REPO / "proxy", REPO / "scripts"):
         sys.path.insert(0, str(p))
 
 from integrity_monitor import IntegrityMonitor, IntegrityViolation
+from policy_eval_v2 import compute_policy_rules_hash, load_policy_rules
 from proxy.server import ChainRecorder, GovernanceProxy, mediate_decision, record_startup_integrity_events
 
 
@@ -170,6 +172,33 @@ def test_proxy_code_hash_recorded_on_startup(tmp_path):
     startup = next(row for row in rows if row["event_type"] == "proxy_startup_code_hash")
     assert startup["current_proxy_code_hash"] == hashes["current_proxy_code_hash"]
     assert startup["user_identity"] == "operator@example.com"
+
+
+def test_policy_rules_loaded_uses_canonical_hash_and_keeps_raw_hash(tmp_path):
+    chain_path = tmp_path / "decision-chain.jsonl"
+    policy_path = tmp_path / "policy-rules.json"
+    policy_path.write_text(
+        '{\n  "default_decision": "ALLOW",\n  "rules": []\n}\n',
+        encoding="utf-8",
+    )
+    monitor = _monitor(tmp_path, chain_path, policy_path)
+    monitor.verify_startup_chain()
+    recorder = ChainRecorder(chain_path, integrity_monitor=monitor)
+
+    record_startup_integrity_events(recorder, monitor)
+
+    rows = [
+        json.loads(line)
+        for line in chain_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    loaded = next(row for row in rows if row["event_type"] == "policy_rules_loaded")
+    raw_hash = "sha256:" + hashlib.sha256(policy_path.read_bytes()).hexdigest()
+    canonical_hash = compute_policy_rules_hash(load_policy_rules(policy_path))
+
+    assert raw_hash != canonical_hash
+    assert loaded["current_policy_rules_hash"] == raw_hash
+    assert loaded["policy_rules_hash"] == canonical_hash
 
 
 def test_proxy_code_hash_change_recorded_on_restart(tmp_path):
