@@ -2268,7 +2268,7 @@ def main():
     )
     qa_gate = ProxyQualityGate(
         QAChainTailReader(qa_chain_path),
-        expected_policy_rules_hash=compute_policy_rules_hash(policy),
+        expected_policy_rules_hash=compute_policy_rules_hash(load_policy_rules(None)),
         expected_capability_registry_hash=compute_capability_registry_hash(),
         stale_cycles=int(os.environ.get("GOV_QA_STALE_CYCLES", "3")),
         heartbeat_seconds=float(os.environ.get("GOV_QA_HEARTBEAT_SECONDS", "30")),
