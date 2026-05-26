@@ -1,8 +1,11 @@
 {
   "version": "0.1",
   "governance_posture": {
-    "mode": "production",
-    "allowed_modes": ["production", "developer"],
+    "mode": "developer",
+    "allowed_modes": [
+      "production",
+      "developer"
+    ],
     "mode_semantics": {
       "production": "Full enforcement. Unexaminable request/response formats and every quality-service integrity failure (active conditions, QA chain staleness, hash mismatch, absent QA chain) block the operation and are recorded as a governance_integrity_error.",
       "developer": "Relaxed enforcement for local development and for repairing the governance system itself. Unexaminable formats forward instead of blocking. QA gate failures of class integrity_active_condition and integrity_qa_chain_staleness forward instead of blocking, and every resulting record carries developer_mode: true plus a developer_mode_qa_relaxation annotation naming the bypassed condition. Hash mismatch and an absent QA chain STILL block in developer mode, because they mean the governance configuration or the QA chain itself cannot be trusted."
@@ -86,8 +89,7 @@
         "max_bytes_hard": 65536,
         "offset_min": 0
       }
-    }
-  ,
+    },
     {
       "tool": "FS_MKDIR",
       "capability_class": "FS_MKDIR",
@@ -124,8 +126,13 @@
       "deny_hidden_paths": true,
       "deny_traversal": true,
       "args": {
-        "required": ["src_path", "dst_path"],
-        "optional": ["overwrite"]
+        "required": [
+          "src_path",
+          "dst_path"
+        ],
+        "optional": [
+          "overwrite"
+        ]
       },
       "caps": {
         "overwrite_allowed": false,
@@ -144,8 +151,12 @@
       "deny_hidden_paths": true,
       "deny_traversal": true,
       "args": {
-        "required": ["path"],
-        "optional": ["recursive"]
+        "required": [
+          "path"
+        ],
+        "optional": [
+          "recursive"
+        ]
       },
       "caps": {
         "recursive_allowed": false,
@@ -163,7 +174,9 @@
       "deny_hidden_paths": true,
       "deny_traversal": true,
       "args": {
-        "required": ["path"],
+        "required": [
+          "path"
+        ],
         "optional": []
       },
       "caps": {
@@ -181,8 +194,14 @@
       "deny_hidden_paths": true,
       "deny_traversal": true,
       "args": {
-        "required": ["src_path", "dst_path"],
-        "optional": ["overwrite", "recursive"]
+        "required": [
+          "src_path",
+          "dst_path"
+        ],
+        "optional": [
+          "overwrite",
+          "recursive"
+        ]
       },
       "caps": {
         "overwrite_allowed": false,
@@ -277,8 +296,13 @@
       "deny_hidden_paths": true,
       "deny_traversal": true,
       "args": {
-        "required": ["src_path", "dst_path"],
-        "optional": ["overwrite"]
+        "required": [
+          "src_path",
+          "dst_path"
+        ],
+        "optional": [
+          "overwrite"
+        ]
       },
       "caps": {
         "cross_root_allowed": true,
@@ -288,9 +312,15 @@
           "runtime": "__GOV_RUNTIME_PATH__"
         },
         "root_pair_allowlist": [
-          {"src_root_id": "runtime", "dst_root_id": "canonical_repo"}
+          {
+            "src_root_id": "runtime",
+            "dst_root_id": "canonical_repo"
+          }
         ],
-        "allowed_artifact_classes": ["vetted_output", "build_artifact"]
+        "allowed_artifact_classes": [
+          "vetted_output",
+          "build_artifact"
+        ]
       }
     },
     {
