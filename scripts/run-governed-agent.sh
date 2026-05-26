@@ -22,7 +22,7 @@ set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
   echo "usage: $(basename "$0") <command> [args...]" >&2
-  echo "  launches <command> with ANTHROPIC/OPENAI/GEMINI_BASE_URL forced through the governance proxy" >&2
+  echo "  launches <command> with ANTHROPIC/OPENAI/GEMINI_BASE_URL and OLLAMA_HOST forced through the governance proxy" >&2
   exit 2
 fi
 
@@ -49,9 +49,13 @@ then
 fi
 
 # Force every provider through the proxy, overriding any inherited override.
+# QS-059: Ollama joins the cloud providers via OLLAMA_HOST (the env var the
+# ollama-python and ollama-js clients consult). The proxy then routes
+# /ollama/* to the local Ollama daemon on :11434.
 export ANTHROPIC_BASE_URL="${PROXY_BASE}/anthropic"
 export OPENAI_BASE_URL="${PROXY_BASE}/openai"
 export GEMINI_BASE_URL="${PROXY_BASE}/gemini"
+export OLLAMA_HOST="${PROXY_BASE}/ollama"
 
-echo "governed routing active → ${PROXY_BASE} (anthropic, openai, gemini)" >&2
+echo "governed routing active → ${PROXY_BASE} (anthropic, openai, gemini, ollama)" >&2
 exec "$@"

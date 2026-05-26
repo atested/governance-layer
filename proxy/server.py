@@ -17,6 +17,8 @@ Agent configuration:
     ANTHROPIC_BASE_URL=http://localhost:8080/anthropic
     OPENAI_BASE_URL=http://localhost:8080/openai
     GEMINI_BASE_URL=http://localhost:8080/gemini
+    OLLAMA_HOST=http://localhost:8080/ollama
+    OLLAMA_HOST=http://localhost:8080/ollama
 
 Architecture:
     Agent → Proxy → Provider API
@@ -2401,6 +2403,9 @@ def main():
     parser.add_argument("--litellm-upstream",
                         default=os.environ.get("LITELLM_UPSTREAM", ""),
                         help="LiteLLM upstream base URL (required for /litellm route)")
+    parser.add_argument("--ollama-upstream",
+                        default=os.environ.get("OLLAMA_UPSTREAM", "http://localhost:11434"),
+                        help="Ollama upstream base URL (default: http://localhost:11434)")
     parser.add_argument("--user-identity", default="",
                         help="User identity for chain records (default: system hostname)")
     parser.add_argument("--session-id", default="", help="Session ID for chain records")
@@ -2481,25 +2486,38 @@ def main():
         "openai_upstream": args.openai_upstream,
         "gemini_upstream": args.gemini_upstream,
         "litellm_upstream": args.litellm_upstream,
+        "ollama_upstream": args.ollama_upstream,
     }
 
-    logger.info("Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s",
-                anthropic_upstream, args.openai_upstream, args.gemini_upstream,
-                args.litellm_upstream or "(not configured)")
+    logger.info(
+        "Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s ollama=%s",
+        anthropic_upstream, args.openai_upstream, args.gemini_upstream,
+        args.litellm_upstream or "(not configured)",
+        args.ollama_upstream,
+    )
 
-    # Warn about non-HTTPS upstreams (informational — proxy starts regardless)
+    # Warn about non-HTTPS upstreams (informational — proxy starts regardless).
+    # Ollama is special-cased: it runs locally and ships without TLS, so an
+    # http://localhost:11434 default is expected and not a deployment risk.
     for provider_label, upstream_url in [
         ("anthropic", anthropic_upstream),
         ("openai", args.openai_upstream),
         ("gemini", args.gemini_upstream),
         ("litellm", args.litellm_upstream),
+        ("ollama", args.ollama_upstream),
     ]:
-        if upstream_url and upstream_url.startswith("http://"):
-            logger.warning(
-                "WARNING: upstream for %s is not using HTTPS — "
-                "traffic to this provider will be unencrypted: %s",
-                provider_label, upstream_url,
-            )
+        if not upstream_url or not upstream_url.startswith("http://"):
+            continue
+        if provider_label == "ollama":
+            from urllib.parse import urlsplit
+            host = (urlsplit(upstream_url).hostname or "").lower()
+            if host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
+                continue
+        logger.warning(
+            "WARNING: upstream for %s is not using HTTPS — "
+            "traffic to this provider will be unencrypted: %s",
+            provider_label, upstream_url,
+        )
 
     try:
         if startup_archive_manifest is not None:

@@ -1055,7 +1055,18 @@ PROXY_ROUTE_EXPORTS = (
     ("ANTHROPIC_BASE_URL", "http://localhost:8080/anthropic"),
     ("OPENAI_BASE_URL", "http://localhost:8080/openai"),
     ("GEMINI_BASE_URL", "http://localhost:8080/gemini"),
+    # QS-059: local Ollama traffic. Ollama's client SDK reads OLLAMA_HOST
+    # rather than the *_BASE_URL convention used by the cloud SDKs.
+    ("OLLAMA_HOST", "http://localhost:8080/ollama"),
 )
+
+
+# QS-059: lines we will strip when (re)installing or uninstalling the
+# governance proxy block from a shell profile. Centralised so adding a
+# fifth provider in the future only touches PROXY_ROUTE_EXPORTS and this
+# tuple — not three places that all need to stay in sync.
+_PROXY_PROFILE_EXPORT_PREFIXES = tuple(f"export {name}=" for name, _ in PROXY_ROUTE_EXPORTS)
+_PROXY_PROFILE_EXPORT_KEYS = tuple(name for name, _ in PROXY_ROUTE_EXPORTS)
 
 
 def _proxy_route_lines() -> list[str]:
@@ -1174,18 +1185,13 @@ def _configure_provider_base_urls(profile_path: Path) -> dict:
         stripped = lines[i].strip()
         if stripped in {begin_marker, old_marker}:
             i += 1
-            while i < len(lines) and (
-                lines[i].strip().startswith("export ANTHROPIC_BASE_URL=")
-                or lines[i].strip().startswith("export OPENAI_BASE_URL=")
-                or lines[i].strip().startswith("export GEMINI_BASE_URL=")
+            while i < len(lines) and any(
+                lines[i].strip().startswith(prefix)
+                for prefix in _PROXY_PROFILE_EXPORT_PREFIXES
             ):
                 i += 1
             continue
-        if (
-            stripped.startswith("export ANTHROPIC_BASE_URL=")
-            or stripped.startswith("export OPENAI_BASE_URL=")
-            or stripped.startswith("export GEMINI_BASE_URL=")
-        ):
+        if any(stripped.startswith(prefix) for prefix in _PROXY_PROFILE_EXPORT_PREFIXES):
             i += 1
             continue
         cleaned.append(lines[i])
@@ -1240,10 +1246,8 @@ def _remove_shell_profile_entry(profile_path: Path) -> dict:
         if stripped in markers:
             found = True
             i += 1
-            while i < len(lines) and (
-                "ANTHROPIC_BASE_URL" in lines[i]
-                or "OPENAI_BASE_URL" in lines[i]
-                or "GEMINI_BASE_URL" in lines[i]
+            while i < len(lines) and any(
+                key in lines[i] for key in _PROXY_PROFILE_EXPORT_KEYS
             ):
                 i += 1
             continue

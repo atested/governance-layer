@@ -34,6 +34,7 @@ from proxy.providers.anthropic import AnthropicProvider
 from proxy.providers.openai import OpenAIProvider
 from proxy.providers.gemini import GeminiProvider
 from proxy.providers.litellm import LiteLLMProvider
+from proxy.providers.ollama import OllamaProvider
 from proxy.server import mediate_decision
 from policy_eval_v2 import load_policy_rules
 
@@ -46,12 +47,14 @@ class TestProviderRegistry(unittest.TestCase):
         self.assertIn("openai", PROVIDERS)
         self.assertIn("gemini", PROVIDERS)
         self.assertIn("litellm", PROVIDERS)
+        self.assertIn("ollama", PROVIDERS)
 
     def test_get_provider(self):
         self.assertIsInstance(get_provider("anthropic"), AnthropicProvider)
         self.assertIsInstance(get_provider("openai"), OpenAIProvider)
         self.assertIsInstance(get_provider("gemini"), GeminiProvider)
         self.assertIsInstance(get_provider("litellm"), LiteLLMProvider)
+        self.assertIsInstance(get_provider("ollama"), OllamaProvider)
 
     def test_get_provider_unknown(self):
         with self.assertRaises(KeyError):
@@ -62,6 +65,7 @@ class TestProviderRegistry(unittest.TestCase):
         self.assertEqual(PROVIDER_PREFIXES["/openai"], "openai")
         self.assertEqual(PROVIDER_PREFIXES["/gemini"], "gemini")
         self.assertEqual(PROVIDER_PREFIXES["/litellm"], "litellm")
+        self.assertEqual(PROVIDER_PREFIXES["/ollama"], "ollama")
 
 
 class TestResolveProvider(unittest.TestCase):
@@ -86,6 +90,16 @@ class TestResolveProvider(unittest.TestCase):
         provider, path = resolve_provider("/litellm/v1/chat/completions")
         self.assertIsInstance(provider, LiteLLMProvider)
         self.assertEqual(path, "/v1/chat/completions")
+
+    def test_ollama_prefix_openai_compat(self):
+        provider, path = resolve_provider("/ollama/v1/chat/completions")
+        self.assertIsInstance(provider, OllamaProvider)
+        self.assertEqual(path, "/v1/chat/completions")
+
+    def test_ollama_prefix_native(self):
+        provider, path = resolve_provider("/ollama/api/chat")
+        self.assertIsInstance(provider, OllamaProvider)
+        self.assertEqual(path, "/api/chat")
 
     def test_no_match_raises(self):
         with self.assertRaises(ValueError):
@@ -205,6 +219,20 @@ class TestProviderEndpointDetection(unittest.TestCase):
         self.assertTrue(p.is_tool_endpoint("/v1beta/models/gemini-pro:streamGenerateContent"))
         self.assertFalse(p.is_tool_endpoint("/v1/models"))
 
+    def test_ollama_chat_endpoints(self):
+        p = OllamaProvider()
+        self.assertTrue(p.is_tool_endpoint("/v1/chat/completions"))
+        self.assertTrue(p.is_tool_endpoint("/api/chat"))
+        self.assertFalse(p.is_tool_endpoint("/api/tags"))
+        self.assertFalse(p.is_tool_endpoint("/api/generate"))
+
+    def test_ollama_chat_endpoints(self):
+        p = OllamaProvider()
+        self.assertTrue(p.is_tool_endpoint("/v1/chat/completions"))
+        self.assertTrue(p.is_tool_endpoint("/api/chat"))
+        self.assertFalse(p.is_tool_endpoint("/api/tags"))
+        self.assertFalse(p.is_tool_endpoint("/api/generate"))
+
 
 class TestProviderUpstreamConfig(unittest.TestCase):
     """Test upstream URL configuration for each provider."""
@@ -230,6 +258,41 @@ class TestProviderUpstreamConfig(unittest.TestCase):
         url = p.get_upstream_url("/v1beta/models/gemini-pro:generateContent", {})
         self.assertEqual(url,
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent")
+
+    def test_ollama_default(self):
+        p = OllamaProvider()
+        self.assertEqual(
+            p.get_upstream_url("/v1/chat/completions", {}),
+            "http://localhost:11434/v1/chat/completions",
+        )
+        self.assertEqual(
+            p.get_upstream_url("/api/chat", {}),
+            "http://localhost:11434/api/chat",
+        )
+
+    def test_ollama_custom(self):
+        p = OllamaProvider()
+        url = p.get_upstream_url(
+            "/v1/chat/completions",
+            {"ollama_upstream": "http://192.168.1.42:11434"},
+        )
+        self.assertEqual(url, "http://192.168.1.42:11434/v1/chat/completions")
+
+
+class TestOllamaProviderRecord(unittest.TestCase):
+    """Governed records emitted for Ollama traffic carry provider=ollama."""
+
+    def test_provider_field_is_ollama(self):
+        policy = dict(load_policy_rules())
+        policy["base_dirs"] = [str(REPO)]
+
+        record = mediate_decision(
+            "Read",
+            {"file_path": str(REPO / "README.md")},
+            policy=policy,
+            provider_name="ollama",
+        )
+        self.assertEqual(record.get("provider"), "ollama")
 
 
 if __name__ == "__main__":

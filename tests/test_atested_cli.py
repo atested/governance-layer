@@ -461,12 +461,15 @@ def test_shell_profile_helpers_configure_provider_base_urls(tmp_path):
     assert "ANTHROPIC_BASE_URL=http://localhost:8080/anthropic" in text
     assert "OPENAI_BASE_URL=http://localhost:8080/openai" in text
     assert "GEMINI_BASE_URL=http://localhost:8080/gemini" in text
+    # QS-059: Ollama joins the cloud providers via OLLAMA_HOST.
+    assert "OLLAMA_HOST=http://localhost:8080/ollama" in text
 
     second = atested_cli._configure_provider_base_urls(profile)
     assert second["updated"] is False
     assert profile.read_text(encoding="utf-8").count("ANTHROPIC_BASE_URL=") == 1
     assert profile.read_text(encoding="utf-8").count("OPENAI_BASE_URL=") == 1
     assert profile.read_text(encoding="utf-8").count("GEMINI_BASE_URL=") == 1
+    assert profile.read_text(encoding="utf-8").count("OLLAMA_HOST=") == 1
 
     assert atested_cli._profile_path_for_shell("/bin/zsh", tmp_path) == tmp_path / ".zshrc"
     assert atested_cli._profile_path_for_shell("/bin/bash", tmp_path) == tmp_path / ".bash_profile"
@@ -826,6 +829,7 @@ def test_uninstall_shell_profile_removal():
             "export ANTHROPIC_BASE_URL=http://localhost:8080/anthropic\n"
             "export OPENAI_BASE_URL=http://localhost:8080/openai\n"
             "export GEMINI_BASE_URL=http://localhost:8080/gemini\n"
+            "export OLLAMA_HOST=http://localhost:8080/ollama\n"
             "# more stuff\n",
             encoding="utf-8",
         )
@@ -835,6 +839,7 @@ def test_uninstall_shell_profile_removal():
         assert "ANTHROPIC_BASE_URL" not in text
         assert "OPENAI_BASE_URL" not in text
         assert "GEMINI_BASE_URL" not in text
+        assert "OLLAMA_HOST" not in text
         assert "Atested proxy endpoint" not in text
         assert "existing stuff" in text
         assert "more stuff" in text
@@ -1082,12 +1087,16 @@ def test_provider_routing_status_flags_bypass():
         "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
         "OPENAI_BASE_URL": "http://localhost:8080/openai",
         "GEMINI_BASE_URL": "http://localhost:8080/gemini",
+        "OLLAMA_HOST": "http://localhost:8080/ollama",
     })
     assert result["any_bypass"] is True
     by_provider = {p["provider"]: p for p in result["providers"]}
     assert by_provider["anthropic"]["state"] == "bypassing"
     assert by_provider["openai"]["state"] == "routed"
     assert by_provider["gemini"]["state"] == "routed"
+    # QS-059: routing status surfaces the ollama row alongside the cloud
+    # providers, so operators see a single bypass list.
+    assert by_provider["ollama"]["state"] == "routed"
     print("PASS: test_provider_routing_status_flags_bypass")
 
 
@@ -1097,6 +1106,7 @@ def test_provider_routing_status_all_routed_and_unset():
         "ANTHROPIC_BASE_URL": "http://localhost:8080/anthropic",
         "OPENAI_BASE_URL": "http://127.0.0.1:8080/openai",
         "GEMINI_BASE_URL": "http://localhost:8080/gemini",
+        "OLLAMA_HOST": "http://localhost:8080/ollama",
     })
     assert routed["any_bypass"] is False
     assert all(p["state"] == "routed" for p in routed["providers"])
@@ -1104,7 +1114,25 @@ def test_provider_routing_status_all_routed_and_unset():
     unset = atested_cli._provider_routing_status({})
     anthropic = next(p for p in unset["providers"] if p["provider"] == "anthropic")
     assert anthropic["state"] == "unset"
+    # QS-059: missing OLLAMA_HOST also reports as unset (not bypass).
+    ollama = next(p for p in unset["providers"] if p["provider"] == "ollama")
+    assert ollama["state"] == "unset"
     print("PASS: test_provider_routing_status_all_routed_and_unset")
+
+
+def test_provider_routing_status_ollama_bypass_detected():
+    """QS-059: OLLAMA_HOST pointing at the real Ollama port bypasses governance."""
+    result = atested_cli._provider_routing_status({
+        "ANTHROPIC_BASE_URL": "http://localhost:8080/anthropic",
+        "OPENAI_BASE_URL": "http://localhost:8080/openai",
+        "GEMINI_BASE_URL": "http://localhost:8080/gemini",
+        "OLLAMA_HOST": "http://example.org:11434",
+    })
+    assert result["any_bypass"] is True
+    by_provider = {p["provider"]: p for p in result["providers"]}
+    # localhost:8080/ollama (proxy) = routed; example.org:11434 = bypass.
+    assert by_provider["ollama"]["state"] == "bypassing"
+    print("PASS: test_provider_routing_status_ollama_bypass_detected")
 
 
 def main():

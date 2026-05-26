@@ -10,12 +10,14 @@ from .anthropic import AnthropicProvider
 from .openai import OpenAIProvider
 from .gemini import GeminiProvider
 from .litellm import LiteLLMProvider
+from .ollama import OllamaProvider
 
 PROVIDERS: dict[str, BaseProvider] = {
     "anthropic": AnthropicProvider(),
     "openai": OpenAIProvider(),
     "gemini": GeminiProvider(),
     "litellm": LiteLLMProvider(),
+    "ollama": OllamaProvider(),
 }
 
 # URL prefix → provider name mapping
@@ -24,6 +26,7 @@ PROVIDER_PREFIXES: dict[str, str] = {
     "/openai": "openai",
     "/gemini": "gemini",
     "/litellm": "litellm",
+    "/ollama": "ollama",
 }
 
 
