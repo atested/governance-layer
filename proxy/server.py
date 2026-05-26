@@ -27,11 +27,13 @@ Architecture:
 
 import argparse
 import asyncio
+import base64
 import hashlib
 import json
 import logging
 import os
 import platform
+import struct
 import sys
 import time as _time_mod
 import threading
@@ -40,6 +42,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
+import websockets
 
 # Add scripts to path for classifier, policy_eval, etc.
 REPO = Path(__file__).resolve().parents[1]
@@ -83,6 +86,8 @@ from proxy.providers.base import BaseProvider, BaseStreamingCollector, ToolCall,
 from proxy.qa_gate import QAChainTailReader, ProxyQualityGate
 
 logger = logging.getLogger("atested.proxy")
+
+_WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 # ---------------------------------------------------------------------------
 # Ed25519 signing key (loaded once at startup)
@@ -164,6 +169,7 @@ CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
 # Maximum request body size (bytes). Protects against unbounded reads.
 # 10 MB — large enough for any legitimate model API request.
 MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10 * 1024 * 1024))
+_WEBSOCKET_MAX_FRAME_BYTES = MAX_REQUEST_BODY_BYTES
 
 
 def compute_capability_registry_hash() -> str:
@@ -650,6 +656,66 @@ def _is_blocking_record(record: dict) -> bool:
     return record.get("policy_decision") in {"DENY", "INTEGRITY_ERROR"}
 
 
+def _is_websocket_upgrade(headers: dict) -> bool:
+    return (
+        headers.get("upgrade", "").lower() == "websocket"
+        and "upgrade" in headers.get("connection", "").lower()
+        and bool(headers.get("sec-websocket-key"))
+    )
+
+
+def _websocket_accept_value(client_key: str) -> str:
+    digest = hashlib.sha1((client_key + _WEBSOCKET_GUID).encode("ascii")).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
+async def _read_websocket_frame(reader: asyncio.StreamReader) -> tuple[int, bytes]:
+    header = await asyncio.wait_for(reader.readexactly(2), timeout=120.0)
+    opcode = header[0] & 0x0F
+    masked = bool(header[1] & 0x80)
+    length = header[1] & 0x7F
+    if length == 126:
+        length = struct.unpack("!H", await reader.readexactly(2))[0]
+    elif length == 127:
+        length = struct.unpack("!Q", await reader.readexactly(8))[0]
+    if length > _WEBSOCKET_MAX_FRAME_BYTES:
+        raise ValueError(f"websocket frame too large: {length} bytes")
+    mask = await reader.readexactly(4) if masked else b""
+    payload = await reader.readexactly(length) if length else b""
+    if masked:
+        payload = bytes(byte ^ mask[i % 4] for i, byte in enumerate(payload))
+    return opcode, payload
+
+
+def _encode_websocket_frame(payload: Any, opcode: int = 1) -> bytes:
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    length = len(payload)
+    head = bytearray([0x80 | opcode])
+    if length < 126:
+        head.append(length)
+    elif length < (1 << 16):
+        head.append(126)
+        head.extend(struct.pack("!H", length))
+    else:
+        head.append(127)
+        head.extend(struct.pack("!Q", length))
+    return bytes(head) + payload
+
+
+def _websocket_denial_message(tool_call: ToolCall, reason: str, matched_rule: str) -> str:
+    denial_text = (
+        f"[Governance] Operation denied: {tool_call.tool_name}\n"
+        f"Reason: {reason}\n"
+        f"Rule: {matched_rule}\n"
+        f"The operation was classified and denied by policy before execution."
+    )
+    return json.dumps({
+        "type": "response.output_text.delta",
+        "delta": denial_text,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Backward-compatible StreamingToolCollector (wraps Anthropic provider)
 # ---------------------------------------------------------------------------
@@ -1031,6 +1097,196 @@ class GovernanceProxy:
         }
         forwarded["content-length"] = str(len(body))
         return forwarded
+
+    def _websocket_upstream_url(self, path: str, provider: BaseProvider) -> str:
+        url = provider.get_upstream_url(path, self._provider_config)
+        if url.startswith("https://"):
+            return "wss://" + url[len("https://"):]
+        if url.startswith("http://"):
+            return "ws://" + url[len("http://"):]
+        return url
+
+    def _websocket_forward_headers(self, headers: dict, provider: BaseProvider) -> dict:
+        forwarded = provider.forward_headers(headers)
+        for key in list(forwarded):
+            if key.lower() in {"content-type", "content-length", "accept"}:
+                forwarded.pop(key, None)
+        return forwarded
+
+    async def _process_websocket_upstream_message(
+        self,
+        *,
+        provider: BaseProvider,
+        collector: BaseStreamingCollector,
+        message: Any,
+        approval_store: Optional[ApprovalStore],
+    ) -> tuple[list[Any], int]:
+        if isinstance(message, bytes):
+            return [message], 0
+        if not isinstance(message, str):
+            return [str(message)], 0
+
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError as exc:
+            if not developer_mode_active():
+                record = self._append_unexaminable_error(
+                    provider_name=provider.name,
+                    method="WS",
+                    path="websocket",
+                    detail=f"websocket JSON parse failed: {exc}",
+                )
+                return [json.dumps({
+                    "type": "error",
+                    "error": {
+                        "type": "governance_integrity_error",
+                        "condition_source": record.get("condition_source"),
+                        "condition_detail": record.get("condition_detail"),
+                    },
+                })], 1
+            return [message], 0
+
+        event_type = str(data.get("type") or "")
+        stream_action = collector.process_event(event_type, data)
+        if stream_action.action == "buffer":
+            collector.add_buffered_event(stream_action.index, message)
+            if not stream_action.completed_tool_call:
+                return [], 0
+
+            tc = stream_action.completed_tool_call
+            record = mediate_decision(
+                tc.tool_name, tc.args,
+                policy=self._policy,
+                chain_recorder=self._chain_recorder,
+                approval_store=approval_store,
+                session_id=self._session_id,
+                user_identity=self._user_identity,
+                provider_name=provider.name,
+                integrity_monitor=self._integrity_monitor,
+                qa_gate=self._qa_gate,
+            )
+            if _is_blocking_record(record):
+                reasons = record.get("policy_reasons", [])
+                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                return [_websocket_denial_message(
+                    tc, reason_text, record.get("matched_rule", ""),
+                )], 1
+            return collector.get_buffered_events(stream_action.index) + [message], 1
+
+        if stream_action.action == "pass":
+            return [message], 0
+        return [], 0
+
+    async def handle_websocket(
+        self,
+        path: str,
+        headers: dict,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        provider: BaseProvider,
+    ) -> None:
+        """Proxy and govern an OpenAI Responses WebSocket session."""
+        upstream_url = self._websocket_upstream_url(path, provider)
+        fwd_headers = self._websocket_forward_headers(headers, provider)
+        request_marker = f"WS {path}".encode("utf-8")
+        governed_record_count = 0
+        handshake_complete = False
+
+        try:
+            async with websockets.connect(
+                upstream_url,
+                additional_headers=fwd_headers,
+                open_timeout=10,
+                ping_interval=20,
+                ping_timeout=20,
+                max_size=_WEBSOCKET_MAX_FRAME_BYTES,
+            ) as upstream:
+                accept = _websocket_accept_value(headers["sec-websocket-key"])
+                writer.write(b"HTTP/1.1 101 Switching Protocols\r\n")
+                writer.write(b"upgrade: websocket\r\n")
+                writer.write(b"connection: Upgrade\r\n")
+                writer.write(f"sec-websocket-accept: {accept}\r\n".encode("ascii"))
+                writer.write(b"\r\n")
+                await writer.drain()
+                handshake_complete = True
+
+                collector = provider.create_streaming_collector()
+                approval_store = self._get_approval_store()
+                closed = asyncio.Event()
+
+                async def client_to_upstream() -> None:
+                    while not closed.is_set():
+                        opcode, payload = await _read_websocket_frame(reader)
+                        if opcode == 0x8:
+                            closed.set()
+                            await upstream.close()
+                            writer.write(_encode_websocket_frame(payload, opcode=0x8))
+                            await writer.drain()
+                            return
+                        if opcode == 0x9:
+                            writer.write(_encode_websocket_frame(payload, opcode=0xA))
+                            await writer.drain()
+                            continue
+                        if opcode == 0xA:
+                            continue
+                        if opcode == 0x1:
+                            await upstream.send(payload.decode("utf-8", errors="replace"))
+                        elif opcode == 0x2:
+                            await upstream.send(payload)
+
+                async def upstream_to_client() -> None:
+                    nonlocal governed_record_count
+                    async for message in upstream:
+                        outputs, records_written = await self._process_websocket_upstream_message(
+                            provider=provider,
+                            collector=collector,
+                            message=message,
+                            approval_store=approval_store,
+                        )
+                        governed_record_count += records_written
+                        for output in outputs:
+                            opcode = 0x2 if isinstance(output, bytes) else 0x1
+                            writer.write(_encode_websocket_frame(output, opcode=opcode))
+                            await writer.drain()
+                    closed.set()
+
+                tasks = {
+                    asyncio.create_task(client_to_upstream()),
+                    asyncio.create_task(upstream_to_client()),
+                }
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                for task in done:
+                    task.result()
+
+        except Exception as exc:
+            logger.warning("WebSocket proxy error (%s %s): %s", provider.name, path, exc)
+            if not handshake_complete:
+                self._append_request_observed(
+                    provider_name=provider.name, method="WS", path=upstream_url,
+                    status_code=502, tool_endpoint=provider.is_tool_endpoint(path),
+                    examined=False, forwarded=False, request_body=request_marker,
+                    detail=f"websocket upstream connection failed: {exc}",
+                )
+                err_body = json.dumps({"error": "websocket upstream connection failed"}).encode()
+                writer.write(b"HTTP/1.1 502 Bad Gateway\r\n")
+                writer.write(b"content-type: application/json\r\n")
+                writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                writer.write(b"\r\n")
+                writer.write(err_body)
+                await writer.drain()
+                return
+        finally:
+            if handshake_complete and governed_record_count == 0:
+                self._append_request_observed(
+                    provider_name=provider.name, method="WS", path=upstream_url,
+                    status_code=101, tool_endpoint=provider.is_tool_endpoint(path),
+                    examined=True, forwarded=True, request_body=request_marker,
+                    detail="websocket session contained no tool calls",
+                )
 
     async def handle_request(self, method: str, path: str, headers: dict,
                              body: bytes,
@@ -1926,6 +2182,35 @@ class ProxyServer:
                 if ":" in line_str:
                     key, value = line_str.split(":", 1)
                     headers[key.strip().lower()] = value.strip()
+
+            if _is_websocket_upgrade(headers):
+                if provider is None:
+                    err_body = json.dumps({"error": "unsupported websocket provider path"}).encode()
+                    writer.write(b"HTTP/1.1 404 Not Found\r\n")
+                    writer.write(b"content-type: application/json\r\n")
+                    writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(err_body)
+                    await writer.drain()
+                    return
+                if provider.name != "openai" or not provider.is_tool_endpoint(path):
+                    err_body = json.dumps({"error": "unsupported websocket endpoint"}).encode()
+                    self._proxy._append_request_observed(
+                        provider_name=provider.name, method="WS", path=path,
+                        status_code=404, tool_endpoint=provider.is_tool_endpoint(path),
+                        examined=False, forwarded=False, request_body=b"",
+                        detail="unsupported websocket endpoint",
+                    )
+                    writer.write(b"HTTP/1.1 404 Not Found\r\n")
+                    writer.write(b"content-type: application/json\r\n")
+                    writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                    writer.write(b"\r\n")
+                    writer.write(err_body)
+                    await writer.drain()
+                    return
+                logger.info("WebSocket request (%s): %s %s", provider.name, method, path)
+                await self._proxy.handle_websocket(path, headers, reader, writer, provider)
+                return
 
             # Read body (with size limit)
             body = b""

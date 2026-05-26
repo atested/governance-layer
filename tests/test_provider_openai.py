@@ -224,6 +224,8 @@ class TestOpenAIProviderMethods(unittest.TestCase):
         self.assertTrue(self.provider.is_tool_endpoint("/v1/chat/completions?foo=bar"))
         self.assertTrue(self.provider.is_tool_endpoint("/v1/responses"))
         self.assertTrue(self.provider.is_tool_endpoint("/v1/responses?foo=bar"))
+        self.assertTrue(self.provider.is_tool_endpoint("/responses"))
+        self.assertTrue(self.provider.is_tool_endpoint("/responses?foo=bar"))
         self.assertFalse(self.provider.is_tool_endpoint("/v1/models"))
         self.assertFalse(self.provider.is_tool_endpoint("/v1/embeddings"))
 

@@ -27,14 +27,18 @@ class OpenAIProvider(BaseProvider):
         for k, v in request_headers.items():
             kl = k.lower() if k != k.lower() else k
             if kl in ("authorization", "content-type", "accept",
-                       "openai-organization", "openai-project"):
+                       "openai-organization", "openai-project", "openai-beta"):
                 forwarded[k] = v
         return forwarded
 
     def is_tool_endpoint(self, path: str) -> bool:
         path_base = path.split("?")[0]
         normalized = path_base.rstrip("/")
-        return normalized.endswith("/v1/chat/completions") or normalized.endswith("/v1/responses")
+        return (
+            normalized.endswith("/v1/chat/completions")
+            or normalized.endswith("/v1/responses")
+            or normalized == "/responses"
+        )
 
     def is_streaming(self, body: bytes) -> bool:
         try:

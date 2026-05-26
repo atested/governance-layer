@@ -32,6 +32,9 @@ from proxy.server import (
     ChainRecorder,
     GovernanceProxy,
     StreamingToolCollector,
+    _encode_websocket_frame,
+    _is_websocket_upgrade,
+    _read_websocket_frame,
     extract_tool_use_blocks,
     mediate_decision,
     replace_tool_use_with_denial,
@@ -925,6 +928,172 @@ class TestQS052ProxyPosture(unittest.TestCase):
         self.assertEqual(rows[0]["provider"], "openai")
         self.assertTrue(rows[0]["developer_mode"])
         chain_path.unlink(missing_ok=True)
+
+    def test_openai_responses_websocket_tool_call_is_mediated(self):
+        proxy, chain_path = self._proxy_with_chain("qs058-ws-tool-mediated.jsonl")
+        collector = OpenAIProvider().create_streaming_collector()
+
+        async def run_one():
+            outputs, mediated = await proxy._process_websocket_upstream_message(
+                provider=OpenAIProvider(),
+                collector=collector,
+                message=json.dumps({
+                    "type": "response.output_item.added",
+                    "output_index": 0,
+                    "item": {
+                        "type": "function_call",
+                        "id": "fc_1",
+                        "call_id": "call_1",
+                        "name": "Read",
+                        "arguments": "",
+                    },
+                }),
+                approval_store=None,
+            )
+            self.assertEqual(outputs, [])
+            self.assertEqual(mediated, 0)
+            return await proxy._process_websocket_upstream_message(
+                provider=OpenAIProvider(),
+                collector=collector,
+                message=json.dumps({
+                    "type": "response.function_call_arguments.done",
+                    "output_index": 0,
+                    "item_id": "fc_1",
+                    "arguments": json.dumps({"file_path": os.path.join(_REPO_STR, "README.md")}),
+                }),
+                approval_store=None,
+            )
+
+        outputs, mediated = _run(run_one())
+        self.assertEqual(mediated, 1)
+        self.assertTrue(any("response.function_call_arguments.done" in str(o) for o in outputs))
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["record_type"], "mediated_decision")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertEqual(rows[0]["policy_decision"], "ALLOW")
+        chain_path.unlink(missing_ok=True)
+
+    def test_openai_responses_websocket_deny_returns_responses_text(self):
+        proxy, chain_path = self._proxy_with_chain("qs058-ws-tool-denied.jsonl")
+        collector = OpenAIProvider().create_streaming_collector()
+
+        async def run_one():
+            await proxy._process_websocket_upstream_message(
+                provider=OpenAIProvider(),
+                collector=collector,
+                message=json.dumps({
+                    "type": "response.output_item.added",
+                    "output_index": 0,
+                    "item": {
+                        "type": "function_call",
+                        "id": "fc_1",
+                        "call_id": "call_1",
+                        "name": "Read",
+                        "arguments": "",
+                    },
+                }),
+                approval_store=None,
+            )
+            return await proxy._process_websocket_upstream_message(
+                provider=OpenAIProvider(),
+                collector=collector,
+                message=json.dumps({
+                    "type": "response.function_call_arguments.done",
+                    "output_index": 0,
+                    "item_id": "fc_1",
+                    "arguments": '{"file_path": "/etc/shadow"}',
+                }),
+                approval_store=None,
+            )
+
+        outputs, mediated = _run(run_one())
+        self.assertEqual(mediated, 1)
+        self.assertEqual(len(outputs), 1)
+        denial = json.loads(outputs[0])
+        self.assertEqual(denial["type"], "response.output_text.delta")
+        self.assertIn("[Governance] Operation denied", denial["delta"])
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(rows[0]["policy_decision"], "DENY")
+        self.assertEqual(rows[0]["provider"], "openai")
+        chain_path.unlink(missing_ok=True)
+
+    def test_openai_responses_websocket_text_only_session_is_observed(self):
+        proxy, chain_path = self._proxy_with_chain("qs058-ws-text-observed.jsonl")
+
+        class _FakeUpstream:
+            def __init__(self, messages):
+                self._messages = list(messages)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if not self._messages:
+                    raise StopAsyncIteration
+                return self._messages.pop(0)
+
+            async def send(self, message):
+                return None
+
+            async def close(self):
+                return None
+
+        class _IdleReader:
+            async def readexactly(self, n):
+                await asyncio.sleep(60)
+
+        class _FakeWriter:
+            def __init__(self):
+                self.buf = bytearray()
+
+            def write(self, data):
+                self.buf.extend(data)
+
+            async def drain(self):
+                return None
+
+        headers = {
+            "connection": "Upgrade",
+            "upgrade": "websocket",
+            "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+            "authorization": "Bearer test",
+        }
+        writer = _FakeWriter()
+        self.assertTrue(_is_websocket_upgrade(headers))
+        with patch("proxy.server.websockets.connect", return_value=_FakeUpstream([
+            json.dumps({"type": "response.output_text.delta", "delta": "hello"}),
+        ])):
+            _run(proxy.handle_websocket(
+                "/responses", headers, _IdleReader(), writer, OpenAIProvider(),
+            ))
+
+        self.assertIn(b"101 Switching Protocols", writer.buf)
+        self.assertIn(b"sec-websocket-accept", writer.buf)
+        rows = [json.loads(line) for line in chain_path.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["event_type"], "proxy_request_observed")
+        self.assertEqual(rows[0]["provider"], "openai")
+        self.assertEqual(rows[0]["method"], "WS")
+        self.assertTrue(rows[0]["examined"])
+        chain_path.unlink(missing_ok=True)
+
+    def test_websocket_frame_codec_roundtrip(self):
+        async def roundtrip():
+            reader = asyncio.StreamReader()
+            reader.feed_data(_encode_websocket_frame("hello"))
+            reader.feed_eof()
+            return await _read_websocket_frame(reader)
+
+        opcode, payload = _run(roundtrip())
+        self.assertEqual(opcode, 0x1)
+        self.assertEqual(payload, b"hello")
 
     def test_non_tool_request_is_observed_once(self):
         proxy, chain_path = self._proxy_with_chain("qs052-non-tool-observed.jsonl")
