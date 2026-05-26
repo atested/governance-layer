@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -16,6 +17,7 @@ from proxy.server import (
     compute_capability_registry_hash,
     mediate_decision,
 )
+from proxy import server as proxy_server
 from qa_chain_fixtures import write_fixture, write_large_fixture
 
 
@@ -59,14 +61,24 @@ def _mediate_with_fixture(tmp_path: Path, fixture: str, *, heartbeat_seconds: fl
         first = gate.check()
         assert first.ok
 
-    recorder = ChainRecorder(chain_path)
-    record = mediate_decision(
-        "Bash",
-        {"command": "echo hello"},
-        policy=POLICY,
-        chain_recorder=recorder,
-        qa_gate=gate,
+    cap_registry = tmp_path / "capability-registry.json"
+    cap_registry.write_text(
+        json.dumps({
+            "version": "0.1",
+            "governance_posture": {"mode": "production"},
+            "tools": [],
+        }),
+        encoding="utf-8",
     )
+    recorder = ChainRecorder(chain_path)
+    with patch.object(proxy_server, "CAP_REGISTRY_PATH", cap_registry):
+        record = mediate_decision(
+            "Bash",
+            {"command": "echo hello"},
+            policy=POLICY,
+            chain_recorder=recorder,
+            qa_gate=gate,
+        )
     rows = []
     if chain_path.exists():
         rows = [json.loads(line) for line in chain_path.read_text(encoding="utf-8").splitlines() if line.strip()]

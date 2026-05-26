@@ -747,6 +747,9 @@ class TestQS052ProxyPosture(unittest.TestCase):
         return path
 
     def _proxy_with_chain(self, chain_name: str) -> tuple[GovernanceProxy, Path]:
+        posture_patch = patch.object(proxy_server, "CAP_REGISTRY_PATH", self._capability_registry("production"))
+        posture_patch.start()
+        self.addCleanup(posture_patch.stop)
         chain_path = Path(os.environ.get("TMPDIR", "/private/tmp")) / chain_name
         chain_path.unlink(missing_ok=True)
         recorder = ChainRecorder(chain_path)
@@ -1447,6 +1450,7 @@ class TestActivityEntryEnrichment(unittest.TestCase):
                 "confidence_tier": 1,
             },
             "policy_decision": "ALLOW",
+            "provider": "openai",
             "record_hash": "sha256:abc",
         }
         entry = _normalize_activity_entry(rec, sequence_position=1)
@@ -1456,6 +1460,7 @@ class TestActivityEntryEnrichment(unittest.TestCase):
         self.assertEqual(entry["detail"]["target"], os.path.join(_REPO_STR, "README.md"))
         self.assertEqual(entry["detail"]["action_type"], "read")
         self.assertEqual(entry["detail"]["confidence_tier"], 1)
+        self.assertEqual(entry["provider"], "openai")
         self.assertIn("Read", entry["summary"])
         self.assertIn("ALLOW", entry["summary"])
 

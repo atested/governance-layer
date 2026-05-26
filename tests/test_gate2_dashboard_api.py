@@ -521,6 +521,26 @@ class TestRecordDetailEventTypes:
         records = data.get("records") or data.get("entries") or []
         assert len(records) > 0
 
+    def test_provider_records_in_activity(self, dashboard_env):
+        """Activity view exposes provider and filters by provider."""
+        from readout import governance_activity_view
+
+        records = [
+            _make_chain_record(1, provider="openai"),
+            _make_chain_record(2, provider="anthropic"),
+        ]
+        _write_chain(dashboard_env["chain"], records)
+
+        all_data = governance_activity_view(dashboard_env["chain"], limit=10)
+        all_records = all_data.get("records") or all_data.get("entries") or []
+        assert {row.get("provider") for row in all_records} == {"openai", "anthropic"}
+
+        openai_data = governance_activity_view(dashboard_env["chain"], limit=10, provider="openai")
+        openai_records = openai_data.get("records") or openai_data.get("entries") or []
+        assert len(openai_records) == 1
+        assert openai_records[0]["provider"] == "openai"
+        assert openai_data["filters"]["provider"] == "openai"
+
     def test_audit_record_detail(self, dashboard_env):
         """audit_record_detail returns data for a known record."""
         from readout import audit_record_detail

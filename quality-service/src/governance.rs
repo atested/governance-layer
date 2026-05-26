@@ -1,4 +1,4 @@
-use crate::canonical::{record_hash, record_hash_preimage};
+use crate::canonical::{governance_signature_preimage, record_hash};
 use crate::config::Config;
 use crate::key::verifying_key_from_private_key;
 use crate::spc::SpcMonitor;
@@ -399,7 +399,7 @@ fn verify_signature(path: &Path, record: &Value, signature: &str) -> Result<(), 
         .map_err(|err| format!("invalid signature base64url: {err}"))?;
     let signature = Signature::from_slice(&signature_bytes)
         .map_err(|err| format!("invalid Ed25519 signature bytes: {err}"))?;
-    let preimage = record_hash_preimage(record)?;
+    let preimage = governance_signature_preimage(record)?;
     verifying
         .verify(preimage.as_bytes(), &signature)
         .map_err(|err| format!("signature verification failed: {err}"))

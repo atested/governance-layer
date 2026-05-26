@@ -111,7 +111,7 @@ export function getConformance() {
 /**
  * Governance activity feed.
  * GET /api/activity
- * @param {Object} opts - { limit, offset, governed_family, event_category, resolution, start_time, end_time, policy_decision, tool_name }
+ * @param {Object} opts - { limit, offset, governed_family, event_category, resolution, start_time, end_time, policy_decision, tool_name, provider }
  */
 export function getActivity(opts = {}) {
   return _request('GET', '/activity', { params: opts });

@@ -1049,7 +1049,7 @@ def _do_archive_background():
 # Archive data merge helpers
 # ---------------------------------------------------------------------------
 
-def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
+def _merge_activity_with_archives(live_data, start_time=None, end_time=None, provider=None):
     """Merge live activity entries with archive SQLite data."""
     from chain_archive import list_archives, archive_root_for
     from archive_artifacts import get_or_regenerate_sqlite
@@ -1099,6 +1099,8 @@ def _merge_activity_with_archives(live_data, start_time=None, end_time=None):
                         continue
                     entry = _normalize_activity_entry(record, sequence_position=int(row["id"]))
                     if entry is None:
+                        continue
+                    if provider and entry.get("provider", "") != provider:
                         continue
                     entry["_source"] = "archive"
                     entry["_archive_id"] = archive_id
@@ -4764,6 +4766,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 end_time=qs("end_time") or None,
                 policy_decision=qs("policy_decision") or None,
                 tool_name=qs("tool_name") or None,
+                provider=qs("provider") or None,
                 machine_scope=qs("machine_scope", "all") or "all",
                 machine_ids=qs_machines(),
             )
@@ -4773,6 +4776,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         data,
                         start_time=qs("start_time") or None,
                         end_time=qs("end_time") or None,
+                        provider=qs("provider") or None,
                     )
                 except Exception:
                     pass  # Fail open — serve live data if archive merge fails

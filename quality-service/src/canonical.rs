@@ -37,6 +37,103 @@ pub fn record_hash(record: &Value) -> Result<String, String> {
     Ok(sha256_prefixed_bytes(preimage.as_bytes()))
 }
 
+pub fn governance_signature_preimage(record: &Value) -> Result<String, String> {
+    if is_action_decision(record) {
+        action_signing_preimage(record)
+    } else {
+        record_hash_preimage(record)
+    }
+}
+
+fn is_action_decision(record: &Value) -> bool {
+    let object = match record.as_object() {
+        Some(object) => object,
+        None => return false,
+    };
+    object.get("event_type").is_none()
+        && (object.get("record_type").and_then(Value::as_str).is_some()
+            || object.get("policy_decision").is_some())
+}
+
+fn action_signing_preimage(record: &Value) -> Result<String, String> {
+    let mut unsigned = record
+        .as_object()
+        .ok_or_else(|| "signature preimage requires an object".to_string())?
+        .clone();
+    for key in [
+        "timestamp_utc",
+        "session_id",
+        "request_id",
+        "process_id",
+        "record_hash",
+        "signature",
+        "signing_key_id",
+        "request_bytes_b64",
+        "evidence_refs",
+        "untrusted_inputs",
+    ] {
+        unsigned.remove(key);
+    }
+
+    if let Some(Value::Array(reasons)) = unsigned.get_mut("policy_reasons") {
+        for reason in reasons.iter_mut() {
+            if let Value::Object(reason_map) = reason {
+                let mut code_only = Map::new();
+                code_only.insert(
+                    "code".to_string(),
+                    reason_map.get("code").cloned().unwrap_or(Value::Null),
+                );
+                *reason = Value::Object(code_only);
+            }
+        }
+    }
+
+    for field in ["tool_args_redacted", "policy_inputs", "normalized_args"] {
+        if let Some(Value::Object(map)) = unsigned.get_mut(field) {
+            match field {
+                "tool_args_redacted" => {
+                    map.remove("path");
+                    map.remove("canonical_path");
+                }
+                "policy_inputs" => {
+                    map.remove("canonical_path");
+                    map.remove("allow_base_dirs");
+                }
+                "normalized_args" => {
+                    map.remove("canonical_path");
+                    map.remove("canonical_src_path");
+                    map.remove("canonical_dst_path");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if let Some(Value::Object(intent)) = unsigned.get_mut("intent") {
+        if let Some(Value::Array(outputs)) = intent.get_mut("expected_outputs") {
+            for output in outputs.iter_mut() {
+                let Value::Object(output_map) = output else {
+                    continue;
+                };
+                let redacts_path = output_map
+                    .get("ref")
+                    .and_then(Value::as_str)
+                    .map(|ref_value| ref_value.ends_with(":path"))
+                    .unwrap_or(false)
+                    && output_map.contains_key("value");
+                if redacts_path {
+                    output_map.insert(
+                        "value".to_string(),
+                        Value::String("<path-redacted>".to_string()),
+                    );
+                }
+            }
+        }
+    }
+
+    canonical_json(&Value::Object(unsigned))
+}
+
 pub fn canonical_policy_hash(policy: &Value) -> Result<String, String> {
     let mut body = policy
         .as_object()

@@ -1,4 +1,4 @@
-use crate::canonical::{record_hash, record_hash_preimage};
+use crate::canonical::{governance_signature_preimage, record_hash};
 use crate::config::Config;
 use crate::key::verifying_key_from_private_key;
 use crate::writer::QaChainWriter;
@@ -246,7 +246,7 @@ fn signature_validity(config: &Config, records: &[Value]) -> CheckResult {
             ));
             continue;
         };
-        let Ok(preimage) = record_hash_preimage(record) else {
+        let Ok(preimage) = governance_signature_preimage(record) else {
             findings.push(finding(
                 "SIGNATURE_VALIDITY",
                 "critical",

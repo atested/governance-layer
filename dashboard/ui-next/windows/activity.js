@@ -20,6 +20,7 @@ const COLUMNS = [
   { key: 'timestamp_utc', label: 'Time',       width: '120px' },
   { key: 'machine_id', label: 'Machine',       width: '120px' },
   { key: 'user_identity', label: 'User',       width: '120px' },
+  { key: 'provider', label: 'Provider',        width: '85px'  },
   { key: 'event_category', label: 'Event',     width: '110px' },
   { key: 'policy_decision', label: 'Decision', width: '80px'  },
   { key: 'matched_rule', label: 'Rule',        width: '140px' },
@@ -32,6 +33,7 @@ const COLUMNS = [
 const COLUMN_TOOLTIPS = {
   timestamp_utc: 'When the chain record was written.',
   machine_id: 'Machine that produced the governance record.',
+  provider: 'Model provider API for this record.',
   event_category: 'The kind of chain event: mediated action, approval, revocation, or observation.',
   policy_decision: 'The policy outcome recorded for this operation.',
   tool_name: 'The governed action name observed by Atested.',
@@ -76,6 +78,7 @@ export function openActivityWindow(trigger, opts = {}) {
     toolFilter: opts.toolFilter || '',
     ruleFilter: '',
     userFilter: '',
+    providerFilter: opts.providerFilter || '',
     machineFilter: opts.machineFilter || '',
     // Pagination
     currentPage: 1,
@@ -252,6 +255,12 @@ function _buildUI(state) {
               </select>
             </label>
             <label class="aw-fp-label">
+              Provider
+              <select class="aw-select" id="aw-provider-filter">
+                <option value="">All providers</option>
+              </select>
+            </label>
+            <label class="aw-fp-label">
               Machine
               <select class="aw-select" id="aw-machine-filter">
                 <option value="">All machines</option>
@@ -337,6 +346,7 @@ function _applyStaticTooltips(state) {
     ['#aw-tool-filter', 'Filter by governed action name.'],
     ['#aw-rule-filter', 'Filter by the policy rule that matched.'],
     ['#aw-user-filter', 'Filter by user or agent identity.'],
+    ['#aw-provider-filter', 'Filter by model provider API.'],
     ['#aw-machine-filter', 'Filter by the machine that produced the record.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
@@ -411,6 +421,7 @@ function _wireControls(state) {
     el.querySelector('#aw-tool-filter').value = '';
     el.querySelector('#aw-rule-filter').value = '';
     el.querySelector('#aw-user-filter').value = '';
+    el.querySelector('#aw-provider-filter').value = '';
     // Reset decision toggles
     el.querySelectorAll('#aw-decision-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('aw-dtoggle-active');
@@ -424,6 +435,7 @@ function _wireControls(state) {
     state.toolFilter = '';
     state.ruleFilter = '';
     state.userFilter = '';
+    state.providerFilter = '';
     state.includeArchives = false;
     state.currentPage = 1;
     _loadData(state);
@@ -500,6 +512,7 @@ function _readFilters(state) {
   state.toolFilter = el.querySelector('#aw-tool-filter').value;
   state.ruleFilter = el.querySelector('#aw-rule-filter').value;
   state.userFilter = el.querySelector('#aw-user-filter').value;
+  state.providerFilter = el.querySelector('#aw-provider-filter').value;
   state.machineFilter = el.querySelector('#aw-machine-filter').value;
 }
 
@@ -520,6 +533,7 @@ async function _loadData(state, options = {}) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.providerFilter) params.provider = state.providerFilter;
   _applyMachineParams(params, state.machineFilter);
   if (state.includeArchives) params.include_archives = '1';
 
@@ -560,12 +574,13 @@ function _populateFilterDropdowns(state) {
   const data = state.data;
 
   // Collect unique values from loaded data
-  const actions = new Set(), rules = new Set(), users = new Set(), machines = new Map();
+  const actions = new Set(), rules = new Set(), users = new Set(), providers = new Set(), machines = new Map();
   for (const entry of data) {
     const detail = entry.detail || {};
     if (detail.tool_name) actions.add(detail.tool_name);
     if (detail.matched_rule) rules.add(detail.matched_rule);
     if (entry.user_identity) users.add(entry.user_identity);
+    if (entry.provider) providers.add(entry.provider);
     if (entry.machine_id) machines.set(entry.machine_id, _machineLabel(entry));
   }
   const registryMachines = state.lastResponse?.unified_view?.machine_registry?.machines || [];
@@ -576,6 +591,7 @@ function _populateFilterDropdowns(state) {
   _fillSelect(el.querySelector('#aw-tool-filter'), 'All actions', actions, state.toolFilter);
   _fillSelect(el.querySelector('#aw-rule-filter'), 'All rules', rules, state.ruleFilter);
   _fillSelect(el.querySelector('#aw-user-filter'), 'All users', users, state.userFilter);
+  _fillSelect(el.querySelector('#aw-provider-filter'), 'All providers', providers, state.providerFilter);
   _fillMachineSelect(el.querySelector('#aw-machine-filter'), machines, state.machineFilter);
 }
 
@@ -635,6 +651,9 @@ function _renderTable(state) {
   }
   if (state.userFilter) {
     filteredData = filteredData.filter(e => e.user_identity === state.userFilter);
+  }
+  if (state.providerFilter) {
+    filteredData = filteredData.filter(e => e.provider === state.providerFilter);
   }
 
   if (!filteredData.length) {
@@ -737,6 +756,11 @@ function _renderCell(key, entry, detail) {
       const cat = entry.event_category || '';
       const display = _EVENT_LABELS[cat] || cat || '\u2014';
       return _esc(display);
+    }
+
+    case 'provider': {
+      const provider = entry.provider || '';
+      return provider ? `<span class="aw-cell-tool">${_esc(provider)}</span>` : '<span class="aw-decision-muted">\u2014</span>';
     }
 
     case 'policy_decision': {
@@ -882,6 +906,7 @@ async function _exportActivity(state) {
   if (state.decisionFilter) params.policy_decision = state.decisionFilter;
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
+  if (state.providerFilter) params.provider = state.providerFilter;
   _applyMachineParams(params, state.machineFilter);
 
   const format = state.el.querySelector('#aw-export-format')?.value || 'json';
@@ -926,6 +951,7 @@ function _getCellValue(key, entry, detail) {
   switch (key) {
     case 'timestamp_utc': return entry.timestamp_utc || '';
     case 'machine_id': return _machineLabel(entry);
+    case 'provider': return entry.provider || '';
     case 'event_category': return entry.event_category || '';
     case 'policy_decision': return detail.policy_decision || '';
     case 'tool_name': return detail.tool_name || '';

@@ -567,6 +567,7 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         "primary_import_timestamp_utc": rec.get("primary_import_timestamp_utc"),
         "machine_id": rec.get("machine_id", ""),
         "machine_role": rec.get("machine_role", ""),
+        "provider": rec.get("provider", ""),
         "record_origin": rec.get("_unified_source", "primary_chain"),
         "import_envelope_hash": rec.get("import_envelope_hash"),
         "event_category": category,
@@ -604,6 +605,7 @@ def governance_activity_view(
     end_time: Optional[str] = None,
     policy_decision: Optional[str] = None,
     tool_name: Optional[str] = None,
+    provider: Optional[str] = None,
     machine_scope: str = "all",
     machine_ids: Optional[str | list[str]] = None,
 ) -> dict:
@@ -648,6 +650,11 @@ def governance_activity_view(
         entries = [
             e for e in entries
             if e["detail"].get("tool_name", "") == tool_name
+        ]
+    if provider:
+        entries = [
+            e for e in entries
+            if e.get("provider", "") == provider
         ]
 
     # Reverse chronological order (most recent first).
@@ -697,6 +704,7 @@ def governance_activity_view(
             "end_time": end_time,
             "policy_decision": policy_decision,
             "tool_name": tool_name,
+            "provider": provider,
             "machine_scope": machine_scope,
             "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
         },
