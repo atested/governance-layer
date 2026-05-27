@@ -141,8 +141,15 @@ function _buildContent(data, recordId) {
     btn.textContent = 'Approve this operation';
     setTooltip(btn, 'Open Approvals with this denied operation prefilled.');
     btn.addEventListener('click', () => {
+      // QS-062: prefer the operation_description so an approval is scoped
+      // to the specific phrase the operator just read — "Push commits to
+      // origin/main", not "Bash". Fall back to the older identifiers in
+      // the same order they were used previously when no description is
+      // available (legacy records, edge cases).
       const operation = (
-        sidecar?.tool_name
+        chain.operation_description
+        || sidecar?.operation_description
+        || sidecar?.tool_name
         || chain.original_tool
         || chain.tool
         || chain.capability_class
@@ -215,8 +222,13 @@ function _buildContextCard(chain, sidecar, eventType, decision) {
     const kv = document.createElement('atd-kv-list');
     const items = [
       { key: 'Decision', value: decision || '\u2014', tooltip: 'Policy outcome recorded for this operation.' },
+      // QS-062: lead the detail card with the plain-English description so
+      // an operator reading a denied record sees what the agent tried to
+      // do before they see the raw tool name. Both fields are surfaced \u2014
+      // Action is kept because the tool name is still useful context.
+      { key: 'Operation', value: rec.operation_description || '\u2014', tooltip: 'Plain-English description of what the operation does. Approvals can be scoped to this exact phrase.' },
       { key: 'Matched Rule', value: rec.matched_rule || '\u2014', variant: 'code', tooltip: 'Policy rule that produced the decision.' },
-      { key: 'Action', value: rec.tool_name || rec.tool || '\u2014', variant: 'code', tooltip: 'Governed action intercepted from the AI application.' },
+      { key: 'Action', value: rec.tool_name || rec.tool || rec.original_tool || '\u2014', variant: 'code', tooltip: 'Raw tool name the AI application invoked.' },
       { key: 'Target', value: rec.target || '\u2014', variant: 'code', tooltip: 'Path, command, URL, or artifact the operation acted on.' },
       { key: 'User', value: rec.user_identity || '\u2014', tooltip: 'Operator identity recorded with the event.' },
       { key: 'Confidence Tier', value: rec.classification?.tier != null ? `Tier ${rec.classification.tier}` : '\u2014', tooltip: 'Classifier evidence confidence used during policy evaluation.' },

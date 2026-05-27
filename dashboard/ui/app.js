@@ -808,18 +808,23 @@ function _renderGovernedRecord(rec) {
   const user = rec.user_identity || rec.approving_operator || "";
   const cls = rec.classification || {};
   const target = (isV2 && cls.targets && cls.targets[0]) || rec.target || rec.artifact_identity || "";
+  // QS-062: prefer the description for both display and approval prefill.
+  const operationDescription = rec.operation_description || "";
 
   const denyReasons = rec.policy_reasons || [];
   const denyReasonText = denyReasons.length
     ? (typeof denyReasons[0].detail === "object" ? denyReasons[0].detail.reason : denyReasons[0].detail)
     : "";
 
-  // Approvals match operation/tool names; keep command arguments out of prefill.
-  const approveTarget = tool || rec.artifact_identity || rec.record_hash || "";
+  // QS-062: prefill an approval with the operation description so the
+  // approval scope is the specific operation ("Push commits to origin/main"),
+  // not "all Bash". Falls back to the legacy tool/identity chain when the
+  // description is missing (older chain records pre-date QS-062).
+  const approveTarget = operationDescription || tool || rec.artifact_identity || rec.record_hash || "";
   const approveHref = isDeny && approveTarget
     ? navHref("/approvals", {
         file: approveTarget,
-        operation: tool,
+        operation: approveTarget,
         target: approveTarget,
         record_hash: rec.record_hash || "",
       })
@@ -830,6 +835,7 @@ function _renderGovernedRecord(rec) {
       <h3>${isV2 ? "Mediated Decision" : "Governed Action"}</h3>
       <ul class="kv">
         <li><span>Decision</span><strong>${isDeny ? '<span class="deny-badge">DENIED</span>' : `<span class="status-ok">${escapeHtml(decision)}</span>`}</strong></li>
+        ${operationDescription ? `<li><span>Operation</span><strong>${escapeHtml(operationDescription)}</strong></li>` : ""}
         <li><span>Tool</span><strong><code>${escapeHtml(tool)}</code></strong></li>
         ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
         ${user ? `<li><span>User</span><strong>${escapeHtml(user)}</strong></li>` : ""}

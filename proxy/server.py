@@ -509,8 +509,10 @@ def _check_approval(
     tool_name: str,
     targets: list[str],
     args: Optional[dict] = None,
+    *,
+    operation_description: str = "",
 ) -> Optional[dict]:
-    """Check if an operation is approved by tool name or target path."""
+    """Check if an operation is approved by description, tool, or target."""
     family = _governed_family()
     context = _deployment_context()
     version = _policy_version()
@@ -523,6 +525,10 @@ def _check_approval(
         context,
         version,
         repo_path=str(REPO),
+        # QS-062: prefer matching on the operation_description so an
+        # approval for "Push commits to origin/main" doesn't accidentally
+        # authorise every Bash call.
+        operation_description=operation_description,
     )
 
 
@@ -618,7 +624,16 @@ def mediate_decision(
     # Check approval store for denied operations
     if record["policy_decision"] == "DENY" and approval_store is not None:
         targets = classification.get("targets", [])
-        approval = _check_approval(approval_store, tool_name, targets, args)
+        approval = _check_approval(
+            approval_store,
+            tool_name,
+            targets,
+            args,
+            # QS-062: pass the description so an operator-issued approval
+            # keyed on the exact operation phrase ("Push commits to
+            # origin/main") wins before falling back to tool-name scope.
+            operation_description=classification.get("operation_description", ""),
+        )
         if approval:
             logger.info(
                 "Approval override: %s approved by %s (event %s)",

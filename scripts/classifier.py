@@ -555,9 +555,28 @@ def classify(tool_name: str, args: Optional[dict] = None) -> dict:
 
     Returns:
         Classification dict with action_type, targets, scope,
-        confidence_tier, evidence, and original_tool.
+        confidence_tier, evidence, original_tool, and
+        operation_description (QS-062 — a short English summary of
+        what the call does, e.g. "Push commits to origin/main").
     """
     args = args or {}
+    result = _classify_impl(tool_name, args)
+    # QS-062: every classification carries a short English description so
+    # downstream consumers (chain record, dashboard, approval scope) can
+    # tell the operator what's happening without reparsing the args.
+    try:
+        from operation_description import describe_operation
+        result["operation_description"] = describe_operation(tool_name, args, result)
+    except Exception:
+        # Description is advisory, never a gate: a bug in the generator
+        # must not break governance. Fall back to a recognisable string.
+        result["operation_description"] = f"Execute: {tool_name}"
+    return result
+
+
+def _classify_impl(tool_name: str, args: dict) -> dict:
+    """Body of classify() — kept separate so the description wrap is a
+    single, auditable line at the public entry point."""
 
     # Check for encoded/obfuscated payloads → Tier 4
     if _detect_encoded_payloads(args):

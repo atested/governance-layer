@@ -340,6 +340,12 @@ def evaluate(
     timestamp_utc = _now_utc_z()
 
     # Build decision record
+    # QS-062: operation_description is a deterministic English summary
+    # produced by the classifier (see scripts/operation_description.py).
+    # It travels at the top level of the record so dashboards and approval
+    # consumers can read it without descending into the classification
+    # dict, and it is included in the canonical record hash so the
+    # description is bound to the chain like every other governed field.
     record = {
         "record_version": "2.0",
         "record_type": "mediated_decision",
@@ -348,6 +354,10 @@ def evaluate(
         "session_id": session_id or "",
         "user_identity": user_identity or "",
         "original_tool": classification.get("original_tool", ""),
+        "operation_description": classification.get(
+            "operation_description",
+            f"Execute: {classification.get('original_tool', 'unknown')}",
+        ),
         "classification": {
             "action_type": classification["action_type"],
             "targets": classification["targets"],

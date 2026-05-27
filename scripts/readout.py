@@ -435,8 +435,18 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         confidence_tier = classification.get("confidence_tier") if is_v2 else None
         action_type = classification.get("action_type", "") if is_v2 else ""
         matched_rule = rec.get("matched_rule", "") if is_v2 else ""
+        # QS-062: the operation_description is written at the top level of
+        # the chain record by policy_eval_v2.evaluate(). Pull it forward so
+        # every Activity entry carries the English summary the operator
+        # needs to decide whether to approve.
+        operation_description = rec.get("operation_description", "")
 
-        if confidence_tier is not None:
+        if operation_description:
+            # Lead with the description so the Activity view's summary
+            # column tells the operator what happened, not just which
+            # tool was invoked.
+            summary = f"{operation_description} \u2192 {policy_decision}"
+        elif confidence_tier is not None:
             summary = f"{tool_name} \u2192 {policy_decision} (Tier {confidence_tier})"
         else:
             summary = f"{tool_name} \u2192 {policy_decision}"
@@ -447,6 +457,7 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
 
         detail = {
             "tool_name": tool_name,
+            "operation_description": operation_description,
             "policy_decision": policy_decision,
             "record_type": record_type,
             "verification_state": rec.get("verification_state", ""),
@@ -825,6 +836,10 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
         "import_envelope_hash": rec.get("import_envelope_hash"),
         "event_category": category,
         "governed_family": governed_family,
+        # QS-062: surface operation_description at the top of the activity
+        # entry so dashboard cells and exports can read it without
+        # descending into detail.
+        "operation_description": rec.get("operation_description", ""),
         "summary": summary,
         "evidence": evidence,
         "detail": detail,

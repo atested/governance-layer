@@ -24,7 +24,12 @@ const COLUMNS = [
   { key: 'event_category', label: 'Event',     width: '110px' },
   { key: 'policy_decision', label: 'Decision', width: '80px'  },
   { key: 'matched_rule', label: 'Rule',        width: '140px' },
-  { key: 'tool_name',   label: 'Action',       width: '140px' },
+  // QS-062: Operation is the readable English summary of what was being
+  // attempted ("Push commits to origin/main"). It replaces Action as the
+  // primary "what happened" column. The raw tool name (Action) is kept
+  // available but defaults to hidden — operators can still toggle it on.
+  { key: 'operation_description', label: 'Operation', width: 'minmax(200px, 2fr)' },
+  { key: 'tool_name',   label: 'Action',       width: '120px' },
   { key: 'confidence_tier', label: 'Tier',     width: '50px'  },
   { key: 'action_type', label: 'Category',     width: '100px' },
   { key: 'target',      label: 'Target',       width: 'minmax(100px, 1fr)' },
@@ -36,7 +41,8 @@ const COLUMN_TOOLTIPS = {
   provider: 'Model provider API for this record.',
   event_category: 'The kind of chain event: mediated action, approval, revocation, or observation.',
   policy_decision: 'The policy outcome recorded for this operation.',
-  tool_name: 'The governed action name observed by Atested.',
+  operation_description: 'Plain-English summary of what the operation does (QS-062). Approvals can be scoped to this exact phrase.',
+  tool_name: 'The raw tool name the agent invoked (e.g. Bash, Read, WebFetch).',
   sequence_position: 'The record position in the hash-linked chain.',
   action_type: 'The evidence-based operation category assigned by the classifier.',
   confidence_tier: 'Classifier confidence tier for the operation evidence.',
@@ -779,6 +785,17 @@ function _renderCell(key, entry, detail) {
       return tool ? `<span class="aw-cell-tool">${_esc(tool)}</span>` : '<span class="aw-decision-muted">\u2014</span>';
     }
 
+    case 'operation_description': {
+      // QS-062: prefer the top-level field; fall back to detail for legacy
+      // entries that pre-date the readout exposing it at the entry root.
+      const desc = entry.operation_description
+        || (detail && detail.operation_description)
+        || '';
+      if (!desc) return '<span class="aw-decision-muted">\u2014</span>';
+      const display = desc.length > 90 ? desc.slice(0, 87) + '\u2026' : desc;
+      return `<span class="aw-cell-operation" data-tooltip="${_escAttr(desc)}">${_esc(display)}</span>`;
+    }
+
     case 'sequence_position':
       return _esc(String(entry.sequence_position || ''));
 
@@ -969,6 +986,8 @@ function _getCellValue(key, entry, detail) {
     case 'event_category': return entry.event_category || '';
     case 'policy_decision': return detail.policy_decision || '';
     case 'tool_name': return detail.tool_name || '';
+    case 'operation_description':
+      return entry.operation_description || (detail && detail.operation_description) || '';
     case 'sequence_position': return String(entry.sequence_position || '');
     case 'action_type': return detail.action_type || '';
     case 'confidence_tier': return detail.confidence_tier != null ? String(detail.confidence_tier) : '';

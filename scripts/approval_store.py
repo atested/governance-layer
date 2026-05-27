@@ -208,13 +208,32 @@ class ApprovalStore:
         policy_version: str,
         *,
         repo_path: str = "",
+        operation_description: str = "",
     ) -> Optional[dict]:
         """Look up an approval for a concrete tool call.
 
-        This preserves the original exact lookup semantics and adds optional
-        pattern entries loaded from a runtime approval-store file. Pattern
-        approvals are still scoped before command/path matching is considered.
+        Lookup order:
+
+        1. Exact artifact_identity match on operation_description (QS-062 —
+           lets an operator approve "Push commits to origin/main" without
+           any other scope keys).
+        2. Exact artifact_identity match on tool_name, then on each target
+           (legacy behaviour, kept for back-compat).
+        3. Pattern approvals from the runtime approval-store sidecar,
+           which can now match on operation_descriptions in addition to
+           tool_names, command_patterns, and target_roots.
         """
+        # QS-062: try the operation_description as an artifact_identity
+        # first. Operators creating approvals via `atested approve` for a
+        # denied record see this exact string in the chain, so this is
+        # the most natural scope key.
+        if operation_description:
+            exact = self.lookup(
+                operation_description, governed_family, deployment_context, policy_version,
+            )
+            if exact:
+                return exact
+
         exact = self.lookup(tool_name, governed_family, deployment_context, policy_version)
         if exact:
             return exact
@@ -236,6 +255,7 @@ class ApprovalStore:
                 args,
                 targets,
                 repo_path=repo_path,
+                operation_description=operation_description,
             ):
                 return approval
         return None
@@ -381,7 +401,26 @@ def _operation_matches_pattern(
     targets: list[str],
     *,
     repo_path: str = "",
+    operation_description: str = "",
 ) -> bool:
+    # QS-062: operation_descriptions is an exact-string allowlist scoped
+    # to the human-readable description ("Push commits to origin/main")
+    # instead of the raw tool name ("Bash"). This lets an operator approve
+    # one specific operation without granting blanket Bash access. When
+    # present, the match key must be satisfied conjunctively with any
+    # other keys (tool_names, command_patterns, target_roots) — it does
+    # not bypass them.
+    op_descriptions = [
+        str(d).strip()
+        for d in _as_list(match.get("operation_descriptions") or match.get("operation_description"))
+        if str(d).strip()
+    ]
+    if op_descriptions:
+        if not operation_description:
+            return False
+        if operation_description.strip() not in op_descriptions:
+            return False
+
     tool_names = _normalize_tool_names(match.get("tool_names") or match.get("tool_name"))
     if tool_names and str(tool_name).strip().casefold() not in tool_names:
         return False
@@ -399,7 +438,9 @@ def _operation_matches_pattern(
             return all(_target_within_roots(t, target_roots, repo_path=repo_path) for t in targets)
         return any(_target_within_roots(t, target_roots, repo_path=repo_path) for t in targets)
 
-    return bool(tool_names or command_patterns)
+    # An approval must pin at least one match key; a `match: {}` would
+    # otherwise approve everything.
+    return bool(op_descriptions or tool_names or command_patterns)
 
 
 def load_approval_store_from_events(
