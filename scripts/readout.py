@@ -352,6 +352,11 @@ EVENT_CATEGORIES = frozenset([
     "opaque_approval",
     "opaque_revocation",
     "opaque_invocation_decision",
+    # QS-060: separate observation categories for ungoverned operations and
+    # proxy-examined no-tool requests. Previously these collapsed into the
+    # generic 'integrity' bucket, which made the Activity view ambiguous.
+    "ungoverned_observation",
+    "proxy_observation",
     "policy_rules_changed",
     "policy_acknowledged",
     "integrity",
@@ -365,11 +370,18 @@ _EVENT_TYPE_TO_CATEGORY = {
     "opaque_artifact_approval": "opaque_approval",
     "opaque_artifact_revocation": "opaque_revocation",
     "opaque_invocation_decision": "opaque_invocation_decision",
+    # QS-060: ungoverned operations get their own category. proxy_request_observed
+    # also gets its own category (proxy_observation) instead of being lumped
+    # under 'integrity'. Note: this entry deliberately overrides the older
+    # 'proxy_request_observed': 'integrity' mapping that appears later in this
+    # dict literal — dict literals take the LAST value, so the explicit entry
+    # below this comment wins. governance_integrity_error remains 'integrity'.
+    "ungoverned_operation_observed": "ungoverned_observation",
     "usage_attestation": "usage_attestation",
     "remote_chain_import": "remote_chain_import",
     "policy_rules_changed": "policy_rules_changed",
     "policy_acknowledged": "policy_acknowledged",
-    "proxy_request_observed": "integrity",
+    "proxy_request_observed": "proxy_observation",
     "governance_integrity_error": "integrity",
     # QS-061: surface system events in the Activity view so an operator can
     # see what the proxy and dashboard recorded at startup. Without these
@@ -516,6 +528,38 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "artifact_identity": artifact_identity,
             "resolution": resolution,
             "governed_family": governed_family,
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "ungoverned_observation":
+        op_type = rec.get("operation_type", "")
+        target = rec.get("target", "")
+        source = rec.get("source", "")
+        summary = f"ungoverned {op_type}" + (f" on {target}" if target else "")
+        detail = {
+            "operation_type": op_type,
+            "target": target,
+            "source": source,
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "proxy_observation":
+        provider = rec.get("provider", "")
+        target = rec.get("target") or rec.get("path", "")
+        source = rec.get("source", "proxy")
+        summary = f"proxy examined {provider or 'request'}; no tool calls"
+        detail = {
+            "operation_type": rec.get("operation_type", "proxy_request"),
+            "target": target,
+            "source": source,
+            "provider": provider,
+            "status": "no_policy_needed",
         }
         evidence = {
             "event_id": rec.get("event_id", ""),

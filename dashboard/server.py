@@ -518,12 +518,8 @@ def _get_verification_tracker():
 def _get_approval_store():
     global _approval_store
     if _approval_store is None:
-        from approval_store import load_approval_store_from_chain, ApprovalStore
-        _approval_store = (
-            load_approval_store_from_chain(str(CHAIN))
-            if CHAIN.exists()
-            else ApprovalStore()
-        )
+        from approval_store import load_approval_store_from_runtime
+        _approval_store = load_approval_store_from_runtime(str(CHAIN))
     return _approval_store
 
 

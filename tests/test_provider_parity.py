@@ -294,3 +294,42 @@ def test_no_tool_calls_extraction():
 
     # LiteLLM — same as OpenAI
     assert PROVIDERS["litellm"].extract_tool_calls(openai_resp) == []
+
+
+def test_openai_responses_tool_call_extraction():
+    """OpenAI Responses API function calls are parsed for mediation."""
+    provider = PROVIDERS["openai"]
+    resp = {
+        "output": [{
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "Bash",
+            "arguments": json.dumps({"command": "git rev-parse HEAD"}),
+        }],
+    }
+    calls = provider.extract_tool_calls(resp)
+    assert len(calls) == 1
+    assert calls[0].tool_name == "Bash"
+    assert calls[0].args == {"command": "git rev-parse HEAD"}
+
+
+def test_openai_realtime_tool_call_extraction():
+    """OpenAI Realtime WebSocket function-call events are parsed for mediation."""
+    provider = PROVIDERS["openai"]
+    event = {
+        "type": "response.output_item.done",
+        "item": {
+            "type": "function_call",
+            "id": "item_1",
+            "call_id": "call_1",
+            "name": "Bash",
+            "arguments": json.dumps({"command": "git rev-parse HEAD"}),
+        },
+    }
+    calls = provider.extract_realtime_tool_calls(event)
+    assert len(calls) == 1
+    classification = classify(calls[0].tool_name, calls[0].args)
+    decision = evaluate(classification, POLICY)
+    assert decision["policy_decision"] == "DENY"
+    assert decision["matched_rule"] == "tier3-approval-required"

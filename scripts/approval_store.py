@@ -28,8 +28,9 @@ signature or with an invalid signature are rejected (not ingested).
 import json
 import logging
 import hashlib
+import fnmatch
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Union
 
 try:
     from canonical_form import canonical_json as _canonical_form_json
@@ -39,6 +40,11 @@ except ImportError:  # pragma: no cover - package import path
 logger = logging.getLogger("atested.approval_store")
 
 APPROVAL_STORE_VERSION = "0.1"
+DEFAULT_APPROVAL_STORE_FILENAMES = (
+    "approval-store.json",
+    "approval-store.jsonl",
+    "approval-store",
+)
 
 
 def _canonical_json(obj) -> str:
@@ -106,6 +112,7 @@ class ApprovalStore:
 
     def __init__(self, *, require_signatures: bool = False, public_key=None):
         self._approvals: dict[tuple, dict] = {}
+        self._pattern_approvals: list[dict] = []
         self._require_signatures = require_signatures
         self._public_key = public_key
         self._rejected_count = 0
@@ -124,8 +131,7 @@ class ApprovalStore:
                 )
                 return False
 
-        key = self._scope_key(event)
-        self._approvals[key] = {
+        record = {
             "artifact_identity": event["artifact_identity"],
             "approving_operator": event["approving_operator"],
             "governed_family": event["governed_family"],
@@ -134,6 +140,13 @@ class ApprovalStore:
             "event_id": event.get("event_id"),
             "timestamp_utc": event.get("timestamp_utc"),
         }
+        if isinstance(event.get("match"), dict):
+            record["match"] = event["match"]
+            self._pattern_approvals.append(record)
+            return True
+
+        key = self._scope_key(event)
+        self._approvals[key] = record
         return True
 
     def ingest_revocation(self, event: dict) -> bool:
@@ -152,6 +165,10 @@ class ApprovalStore:
 
         key = self._scope_key(event)
         self._approvals.pop(key, None)
+        self._pattern_approvals = [
+            approval for approval in self._pattern_approvals
+            if not self._event_scope_matches_approval(event, approval)
+        ]
         return True
 
     @property
@@ -181,9 +198,74 @@ class ApprovalStore:
         )
         return self._approvals.get(key)
 
+    def lookup_operation(
+        self,
+        tool_name: str,
+        args: Optional[dict],
+        targets: list[str],
+        governed_family: str,
+        deployment_context: str,
+        policy_version: str,
+        *,
+        repo_path: str = "",
+    ) -> Optional[dict]:
+        """Look up an approval for a concrete tool call.
+
+        This preserves the original exact lookup semantics and adds optional
+        pattern entries loaded from a runtime approval-store file. Pattern
+        approvals are still scoped before command/path matching is considered.
+        """
+        exact = self.lookup(tool_name, governed_family, deployment_context, policy_version)
+        if exact:
+            return exact
+        for target in targets:
+            if target:
+                exact = self.lookup(target, governed_family, deployment_context, policy_version)
+                if exact:
+                    return exact
+
+        args = args or {}
+        for approval in self._pattern_approvals:
+            if not self._scope_matches(
+                approval, governed_family, deployment_context, policy_version,
+            ):
+                continue
+            if _operation_matches_pattern(
+                approval.get("match", {}),
+                tool_name,
+                args,
+                targets,
+                repo_path=repo_path,
+            ):
+                return approval
+        return None
+
     def all_approvals(self) -> list[dict]:
         """Return all current approvals (for testing/inspection)."""
-        return list(self._approvals.values())
+        return list(self._approvals.values()) + list(self._pattern_approvals)
+
+    @staticmethod
+    def _scope_matches(
+        approval: dict,
+        governed_family: str,
+        deployment_context: str,
+        policy_version: str,
+    ) -> bool:
+        return (
+            approval.get("governed_family") == governed_family
+            and approval.get("deployment_context") == deployment_context
+            and approval.get("policy_version") == policy_version
+        )
+
+    @staticmethod
+    def _event_scope_matches_approval(event: dict, approval: dict) -> bool:
+        return (
+            _normalize_artifact_identity(event.get("artifact_identity", ""))
+            == _normalize_artifact_identity(approval.get("artifact_identity", ""))
+            and event.get("governed_family") == approval.get("governed_family")
+            and event.get("deployment_context") == approval.get("deployment_context")
+            and event.get("policy_version") == approval.get("policy_version")
+        )
 
     def _scope_key(self, event: dict) -> tuple:
         return (
@@ -192,6 +274,132 @@ class ApprovalStore:
             event["deployment_context"],
             event["policy_version"],
         )
+
+
+def _as_list(value: Any) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _normalize_tool_names(value: Any) -> set[str]:
+    return {str(item).strip().casefold() for item in _as_list(value) if str(item).strip()}
+
+
+def _split_shell_chain(command: str) -> list[str]:
+    """Split simple shell command chains without splitting quoted separators."""
+    segments: list[str] = []
+    current: list[str] = []
+    in_single = False
+    in_double = False
+    i = 0
+    while i < len(command):
+        c = command[i]
+        if c == "'" and not in_double:
+            in_single = not in_single
+        elif c == '"' and not in_single:
+            in_double = not in_double
+        elif c == "\\" and not in_single and i + 1 < len(command):
+            current.append(c)
+            i += 1
+            current.append(command[i])
+            i += 1
+            continue
+        if not in_single and not in_double:
+            if command[i:i + 2] in ("&&", "||"):
+                segment = "".join(current).strip()
+                if segment:
+                    segments.append(segment)
+                current = []
+                i += 2
+                continue
+            if c == ";":
+                segment = "".join(current).strip()
+                if segment:
+                    segments.append(segment)
+                current = []
+                i += 1
+                continue
+        current.append(c)
+        i += 1
+    segment = "".join(current).strip()
+    if segment:
+        segments.append(segment)
+    return segments or [command.strip()]
+
+
+def _target_within_roots(target: str, roots: list[str], *, repo_path: str) -> bool:
+    target_s = str(target or "").strip()
+    if not target_s:
+        return False
+    expanded_roots = []
+    for root in roots:
+        root_s = str(root or "").strip()
+        if root_s == "__GOV_CANONICAL_REPO_PATH__":
+            root_s = repo_path
+        if root_s:
+            expanded_roots.append(str(Path(root_s).expanduser().resolve()))
+    try:
+        target_resolved = str(Path(target_s).expanduser().resolve())
+    except OSError:
+        target_resolved = target_s
+    return any(
+        target_resolved == root or target_resolved.startswith(root.rstrip("/") + "/")
+        for root in expanded_roots
+    )
+
+
+def _cd_segment_allowed(segment: str, *, repo_path: str) -> bool:
+    if not repo_path:
+        return False
+    parts = segment.split()
+    if len(parts) != 2 or parts[0] != "cd":
+        return False
+    return _target_within_roots(parts[1], ["__GOV_CANONICAL_REPO_PATH__"], repo_path=repo_path)
+
+
+def _command_matches(command: str, patterns: list[str], *, repo_path: str) -> bool:
+    if not command or not patterns:
+        return False
+    matched = False
+    for segment in _split_shell_chain(command):
+        if _cd_segment_allowed(segment, repo_path=repo_path):
+            continue
+        if any(fnmatch.fnmatchcase(segment, pattern) for pattern in patterns):
+            matched = True
+            continue
+        return False
+    return matched
+
+
+def _operation_matches_pattern(
+    match: dict,
+    tool_name: str,
+    args: dict,
+    targets: list[str],
+    *,
+    repo_path: str = "",
+) -> bool:
+    tool_names = _normalize_tool_names(match.get("tool_names") or match.get("tool_name"))
+    if tool_names and str(tool_name).strip().casefold() not in tool_names:
+        return False
+
+    command_patterns = [str(p) for p in _as_list(match.get("command_patterns")) if str(p).strip()]
+    if command_patterns:
+        if not _command_matches(str(args.get("command", "")), command_patterns, repo_path=repo_path):
+            return False
+
+    target_roots = [str(p) for p in _as_list(match.get("target_roots")) if str(p).strip()]
+    if target_roots:
+        if not targets:
+            return False
+        if match.get("require_all_targets_within_roots", True):
+            return all(_target_within_roots(t, target_roots, repo_path=repo_path) for t in targets)
+        return any(_target_within_roots(t, target_roots, repo_path=repo_path) for t in targets)
+
+    return bool(tool_names or command_patterns)
 
 
 def load_approval_store_from_events(
@@ -214,6 +422,63 @@ def load_approval_store_from_events(
             store.ingest_approval(event)
         elif event_type == "opaque_artifact_revocation":
             store.ingest_revocation(event)
+    return store
+
+
+def _iter_sidecar_events(path: Path) -> list[dict]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return []
+    if path.suffix == ".jsonl":
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+    payload = json.loads(text)
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        approvals = payload.get("approvals")
+        if isinstance(approvals, list):
+            return approvals
+        if payload.get("event_type") == "opaque_artifact_approval":
+            return [payload]
+    raise ValueError(f"unsupported approval store format: {path}")
+
+
+def load_approval_store_from_file(path: Union[str, Path], store: Optional[ApprovalStore] = None) -> ApprovalStore:
+    """Load file-backed approvals from ``approval-store*.`` sidecars."""
+    approval_store = store or ApprovalStore()
+    for event in _iter_sidecar_events(Path(path)):
+        if event.get("event_type", "opaque_artifact_approval") != "opaque_artifact_approval":
+            continue
+        approval_store.ingest_approval({
+            "event_type": "opaque_artifact_approval",
+            **event,
+        })
+    return approval_store
+
+
+def default_approval_store_paths(chain_path: Union[str, Path]) -> list[Path]:
+    chain = Path(chain_path)
+    runtime = chain.parent.parent if chain.parent.name == "LOGS" else chain.parent
+    return [runtime / name for name in DEFAULT_APPROVAL_STORE_FILENAMES]
+
+
+def load_approval_store_from_runtime(
+    chain_path: Union[str, Path],
+    *,
+    require_signatures: bool = False,
+    public_key=None,
+) -> ApprovalStore:
+    """Load approvals from the chain plus runtime approval-store sidecars."""
+    path = Path(chain_path)
+    if path.exists():
+        store = load_approval_store_from_chain(
+            str(path), require_signatures=require_signatures, public_key=public_key,
+        )
+    else:
+        store = ApprovalStore(require_signatures=require_signatures, public_key=public_key)
+    for sidecar in default_approval_store_paths(path):
+        if sidecar.exists():
+            load_approval_store_from_file(sidecar, store)
     return store
 
 

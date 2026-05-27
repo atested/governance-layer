@@ -761,6 +761,45 @@ function _recordBackLink(ctx) {
   return `<a class="pill" href="${navHref("/activity")}">Back to Activity</a>`;
 }
 
+// QS-060: render cards for two new observation event types so the operator
+// can distinguish "boundary-bypass" records from "proxy saw the request but
+// no tool call needed policy" records.
+function _renderUngovernedRecord(rec) {
+  const opType = rec.operation_type || "";
+  const target = rec.target || "";
+  const source = rec.source || "";
+
+  return `
+    <div class="card record-context">
+      <h3>Boundary Observation</h3>
+      <p class="record-warning">This operation was observed outside the mediation boundary and was not policy-evaluated.</p>
+      <ul class="kv">
+        <li><span>Operation</span><strong class="ungoverned-op">${escapeHtml(opType)}</strong></li>
+        ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
+        ${source ? `<li><span>Source</span><strong>${escapeHtml(source)}</strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+    </div>`;
+}
+
+function _renderProxyObservedRecord(rec) {
+  const opType = rec.operation_type || rec.event_type || "proxy_request";
+  const target = rec.target || rec.path || "";
+  const source = rec.source || "proxy";
+
+  return `
+    <div class="card record-context">
+      <h3>Proxy Observation</h3>
+      <p class="record-warning">This request was examined by the proxy. No tool calls were present in the response — no policy evaluation was needed.</p>
+      <ul class="kv">
+        <li><span>Operation</span><strong class="ungoverned-op">${escapeHtml(opType)}</strong></li>
+        ${target ? `<li><span>Target</span><strong class="mono-cell">${escapeHtml(target)}</strong></li>` : ""}
+        ${source ? `<li><span>Source</span><strong>${escapeHtml(source)}</strong></li>` : ""}
+        <li><span>Recorded</span><strong>${formatTime(rec.timestamp_utc)}</strong></li>
+      </ul>
+    </div>`;
+}
+
 function _renderGovernedRecord(rec) {
   const decision = rec.policy_decision || "unknown";
   const isDeny = decision === "DENY";
@@ -852,7 +891,14 @@ async function renderRecordDetail() {
   const eventType = rec.event_type || null;
 
   let contextCard = "";
-  if (eventType === "opaque_artifact_approval" || eventType === "opaque_artifact_revocation") {
+  // QS-060: route the two new observation event types to dedicated cards
+  // before the approval/verification branches so they don't fall through
+  // to _renderGovernedRecord and misrender as governed-action decisions.
+  if (eventType === "ungoverned_operation_observed") {
+    contextCard = _renderUngovernedRecord(rec);
+  } else if (eventType === "proxy_request_observed") {
+    contextCard = _renderProxyObservedRecord(rec);
+  } else if (eventType === "opaque_artifact_approval" || eventType === "opaque_artifact_revocation") {
     contextCard = _renderApprovalRecord(rec);
   } else if (eventType === "verification_state_transition") {
     contextCard = _renderVerificationRecord(rec);

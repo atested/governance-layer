@@ -56,7 +56,12 @@ from classifier import classify
 from canonical_form import canonical_json as _canonical_form_json
 from env_compat import read_env_preferred  # QS-039 #14: ATESTED_*/GOV_* fallback
 from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash, compute_policy_rules_hash
-from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_chain
+# QS-060 replaces load_approval_store_from_chain with the runtime-aware loader
+# that also reads sidecar approval-store files; the proxy now goes through
+# that loader at line ~493 (_load_approval_store). The legacy
+# from_chain helper is still exported by approval_store for callers that
+# already have a chain path in hand.
+from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_runtime
 from event_model import (
     build_non_action_event,
     is_non_action_event,
@@ -483,10 +488,8 @@ def replace_tool_use_with_denial(
 
 
 def _load_approval_store(chain_path: Path) -> ApprovalStore:
-    """Load the approval store from the governance chain."""
-    if chain_path.exists():
-        return load_approval_store_from_chain(str(chain_path))
-    return ApprovalStore()
+    """Load the approval store from the governance chain and runtime sidecars."""
+    return load_approval_store_from_runtime(str(chain_path))
 
 
 def _governed_family() -> str:
@@ -505,23 +508,22 @@ def _check_approval(
     approval_store: ApprovalStore,
     tool_name: str,
     targets: list[str],
+    args: Optional[dict] = None,
 ) -> Optional[dict]:
     """Check if an operation is approved by tool name or target path."""
     family = _governed_family()
     context = _deployment_context()
     version = _policy_version()
 
-    approval = approval_store.lookup(tool_name, family, context, version)
-    if approval:
-        return approval
-
-    for target in targets:
-        if target:
-            approval = approval_store.lookup(target, family, context, version)
-            if approval:
-                return approval
-
-    return None
+    return approval_store.lookup_operation(
+        tool_name,
+        args or {},
+        targets,
+        family,
+        context,
+        version,
+        repo_path=str(REPO),
+    )
 
 
 def mediate_decision(
@@ -616,7 +618,7 @@ def mediate_decision(
     # Check approval store for denied operations
     if record["policy_decision"] == "DENY" and approval_store is not None:
         targets = classification.get("targets", [])
-        approval = _check_approval(approval_store, tool_name, targets)
+        approval = _check_approval(approval_store, tool_name, targets, args)
         if approval:
             logger.info(
                 "Approval override: %s approved by %s (event %s)",

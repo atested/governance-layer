@@ -185,11 +185,9 @@ def _append_chain_record_atomic(event: dict) -> dict:
 
 
 def _load_approval_store():
-    from approval_store import ApprovalStore, load_approval_store_from_chain
+    from approval_store import load_approval_store_from_runtime
 
-    if CHAIN.exists():
-        return load_approval_store_from_chain(str(CHAIN))
-    return ApprovalStore()
+    return load_approval_store_from_runtime(str(CHAIN))
 
 
 def _load_verification_tracker():
@@ -1237,6 +1235,14 @@ def _remove_shell_profile_entry(profile_path: Path) -> dict:
         text = profile_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {"removed": False, "reason": "profile_not_found"}
+    except OSError as exc:
+        return {
+            "removed": False,
+            "profile": str(profile_path),
+            "profile_display": _profile_display_path(profile_path),
+            "reason": "read_failed",
+            "error": str(exc),
+        }
     lines = text.splitlines(keepends=True)
     new_lines: list[str] = []
     i = 0
@@ -1255,7 +1261,16 @@ def _remove_shell_profile_entry(profile_path: Path) -> dict:
         i += 1
     if not found:
         return {"removed": False, "profile": str(profile_path), "reason": "marker_not_found"}
-    profile_path.write_text("".join(new_lines), encoding="utf-8")
+    try:
+        profile_path.write_text("".join(new_lines), encoding="utf-8")
+    except OSError as exc:
+        return {
+            "removed": False,
+            "profile": str(profile_path),
+            "profile_display": _profile_display_path(profile_path),
+            "reason": "write_failed",
+            "error": str(exc),
+        }
     return {"removed": True, "profile": str(profile_path)}
 
 
