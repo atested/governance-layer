@@ -355,6 +355,9 @@ EVENT_CATEGORIES = frozenset([
     "policy_rules_changed",
     "policy_acknowledged",
     "integrity",
+    # QS-061: operationally relevant startup and disclosure events.
+    "startup",
+    "disclosure",
 ])
 
 _EVENT_TYPE_TO_CATEGORY = {
@@ -368,6 +371,16 @@ _EVENT_TYPE_TO_CATEGORY = {
     "policy_acknowledged": "policy_acknowledged",
     "proxy_request_observed": "integrity",
     "governance_integrity_error": "integrity",
+    # QS-061: surface system events in the Activity view so an operator can
+    # see what the proxy and dashboard recorded at startup. Without these
+    # mappings, the entries returned None from _normalize_activity_entry and
+    # the Activity view looked empty after a fresh start, hiding records
+    # that the operator must be able to inspect.
+    "chain_started_after_archive": "startup",
+    "policy_rules_loaded": "startup",
+    "proxy_startup_code_hash": "startup",
+    "proxy_code_hash_changed": "startup",
+    "disclosure_shown": "disclosure",
 }
 
 
@@ -558,6 +571,202 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "event_id": rec.get("event_id", ""),
             "record_hash": rec.get("record_hash", ""),
             "condition_source": condition_source,
+        }
+
+    elif category == "startup":
+        # QS-061: render the four chain bootstrap events the proxy writes on
+        # every start (and an archive event when the chain was reset). The
+        # detail/summary fields name the artifact the operator must verify,
+        # and the tool_name column carries the human label so the existing
+        # Activity table cells render without further changes.
+        startup_labels = {
+            "chain_started_after_archive": "Chain reset",
+            "policy_rules_loaded": "Policy rules loaded",
+            "proxy_startup_code_hash": "Proxy started",
+            "proxy_code_hash_changed": "Proxy code changed",
+        }
+        et = str(event_type)
+        label = startup_labels.get(et, et)
+        if et == "chain_started_after_archive":
+            summary = (
+                f"Chain reset → archive {rec.get('archive_id', '')}"
+                if rec.get("archive_id") else "Chain reset"
+            )
+            detail = {
+                "tool_name": label,
+                "archive_id": rec.get("archive_id", ""),
+                "archive_reason": rec.get("archive_reason", ""),
+                "archived_record_count": rec.get("archived_record_count", 0),
+                "archive_chain_path": rec.get("archive_chain_path", ""),
+                "archive_manifest_path": rec.get("archive_manifest_path", ""),
+                "target": rec.get("archive_id", ""),
+                "status": "chain_reset",
+            }
+        elif et == "policy_rules_loaded":
+            policy_hash = rec.get("current_policy_rules_hash", "")
+            summary = f"Policy rules loaded ({policy_hash[:23] if policy_hash else 'unknown'})"
+            detail = {
+                "tool_name": label,
+                "current_policy_rules_hash": policy_hash,
+                "policy_rules_hash": rec.get("policy_rules_hash", ""),
+                "capability_registry_hash": rec.get("capability_registry_hash", ""),
+                "policy_path": rec.get("policy_path", ""),
+                "target": policy_hash,
+                "status": "loaded",
+            }
+        elif et == "proxy_startup_code_hash":
+            code_hash = rec.get("current_proxy_code_hash", "")
+            summary = f"Proxy started (code {code_hash[:23] if code_hash else 'unknown'})"
+            detail = {
+                "tool_name": label,
+                "current_proxy_code_hash": code_hash,
+                "metadata_hash": rec.get("metadata_hash", ""),
+                "product_version": rec.get("product_version", ""),
+                "code_paths": rec.get("code_paths", []),
+                "target": code_hash,
+                "status": "started",
+            }
+        elif et == "proxy_code_hash_changed":
+            current = rec.get("current_proxy_code_hash", "")
+            previous = rec.get("previous_proxy_code_hash", "")
+            summary = (
+                f"Proxy code changed ({previous[:14]}… → {current[:14]}…)"
+                if previous and current else "Proxy code changed"
+            )
+            detail = {
+                "tool_name": label,
+                "previous_proxy_code_hash": previous,
+                "current_proxy_code_hash": current,
+                "code_paths": rec.get("code_paths", []),
+                "target": current,
+                "status": "changed",
+            }
+        else:
+            summary = label
+            detail = {"tool_name": label, "status": "startup_event"}
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "disclosure":
+        # QS-061: the dashboard records disclosure_shown when an operator
+        # acknowledges the disclosure modal. It is operationally relevant
+        # because the chain proves the operator saw the disclosure before
+        # proceeding.
+        governed_family = rec.get("governed_family", "")
+        operator = rec.get("operator", "")
+        summary = f"Disclosure acknowledged by {operator or 'operator'}"
+        detail = {
+            "tool_name": "Disclosure acknowledged",
+            "operator": operator,
+            "deployment_context": rec.get("deployment_context", ""),
+            "policy_version": rec.get("policy_version", ""),
+            "governed_family": governed_family,
+            "target": governed_family,
+            "status": "acknowledged",
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "startup":
+        # QS-061: render the four chain bootstrap events the proxy writes on
+        # every start (and an archive event when the chain was reset). The
+        # detail/summary fields name the artifact the operator must verify,
+        # and the tool_name column carries the human label so the existing
+        # Activity table cells render without further changes.
+        startup_labels = {
+            "chain_started_after_archive": "Chain reset",
+            "policy_rules_loaded": "Policy rules loaded",
+            "proxy_startup_code_hash": "Proxy started",
+            "proxy_code_hash_changed": "Proxy code changed",
+        }
+        et = str(event_type)
+        label = startup_labels.get(et, et)
+        if et == "chain_started_after_archive":
+            summary = (
+                f"Chain reset → archive {rec.get('archive_id', '')}"
+                if rec.get("archive_id") else "Chain reset"
+            )
+            detail = {
+                "tool_name": label,
+                "archive_id": rec.get("archive_id", ""),
+                "archive_reason": rec.get("archive_reason", ""),
+                "archived_record_count": rec.get("archived_record_count", 0),
+                "archive_chain_path": rec.get("archive_chain_path", ""),
+                "archive_manifest_path": rec.get("archive_manifest_path", ""),
+                "target": rec.get("archive_id", ""),
+                "status": "chain_reset",
+            }
+        elif et == "policy_rules_loaded":
+            policy_hash = rec.get("current_policy_rules_hash", "")
+            summary = f"Policy rules loaded ({policy_hash[:23] if policy_hash else 'unknown'})"
+            detail = {
+                "tool_name": label,
+                "current_policy_rules_hash": policy_hash,
+                "policy_rules_hash": rec.get("policy_rules_hash", ""),
+                "capability_registry_hash": rec.get("capability_registry_hash", ""),
+                "policy_path": rec.get("policy_path", ""),
+                "target": policy_hash,
+                "status": "loaded",
+            }
+        elif et == "proxy_startup_code_hash":
+            code_hash = rec.get("current_proxy_code_hash", "")
+            summary = f"Proxy started (code {code_hash[:23] if code_hash else 'unknown'})"
+            detail = {
+                "tool_name": label,
+                "current_proxy_code_hash": code_hash,
+                "metadata_hash": rec.get("metadata_hash", ""),
+                "product_version": rec.get("product_version", ""),
+                "code_paths": rec.get("code_paths", []),
+                "target": code_hash,
+                "status": "started",
+            }
+        elif et == "proxy_code_hash_changed":
+            current = rec.get("current_proxy_code_hash", "")
+            previous = rec.get("previous_proxy_code_hash", "")
+            summary = (
+                f"Proxy code changed ({previous[:14]}… → {current[:14]}…)"
+                if previous and current else "Proxy code changed"
+            )
+            detail = {
+                "tool_name": label,
+                "previous_proxy_code_hash": previous,
+                "current_proxy_code_hash": current,
+                "code_paths": rec.get("code_paths", []),
+                "target": current,
+                "status": "changed",
+            }
+        else:
+            summary = label
+            detail = {"tool_name": label, "status": "startup_event"}
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
+        }
+
+    elif category == "disclosure":
+        # QS-061: the dashboard records disclosure_shown when an operator
+        # acknowledges the disclosure modal. It is operationally relevant
+        # because the chain proves the operator saw the disclosure before
+        # proceeding.
+        governed_family = rec.get("governed_family", "")
+        operator = rec.get("operator", "")
+        summary = f"Disclosure acknowledged by {operator or 'operator'}"
+        detail = {
+            "tool_name": "Disclosure acknowledged",
+            "operator": operator,
+            "deployment_context": rec.get("deployment_context", ""),
+            "policy_version": rec.get("policy_version", ""),
+            "governed_family": governed_family,
+            "target": governed_family,
+            "status": "acknowledged",
+        }
+        evidence = {
+            "event_id": rec.get("event_id", ""),
+            "record_hash": rec.get("record_hash", ""),
         }
 
     entry = {

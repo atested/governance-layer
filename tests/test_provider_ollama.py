@@ -372,5 +372,122 @@ class TestOllamaStreamingCollector(unittest.TestCase):
         self.assertIsInstance(collector, OpenAIStreamingCollector)
 
 
+# ---------------------------------------------------------------------------
+# QS-061: per-provider timeout end-to-end
+# ---------------------------------------------------------------------------
+
+
+class TestOllamaTimeoutWiring(unittest.TestCase):
+    """Verify Ollama traffic goes through with the configured timeout AND
+    that the proxy records a governed chain entry tagged provider=ollama.
+
+    Spinning up a live Ollama is out of scope for this sandboxed test, so we
+    swap httpx.AsyncClient for a fake that returns a non-streaming Ollama
+    response. The fake records the timeout it was constructed with so the
+    test can assert provider_timeout_seconds() actually reached the client.
+    """
+
+    def test_non_streaming_uses_per_provider_timeout_and_records_provider(self):
+        import asyncio
+        import importlib
+        import json as _json
+
+        proxy_server = importlib.import_module("proxy.server")
+
+        captured = {"timeout": None, "url": None, "chain_records": []}
+
+        class _FakeResponse:
+            status_code = 200
+            content = _json.dumps({
+                "model": "llama3:8b",
+                "message": {"role": "assistant", "content": "hello"},
+                "done": True,
+            }).encode()
+            headers = {"content-type": "application/json"}
+
+            async def aread(self):
+                return self.content
+
+        class _FakeClient:
+            def __init__(self, timeout=None, **kw):
+                captured["timeout"] = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def request(self, method, url, headers=None, content=None):
+                captured["url"] = url
+                return _FakeResponse()
+
+        class _FakeChainRecorder:
+            def append_atomic(self, record):
+                captured["chain_records"].append(record)
+
+        # Build the GovernanceProxy with a fake recorder + an Ollama upstream.
+        proxy = proxy_server.GovernanceProxy(
+            upstream_base="https://api.anthropic.com",
+            policy={"rules": [], "default_decision": "ALLOW", "default_reason": "ok"},
+            chain_recorder=_FakeChainRecorder(),
+            session_id="test-session",
+            user_identity="test-operator",
+            provider_config={
+                "ollama_upstream": "http://localhost:11434",
+                # Custom timeout — must flow through to the http client.
+                "ollama_timeout_seconds": 420.0,
+            },
+        )
+
+        from proxy.providers.ollama import OllamaProvider
+        provider = OllamaProvider()
+
+        async def _drive():
+            # Patch httpx.AsyncClient inside proxy.server for the duration.
+            original = proxy_server.httpx.AsyncClient
+            proxy_server.httpx.AsyncClient = _FakeClient
+            try:
+                status, headers, body = await proxy._handle_non_streaming_provider(
+                    url="http://localhost:11434/api/chat",
+                    method="POST",
+                    headers={"content-type": "application/json"},
+                    body=b'{"model":"llama3:8b","messages":[{"role":"user","content":"hi"}]}',
+                    is_tool_ep=True,
+                    provider=provider,
+                )
+            finally:
+                proxy_server.httpx.AsyncClient = original
+            return status, body
+
+        status, body = asyncio.run(_drive())
+
+        # The upstream call must go to the Ollama URL with the per-provider
+        # timeout (300s default, 420s here).
+        self.assertEqual(captured["url"], "http://localhost:11434/api/chat")
+        self.assertEqual(captured["timeout"], 420.0)
+        # The proxy must record at least one governed entry tagged ollama.
+        providers = {r.get("provider") for r in captured["chain_records"]}
+        self.assertIn("ollama", providers,
+                      f"expected provider=ollama in chain records, got providers={providers}")
+        # And the response must come back to the caller unchanged because the
+        # mock response has no tool calls — Ollama answers the user directly.
+        self.assertEqual(status, 200)
+        parsed = _json.loads(body)
+        self.assertEqual(parsed["message"]["content"], "hello")
+
+    def test_default_ollama_timeout_when_unset(self):
+        """If no override is provided in provider_config, fall back to 300s."""
+        from proxy.server import (
+            provider_timeout_seconds,
+            DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            provider_timeout_seconds("ollama", {}),
+            DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(DEFAULT_OLLAMA_TIMEOUT_SECONDS, 300.0)
+
+
 if __name__ == "__main__":
     unittest.main()

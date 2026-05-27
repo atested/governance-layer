@@ -2385,6 +2385,248 @@ def cmd_restore_verify(args) -> int:
     return 0 if result.get("restore_runtime_valid") else 1
 
 
+CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
+TIER3_RULE_ID = "tier3-approval-required"
+TIER3_PRODUCTION_REASON = (
+    "Opaque execution requires operator approval before running. "
+    "Approve once via 'atested approve <artifact_identity>' to permit "
+    "matching operations."
+)
+
+
+def _read_json_text(path: Path) -> tuple[str, dict]:
+    """Read a JSON file and return its raw text and parsed contents.
+
+    The raw text is preserved so we can detect mid-edit changes via a
+    fingerprint comparison before swapping the file.
+    """
+    raw = path.read_text(encoding="utf-8")
+    return raw, json.loads(raw)
+
+
+def _write_json_atomic(path: Path, data: dict) -> None:
+    """Atomic JSON write — temp file in the same directory + os.replace.
+
+    Same pattern as scripts/process_supervisor.py::write_json_atomic, repeated
+    here to avoid importing the supervisor only for this helper.
+    """
+    import tempfile as _tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = _tempfile.mkstemp(
+        dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(data, indent=2, sort_keys=False, ensure_ascii=False) + "\n")
+        os.replace(tmp_name, str(path))
+    except BaseException:
+        try:
+            Path(tmp_name).unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _find_tier3_rule_index(policy: dict) -> int:
+    """Return the index of the tier3-approval-required rule, or -1."""
+    rules = policy.get("rules", [])
+    for idx, rule in enumerate(rules):
+        if isinstance(rule, dict) and rule.get("id") == TIER3_RULE_ID:
+            return idx
+    return -1
+
+
+def cmd_production(args) -> int:
+    """Switch governance posture to production atomically.
+
+    Two coordinated changes:
+      1. capabilities/policy-rules.json — tier3-approval-required.decision = DENY.
+      2. capabilities/capability-registry.json — governance_posture.mode = production.
+
+    "Atomic" here means: validate both files first, build both new payloads in
+    memory, then call os.replace() on each. A failure between the two renames
+    would leave the system in a mixed state, so the validate-then-write order
+    minimises the window. If the second rename fails, the function logs the
+    inconsistency and exits non-zero so the operator can re-run to converge.
+
+    QS-061: this command is the mechanism only. The operator runs it after
+    verifying the approval store rebuild (QS-060) has succeeded. The default
+    requires --confirm (or an interactive y/N) because flipping to production
+    DENIES every tier-3 operation that lacks an approval record.
+    """
+    result: dict = {
+        "switched": False,
+        "policy_path": str(POLICY_RULES_PATH),
+        "registry_path": str(CAP_REGISTRY_PATH),
+        "changes": {},
+    }
+
+    # --- Read both files ---
+    try:
+        policy_raw, policy = _read_json_text(POLICY_RULES_PATH)
+    except (OSError, json.JSONDecodeError) as exc:
+        result["error"] = f"policy_rules_unreadable: {exc}"
+        _emit(args, result)
+        return 1
+    try:
+        registry_raw, registry = _read_json_text(CAP_REGISTRY_PATH)
+    except (OSError, json.JSONDecodeError) as exc:
+        result["error"] = f"capability_registry_unreadable: {exc}"
+        _emit(args, result)
+        return 1
+
+    # --- Validate tier3 rule presence and capture current state ---
+    tier3_idx = _find_tier3_rule_index(policy)
+    if tier3_idx < 0:
+        result["error"] = f"tier3_rule_missing: no rule with id={TIER3_RULE_ID!r}"
+        _emit(args, result)
+        return 1
+    current_tier3 = policy["rules"][tier3_idx]
+    current_tier3_decision = current_tier3.get("decision", "")
+    current_tier3_reason = current_tier3.get("reason", "")
+
+    # --- Validate registry shape and capture current mode ---
+    posture = registry.get("governance_posture")
+    if not isinstance(posture, dict):
+        result["error"] = "governance_posture_missing_or_invalid"
+        _emit(args, result)
+        return 1
+    current_mode = posture.get("mode", "")
+    allowed_modes = posture.get("allowed_modes") or []
+    if "production" not in allowed_modes:
+        result["error"] = (
+            f"production_mode_not_allowed: governance_posture.allowed_modes={allowed_modes!r}"
+        )
+        _emit(args, result)
+        return 1
+
+    # --- Compute new payloads ---
+    new_policy = json.loads(policy_raw)  # fresh deep copy
+    new_policy["rules"][tier3_idx]["decision"] = "DENY"
+    new_policy["rules"][tier3_idx]["reason"] = TIER3_PRODUCTION_REASON
+
+    new_registry = json.loads(registry_raw)  # fresh deep copy
+    new_registry["governance_posture"]["mode"] = "production"
+
+    result["changes"] = {
+        "policy_rules.tier3_decision": {
+            "from": current_tier3_decision,
+            "to": "DENY",
+        },
+        "policy_rules.tier3_reason": {
+            "from": current_tier3_reason,
+            "to": TIER3_PRODUCTION_REASON,
+        },
+        "capability_registry.governance_posture.mode": {
+            "from": current_mode,
+            "to": "production",
+        },
+    }
+
+    already_production = (
+        current_mode == "production"
+        and current_tier3_decision == "DENY"
+    )
+    if already_production:
+        result["already_production"] = True
+        result["switched"] = False
+        result["message"] = "System is already in production mode; no changes made."
+        _emit(args, result)
+        return 0
+
+    # --- Dry run short-circuit ---
+    if getattr(args, "dry_run", False):
+        result["dry_run"] = True
+        result["message"] = "Dry run — no files modified."
+        _emit(args, result)
+        return 0
+
+    # --- Confirmation ---
+    if not getattr(args, "confirm", False):
+        if not sys.stdin.isatty():
+            result["error"] = "non_interactive_requires_confirm"
+            result["message"] = (
+                "Refusing to switch to production without --confirm in a "
+                "non-interactive shell."
+            )
+            _emit(args, result)
+            return 1
+        print("This will switch governance posture to production:")
+        print(f"  policy_rules.json   {TIER3_RULE_ID}.decision: "
+              f"{current_tier3_decision} → DENY")
+        print(f"  capability-registry.json   governance_posture.mode: "
+              f"{current_mode} → production")
+        print(
+            "After this change every tier-3 operation will be denied unless it "
+            "has a current approval in the approval store."
+        )
+        answer = input("Proceed? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            result["error"] = "operator_cancelled"
+            _emit(args, result)
+            return 1
+
+    # --- Re-check files have not drifted since we read them. ---
+    # If another writer touched either file between our read and our write we
+    # abort instead of clobbering their change. The operator can re-run.
+    try:
+        latest_policy_raw = POLICY_RULES_PATH.read_text(encoding="utf-8")
+        latest_registry_raw = CAP_REGISTRY_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        result["error"] = f"recheck_failed: {exc}"
+        _emit(args, result)
+        return 1
+    if latest_policy_raw != policy_raw or latest_registry_raw != registry_raw:
+        result["error"] = "concurrent_modification_detected"
+        result["message"] = (
+            "policy-rules.json or capability-registry.json changed during "
+            "this command. No files were written. Re-run to retry."
+        )
+        _emit(args, result)
+        return 1
+
+    # --- Atomic writes ---
+    try:
+        _write_json_atomic(POLICY_RULES_PATH, new_policy)
+    except OSError as exc:
+        result["error"] = f"policy_rules_write_failed: {exc}"
+        _emit(args, result)
+        return 1
+    try:
+        _write_json_atomic(CAP_REGISTRY_PATH, new_registry)
+    except OSError as exc:
+        # Best-effort rollback of the policy file so the system is not left
+        # in a half-switched state. If rollback also fails, surface both.
+        rollback_error = ""
+        try:
+            POLICY_RULES_PATH.write_text(policy_raw, encoding="utf-8")
+        except OSError as rollback_exc:
+            rollback_error = str(rollback_exc)
+        result["error"] = f"capability_registry_write_failed: {exc}"
+        if rollback_error:
+            result["rollback_error"] = rollback_error
+            result["message"] = (
+                "policy-rules.json was switched to DENY but capability-registry.json "
+                "could not be written, AND the rollback also failed. Manual "
+                "intervention required."
+            )
+        else:
+            result["message"] = (
+                "policy-rules.json change was rolled back after the registry "
+                "write failed."
+            )
+        _emit(args, result)
+        return 1
+
+    result["switched"] = True
+    result["message"] = (
+        "Governance posture switched to production. Restart the proxy and "
+        "quality service so they pick up the new policy/registry hashes."
+    )
+    _emit(args, result)
+    return 0
+
+
 def cmd_uninstall(args) -> int:
     """Remove Atested from this machine."""
     import shutil as _shutil
@@ -2636,6 +2878,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore_verify = restore_sub.add_parser("verify", help="Validate a restored primary gov_runtime")
     p_restore_verify.add_argument("--runtime", default=None, help="Runtime directory to validate (default: configured gov_runtime)")
     p_restore_verify.set_defaults(func=cmd_restore_verify)
+
+    p_production = sub.add_parser(
+        "production",
+        help=(
+            "Switch governance posture to production atomically "
+            "(tier3-approval-required → DENY, governance_posture.mode → production)"
+        ),
+    )
+    p_production.add_argument(
+        "--confirm", action="store_true",
+        help="Apply the switch without an interactive prompt",
+    )
+    p_production.add_argument(
+        "--dry-run", action="store_true",
+        help="Show the diff without modifying any files",
+    )
+    p_production.set_defaults(func=cmd_production)
 
     p_uninstall = sub.add_parser("uninstall", help="Remove Atested from this machine")
     p_uninstall.add_argument("--keep-runtime", action="store_true",

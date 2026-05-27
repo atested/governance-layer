@@ -1135,6 +1135,275 @@ def test_provider_routing_status_ollama_bypass_detected():
     print("PASS: test_provider_routing_status_ollama_bypass_detected")
 
 
+# ---------------------------------------------------------------------------
+# QS-061: atested production command tests
+# ---------------------------------------------------------------------------
+
+
+def _setup_capabilities_in(tmp: str, *, tier3_decision: str = "ALLOW",
+                            mode: str = "developer") -> Path:
+    """Build a temp capabilities/ directory mirroring the real one.
+
+    The cmd_production tests rewrite atested_cli.POLICY_RULES_PATH and
+    atested_cli.CAP_REGISTRY_PATH so each test gets isolated fixtures.
+    """
+    src_caps = REPO / "capabilities"
+    dst_caps = Path(tmp) / "capabilities"
+    dst_caps.mkdir()
+    policy = json.loads((src_caps / "policy-rules.json").read_text(encoding="utf-8"))
+    for rule in policy.get("rules", []):
+        if isinstance(rule, dict) and rule.get("id") == atested_cli.TIER3_RULE_ID:
+            rule["decision"] = tier3_decision
+            break
+    (dst_caps / "policy-rules.json").write_text(
+        json.dumps(policy, indent=2), encoding="utf-8")
+    registry = json.loads((src_caps / "capability-registry.json").read_text(encoding="utf-8"))
+    registry["governance_posture"]["mode"] = mode
+    (dst_caps / "capability-registry.json").write_text(
+        json.dumps(registry, indent=2), encoding="utf-8")
+    return dst_caps
+
+
+def _patch_capabilities_paths(dst_caps: Path):
+    """Point atested_cli at the temp capabilities/ dir, returning a restore fn."""
+    saved = (atested_cli.POLICY_RULES_PATH, atested_cli.CAP_REGISTRY_PATH)
+    atested_cli.POLICY_RULES_PATH = dst_caps / "policy-rules.json"
+    atested_cli.CAP_REGISTRY_PATH = dst_caps / "capability-registry.json"
+    def _restore():
+        atested_cli.POLICY_RULES_PATH, atested_cli.CAP_REGISTRY_PATH = saved
+    return _restore
+
+
+class _ProductionArgs:
+    def __init__(self, **kw):
+        self.json = True
+        self.confirm = kw.get("confirm", False)
+        self.dry_run = kw.get("dry_run", False)
+
+
+def test_production_help():
+    """`atested production --help` exits 0 and advertises the two flags."""
+    rc, out, err = _run_cli(["production", "--help"])
+    assert rc == 0, f"stderr: {err}"
+    assert "--confirm" in out
+    assert "--dry-run" in out
+    print("PASS: test_production_help")
+
+
+def test_production_dry_run_no_writes():
+    """--dry-run reports the diff but leaves both files byte-identical."""
+    import io, contextlib
+    with tempfile.TemporaryDirectory() as tmp:
+        dst = _setup_capabilities_in(tmp)
+        restore = _patch_capabilities_paths(dst)
+        try:
+            policy_before = (dst / "policy-rules.json").read_bytes()
+            registry_before = (dst / "capability-registry.json").read_bytes()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = atested_cli.cmd_production(_ProductionArgs(dry_run=True))
+            assert rc == 0, buf.getvalue()
+            data = json.loads(buf.getvalue())
+            assert data["dry_run"] is True
+            assert data["switched"] is False
+            assert (dst / "policy-rules.json").read_bytes() == policy_before
+            assert (dst / "capability-registry.json").read_bytes() == registry_before
+            change = data["changes"]["policy_rules.tier3_decision"]
+            assert change == {"from": "ALLOW", "to": "DENY"}
+        finally:
+            restore()
+    print("PASS: test_production_dry_run_no_writes")
+
+
+def test_production_switch_with_confirm():
+    """--confirm rewrites both files; tier3 → DENY and mode → production."""
+    import io, contextlib
+    with tempfile.TemporaryDirectory() as tmp:
+        dst = _setup_capabilities_in(tmp)
+        restore = _patch_capabilities_paths(dst)
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = atested_cli.cmd_production(_ProductionArgs(confirm=True))
+            assert rc == 0, buf.getvalue()
+            data = json.loads(buf.getvalue())
+            assert data["switched"] is True
+            policy = json.loads((dst / "policy-rules.json").read_text(encoding="utf-8"))
+            idx = atested_cli._find_tier3_rule_index(policy)
+            assert policy["rules"][idx]["decision"] == "DENY"
+            assert "operator approval" in policy["rules"][idx]["reason"]
+            registry = json.loads((dst / "capability-registry.json").read_text(encoding="utf-8"))
+            assert registry["governance_posture"]["mode"] == "production"
+        finally:
+            restore()
+    print("PASS: test_production_switch_with_confirm")
+
+
+def test_production_idempotent_when_already_production():
+    """Re-running on an already-production system is a no-op success."""
+    import io, contextlib
+    with tempfile.TemporaryDirectory() as tmp:
+        dst = _setup_capabilities_in(tmp, tier3_decision="DENY", mode="production")
+        restore = _patch_capabilities_paths(dst)
+        try:
+            policy_before = (dst / "policy-rules.json").read_bytes()
+            registry_before = (dst / "capability-registry.json").read_bytes()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = atested_cli.cmd_production(_ProductionArgs(confirm=True))
+            assert rc == 0
+            data = json.loads(buf.getvalue())
+            assert data["already_production"] is True
+            assert data["switched"] is False
+            # No writes happened.
+            assert (dst / "policy-rules.json").read_bytes() == policy_before
+            assert (dst / "capability-registry.json").read_bytes() == registry_before
+        finally:
+            restore()
+    print("PASS: test_production_idempotent_when_already_production")
+
+
+def test_production_non_interactive_requires_confirm():
+    """Without --confirm and without a TTY, the command refuses to proceed."""
+    import io, contextlib
+    # The subprocess path runs without a TTY, so this mirrors the real CLI.
+    rc, out, err = _run_cli(["production"])
+    # In a non-interactive run, the command should exit non-zero with a
+    # structured error and NOT touch the repository's files.
+    assert rc == 1, f"expected exit 1, got {rc}: {out} {err}"
+    payload = json.loads(out)
+    assert payload["switched"] is False
+    assert payload.get("error") == "non_interactive_requires_confirm"
+    print("PASS: test_production_non_interactive_requires_confirm")
+
+
+def test_production_detects_concurrent_modification():
+    """A racing write between read and apply aborts the switch without writing."""
+    import io, contextlib
+    with tempfile.TemporaryDirectory() as tmp:
+        dst = _setup_capabilities_in(tmp)
+        restore = _patch_capabilities_paths(dst)
+        try:
+            orig_read = atested_cli._read_json_text
+            calls = {"n": 0}
+            def racy_read(path):
+                calls["n"] += 1
+                txt, data = orig_read(path)
+                if calls["n"] == 2:  # right after we read the second file
+                    with open(atested_cli.POLICY_RULES_PATH, "a") as fh:
+                        fh.write(" ")
+                return txt, data
+            atested_cli._read_json_text = racy_read
+            try:
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = atested_cli.cmd_production(_ProductionArgs(confirm=True))
+            finally:
+                atested_cli._read_json_text = orig_read
+            assert rc == 1
+            payload = json.loads(buf.getvalue())
+            assert payload["error"] == "concurrent_modification_detected"
+        finally:
+            restore()
+    print("PASS: test_production_detects_concurrent_modification")
+
+
+# ---------------------------------------------------------------------------
+# QS-061: activity readout — system events appear in the projection
+# ---------------------------------------------------------------------------
+
+
+def test_activity_view_surfaces_system_events():
+    """The four startup events and disclosure_shown become activity entries."""
+    from readout import _normalize_activity_entry, _EVENT_TYPE_TO_CATEGORY
+
+    samples = [
+        ("chain_started_after_archive", "startup", {
+            "archive_id": "chain-archive-X",
+            "archive_reason": "startup_integrity_violation",
+            "archived_record_count": 0,
+        }),
+        ("policy_rules_loaded", "startup", {
+            "current_policy_rules_hash": "sha256:abc",
+            "policy_rules_hash": "sha256:def",
+        }),
+        ("proxy_startup_code_hash", "startup", {
+            "current_proxy_code_hash": "sha256:ccc",
+            "product_version": "1.0.0",
+        }),
+        ("proxy_code_hash_changed", "startup", {
+            "previous_proxy_code_hash": "sha256:old",
+            "current_proxy_code_hash": "sha256:new",
+        }),
+        ("disclosure_shown", "disclosure", {
+            "operator": "dashboard_operator",
+            "governed_family": "mcp_tools_v1",
+        }),
+    ]
+    for event_type, expected_category, extra in samples:
+        record = {
+            "event_type": event_type,
+            "event_id": "evt-1",
+            "event_timestamp_utc": "2026-05-26T10:00:00Z",
+            "record_hash": "sha256:rec",
+        }
+        record.update(extra)
+        entry = _normalize_activity_entry(record, sequence_position=1)
+        assert entry is not None, f"{event_type} normalized to None"
+        assert entry["event_category"] == expected_category, (
+            f"{event_type}: expected category {expected_category}, "
+            f"got {entry['event_category']}"
+        )
+        assert entry["summary"], f"{event_type}: empty summary"
+        assert entry["detail"].get("tool_name"), (
+            f"{event_type}: missing tool_name label for table rendering"
+        )
+        assert _EVENT_TYPE_TO_CATEGORY[event_type] == expected_category
+    print("PASS: test_activity_view_surfaces_system_events")
+
+
+# ---------------------------------------------------------------------------
+# QS-061: per-provider httpx timeout selection
+# ---------------------------------------------------------------------------
+
+
+def test_provider_timeout_seconds():
+    """Ollama gets 300s by default and respects ollama_timeout_seconds overrides."""
+    from proxy.server import (
+        provider_timeout_seconds,
+        DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    )
+    assert provider_timeout_seconds("ollama", {}) == DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    assert provider_timeout_seconds("ollama", {"ollama_timeout_seconds": 600}) == 600.0
+    assert provider_timeout_seconds("ollama", {"ollama_timeout_seconds": "450"}) == 450.0
+    # Invalid / non-positive falls back to the default Ollama value.
+    assert provider_timeout_seconds("ollama", {"ollama_timeout_seconds": "abc"}) == DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    assert provider_timeout_seconds("ollama", {"ollama_timeout_seconds": 0}) == DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    assert provider_timeout_seconds("ollama", {"ollama_timeout_seconds": -1}) == DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    # Non-Ollama providers always get the cloud default and ignore the Ollama
+    # override key so a generous Ollama timeout does not slow cloud calls.
+    assert provider_timeout_seconds("anthropic", {"ollama_timeout_seconds": 999}) == DEFAULT_PROVIDER_TIMEOUT_SECONDS
+    assert provider_timeout_seconds("openai", {}) == DEFAULT_PROVIDER_TIMEOUT_SECONDS
+    assert provider_timeout_seconds(None, None) == DEFAULT_PROVIDER_TIMEOUT_SECONDS
+    print("PASS: test_provider_timeout_seconds")
+
+
+def test_proxy_cli_accepts_ollama_timeout_flag_and_env():
+    """--ollama-timeout flag and OLLAMA_TIMEOUT env var both populate args.ollama_timeout."""
+    # Re-import in a way that doesn't run main(). build_parser is private — go
+    # through argparse directly by invoking the proxy module's parser-building
+    # code via -m proxy --help is too slow; instead spawn the help and parse.
+    rc = subprocess.run(
+        [sys.executable, "-m", "proxy", "--help"],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    assert rc.returncode == 0, rc.stderr
+    assert "--ollama-timeout" in rc.stdout
+    assert "OLLAMA_TIMEOUT" in rc.stdout
+    print("PASS: test_proxy_cli_accepts_ollama_timeout_flag_and_env")
+
+
 def main():
     test_help()
     test_policy_list()
@@ -1146,6 +1415,16 @@ def main():
     test_status_command()
     test_activity_command()
     test_wrapper_script_executable()
+    # QS-061
+    test_production_help()
+    test_production_dry_run_no_writes()
+    test_production_switch_with_confirm()
+    test_production_idempotent_when_already_production()
+    test_production_non_interactive_requires_confirm()
+    test_production_detects_concurrent_modification()
+    test_activity_view_surfaces_system_events()
+    test_provider_timeout_seconds()
+    test_proxy_cli_accepts_ollama_timeout_flag_and_env()
     print("\nAll atested CLI tests passed.")
 
 

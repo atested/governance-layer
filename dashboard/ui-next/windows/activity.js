@@ -232,6 +232,10 @@ function _buildUI(state) {
                 <option value="verification_transition">Verification</option>
                 <option value="opaque_approval">Approval</option>
                 <option value="opaque_revocation">Revocation</option>
+                <option value="policy_rules_changed">Policy change</option>
+                <option value="integrity">Integrity</option>
+                <option value="startup">Startup</option>
+                <option value="disclosure">Disclosure</option>
               </select>
             </label>
             <label class="aw-fp-label">
@@ -813,6 +817,16 @@ const _EVENT_LABELS = {
   opaque_approval: 'Approval',
   opaque_revocation: 'Revocation',
   policy_rules_changed: 'Policy Change',
+  policy_acknowledged: 'Policy Ack',
+  // QS-061: label the startup, integrity, and disclosure rows the operator
+  // expects to see in Activity after a fresh start. Without these labels
+  // the event_category column rendered the raw category string.
+  startup: 'Startup',
+  integrity: 'Integrity',
+  disclosure: 'Disclosure',
+  usage_attestation: 'Attestation',
+  remote_chain_import: 'Sync',
+  opaque_invocation_decision: 'Opaque Call',
 };
 
 function _rowTooltip(entry, detail) {

@@ -173,6 +173,68 @@ CAP_REGISTRY_PATH = REPO / "capabilities" / "capability-registry.json"
 MAX_REQUEST_BODY_BYTES = int(os.environ.get("ATESTED_MAX_REQUEST_BODY_BYTES", 10 * 1024 * 1024))
 _WEBSOCKET_MAX_FRAME_BYTES = MAX_REQUEST_BODY_BYTES
 
+# QS-061: per-provider upstream timeouts. Cloud APIs answer in well under
+# the 120s default, but local Ollama inference on a CPU-only host can take
+# minutes for the first token (model load + cold cache). A single 120s
+# timeout silently failed those requests with no governed record produced.
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 120.0
+DEFAULT_OLLAMA_TIMEOUT_SECONDS = 300.0
+
+
+def provider_timeout_seconds(
+    provider_name: Optional[str],
+    provider_config: Optional[dict],
+) -> float:
+    """Return the httpx timeout (seconds) to use for a given provider.
+
+    Falls back to ``DEFAULT_PROVIDER_TIMEOUT_SECONDS`` when no provider is
+    given, when the provider has no override, or when the configured value
+    is unparseable. Only Ollama currently has a provider-specific default
+    because it is the only upstream that routinely exceeds 120 seconds.
+    """
+    config = provider_config or {}
+    if provider_name == "ollama":
+        raw = config.get("ollama_timeout_seconds")
+        if raw is None:
+            return DEFAULT_OLLAMA_TIMEOUT_SECONDS
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return DEFAULT_OLLAMA_TIMEOUT_SECONDS
+        return value if value > 0 else DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    return DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+# QS-061: per-provider upstream timeouts. Cloud APIs answer in well under
+# the 120s default, but local Ollama inference on a CPU-only host can take
+# minutes for the first token (model load + cold cache). A single 120s
+# timeout silently failed those requests with no governed record produced.
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 120.0
+DEFAULT_OLLAMA_TIMEOUT_SECONDS = 300.0
+
+
+def provider_timeout_seconds(
+    provider_name: Optional[str],
+    provider_config: Optional[dict],
+) -> float:
+    """Return the httpx timeout (seconds) to use for a given provider.
+
+    Falls back to ``DEFAULT_PROVIDER_TIMEOUT_SECONDS`` when no provider is
+    given, when the provider has no override, or when the configured value
+    is unparseable. Only Ollama currently has a provider-specific default
+    because it is the only upstream that routinely exceeds 120 seconds.
+    """
+    config = provider_config or {}
+    if provider_name == "ollama":
+        raw = config.get("ollama_timeout_seconds")
+        if raw is None:
+            return DEFAULT_OLLAMA_TIMEOUT_SECONDS
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return DEFAULT_OLLAMA_TIMEOUT_SECONDS
+        return value if value > 0 else DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    return DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
 
 def compute_capability_registry_hash() -> str:
     return "sha256:" + hashlib.sha256(CAP_REGISTRY_PATH.read_bytes()).hexdigest()
@@ -1541,7 +1603,11 @@ class GovernanceProxy:
 
         logger.info("Streaming handler (%s) entered for path=%s", provider.name, path)
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        # QS-061: pick a timeout that fits the provider. Cloud APIs answer
+        # well under 120s, but local Ollama can take minutes per token.
+        async with httpx.AsyncClient(
+            timeout=provider_timeout_seconds(provider.name, self._provider_config)
+        ) as client:
             async with client.stream(
                 "POST", url, headers=fwd_headers, content=body,
             ) as resp:
@@ -1775,7 +1841,10 @@ class GovernanceProxy:
         is_tool_ep: bool, provider: BaseProvider,
     ) -> tuple[int, dict, bytes]:
         """Forward a non-streaming request and govern via provider interface."""
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        # QS-061: per-provider timeout — Ollama defaults to 300s.
+        async with httpx.AsyncClient(
+            timeout=provider_timeout_seconds(provider.name, self._provider_config)
+        ) as client:
             resp = await client.request(
                 method, url, headers=headers, content=body,
             )
@@ -2016,7 +2085,10 @@ class GovernanceProxy:
         approval_store = self._get_approval_store()
         tool_call_count = 0
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        # QS-061: per-provider timeout — Ollama defaults to 300s.
+        async with httpx.AsyncClient(
+            timeout=provider_timeout_seconds(provider.name, self._provider_config)
+        ) as client:
             async with client.stream(
                 "POST", url, headers=headers, content=body,
             ) as resp:
@@ -2406,6 +2478,15 @@ def main():
     parser.add_argument("--ollama-upstream",
                         default=os.environ.get("OLLAMA_UPSTREAM", "http://localhost:11434"),
                         help="Ollama upstream base URL (default: http://localhost:11434)")
+    parser.add_argument("--ollama-timeout",
+                        type=float,
+                        default=float(os.environ.get("OLLAMA_TIMEOUT", DEFAULT_OLLAMA_TIMEOUT_SECONDS)),
+                        help=(
+                            "Per-request timeout in seconds for the Ollama provider "
+                            f"(default: {int(DEFAULT_OLLAMA_TIMEOUT_SECONDS)}s, env: OLLAMA_TIMEOUT). "
+                            "Set higher than the 120s cloud default because local "
+                            "Ollama inference is slower, especially for the first token."
+                        ))
     parser.add_argument("--user-identity", default="",
                         help="User identity for chain records (default: system hostname)")
     parser.add_argument("--session-id", default="", help="Session ID for chain records")
@@ -2487,13 +2568,16 @@ def main():
         "gemini_upstream": args.gemini_upstream,
         "litellm_upstream": args.litellm_upstream,
         "ollama_upstream": args.ollama_upstream,
+        # QS-061: per-provider timeout. Read by provider_timeout_seconds()
+        # when each upstream call constructs an httpx client.
+        "ollama_timeout_seconds": args.ollama_timeout,
     }
 
     logger.info(
-        "Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s ollama=%s",
+        "Provider upstreams: anthropic=%s openai=%s gemini=%s litellm=%s ollama=%s (timeout=%.0fs)",
         anthropic_upstream, args.openai_upstream, args.gemini_upstream,
         args.litellm_upstream or "(not configured)",
-        args.ollama_upstream,
+        args.ollama_upstream, args.ollama_timeout,
     )
 
     # Warn about non-HTTPS upstreams (informational — proxy starts regardless).
