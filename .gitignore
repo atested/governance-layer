@@ -32,3 +32,6 @@ __pycache__/
 .claude/
 .mcp.json
 .agent-workspaces/
+node_modules/
+dist/
+design-ui/.data/
