@@ -1,17 +1,166 @@
+/*
+ * DESIGN-UI-012: theme token layer.
+ *
+ * Three layers, ordered by specificity from low to high so an explicit
+ * operator override always wins over the system-preference query:
+ *
+ *   1. :root         — light tokens (the default, always defined so any
+ *                      token reference resolves even before the script in
+ *                      index.html has had a chance to apply data-theme).
+ *   2. @media (prefers-color-scheme: dark) :root
+ *                    — dark tokens applied when the OS prefers dark AND no
+ *                      explicit operator override is set. data-theme on
+ *                      <html> beats this because of selector specificity.
+ *   3. [data-theme="light"] / [data-theme="dark"]
+ *                    — explicit operator override. Set by the React theme
+ *                      picker and pre-applied by the inline boot script in
+ *                      index.html to avoid a flash of the wrong theme.
+ *
+ * Dark surfaces deliberately use dark grays (#1a1d23 family) rather than
+ * pure #000 so foreground text contrast stays within readable AA range
+ * and the UI doesn't feel like a hole in the screen.
+ */
+
 :root {
-  color: #202124;
-  background: #f6f7f9;
+  /* Surfaces */
+  --bg-primary: #f6f7f9;
+  --bg-secondary: #edf1f5;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f8fafb;
+  --surface-tertiary: #edf1f5;
+  --surface-active: #dfe7ef;
+
+  /* Text */
+  --text-primary: #202124;
+  --text-secondary: #5f6673;
+
+  /* Borders */
+  --border-color: #d8dde5;
+  --border-strong: #cfd6df;
+  --border-subtle: #edf1f5;
+
+  /* Accents (used for assistant messages, connected map nodes, edges) */
+  --accent: #7ba3c7;
+  --accent-soft: #9fb4c8;
+
+  /* Status — success / warning / error */
+  --success-bg: #e8f5ee;
+  --success-border: #9ccfb2;
+  --success-text: #31724a;
+  --warning-bg: #fff7e2;
+  --warning-text: #8a5a00;
+  --error-bg: #fbebe9;
+  --error-border: #e5aaa3;
+
+  color: var(--text-primary);
+  background: var(--bg-primary);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+  /* Native form controls (selects, inputs) pick up the right palette. */
+  color-scheme: light;
+}
+
+/* System preference: dark. Only applies when no explicit override is set. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #1a1d23;
+    --bg-secondary: #1f242b;
+    --surface-primary: #232830;
+    --surface-secondary: #2a2f37;
+    --surface-tertiary: #2f3540;
+    --surface-active: #3a4150;
+
+    --text-primary: #e8eaed;
+    --text-secondary: #a5acb7;
+
+    --border-color: #3a4049;
+    --border-strong: #444b55;
+    --border-subtle: #2c3138;
+
+    --accent: #6fa6d2;
+    --accent-soft: #5a7892;
+
+    --success-bg: #1f3b2b;
+    --success-border: #3f7a5b;
+    --success-text: #7ec99a;
+    --warning-bg: #3a2f15;
+    --warning-text: #e0b96d;
+    --error-bg: #3a2222;
+    --error-border: #8a4a44;
+
+    color-scheme: dark;
+  }
+}
+
+/* Explicit operator override — always wins, both directions. */
+:root[data-theme="light"] {
+  --bg-primary: #f6f7f9;
+  --bg-secondary: #edf1f5;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f8fafb;
+  --surface-tertiary: #edf1f5;
+  --surface-active: #dfe7ef;
+
+  --text-primary: #202124;
+  --text-secondary: #5f6673;
+
+  --border-color: #d8dde5;
+  --border-strong: #cfd6df;
+  --border-subtle: #edf1f5;
+
+  --accent: #7ba3c7;
+  --accent-soft: #9fb4c8;
+
+  --success-bg: #e8f5ee;
+  --success-border: #9ccfb2;
+  --success-text: #31724a;
+  --warning-bg: #fff7e2;
+  --warning-text: #8a5a00;
+  --error-bg: #fbebe9;
+  --error-border: #e5aaa3;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #1a1d23;
+  --bg-secondary: #1f242b;
+  --surface-primary: #232830;
+  --surface-secondary: #2a2f37;
+  --surface-tertiary: #2f3540;
+  --surface-active: #3a4150;
+
+  --text-primary: #e8eaed;
+  --text-secondary: #a5acb7;
+
+  --border-color: #3a4049;
+  --border-strong: #444b55;
+  --border-subtle: #2c3138;
+
+  --accent: #6fa6d2;
+  --accent-soft: #5a7892;
+
+  --success-bg: #1f3b2b;
+  --success-border: #3f7a5b;
+  --success-text: #7ec99a;
+  --warning-bg: #3a2f15;
+  --warning-text: #e0b96d;
+  --error-bg: #3a2222;
+  --error-border: #8a4a44;
+
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
+  color: var(--text-primary);
+  background: var(--bg-primary);
 }
 
 button {
   font: inherit;
+  color: var(--text-primary);
 }
 
 .app-shell {
@@ -20,8 +169,8 @@ button {
 
 .app-header {
   align-items: center;
-  background: #ffffff;
-  border-bottom: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   padding: 20px 28px;
@@ -33,30 +182,64 @@ button {
 }
 
 .app-header p {
-  color: #5f6673;
+  color: var(--text-secondary);
   margin: 0;
 }
 
-.health {
-  border: 1px solid #cfd6df;
+/* Theme picker (DESIGN-UI-012). Lives in the header next to the health pill. */
+.app-header-tools {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.theme-picker {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+}
+
+.theme-picker button {
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.theme-picker button.active {
+  background: var(--surface-primary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.health {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-primary);
   font-size: 13px;
   padding: 6px 10px;
 }
 
 .health-ok {
-  background: #e8f5ee;
-  border-color: #9ccfb2;
+  background: var(--success-bg);
+  border-color: var(--success-border);
 }
 
 .health-down {
-  background: #fbebe9;
-  border-color: #e5aaa3;
+  background: var(--error-bg);
+  border-color: var(--error-border);
 }
 
 .app-nav {
-  background: #ffffff;
-  border-bottom: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   gap: 8px;
   padding: 10px 28px;
@@ -66,13 +249,14 @@ button {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
+  color: var(--text-primary);
   cursor: pointer;
   padding: 7px 12px;
 }
 
 .app-nav button.active {
-  background: #edf1f5;
-  border-color: #cfd6df;
+  background: var(--surface-tertiary);
+  border-color: var(--border-strong);
 }
 
 .route-panel {
@@ -104,19 +288,20 @@ button {
 .item-form button,
 .chat-form button,
 .item-actions button {
-  background: #ffffff;
-  border: 1px solid #cfd6df;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
+  color: var(--text-primary);
   cursor: pointer;
   padding: 7px 10px;
 }
 
 .focus-bar button.active {
-  background: #dfe7ef;
+  background: var(--surface-active);
 }
 
 .focus-bar span {
-  color: #5f6673;
+  color: var(--text-secondary);
   margin-left: auto;
 }
 
@@ -138,8 +323,8 @@ button {
 .chat-panel,
 .proposal-panel,
 .lineage-panel {
-  background: #ffffff;
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   min-width: 0;
   padding: 16px;
@@ -163,9 +348,11 @@ button {
 .item-form textarea,
 .chat-form textarea,
 .item-card input {
-  border: 1px solid #cfd6df;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   box-sizing: border-box;
+  color: var(--text-primary);
   font: inherit;
   padding: 8px;
   width: 100%;
@@ -186,7 +373,8 @@ button {
 
 .item-card,
 .proposal-card {
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
 }
@@ -194,7 +382,7 @@ button {
 .item-card p,
 .proposal-card p,
 .muted {
-  color: #5f6673;
+  color: var(--text-secondary);
 }
 
 .item-actions,
@@ -208,7 +396,7 @@ button {
 
 .proposal-card-header span,
 .item-actions span {
-  color: #5f6673;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -220,13 +408,13 @@ button {
 }
 
 .message {
-  border-left: 3px solid #cfd6df;
+  border-left: 3px solid var(--border-strong);
   margin: 0;
   padding-left: 10px;
 }
 
 .message-assistant {
-  border-left-color: #7ba3c7;
+  border-left-color: var(--accent);
 }
 
 .preview-grid {
@@ -241,7 +429,7 @@ button {
 }
 
 .preview-grid span {
-  color: #5f6673;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -253,7 +441,7 @@ button {
 }
 
 .lineage-list li {
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--border-subtle);
   display: grid;
   gap: 2px;
   padding-bottom: 8px;
@@ -261,7 +449,7 @@ button {
 
 .lineage-list span,
 .lineage-list small {
-  color: #5f6673;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -285,13 +473,13 @@ button {
 
 .map-header p,
 .map-header span {
-  color: #5f6673;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .map-filters {
-  background: #ffffff;
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   display: flex;
   gap: 12px;
@@ -299,22 +487,24 @@ button {
 }
 
 .map-filters label {
-  color: #5f6673;
+  color: var(--text-secondary);
   display: grid;
   gap: 4px;
   min-width: 160px;
 }
 
 .map-filters select {
-  border: 1px solid #cfd6df;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
+  color: var(--text-primary);
   font: inherit;
   padding: 7px;
 }
 
 .map-canvas {
-  background: #ffffff;
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   display: grid;
   gap: 16px;
@@ -331,8 +521,8 @@ button {
 }
 
 .map-edge-list span {
-  border-left: 3px solid #9fb4c8;
-  color: #5f6673;
+  border-left: 3px solid var(--accent-soft);
+  color: var(--text-secondary);
   font-size: 12px;
   padding-left: 8px;
 }
@@ -342,9 +532,10 @@ button {
 }
 
 .map-node {
-  background: #f8fafb;
-  border: 1px solid #cfd6df;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
+  color: var(--text-primary);
   cursor: pointer;
   display: grid;
   gap: 6px;
@@ -354,7 +545,7 @@ button {
 }
 
 .map-node.connected {
-  border-color: #7ba3c7;
+  border-color: var(--accent);
 }
 
 .map-node.disconnected {
@@ -363,7 +554,7 @@ button {
 
 .map-node span,
 .map-node small {
-  color: #5f6673;
+  color: var(--text-secondary);
 }
 
 .spec-workspace {
@@ -386,7 +577,7 @@ button {
 
 .spec-header p,
 .export-status {
-  color: #5f6673;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -397,14 +588,15 @@ button {
 
 .spec-actions select,
 .spec-actions button {
-  border: 1px solid #cfd6df;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
+  color: var(--text-primary);
   font: inherit;
   padding: 7px 10px;
 }
 
 .spec-actions button {
-  background: #ffffff;
   cursor: pointer;
 }
 
@@ -418,16 +610,17 @@ button {
 .validation-panel,
 .spec-section-card,
 .export-list {
-  background: #ffffff;
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 16px;
 }
 
 .spec-preview pre {
-  background: #f8fafb;
-  border: 1px solid #edf1f5;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
+  color: var(--text-primary);
   max-height: 560px;
   overflow: auto;
   padding: 12px;
@@ -443,12 +636,12 @@ button {
 }
 
 .validation-row {
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 8px;
 }
 
 .validation-row span {
-  border: 1px solid #cfd6df;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 12px;
   margin-left: 8px;
@@ -457,29 +650,29 @@ button {
 
 .validation-row p,
 .validation-row small {
-  color: #5f6673;
+  color: var(--text-secondary);
   display: block;
   margin: 4px 0 0;
 }
 
 .validation-pass {
-  color: #31724a;
+  color: var(--success-text);
 }
 
 .validation-warning {
-  color: #8a5a00;
+  color: var(--warning-text);
 }
 
 .validation-fail span {
-  background: #fbebe9;
+  background: var(--error-bg);
 }
 
 .validation-warning span {
-  background: #fff7e2;
+  background: var(--warning-bg);
 }
 
 .validation-pass span {
-  background: #e8f5ee;
+  background: var(--success-bg);
 }
 
 .spec-section-grid {
@@ -501,7 +694,7 @@ button {
 }
 
 .export-card {
-  border: 1px solid #edf1f5;
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   display: grid;
   gap: 4px;
@@ -510,7 +703,7 @@ button {
 
 .export-card span,
 .export-card small {
-  color: #5f6673;
+  color: var(--text-secondary);
 }
 
 .surface-preview {
@@ -522,8 +715,8 @@ button {
 
 .surface-preview section,
 .chat-preview {
-  background: #ffffff;
-  border: 1px solid #d8dde5;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 18px;
 }

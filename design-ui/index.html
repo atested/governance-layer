@@ -4,6 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Design UI v1</title>
+    <!--
+      DESIGN-UI-012: no-flash theme boot.
+
+      Reads the operator's persisted theme override from localStorage and
+      applies it to <html data-theme="…"> SYNCHRONOUSLY, before any CSS or
+      React code runs. Without this script, the page would paint once using
+      the light tokens before React mounted and toggled to the persisted
+      theme, producing a brief flash that operators describe as "flicker".
+
+      "system" or missing -> no attribute set; CSS media queries take over.
+      "light" / "dark"   -> attribute set; explicit override wins via the
+                            [data-theme] selector specificity in app.css.
+
+      The try/catch protects against private-mode browsers that throw on
+      any localStorage access. In that case we silently fall through to the
+      system preference, which is the right default behaviour anyway.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("design-ui:theme");
+          if (stored === "dark" || stored === "light") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {
+          /* localStorage unavailable; fall back to prefers-color-scheme. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
