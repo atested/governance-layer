@@ -366,6 +366,153 @@ button {
   color: #5f6673;
 }
 
+.spec-workspace {
+  display: grid;
+  gap: 14px;
+  margin: 18px auto;
+  max-width: 1280px;
+  padding: 0 20px 24px;
+}
+
+.spec-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.spec-header h2 {
+  margin: 0 0 4px;
+}
+
+.spec-header p,
+.export-status {
+  color: #5f6673;
+  margin: 0;
+}
+
+.spec-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.spec-actions select,
+.spec-actions button {
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  font: inherit;
+  padding: 7px 10px;
+}
+
+.spec-actions button {
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.spec-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+}
+
+.spec-preview,
+.validation-panel,
+.spec-section-card,
+.export-list {
+  background: #ffffff;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.spec-preview pre {
+  background: #f8fafb;
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
+  max-height: 560px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.validation-panel ol,
+.spec-section-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.validation-row {
+  border-bottom: 1px solid #edf1f5;
+  padding-bottom: 8px;
+}
+
+.validation-row span {
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 2px 6px;
+}
+
+.validation-row p,
+.validation-row small {
+  color: #5f6673;
+  display: block;
+  margin: 4px 0 0;
+}
+
+.validation-pass {
+  color: #31724a;
+}
+
+.validation-warning {
+  color: #8a5a00;
+}
+
+.validation-fail span {
+  background: #fbebe9;
+}
+
+.validation-warning span {
+  background: #fff7e2;
+}
+
+.validation-pass span {
+  background: #e8f5ee;
+}
+
+.spec-section-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.spec-section-card h3,
+.export-list h3,
+.validation-panel h3,
+.spec-preview h3 {
+  margin: 0 0 10px;
+}
+
+.export-list {
+  display: grid;
+  gap: 10px;
+}
+
+.export-card {
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.export-card span,
+.export-card small {
+  color: #5f6673;
+}
+
 .surface-preview {
   display: grid;
   gap: 16px;
@@ -400,11 +547,13 @@ button {
   .surface-layout.focus-discovery,
   .surface-layout.focus-purpose,
   .design-bottom,
-  .map-canvas {
+  .map-canvas,
+  .spec-layout {
     grid-template-columns: 1fr;
   }
 
-  .map-filters {
+  .map-filters,
+  .spec-header {
     flex-direction: column;
   }
 }

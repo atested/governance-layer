@@ -53,7 +53,7 @@ export function createApiServer(options: { dbPath?: string } = {}) {
         return;
       }
 
-      if (url.pathname === "/api/spec") {
+      if (url.pathname === "/api/spec" || url.pathname === "/api/spec/export") {
         handleSpec(request, response, db, url);
         return;
       }

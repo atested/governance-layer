@@ -12,7 +12,9 @@ import type {
   DesignProposal,
   DiscoveryItem,
   LineageEvent,
-  PurposeItem
+  PurposeItem,
+  SpecBuilderResponse,
+  SpecExport
 } from "../types/design";
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -138,6 +140,20 @@ export async function selectMapNode(projectId: string, nodeId: string) {
     {
       method: "POST",
       body: JSON.stringify({ nodeId })
+    }
+  );
+}
+
+export async function getSpecBuilder(projectId: string) {
+  return requestJson<SpecBuilderResponse>(`/api/spec?projectId=${encodeURIComponent(projectId)}`);
+}
+
+export async function createSpecExport(projectId: string, format: "markdown" | "json") {
+  return requestJson<{ export: SpecExport }>(
+    `/api/spec/export?projectId=${encodeURIComponent(projectId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ format })
     }
   );
 }

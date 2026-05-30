@@ -117,6 +117,72 @@ export type DesignMap = {
   activeContext: ActiveContext | null;
 };
 
+export type SpecSectionTitle =
+  | "Purpose"
+  | "Core concept summary"
+  | "Relevant discovered structure"
+  | "Principles"
+  | "Operational intent"
+  | "Expectations"
+  | "Boundaries"
+  | "Constraints"
+  | "Key relationships"
+  | "Tensions"
+  | "Residual judgments"
+  | "Positive exemplars"
+  | "Negative exemplars"
+  | "Distinguishing properties"
+  | "Supporting lineage references"
+  | "Notes for Specification";
+
+export type DesignSpecification = {
+  projectId: string;
+  title: string;
+  sections: Record<SpecSectionTitle, string[]>;
+  sourcePurposeItemIds: string[];
+  sourceLineageEventIds: string[];
+  relationshipReferences: Array<{ id: string; fromId: string; toId: string; type: string; description: string }>;
+  discoveryReferences: Array<{ id: string; title: string; discoveryType: string; state: string }>;
+};
+
+export type ValidationCheck = {
+  status: "pass" | "warning" | "fail";
+  message: string;
+  relatedItemIds: string[];
+};
+
+export type SpecValidationResult = {
+  passed: boolean;
+  checks: {
+    purposeClarity: ValidationCheck;
+    expectationClarity: ValidationCheck;
+    operationalIntentPreserved: ValidationCheck;
+    confusionRiskAddressed: ValidationCheck;
+    examplesAdequate: ValidationCheck;
+    boundariesPresent: ValidationCheck;
+    residualJudgmentsPresent: ValidationCheck;
+    downstreamRediscoveryRisk: ValidationCheck;
+  };
+};
+
+export type SpecExport = {
+  id: string;
+  projectId: string;
+  format: "markdown" | "json";
+  content: string;
+  sourcePurposeItemIds: string[];
+  sourceLineageEventIds: string[];
+  createdAt: string;
+};
+
+export type SpecBuilderResponse = {
+  spec: DesignSpecification;
+  markdown: string;
+  json: string;
+  validation: SpecValidationResult;
+  exports: SpecExport[];
+};
+
 export type ChatMessage = {
   id: string;
   projectId: string;
