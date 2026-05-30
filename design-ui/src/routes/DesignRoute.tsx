@@ -1,4 +1,12 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+// DESIGN-UI-011: split FormEvent into an explicit type-only import.
+// FormEvent is exported by react only as a type (.d.ts), not as a
+// runtime value. Importing it in the same `import { ... }` line as
+// value hooks works under esbuild's auto-detection but can fail Vite
+// 7's stricter import rewriting and leave the entry module 500'ing.
+// Marking it `import type` removes the ambiguity for every transformer
+// in the pipeline.
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   acceptProposal,
   createItem,
