@@ -42,7 +42,13 @@ The server uses stdio transport for local MCP clients.
 
 ## Codex Configuration Example
 
-Add a local MCP server entry pointing at this package. Adjust paths for your checkout.
+Print a ready-to-paste local MCP server entry from the repo root:
+
+```sh
+./scripts/print-design-ui-mcp-config.sh
+```
+
+Then paste the output into `~/.codex/config.toml`. The generated snippet will look like this, with the absolute path for your checkout:
 
 ```toml
 [mcp_servers.design-ui]
@@ -52,6 +58,8 @@ env = { DESIGN_UI_API_URL = "http://127.0.0.1:4174/api" }
 ```
 
 Design UI must be running before MCP tools can read API state.
+
+Full operator setup instructions are in `docs/design-ui-mcp-operator-setup.md`.
 
 ## Tools
 
