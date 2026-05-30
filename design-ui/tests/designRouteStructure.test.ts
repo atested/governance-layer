@@ -29,6 +29,13 @@ test("/design route includes lineage panel and active context loading", () => {
   assert.match(routeSource, /activeContext/);
 });
 
+test("/design active context constrains both surfaces without hiding them", () => {
+  assert.match(routeSource, /context \? discovery\.filter/);
+  assert.match(routeSource, /context \? purpose\.filter/);
+  assert.doesNotMatch(routeSource, /context && context\.discoveryItemIds\.length/);
+  assert.doesNotMatch(routeSource, /context && context\.purposeItemIds\.length/);
+});
+
 test("/map route is a node-link graph with filters and context loading", () => {
   const mapRoute = readFileSync(new URL("../src/routes/MapRoute.tsx", import.meta.url), "utf8");
   assert.match(mapRoute, /data-testid="design-map"/);

@@ -262,15 +262,9 @@ export function DesignRoute() {
     const context = map.activeContext;
     setActiveContext(context);
     setDiscoveryItems(
-      context && context.discoveryItemIds.length > 0
-        ? discovery.filter((item) => context.discoveryItemIds.includes(item.id))
-        : discovery
+      context ? discovery.filter((item) => context.discoveryItemIds.includes(item.id)) : discovery
     );
-    setPurposeItems(
-      context && context.purposeItemIds.length > 0
-        ? purpose.filter((item) => context.purposeItemIds.includes(item.id))
-        : purpose
-    );
+    setPurposeItems(context ? purpose.filter((item) => context.purposeItemIds.includes(item.id)) : purpose);
     setProposals(proposalRows);
     setMessages(chatRows);
     setLineageEvents(lineageRows.events);
