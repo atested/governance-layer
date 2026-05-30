@@ -1,0 +1,118 @@
+:root {
+  color: #202124;
+  background: #f6f7f9;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-header {
+  align-items: center;
+  background: #ffffff;
+  border-bottom: 1px solid #d8dde5;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 28px;
+}
+
+.app-header h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.app-header p {
+  color: #5f6673;
+  margin: 0;
+}
+
+.health {
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.health-ok {
+  background: #e8f5ee;
+  border-color: #9ccfb2;
+}
+
+.health-down {
+  background: #fbebe9;
+  border-color: #e5aaa3;
+}
+
+.app-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #d8dde5;
+  display: flex;
+  gap: 8px;
+  padding: 10px 28px;
+}
+
+.app-nav button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 7px 12px;
+}
+
+.app-nav button.active {
+  background: #edf1f5;
+  border-color: #cfd6df;
+}
+
+.route-panel {
+  margin: 28px auto;
+  max-width: 1120px;
+  padding: 0 28px;
+}
+
+.route-panel h2 {
+  font-size: 20px;
+}
+
+.surface-preview {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  min-height: 360px;
+}
+
+.surface-preview section,
+.chat-preview {
+  background: #ffffff;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.chat-preview {
+  margin-top: 16px;
+  min-height: 120px;
+}
+
+@media (max-width: 720px) {
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .surface-preview {
+    grid-template-columns: 1fr;
+  }
+}
