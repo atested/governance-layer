@@ -4,7 +4,16 @@ export type HealthResponse = {
   timestamp: string;
 };
 
-import type { ChatMessage, DesignProject, DesignProposal, DiscoveryItem, PurposeItem } from "../types/design";
+import type {
+  ActiveContext,
+  ChatMessage,
+  DesignMap,
+  DesignProject,
+  DesignProposal,
+  DiscoveryItem,
+  LineageEvent,
+  PurposeItem
+} from "../types/design";
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -111,4 +120,24 @@ export async function sendChatMessage(projectId: string, content: string) {
     method: "POST",
     body: JSON.stringify({ content })
   });
+}
+
+export async function listLineageEvents(projectId: string, subjectId?: string) {
+  const params = new URLSearchParams({ projectId });
+  if (subjectId) params.set("subjectId", subjectId);
+  return requestJson<{ events: LineageEvent[] }>(`/api/lineage?${params.toString()}`);
+}
+
+export async function getDesignMap(projectId: string) {
+  return requestJson<DesignMap>(`/api/map?projectId=${encodeURIComponent(projectId)}`);
+}
+
+export async function selectMapNode(projectId: string, nodeId: string) {
+  return requestJson<{ activeContext: ActiveContext; map: DesignMap }>(
+    `/api/map/context?projectId=${encodeURIComponent(projectId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ nodeId })
+    }
+  );
 }

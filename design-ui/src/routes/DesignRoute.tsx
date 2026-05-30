@@ -4,15 +4,24 @@ import {
   createItem,
   createProject,
   createProposal,
+  getDesignMap,
   listChatMessages,
   listItems,
+  listLineageEvents,
   listProjects,
   listProposals,
   rejectProposal,
   sendChatMessage,
   updateItem
 } from "../api/client";
-import type { ChatMessage, DesignProposal, DiscoveryItem, PurposeItem } from "../types/design";
+import type {
+  ActiveContext,
+  ChatMessage,
+  DesignProposal,
+  DiscoveryItem,
+  LineageEvent,
+  PurposeItem
+} from "../types/design";
 
 type Focus = "discovery" | "purpose";
 
@@ -101,6 +110,7 @@ function DiscoverySurface({
   setDraft,
   onCreate,
   onEdit,
+  onShowLineage,
   onPromote
 }: {
   items: DiscoveryItem[];
@@ -108,6 +118,7 @@ function DiscoverySurface({
   setDraft: (draft: ItemDraft) => void;
   onCreate: () => Promise<void>;
   onEdit: (item: DiscoveryItem) => Promise<void>;
+  onShowLineage: (item: DiscoveryItem) => Promise<void>;
   onPromote: (item: DiscoveryItem) => Promise<void>;
 }) {
   return (
@@ -145,6 +156,9 @@ function DiscoverySurface({
             <p>{item.body || item.discoveryType}</p>
             <div className="item-actions">
               <span>{item.state}</span>
+              <button type="button" onClick={() => void onShowLineage(item)}>
+                Lineage
+              </button>
               <button type="button" onClick={() => void onPromote(item)}>
                 Promote
               </button>
@@ -162,6 +176,7 @@ function PurposeSurface({
   setDraft,
   onCreate,
   onEdit,
+  onShowLineage,
   onDemote
 }: {
   items: PurposeItem[];
@@ -169,6 +184,7 @@ function PurposeSurface({
   setDraft: (draft: ItemDraft) => void;
   onCreate: () => Promise<void>;
   onEdit: (item: PurposeItem) => Promise<void>;
+  onShowLineage: (item: PurposeItem) => Promise<void>;
   onDemote: (item: PurposeItem) => Promise<void>;
 }) {
   return (
@@ -206,6 +222,9 @@ function PurposeSurface({
             <p>{item.body || item.purposeType}</p>
             <div className="item-actions">
               <span>{item.state}</span>
+              <button type="button" onClick={() => void onShowLineage(item)}>
+                Lineage
+              </button>
               <button type="button" onClick={() => void onDemote(item)}>
                 Demote
               </button>
@@ -224,21 +243,37 @@ export function DesignRoute() {
   const [purposeItems, setPurposeItems] = useState<PurposeItem[]>([]);
   const [proposals, setProposals] = useState<DesignProposal[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeContext, setActiveContext] = useState<ActiveContext | null>(null);
+  const [selectedLineageLabel, setSelectedLineageLabel] = useState("Project Playback");
+  const [lineageEvents, setLineageEvents] = useState<LineageEvent[]>([]);
   const [discoveryDraft, setDiscoveryDraft] = useState(emptyDraft);
   const [purposeDraft, setPurposeDraft] = useState(emptyDraft);
   const [chatDraft, setChatDraft] = useState("");
 
   const loadProjectData = async (id: string) => {
-    const [discovery, purpose, proposalRows, chatRows] = await Promise.all([
+    const [discovery, purpose, proposalRows, chatRows, lineageRows, map] = await Promise.all([
       listItems(id, "discovery"),
       listItems(id, "purpose"),
       listProposals(id),
-      listChatMessages(id)
+      listChatMessages(id),
+      listLineageEvents(id),
+      getDesignMap(id)
     ]);
-    setDiscoveryItems(discovery);
-    setPurposeItems(purpose);
+    const context = map.activeContext;
+    setActiveContext(context);
+    setDiscoveryItems(
+      context && context.discoveryItemIds.length > 0
+        ? discovery.filter((item) => context.discoveryItemIds.includes(item.id))
+        : discovery
+    );
+    setPurposeItems(
+      context && context.purposeItemIds.length > 0
+        ? purpose.filter((item) => context.purposeItemIds.includes(item.id))
+        : purpose
+    );
     setProposals(proposalRows);
     setMessages(chatRows);
+    setLineageEvents(lineageRows.events);
   };
 
   useEffect(() => {
@@ -330,6 +365,13 @@ export function DesignRoute() {
     await refresh();
   };
 
+  const showLineage = async (item: DiscoveryItem | PurposeItem) => {
+    if (!projectId) return;
+    const lineage = await listLineageEvents(projectId, item.id);
+    setSelectedLineageLabel(item.title);
+    setLineageEvents(lineage.events);
+  };
+
   return (
     <section className="design-workspace">
       <div className="focus-bar" role="group" aria-label="Surface focus">
@@ -348,6 +390,7 @@ export function DesignRoute() {
           Purpose Focus
         </button>
         <span>{pendingCount} pending</span>
+        {activeContext ? <span>Context: {activeContext.label}</span> : null}
       </div>
 
       <div className={`surface-layout focus-${focus}`}>
@@ -361,6 +404,7 @@ export function DesignRoute() {
               : Promise.resolve()
           }
           onPromote={proposePromotion}
+          onShowLineage={showLineage}
           setDraft={setDiscoveryDraft}
         />
         <PurposeSurface
@@ -373,6 +417,7 @@ export function DesignRoute() {
               ? updateItem(projectId, "purpose", item.id, { title: item.title }).then(refresh)
               : Promise.resolve()
           }
+          onShowLineage={showLineage}
           setDraft={setPurposeDraft}
         />
       </div>
@@ -398,6 +443,23 @@ export function DesignRoute() {
           </form>
         </section>
         <ProposalPreviewPanel proposals={proposals} onAccept={accept} onReject={reject} />
+        <aside className="lineage-panel" data-testid="lineage-panel">
+          <h3>{selectedLineageLabel}</h3>
+          {lineageEvents.length === 0 ? <p className="muted">No lineage events yet.</p> : null}
+          <ol className="lineage-list">
+            {lineageEvents.map((event) => (
+              <li key={event.id}>
+                <b>{event.eventType}</b>
+                <span>{event.subjectId}</span>
+                <small>
+                  {event.createdAt}
+                  {event.proposalId ? ` · proposal ${event.proposalId}` : ""}
+                  {event.messageIds.length > 0 ? ` · messages ${event.messageIds.join(", ")}` : ""}
+                </small>
+              </li>
+            ))}
+          </ol>
+        </aside>
       </div>
     </section>
   );

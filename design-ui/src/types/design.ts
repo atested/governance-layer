@@ -40,6 +40,83 @@ export type PurposeItem = {
   updatedAt: string;
 };
 
+export type Relationship = {
+  id: string;
+  projectId: string;
+  fromId: string;
+  toId: string;
+  type: string;
+  description: string;
+  createdAt: string;
+};
+
+export type ActiveContext = {
+  id: string;
+  projectId: string;
+  label: string;
+  discoveryItemIds: string[];
+  purposeItemIds: string[];
+  conceptIds: string[];
+  relationshipIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LineageEvent = {
+  id: string;
+  projectId: string;
+  subjectId: string;
+  eventType:
+    | "created"
+    | "edited"
+    | "promoted"
+    | "demoted"
+    | "merged"
+    | "split"
+    | "connected"
+    | "challenged"
+    | "superseded"
+    | "exported";
+  beforeValue: unknown;
+  afterValue: unknown;
+  messageIds: string[];
+  proposalId: string | null;
+  createdAt: string;
+};
+
+export type MapNodeType =
+  | "concept"
+  | "discovery_cluster"
+  | "purpose_region"
+  | "tension"
+  | "open_area"
+  | "disconnected_idea";
+
+export type MapNode = {
+  id: string;
+  label: string;
+  nodeType: MapNodeType;
+  maturity: DesignItemState | string;
+  connected: boolean;
+  sourceKind: "concept" | "discovery" | "purpose";
+  sourceId: string;
+};
+
+export type MapEdge = {
+  id: string;
+  fromId: string;
+  toId: string;
+  type: string;
+  description: string;
+};
+
+export type DesignMap = {
+  nodes: MapNode[];
+  edges: MapEdge[];
+  activeContexts: ActiveContext[];
+  activeContext: ActiveContext | null;
+};
+
 export type ChatMessage = {
   id: string;
   projectId: string;

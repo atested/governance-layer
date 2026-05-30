@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DesignDatabase } from "../db.ts";
-import { createProject } from "../repositories/projects.ts";
+import { createProject, listProjects } from "../repositories/projects.ts";
 import { readJsonBody } from "./request.ts";
 import { sendJson } from "./health.ts";
 
@@ -17,7 +17,7 @@ export async function handleProjects(
   }
 
   if (request.method === "GET") {
-    sendJson(response, 200, db.prepare("SELECT * FROM projects ORDER BY createdAt ASC").all());
+    sendJson(response, 200, listProjects(db));
     return;
   }
 

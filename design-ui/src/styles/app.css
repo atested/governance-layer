@@ -136,7 +136,8 @@ button {
 
 .design-surface,
 .chat-panel,
-.proposal-panel {
+.proposal-panel,
+.lineage-panel {
   background: #ffffff;
   border: 1px solid #d8dde5;
   border-radius: 8px;
@@ -146,7 +147,8 @@ button {
 
 .design-surface h2,
 .chat-panel h2,
-.proposal-panel h3 {
+.proposal-panel h3,
+.lineage-panel h3 {
   font-size: 18px;
   margin: 0 0 12px;
 }
@@ -213,7 +215,7 @@ button {
 .design-bottom {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr) minmax(280px, 1fr);
   min-height: 30vh;
 }
 
@@ -241,6 +243,127 @@ button {
 .preview-grid span {
   color: #5f6673;
   font-size: 12px;
+}
+
+.lineage-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.lineage-list li {
+  border-bottom: 1px solid #edf1f5;
+  display: grid;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+
+.lineage-list span,
+.lineage-list small {
+  color: #5f6673;
+  font-size: 12px;
+}
+
+.map-workspace {
+  display: grid;
+  gap: 14px;
+  margin: 18px auto;
+  max-width: 1280px;
+  padding: 0 20px 24px;
+}
+
+.map-header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.map-header h2 {
+  margin: 0 0 4px;
+}
+
+.map-header p,
+.map-header span {
+  color: #5f6673;
+  margin: 0;
+}
+
+.map-filters {
+  background: #ffffff;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+
+.map-filters label {
+  color: #5f6673;
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.map-filters select {
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  font: inherit;
+  padding: 7px;
+}
+
+.map-canvas {
+  background: #ffffff;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 3fr);
+  min-height: 520px;
+  padding: 16px;
+}
+
+.map-edge-list,
+.map-node-grid {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+}
+
+.map-edge-list span {
+  border-left: 3px solid #9fb4c8;
+  color: #5f6673;
+  font-size: 12px;
+  padding-left: 8px;
+}
+
+.map-node-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.map-node {
+  background: #f8fafb;
+  border: 1px solid #cfd6df;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 12px;
+  text-align: left;
+}
+
+.map-node.connected {
+  border-color: #7ba3c7;
+}
+
+.map-node.disconnected {
+  border-style: dashed;
+}
+
+.map-node span,
+.map-node small {
+  color: #5f6673;
 }
 
 .surface-preview {
@@ -276,7 +399,12 @@ button {
 
   .surface-layout.focus-discovery,
   .surface-layout.focus-purpose,
-  .design-bottom {
+  .design-bottom,
+  .map-canvas {
     grid-template-columns: 1fr;
+  }
+
+  .map-filters {
+    flex-direction: column;
   }
 }

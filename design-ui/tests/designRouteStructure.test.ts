@@ -22,6 +22,25 @@ test("/design route includes manual fallback and proposal approval controls", ()
   assert.match(routeSource, /Reject/);
 });
 
+test("/design route includes lineage panel and active context loading", () => {
+  assert.match(routeSource, /data-testid="lineage-panel"/);
+  assert.match(routeSource, /listLineageEvents/);
+  assert.match(routeSource, /getDesignMap/);
+  assert.match(routeSource, /activeContext/);
+});
+
+test("/map route is a node-link graph with filters and context loading", () => {
+  const mapRoute = readFileSync(new URL("../src/routes/MapRoute.tsx", import.meta.url), "utf8");
+  assert.match(mapRoute, /data-testid="design-map"/);
+  assert.match(mapRoute, /map-node-grid/);
+  assert.match(mapRoute, /map-edge-list/);
+  assert.match(mapRoute, /selectMapNode/);
+  assert.match(mapRoute, /nodeType/);
+  assert.match(mapRoute, /maturity/);
+  assert.match(mapRoute, /connected/);
+  assert.doesNotMatch(mapRoute, /tree|folder/i);
+});
+
 test("focus CSS changes grid ratio without hiding either surface", () => {
   assert.match(cssSource, /\.surface-layout\.focus-discovery[\s\S]*grid-template-columns: minmax\(0, 3fr\) minmax\(240px, 1fr\)/);
   assert.match(cssSource, /\.surface-layout\.focus-purpose[\s\S]*grid-template-columns: minmax\(240px, 1fr\) minmax\(0, 3fr\)/);
