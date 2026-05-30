@@ -15,3 +15,7 @@ export function createProject(db: DesignDatabase, input: { title: string; id?: s
 export function getProject(db: DesignDatabase, id: string) {
   return db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
 }
+
+export function listProjects(db: DesignDatabase) {
+  return db.prepare("SELECT * FROM projects ORDER BY createdAt ASC").all();
+}

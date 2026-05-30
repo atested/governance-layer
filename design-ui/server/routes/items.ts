@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DesignDatabase } from "../db.ts";
 import { createDiscoveryItem, listDiscoveryItems } from "../repositories/discoveryItems.ts";
-import { updateProjectScopedRecord } from "../repositories/projectScopedCrud.ts";
+import { createLineageEvent } from "../repositories/lineageEvents.ts";
+import { getProjectScopedRecord, updateProjectScopedRecord } from "../repositories/projectScopedCrud.ts";
 import { createPurposeItem, listPurposeItems } from "../repositories/purposeItems.ts";
 import { nowIso } from "../repositories/base.ts";
 import { sendJson } from "./health.ts";
@@ -43,6 +44,12 @@ export async function handleItems(
             body: body.body,
             discoveryType: body.discoveryType ?? "observation"
           });
+    createLineageEvent(db, {
+      projectId,
+      subjectId: String(item.id),
+      eventType: "created",
+      afterValue: item
+    });
     sendJson(response, 201, item);
     return;
   }
@@ -65,16 +72,24 @@ export async function handleItems(
     const body = await readJsonBody<{ title?: string; body?: string; discoveryType?: string; purposeType?: string }>(
       request
     );
+    const before = getProjectScopedRecord(db, table, projectId, id);
+    if (!before) {
+      sendJson(response, 404, { error: "item_not_found" });
+      return;
+    }
     const patch: Record<string, string> = { updatedAt: nowIso() };
     if (body.title !== undefined) patch.title = body.title;
     if (body.body !== undefined) patch.body = body.body;
     if (body.discoveryType !== undefined && kind !== "purpose") patch.discoveryType = body.discoveryType;
     if (body.purposeType !== undefined && kind === "purpose") patch.purposeType = body.purposeType;
     const item = updateProjectScopedRecord(db, table, projectId, id, patch);
-    if (!item) {
-      sendJson(response, 404, { error: "item_not_found" });
-      return;
-    }
+    createLineageEvent(db, {
+      projectId,
+      subjectId: id,
+      eventType: "edited",
+      beforeValue: before,
+      afterValue: item
+    });
     sendJson(response, 200, item);
     return;
   }

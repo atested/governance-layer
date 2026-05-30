@@ -1,10 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DesignDatabase } from "../db.ts";
-import { listActiveContexts } from "../repositories/activeContexts.ts";
-import { listConcepts } from "../repositories/concepts.ts";
-import { listRelationships } from "../repositories/relationships.ts";
+import { replaceActiveContext } from "../repositories/activeContexts.ts";
+import { buildDesignMap, contextForNode } from "../services/mapBuilder.ts";
 import { sendJson } from "./health.ts";
-import { requireProjectId } from "./request.ts";
+import { readJsonBody, requireProjectId } from "./request.ts";
 
 export function handleMap(
   request: IncomingMessage,
@@ -19,11 +18,29 @@ export function handleMap(
   }
 
   if (request.method === "GET") {
-    sendJson(response, 200, {
-      concepts: listConcepts(db, projectId),
-      relationships: listRelationships(db, projectId),
-      activeContexts: listActiveContexts(db, projectId)
-    });
+    sendJson(response, 200, buildDesignMap(db, projectId));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/map/context") {
+    readJsonBody<{ nodeId?: string }>(request)
+      .then((body) => {
+        if (!body.nodeId) {
+          sendJson(response, 400, { error: "nodeId_required" });
+          return;
+        }
+        const context = replaceActiveContext(db, {
+          projectId,
+          ...contextForNode(db, projectId, body.nodeId)
+        });
+        sendJson(response, 201, { activeContext: context, map: buildDesignMap(db, projectId) });
+      })
+      .catch((error) => {
+        sendJson(response, 500, {
+          error: "map_context_failed",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      });
     return;
   }
 

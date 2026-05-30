@@ -4,6 +4,7 @@ import { initializeDatabase } from "./db.ts";
 import { handleChat } from "./routes/chat.ts";
 import { handleHealth, sendJson } from "./routes/health.ts";
 import { handleItems } from "./routes/items.ts";
+import { handleLineage } from "./routes/lineage.ts";
 import { handleMap } from "./routes/map.ts";
 import { handleProjects } from "./routes/projects.ts";
 import { handleProposals } from "./routes/proposals.ts";
@@ -42,7 +43,12 @@ export function createApiServer(options: { dbPath?: string } = {}) {
         return;
       }
 
-      if (url.pathname === "/api/map") {
+      if (url.pathname === "/api/lineage") {
+        handleLineage(request, response, db, url);
+        return;
+      }
+
+      if (url.pathname === "/api/map" || url.pathname === "/api/map/context") {
         handleMap(request, response, db, url);
         return;
       }
