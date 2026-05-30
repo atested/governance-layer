@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DesignDatabase } from "../db.ts";
 import { createProposal, listProposals } from "../repositories/proposals.ts";
+import { acceptProposal, rejectProposal } from "../services/proposalCommitter.ts";
+import { withProposalPreview } from "../services/proposalPreview.ts";
 import { sendJson } from "./health.ts";
 import { readJsonBody, requireProjectId } from "./request.ts";
 
@@ -13,6 +15,17 @@ export async function handleProposals(
   const projectId = requireProjectId(url);
   if (!projectId) {
     sendJson(response, 400, { error: "projectId_required" });
+    return;
+  }
+
+  const actionMatch = url.pathname.match(/^\/api\/proposals\/([^/]+)\/(accept|reject)$/);
+  if (request.method === "POST" && actionMatch) {
+    const [, proposalId, action] = actionMatch;
+    const result =
+      action === "accept"
+        ? acceptProposal(db, projectId, proposalId)
+        : { proposal: rejectProposal(db, projectId, proposalId) };
+    sendJson(response, 200, result);
     return;
   }
 
@@ -30,12 +43,12 @@ export async function handleProposals(
       rationale: body.rationale,
       sourceMessageIds: body.sourceMessageIds
     });
-    sendJson(response, 201, proposal);
+    sendJson(response, 201, withProposalPreview(proposal));
     return;
   }
 
   if (request.method === "GET") {
-    sendJson(response, 200, listProposals(db, projectId));
+    sendJson(response, 200, listProposals(db, projectId).map((proposal) => withProposalPreview(proposal)));
     return;
   }
 

@@ -27,12 +27,12 @@ export function createApiServer(options: { dbPath?: string } = {}) {
         return;
       }
 
-      if (url.pathname === "/api/chat") {
+      if (url.pathname === "/api/chat" || url.pathname === "/api/chat/send") {
         await handleChat(request, response, db, url);
         return;
       }
 
-      if (url.pathname === "/api/proposals") {
+      if (url.pathname === "/api/proposals" || url.pathname.startsWith("/api/proposals/")) {
         await handleProposals(request, response, db, url);
         return;
       }
