@@ -85,6 +85,164 @@ button {
   font-size: 20px;
 }
 
+.design-workspace {
+  display: grid;
+  gap: 14px;
+  margin: 18px auto;
+  max-width: 1280px;
+  padding: 0 20px 24px;
+}
+
+.focus-bar {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.focus-bar button,
+.proposal-actions button,
+.item-form button,
+.chat-form button,
+.item-actions button {
+  background: #ffffff;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 7px 10px;
+}
+
+.focus-bar button.active {
+  background: #dfe7ef;
+}
+
+.focus-bar span {
+  color: #5f6673;
+  margin-left: auto;
+}
+
+.surface-layout {
+  display: grid;
+  gap: 14px;
+  min-height: 56vh;
+}
+
+.surface-layout.focus-discovery {
+  grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
+}
+
+.surface-layout.focus-purpose {
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 3fr);
+}
+
+.design-surface,
+.chat-panel,
+.proposal-panel {
+  background: #ffffff;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.design-surface h2,
+.chat-panel h2,
+.proposal-panel h3 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+.item-form,
+.chat-form {
+  display: grid;
+  gap: 8px;
+}
+
+.item-form input,
+.item-form textarea,
+.chat-form textarea,
+.item-card input {
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px;
+  width: 100%;
+}
+
+.item-form textarea,
+.chat-form textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.item-list,
+.message-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.item-card,
+.proposal-card {
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.item-card p,
+.proposal-card p,
+.muted {
+  color: #5f6673;
+}
+
+.item-actions,
+.proposal-actions,
+.proposal-card-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.proposal-card-header span,
+.item-actions span {
+  color: #5f6673;
+  font-size: 12px;
+}
+
+.design-bottom {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  min-height: 30vh;
+}
+
+.message {
+  border-left: 3px solid #cfd6df;
+  margin: 0;
+  padding-left: 10px;
+}
+
+.message-assistant {
+  border-left-color: #7ba3c7;
+}
+
+.preview-grid {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.preview-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.preview-grid span {
+  color: #5f6673;
+  font-size: 12px;
+}
+
 .surface-preview {
   display: grid;
   gap: 16px;
@@ -113,6 +271,12 @@ button {
   }
 
   .surface-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-layout.focus-discovery,
+  .surface-layout.focus-purpose,
+  .design-bottom {
     grid-template-columns: 1fr;
   }
 }

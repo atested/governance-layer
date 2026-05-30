@@ -144,7 +144,9 @@ test("proposal storage does not mutate committed design state", () => {
 
     const proposals = listProposals(db, projectId);
     assert.equal(proposals.length, 1);
-    assert.equal(proposals[0].status, "pending");
+    const proposal = proposals[0];
+    assert.ok(proposal);
+    assert.equal(proposal.status, "pending");
     db.close();
   });
 });

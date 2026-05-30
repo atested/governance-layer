@@ -18,6 +18,28 @@ export type DesignProject = {
   activeContextId?: string | null;
 };
 
+export type DiscoveryItem = {
+  id: string;
+  projectId: string;
+  title: string;
+  body: string;
+  discoveryType: string;
+  state: DesignItemState;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PurposeItem = {
+  id: string;
+  projectId: string;
+  title: string;
+  body: string;
+  purposeType: string;
+  state: DesignItemState;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ChatMessage = {
   id: string;
   projectId: string;
@@ -25,6 +47,15 @@ export type ChatMessage = {
   content: string;
   createdAt: string;
   sourceRefs: string[];
+};
+
+export type ProposalPreview = {
+  proposalId: string;
+  proposalType: string;
+  creates: Array<{ table: string; title: string }>;
+  changes: Array<{ table: string; id: string; fields: string[] }>;
+  connections: Array<{ fromId: string; toId: string; type: string }>;
+  lineageEvents: Array<{ eventType: string; subjectId: string }>;
 };
 
 export type DesignProposal = {
@@ -46,4 +77,5 @@ export type DesignProposal = {
   status: ProposalStatus;
   createdAt: string;
   resolvedAt?: string | null;
+  preview?: ProposalPreview;
 };

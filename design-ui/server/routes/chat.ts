@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DesignDatabase } from "../db.ts";
 import { createChatMessage, listChatMessages } from "../repositories/chatMessages.ts";
+import { createStubChatTurn } from "../services/stubProposalEngine.ts";
+import { withProposalPreview } from "../services/proposalPreview.ts";
 import { sendJson } from "./health.ts";
 import { readJsonBody, requireProjectId } from "./request.ts";
 
@@ -13,6 +15,19 @@ export async function handleChat(
   const projectId = requireProjectId(url);
   if (!projectId) {
     sendJson(response, 400, { error: "projectId_required" });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/chat/send") {
+    const body = await readJsonBody<{ content?: string }>(request);
+    const turn = createStubChatTurn(db, {
+      projectId,
+      content: body.content ?? ""
+    });
+    sendJson(response, 201, {
+      ...turn,
+      proposals: turn.proposals.map((proposal) => withProposalPreview(proposal))
+    });
     return;
   }
 
