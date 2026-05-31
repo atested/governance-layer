@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { ComponentContainer, GoldenLayout } from "golden-layout";
@@ -71,7 +70,7 @@ export function buildDefaultWorkspaceLayout(pendingCount: number): LayoutConfig 
       content: [
         {
           type: "row",
-          size: "72%",
+          size: "76%",
           content: [
             workspaceComponent("chat", pendingCount, "33%"),
             workspaceComponent("discovery", pendingCount, "34%"),
@@ -80,7 +79,7 @@ export function buildDefaultWorkspaceLayout(pendingCount: number): LayoutConfig 
         },
         {
           type: "stack",
-          size: "28%",
+          size: "24%",
           content: [workspaceComponent("proposals", pendingCount), workspaceComponent("lineage", pendingCount)]
         }
       ]
@@ -94,13 +93,13 @@ export function buildDefaultWorkspaceLayout(pendingCount: number): LayoutConfig 
       reorderEnabled: true
     },
     dimensions: {
-      borderGrabWidth: 16,
-      borderWidth: 8,
-      defaultMinItemHeight: "220px",
-      defaultMinItemWidth: "280px",
+      borderGrabWidth: 18,
+      borderWidth: 10,
+      defaultMinItemHeight: "180px",
+      defaultMinItemWidth: "300px",
       dragProxyHeight: 260,
       dragProxyWidth: 360,
-      headerHeight: 30
+      headerHeight: 32
     },
     header: {
       close: "Hide panel",
@@ -123,10 +122,6 @@ function collectWorkspacePanelIds(layoutConfig: unknown, found = new Set<Workspa
     for (const child of node.content) collectWorkspacePanelIds(child, found);
   }
   return found;
-}
-
-function GoldenPanelFrame({ children }: { children: ReactNode }) {
-  return <div className="golden-panel-frame">{children}</div>;
 }
 
 function renderPanel(panelId: WorkspacePanelId, props: WorkspacePanelPropsState) {
@@ -183,9 +178,7 @@ export function DesignWorkspaceShell({
   );
 
   const renderMountedPanel = (record: MountedGoldenPanel) => {
-    record.root.render(
-      <GoldenPanelFrame>{renderPanel(record.panelId, latestPanelPropsRef.current)}</GoldenPanelFrame>
-    );
+    record.root.render(renderPanel(record.panelId, latestPanelPropsRef.current));
   };
 
   const updateHiddenPanels = (layout: GoldenLayout) => {
@@ -279,31 +272,32 @@ export function DesignWorkspaceShell({
 
   return (
     <section className="design-workspace">
-      <div className="focus-bar workspace-toolbar" role="group" aria-label="Workspace controls">
-        {panelMetadata.map((panel) => (
-          <button key={panel.id} onClick={() => focusPanel(panel.id)} type="button">
-            {panel.title}
-          </button>
-        ))}
+      <div className="workspace-statusbar" role="group" aria-label="Workspace controls">
+        <span>{pendingCount} pending</span>
+        {activeContextLabel ? <span>Context: {activeContextLabel}</span> : null}
         <button data-testid="workspace-reset-layout" onClick={resetLayout} type="button">
           Reset Layout
         </button>
-        <div className="workspace-hidden-panels" data-testid="workspace-hidden-panels">
-          <span>Hidden panels</span>
-          {hiddenPanels.length === 0 ? <span>None</span> : null}
-          {hiddenPanels.map((panelId) => (
-            <button
-              data-testid={`workspace-reopen-${panelId}`}
-              key={panelId}
-              onClick={() => focusPanel(panelId)}
-              type="button"
-            >
-              Show {DEFAULT_WORKSPACE_LAYOUT_PANELS[panelId].title}
-            </button>
-          ))}
-        </div>
-        <span>{pendingCount} pending</span>
-        {activeContextLabel ? <span>Context: {activeContextLabel}</span> : null}
+        {hiddenPanels.length > 0 ? (
+          <div className="workspace-hidden-panels" data-testid="workspace-hidden-panels">
+            <span>Hidden</span>
+            {hiddenPanels.map((panelId) => (
+              <button
+                data-testid={`workspace-reopen-${panelId}`}
+                key={panelId}
+                onClick={() => focusPanel(panelId)}
+                type="button"
+              >
+                {panelMetadata.find((panel) => panel.id === panelId)?.title ??
+                  DEFAULT_WORKSPACE_LAYOUT_PANELS[panelId].title}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="workspace-hidden-panels" data-testid="workspace-hidden-panels">
+            <span>All panels visible</span>
+          </div>
+        )}
       </div>
       <div className="golden-workspace lm_goldenlayout" data-testid="design-workspace-shell" ref={hostRef} />
     </section>

@@ -21,8 +21,7 @@ export function DiscoveryPanel({
   onPromote
 }: DiscoveryPanelProps) {
   return (
-    <section className="design-surface" data-testid="discovery-surface">
-      <h2>Discovery</h2>
+    <section className="workspace-panel design-surface discovery-panel" data-testid="discovery-surface">
       <form
         className="item-form"
         onSubmit={(event) => {

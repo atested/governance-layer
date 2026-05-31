@@ -274,37 +274,60 @@ button {
 }
 
 .design-workspace {
-  display: grid;
-  gap: 14px;
-  margin: 18px auto;
-  max-width: 1440px;
-  padding: 0 20px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: calc(100vh - 148px);
+  min-height: 560px;
+  padding: 8px 10px 10px;
 }
 
 .golden-workspace {
-  background: var(--surface-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  height: calc(100vh - 190px);
-  min-height: 660px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   overflow: hidden;
 }
 
-.golden-panel-host,
-.golden-panel-frame {
+.golden-panel-host {
   box-sizing: border-box;
   height: 100%;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.golden-panel-frame > .design-surface,
-.golden-panel-frame > .chat-panel,
-.golden-panel-frame > .proposal-panel,
-.golden-panel-frame > .lineage-panel {
-  border: 0;
-  border-radius: 0;
+.workspace-panel {
+  background: var(--surface-primary);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   height: 100%;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.discovery-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-soft) 18%, var(--surface-primary)),
+    var(--surface-primary) 42%
+  );
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.purpose-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--success-bg) 45%, var(--surface-primary)),
+    var(--surface-primary) 42%
+  );
+  box-shadow: inset 3px 0 0 var(--success-border);
 }
 
 .golden-workspace .lm_content {
@@ -313,20 +336,25 @@ button {
 }
 
 .golden-workspace .lm_header {
-  background: var(--surface-secondary);
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  height: 30px;
+  height: 32px;
 }
 
 .golden-workspace .lm_header .lm_tab {
   background: var(--surface-tertiary);
   border-color: var(--border-color);
   color: var(--text-secondary);
+  cursor: grab;
   font-family: inherit;
   font-size: 12px;
-  height: 20px;
+  height: 21px;
   margin-top: 3px;
-  padding: 3px 26px 5px 10px;
+  padding: 4px 28px 5px 10px;
+}
+
+.golden-workspace .lm_header .lm_tab:active {
+  cursor: grabbing;
 }
 
 .golden-workspace .lm_header .lm_tab.lm_active,
@@ -336,8 +364,8 @@ button {
 }
 
 .golden-workspace .lm_splitter {
-  background: var(--border-strong);
-  opacity: 0.55;
+  background: var(--border-color);
+  opacity: 0.8;
 }
 
 .golden-workspace .lm_splitter:hover,
@@ -371,21 +399,31 @@ button {
   outline-color: var(--accent);
 }
 
-.workspace-toolbar {
+.workspace-statusbar {
+  align-items: center;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
 }
 
-.workspace-toolbar span + span {
-  margin-left: 0;
+.workspace-statusbar span {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
-.focus-bar {
+.workspace-hidden-panels {
   align-items: center;
   display: flex;
   gap: 8px;
+  margin-left: auto;
 }
 
-.focus-bar button,
+.workspace-statusbar button,
 .proposal-actions button,
 .item-form button,
 .chat-form button,
@@ -396,15 +434,6 @@ button {
   color: var(--text-primary);
   cursor: pointer;
   padding: 7px 10px;
-}
-
-.focus-bar button.active {
-  background: var(--surface-active);
-}
-
-.focus-bar span {
-  color: var(--text-secondary);
-  margin-left: auto;
 }
 
 .surface-layout {
@@ -425,19 +454,9 @@ button {
 .chat-panel,
 .proposal-panel,
 .lineage-panel {
-  background: var(--surface-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
   min-width: 0;
-  padding: 16px;
-}
-
-.design-surface h2,
-.chat-panel h2,
-.proposal-panel h3,
-.lineage-panel h3 {
-  font-size: 18px;
-  margin: 0 0 12px;
 }
 
 .item-form,
@@ -466,18 +485,38 @@ button {
   resize: vertical;
 }
 
+.chat-form {
+  align-items: end;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.chat-form textarea {
+  max-height: 150px;
+  min-height: 52px;
+}
+
 .item-list,
-.message-list {
+.message-list,
+.proposal-list {
   display: grid;
+  flex: 1 1 auto;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.message-list {
+  align-content: start;
 }
 
 .item-card,
 .proposal-card {
-  background: var(--surface-primary);
+  background: color-mix(in srgb, var(--surface-primary) 88%, var(--surface-secondary));
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 12px;
 }
 
@@ -537,9 +576,19 @@ button {
 
 .lineage-list {
   display: grid;
+  flex: 1 1 auto;
   gap: 8px;
   margin: 0;
+  min-height: 0;
+  overflow: auto;
   padding-left: 20px;
+}
+
+.lineage-context {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+  font-size: 12px;
+  margin: 0;
 }
 
 .lineage-list li {

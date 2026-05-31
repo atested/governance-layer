@@ -21,8 +21,7 @@ export function PurposePanel({
   onDemote
 }: PurposePanelProps) {
   return (
-    <section className="design-surface" data-testid="purpose-surface">
-      <h2>Purpose</h2>
+    <section className="workspace-panel design-surface purpose-panel" data-testid="purpose-surface">
       <form
         className="item-form"
         onSubmit={(event) => {
