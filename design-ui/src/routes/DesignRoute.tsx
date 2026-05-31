@@ -22,11 +22,6 @@ import {
   sendChatMessage,
   updateItem
 } from "../api/client";
-import { ChatPanel } from "../panels/ChatPanel";
-import { DiscoveryPanel } from "../panels/DiscoveryPanel";
-import { LineagePanel } from "../panels/LineagePanel";
-import { ProposalsPanel } from "../panels/ProposalsPanel";
-import { PurposePanel } from "../panels/PurposePanel";
 import { emptyDraft } from "../panels/types";
 import type {
   ActiveContext,
@@ -36,12 +31,10 @@ import type {
   LineageEvent,
   PurposeItem
 } from "../types/design";
-
-type Focus = "discovery" | "purpose";
+import { DesignWorkspaceShell } from "../workspace/DesignWorkspaceShell";
 
 export function DesignRoute() {
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [focus, setFocus] = useState<Focus>("discovery");
   const [discoveryItems, setDiscoveryItems] = useState<DiscoveryItem[]>([]);
   const [purposeItems, setPurposeItems] = useState<PurposeItem[]>([]);
   const [proposals, setProposals] = useState<DesignProposal[]>([]);
@@ -170,60 +163,46 @@ export function DesignRoute() {
   };
 
   return (
-    <section className="design-workspace">
-      <div className="focus-bar" role="group" aria-label="Surface focus">
-        <button
-          className={focus === "discovery" ? "active" : ""}
-          onClick={() => setFocus("discovery")}
-          type="button"
-        >
-          Discovery Focus
-        </button>
-        <button
-          className={focus === "purpose" ? "active" : ""}
-          onClick={() => setFocus("purpose")}
-          type="button"
-        >
-          Purpose Focus
-        </button>
-        <span>{pendingCount} pending</span>
-        {activeContext ? <span>Context: {activeContext.label}</span> : null}
-      </div>
-
-      <div className={`surface-layout focus-${focus}`}>
-        <DiscoveryPanel
-          draft={discoveryDraft}
-          items={discoveryItems}
-          onCreate={() => createManualItem("discovery")}
-          onEdit={(item) =>
-            projectId
-              ? updateItem(projectId, "discovery", item.id, { title: item.title }).then(refresh)
-              : Promise.resolve()
-          }
-          onPromote={proposePromotion}
-          onShowLineage={showLineage}
-          setDraft={setDiscoveryDraft}
-        />
-        <PurposePanel
-          draft={purposeDraft}
-          items={purposeItems}
-          onCreate={() => createManualItem("purpose")}
-          onDemote={proposeDemotion}
-          onEdit={(item) =>
-            projectId
-              ? updateItem(projectId, "purpose", item.id, { title: item.title }).then(refresh)
-              : Promise.resolve()
-          }
-          onShowLineage={showLineage}
-          setDraft={setPurposeDraft}
-        />
-      </div>
-
-      <div className="design-bottom">
-        <ChatPanel messages={messages} draft={chatDraft} setDraft={setChatDraft} onSubmit={submitChat} />
-        <ProposalsPanel proposals={proposals} onAccept={accept} onReject={reject} />
-        <LineagePanel label={selectedLineageLabel} events={lineageEvents} />
-      </div>
-    </section>
+    <DesignWorkspaceShell
+      activeContextLabel={activeContext?.label ?? null}
+      chatPanel={{
+        messages,
+        draft: chatDraft,
+        setDraft: setChatDraft,
+        onSubmit: submitChat
+      }}
+      discoveryPanel={{
+        draft: discoveryDraft,
+        items: discoveryItems,
+        onCreate: () => createManualItem("discovery"),
+        onEdit: (item) =>
+          projectId
+            ? updateItem(projectId, "discovery", item.id, { title: item.title }).then(refresh)
+            : Promise.resolve(),
+        onPromote: proposePromotion,
+        onShowLineage: showLineage,
+        setDraft: setDiscoveryDraft
+      }}
+      lineagePanel={{
+        label: selectedLineageLabel,
+        events: lineageEvents
+      }}
+      pendingCount={pendingCount}
+      proposalsPanel={{
+        proposals,
+        onAccept: accept,
+        onReject: reject
+      }}
+      purposePanel={{
+        draft: purposeDraft,
+        items: purposeItems,
+        onCreate: () => createManualItem("purpose"),
+        onDemote: proposeDemotion,
+        onEdit: (item) =>
+          projectId ? updateItem(projectId, "purpose", item.id, { title: item.title }).then(refresh) : Promise.resolve(),
+        onShowLineage: showLineage,
+        setDraft: setPurposeDraft
+      }}
+    />
   );
 }

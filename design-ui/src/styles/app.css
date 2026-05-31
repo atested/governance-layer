@@ -273,8 +273,58 @@ button {
   display: grid;
   gap: 14px;
   margin: 18px auto;
-  max-width: 1280px;
+  max-width: 1440px;
   padding: 0 20px 24px;
+}
+
+.design-dockview {
+  --dv-group-view-background-color: var(--surface-primary);
+  --dv-tabs-and-actions-container-background-color: var(--surface-secondary);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-primary);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface-tertiary);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-primary);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface-tertiary);
+  --dv-activegroup-visiblepanel-tab-color: var(--text-primary);
+  --dv-activegroup-hiddenpanel-tab-color: var(--text-secondary);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text-secondary);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-secondary);
+  --dv-tab-divider-color: var(--border-color);
+  --dv-separator-border: var(--border-color);
+  --dv-paneview-header-border-color: var(--border-color);
+  --dv-paneview-active-outline-color: var(--accent);
+  --dv-sash-color: var(--border-subtle);
+  --dv-active-sash-color: var(--accent-soft);
+  --dv-tabs-and-actions-container-height: 34px;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  height: calc(100vh - 190px);
+  min-height: 660px;
+  overflow: hidden;
+}
+
+.design-dockview-panel {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
+}
+
+.design-dockview-panel > .design-surface,
+.design-dockview-panel > .chat-panel,
+.design-dockview-panel > .proposal-panel,
+.design-dockview-panel > .lineage-panel {
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.workspace-toolbar {
+  flex-wrap: wrap;
+}
+
+.workspace-toolbar span + span {
+  margin-left: 0;
 }
 
 .focus-bar {
