@@ -59,7 +59,7 @@ function workspaceComponent(panelId: WorkspacePanelId, pendingCount: number, siz
     componentType: panelId,
     title: panelTitle(panelId, pendingCount),
     size,
-    minSize: panelId === "chat" || panelId === "discovery" || panelId === "purpose" ? "360px" : "280px"
+    minSize: panelId === "chat" || panelId === "discovery" || panelId === "purpose" ? "160px" : "120px"
   };
 }
 
@@ -93,10 +93,10 @@ export function buildDefaultWorkspaceLayout(pendingCount: number): LayoutConfig 
       reorderEnabled: true
     },
     dimensions: {
-      borderGrabWidth: 18,
-      borderWidth: 10,
-      defaultMinItemHeight: "180px",
-      defaultMinItemWidth: "300px",
+      borderGrabWidth: 14,
+      borderWidth: 6,
+      defaultMinItemHeight: "120px",
+      defaultMinItemWidth: "140px",
       dragProxyHeight: 260,
       dragProxyWidth: 360,
       headerHeight: 32
@@ -110,6 +110,13 @@ export function buildDefaultWorkspaceLayout(pendingCount: number): LayoutConfig 
       tabDropdown: "More panels"
     }
   };
+}
+
+function resizeLayoutToHost(layout: GoldenLayout, host: HTMLElement) {
+  const { height, width } = host.getBoundingClientRect();
+  if (width > 0 && height > 0) {
+    layout.setSize(Math.floor(width), Math.floor(height));
+  }
 }
 
 function collectWorkspacePanelIds(layoutConfig: unknown, found = new Set<WorkspacePanelId>()) {
@@ -218,17 +225,20 @@ export function DesignWorkspaceShell({
     if (!host) return;
 
     const layout = new GoldenLayout(host);
-    const resizeObserver = new ResizeObserver(() => layout.updateRootSize());
+    layout.resizeWithContainerAutomatically = true;
+    layout.resizeDebounceInterval = 0;
+    layout.resizeDebounceExtendedWhenPossible = false;
 
     registerPanels(layout);
     layout.loadLayout(buildDefaultWorkspaceLayout(pendingCount));
-    resizeObserver.observe(host);
+    resizeLayoutToHost(layout, host);
+    const resizeFrame = window.requestAnimationFrame(() => resizeLayoutToHost(layout, host));
     layout.on("stateChanged", () => updateHiddenPanels(layout));
     updateHiddenPanels(layout);
     layoutRef.current = layout;
 
     return () => {
-      resizeObserver.disconnect();
+      window.cancelAnimationFrame(resizeFrame);
       layout.destroy();
       for (const record of mountedPanelsRef.current.values()) {
         record.root.unmount();
