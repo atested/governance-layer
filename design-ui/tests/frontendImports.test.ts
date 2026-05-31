@@ -27,6 +27,10 @@ import test from "node:test";
 
 const mainTsx = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
 const viteConfigTs = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+const goldenLayoutCss = readFileSync(
+  new URL("../src/styles/goldenlayout.css", import.meta.url),
+  "utf8",
+);
 const designRouteTsx = readFileSync(
   new URL("../src/routes/DesignRoute.tsx", import.meta.url),
   "utf8",
@@ -47,9 +51,15 @@ test("main.tsx uses named imports for React 19 + Vite 7", () => {
   assert.match(mainTsx, /<StrictMode>/);
 });
 
-test("main.tsx imports GoldenLayout styles without a Dockview CSS alias", () => {
-  assert.match(mainTsx, /import "golden-layout\/dist\/css\/goldenlayout-base\.css";/);
-  assert.match(mainTsx, /import "golden-layout\/dist\/css\/themes\/goldenlayout-light-theme\.css";/);
+test("main.tsx imports local GoldenLayout styles without package CSS specifiers", () => {
+  assert.match(mainTsx, /import "\.\/styles\/goldenlayout\.css";/);
+  assert.doesNotMatch(mainTsx, /golden-layout\/dist\/css\/goldenlayout-base\.css/);
+  assert.doesNotMatch(mainTsx, /golden-layout\/dist\/css\/themes\/goldenlayout-light-theme\.css/);
+  assert.match(goldenLayoutCss, /@import "\.\.\/\.\.\/node_modules\/golden-layout\/dist\/css\/goldenlayout-base\.css";/);
+  assert.match(
+    goldenLayoutCss,
+    /@import "\.\.\/\.\.\/node_modules\/golden-layout\/dist\/css\/themes\/goldenlayout-light-theme\.css";/,
+  );
   assert.doesNotMatch(mainTsx, /dockview\/dist\/styles\/dockview\.css/);
   assert.doesNotMatch(viteConfigTs, /dockview\/dist\/styles\/dockview\.css/);
 });
