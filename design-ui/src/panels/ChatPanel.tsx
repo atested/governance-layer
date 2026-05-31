@@ -15,8 +15,7 @@ export function ChatPanel({
   onSubmit
 }: ChatPanelProps) {
   return (
-    <section className="chat-panel" data-testid="chat-panel">
-      <h2>Chat</h2>
+    <section className="workspace-panel chat-panel" data-testid="chat-panel">
       <div className="message-list">
         {messages.map((message) => (
           <p className={`message message-${message.role}`} key={message.id}>

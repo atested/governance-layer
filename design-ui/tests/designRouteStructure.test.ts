@@ -64,9 +64,9 @@ test("default workspace layout registers primary panels and support panels", () 
   assert.match(workspaceShell, /workspaceComponent\("purpose", pendingCount, "33%"\)/);
   assert.match(workspaceShell, /workspaceComponent\("proposals", pendingCount\)/);
   assert.match(workspaceShell, /workspaceComponent\("lineage", pendingCount\)/);
-  assert.match(workspaceShell, /type: "row"[\s\S]*size: "72%"/);
-  assert.match(workspaceShell, /type: "stack"[\s\S]*size: "28%"/);
-  assert.match(workspaceShell, /borderGrabWidth: 16/);
+  assert.match(workspaceShell, /type: "row"[\s\S]*size: "76%"/);
+  assert.match(workspaceShell, /type: "stack"[\s\S]*size: "24%"/);
+  assert.match(workspaceShell, /borderGrabWidth: 18/);
   assert.match(workspaceShell, /popout: "Open in new window"/);
   assert.match(workspaceShell, /close: "Hide panel"/);
 });
@@ -99,12 +99,19 @@ test("primary and support surfaces are extracted into reusable panels", () => {
 
 test("extracted panels preserve current route controls and test ids", () => {
   assert.match(chatPanel, /data-testid="chat-panel"/);
+  assert.match(chatPanel, /className="workspace-panel chat-panel"/);
   assert.match(chatPanel, /Chat message/);
   assert.match(chatPanel, /Send/);
   assert.match(discoveryPanel, /data-testid="discovery-surface"/);
+  assert.match(discoveryPanel, /className="workspace-panel design-surface discovery-panel"/);
   assert.match(purposePanel, /data-testid="purpose-surface"/);
+  assert.match(purposePanel, /className="workspace-panel design-surface purpose-panel"/);
   assert.match(proposalsPanel, /data-testid="proposals-panel"/);
   assert.match(lineagePanel, /data-testid="lineage-panel"/);
+  assert.doesNotMatch(chatPanel, /<h2>Chat<\/h2>/);
+  assert.doesNotMatch(discoveryPanel, /<h2>Discovery<\/h2>/);
+  assert.doesNotMatch(purposePanel, /<h2>Purpose<\/h2>/);
+  assert.doesNotMatch(proposalsPanel, /<h3>Pending Proposals<\/h3>/);
 });
 
 test("/map route is a node-link graph with filters and context loading", () => {
@@ -121,9 +128,10 @@ test("/map route is a node-link graph with filters and context loading", () => {
 
 test("workspace CSS hosts GoldenLayout without hiding surfaces", () => {
   assert.match(cssSource, /\.golden-workspace/);
-  assert.match(cssSource, /\.golden-panel-frame/);
+  assert.match(cssSource, /\.workspace-panel/);
   assert.match(cssSource, /\.lm_splitter:hover/);
   assert.match(cssSource, /\.lm_controls > \*/);
   assert.match(cssSource, /\.lm_dropTargetIndicator/);
+  assert.doesNotMatch(cssSource, /\.golden-panel-frame/);
   assert.doesNotMatch(cssSource, /display:\s*none/);
 });
