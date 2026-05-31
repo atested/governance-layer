@@ -13,7 +13,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import "dockview/dist/styles/dockview.css";
+import "golden-layout/dist/css/goldenlayout-base.css";
+import "golden-layout/dist/css/themes/goldenlayout-light-theme.css";
 import "./styles/app.css";
 
 createRoot(document.getElementById("root") as HTMLElement).render(

@@ -44,11 +44,13 @@ test("/design active context constrains both surfaces without hiding them", () =
   assert.doesNotMatch(routeSource, /context && context\.purposeItemIds\.length/);
 });
 
-test("/design uses Dockview workspace shell without removing route-owned state", () => {
-  assert.match(packageSource, /"dockview"/);
-  assert.match(workspaceShell, /DockviewReact/);
+test("/design uses GoldenLayout workspace shell without removing route-owned state", () => {
+  assert.match(packageSource, /"golden-layout"/);
+  assert.doesNotMatch(packageSource, /"dockview"/);
+  assert.match(workspaceShell, /GoldenLayout/);
   assert.match(workspaceShell, /data-testid="design-workspace-shell"/);
   assert.match(workspaceShell, /WORKSPACE_PANEL_IDS = \["chat", "discovery", "purpose", "proposals", "lineage"\]/);
+  assert.match(workspaceShell, /registerComponentFactoryFunction/);
   assert.match(workspaceShell, /buildDefaultWorkspaceLayout/);
   assert.match(workspaceShell, /data-testid="workspace-reset-layout"/);
   assert.match(routeSource, /acceptProposal/);
@@ -57,14 +59,24 @@ test("/design uses Dockview workspace shell without removing route-owned state",
 });
 
 test("default workspace layout registers primary panels and support panels", () => {
-  assert.match(workspaceShell, /id: "chat"[\s\S]*component: "chat"/);
-  assert.match(workspaceShell, /id: "discovery"[\s\S]*component: "discovery"/);
-  assert.match(workspaceShell, /id: "purpose"[\s\S]*component: "purpose"/);
-  assert.match(workspaceShell, /id: "proposals"[\s\S]*component: "proposals"/);
-  assert.match(workspaceShell, /id: "lineage"[\s\S]*component: "lineage"/);
-  assert.match(workspaceShell, /referencePanel: "purpose"[\s\S]*direction: "below"/);
-  assert.match(workspaceShell, /referencePanel: "proposals"[\s\S]*direction: "within"/);
-  assert.match(workspaceShell, /inactive: true/);
+  assert.match(workspaceShell, /workspaceComponent\("chat", pendingCount, "33%"\)/);
+  assert.match(workspaceShell, /workspaceComponent\("discovery", pendingCount, "34%"\)/);
+  assert.match(workspaceShell, /workspaceComponent\("purpose", pendingCount, "33%"\)/);
+  assert.match(workspaceShell, /workspaceComponent\("proposals", pendingCount\)/);
+  assert.match(workspaceShell, /workspaceComponent\("lineage", pendingCount\)/);
+  assert.match(workspaceShell, /type: "row"[\s\S]*size: "72%"/);
+  assert.match(workspaceShell, /type: "stack"[\s\S]*size: "28%"/);
+  assert.match(workspaceShell, /borderGrabWidth: 16/);
+  assert.match(workspaceShell, /popout: "Open in new window"/);
+  assert.match(workspaceShell, /close: "Hide panel"/);
+});
+
+test("workspace can reset and recover hidden GoldenLayout panels", () => {
+  assert.match(workspaceShell, /layout\.loadLayout\(buildDefaultWorkspaceLayout\(pendingCount\)\)/);
+  assert.match(workspaceShell, /data-testid="workspace-hidden-panels"/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-reopen-\$\{panelId\}`\}/);
+  assert.match(workspaceShell, /layout\.newComponent\(panelId/);
+  assert.match(workspaceShell, /collectWorkspacePanelIds/);
 });
 
 test("primary and support surfaces are extracted into reusable panels", () => {
@@ -107,9 +119,11 @@ test("/map route is a node-link graph with filters and context loading", () => {
   assert.doesNotMatch(mapRoute, /tree|folder/i);
 });
 
-test("workspace CSS hosts Dockview without hiding surfaces", () => {
-  assert.match(cssSource, /\.design-dockview/);
-  assert.match(cssSource, /\.design-dockview-panel/);
-  assert.match(cssSource, /--dv-group-view-background-color: var\(--surface-primary\)/);
+test("workspace CSS hosts GoldenLayout without hiding surfaces", () => {
+  assert.match(cssSource, /\.golden-workspace/);
+  assert.match(cssSource, /\.golden-panel-frame/);
+  assert.match(cssSource, /\.lm_splitter:hover/);
+  assert.match(cssSource, /\.lm_controls > \*/);
+  assert.match(cssSource, /\.lm_dropTargetIndicator/);
   assert.doesNotMatch(cssSource, /display:\s*none/);
 });

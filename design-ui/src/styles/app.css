@@ -42,6 +42,7 @@
   /* Accents (used for assistant messages, connected map nodes, edges) */
   --accent: #7ba3c7;
   --accent-soft: #9fb4c8;
+  --golden-icon-filter: none;
 
   /* Status — success / warning / error */
   --success-bg: #e8f5ee;
@@ -80,6 +81,7 @@
 
     --accent: #6fa6d2;
     --accent-soft: #5a7892;
+    --golden-icon-filter: invert(1);
 
     --success-bg: #1f3b2b;
     --success-border: #3f7a5b;
@@ -111,6 +113,7 @@
 
   --accent: #7ba3c7;
   --accent-soft: #9fb4c8;
+  --golden-icon-filter: none;
 
   --success-bg: #e8f5ee;
   --success-border: #9ccfb2;
@@ -140,6 +143,7 @@
 
   --accent: #6fa6d2;
   --accent-soft: #5a7892;
+  --golden-icon-filter: invert(1);
 
   --success-bg: #1f3b2b;
   --success-border: #3f7a5b;
@@ -277,24 +281,7 @@ button {
   padding: 0 20px 24px;
 }
 
-.design-dockview {
-  --dv-group-view-background-color: var(--surface-primary);
-  --dv-tabs-and-actions-container-background-color: var(--surface-secondary);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-primary);
-  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface-tertiary);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-primary);
-  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface-tertiary);
-  --dv-activegroup-visiblepanel-tab-color: var(--text-primary);
-  --dv-activegroup-hiddenpanel-tab-color: var(--text-secondary);
-  --dv-inactivegroup-visiblepanel-tab-color: var(--text-secondary);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-secondary);
-  --dv-tab-divider-color: var(--border-color);
-  --dv-separator-border: var(--border-color);
-  --dv-paneview-header-border-color: var(--border-color);
-  --dv-paneview-active-outline-color: var(--accent);
-  --dv-sash-color: var(--border-subtle);
-  --dv-active-sash-color: var(--accent-soft);
-  --dv-tabs-and-actions-container-height: 34px;
+.golden-workspace {
   background: var(--surface-primary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -303,20 +290,85 @@ button {
   overflow: hidden;
 }
 
-.design-dockview-panel {
+.golden-panel-host,
+.golden-panel-frame {
   box-sizing: border-box;
   height: 100%;
   overflow: auto;
 }
 
-.design-dockview-panel > .design-surface,
-.design-dockview-panel > .chat-panel,
-.design-dockview-panel > .proposal-panel,
-.design-dockview-panel > .lineage-panel {
+.golden-panel-frame > .design-surface,
+.golden-panel-frame > .chat-panel,
+.golden-panel-frame > .proposal-panel,
+.golden-panel-frame > .lineage-panel {
   border: 0;
   border-radius: 0;
   height: 100%;
   overflow: auto;
+}
+
+.golden-workspace .lm_content {
+  background: var(--surface-primary);
+  border-color: var(--border-color);
+}
+
+.golden-workspace .lm_header {
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--border-color);
+  height: 30px;
+}
+
+.golden-workspace .lm_header .lm_tab {
+  background: var(--surface-tertiary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  height: 20px;
+  margin-top: 3px;
+  padding: 3px 26px 5px 10px;
+}
+
+.golden-workspace .lm_header .lm_tab.lm_active,
+.golden-workspace .lm_tab:hover {
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.golden-workspace .lm_splitter {
+  background: var(--border-strong);
+  opacity: 0.55;
+}
+
+.golden-workspace .lm_splitter:hover,
+.golden-workspace .lm_splitter.lm_dragging {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.golden-workspace .lm_splitter.lm_horizontal .lm_drag_handle {
+  cursor: ew-resize;
+}
+
+.golden-workspace .lm_splitter.lm_vertical .lm_drag_handle {
+  cursor: ns-resize;
+}
+
+.golden-workspace .lm_controls > * {
+  filter: var(--golden-icon-filter);
+  opacity: 0.65;
+}
+
+.golden-workspace .lm_header .lm_tab .lm_close_tab {
+  filter: var(--golden-icon-filter);
+}
+
+.golden-workspace .lm_controls > *:hover {
+  opacity: 1;
+}
+
+.golden-workspace .lm_dropTargetIndicator {
+  outline-color: var(--accent);
 }
 
 .workspace-toolbar {
