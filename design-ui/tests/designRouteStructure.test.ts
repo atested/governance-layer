@@ -49,6 +49,7 @@ test("/design uses Dockview workspace shell without removing route-owned state",
   assert.match(workspaceShell, /DockviewReact/);
   assert.match(workspaceShell, /data-testid="design-workspace-shell"/);
   assert.match(workspaceShell, /WORKSPACE_PANEL_IDS = \["chat", "discovery", "purpose", "proposals", "lineage"\]/);
+  assert.match(workspaceShell, /WORKSPACE_TAB_COMPONENT = "workspaceTab"/);
   assert.match(workspaceShell, /buildDefaultWorkspaceLayout/);
   assert.match(workspaceShell, /data-testid="workspace-reset-layout"/);
   assert.match(routeSource, /acceptProposal/);
@@ -62,9 +63,30 @@ test("default workspace layout registers primary panels and support panels", () 
   assert.match(workspaceShell, /id: "purpose"[\s\S]*component: "purpose"/);
   assert.match(workspaceShell, /id: "proposals"[\s\S]*component: "proposals"/);
   assert.match(workspaceShell, /id: "lineage"[\s\S]*component: "lineage"/);
-  assert.match(workspaceShell, /referencePanel: "purpose"[\s\S]*direction: "below"/);
+  assert.match(workspaceShell, /referencePanel: "discovery"[\s\S]*direction: "below"/);
+  assert.match(workspaceShell, /referencePanel: "chat"[\s\S]*direction: "below"/);
   assert.match(workspaceShell, /referencePanel: "proposals"[\s\S]*direction: "within"/);
+  assert.match(workspaceShell, /minimumWidth: 420/);
   assert.match(workspaceShell, /inactive: true/);
+});
+
+test("workspace panels expose GoldenLayout-style controls and recovery", () => {
+  assert.match(workspaceShell, /function WorkspacePanelTab/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-popout-\$\{panelId\}`\}/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-maximize-\$\{panelId\}`\}/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-close-\$\{panelId\}`\}/);
+  assert.match(workspaceShell, /data-testid="workspace-hidden-panels"/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-reopen-\$\{panelId\}`\}/);
+  assert.match(workspaceShell, /panel\.api\.close\(\)/);
+  assert.match(workspaceShell, /panel\.api\.maximize\(\)/);
+  assert.match(workspaceShell, /panel\.api\.exitMaximized\(\)/);
+});
+
+test("workspace popouts use focused route-based panel windows", () => {
+  assert.match(workspaceShell, /searchParams\.set\("panel", panelId\)/);
+  assert.match(workspaceShell, /window\.open/);
+  assert.match(workspaceShell, /popup,width=1120,height=820/);
+  assert.match(workspaceShell, /data-testid=\{`workspace-popout-panel-\$\{selectedPopoutPanel\}`\}/);
 });
 
 test("primary and support surfaces are extracted into reusable panels", () => {
@@ -110,6 +132,10 @@ test("/map route is a node-link graph with filters and context loading", () => {
 test("workspace CSS hosts Dockview without hiding surfaces", () => {
   assert.match(cssSource, /\.design-dockview/);
   assert.match(cssSource, /\.design-dockview-panel/);
+  assert.match(cssSource, /\.workspace-tab-actions/);
+  assert.match(cssSource, /\.workspace-hidden-panels/);
   assert.match(cssSource, /--dv-group-view-background-color: var\(--surface-primary\)/);
+  assert.match(cssSource, /--dv-active-sash-color: var\(--accent\)/);
+  assert.match(cssSource, /\.dv-split-view-container\.dv-horizontal > \.dv-sash-container > \.dv-sash/);
   assert.doesNotMatch(cssSource, /display:\s*none/);
 });

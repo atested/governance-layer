@@ -292,15 +292,36 @@ button {
   --dv-separator-border: var(--border-color);
   --dv-paneview-header-border-color: var(--border-color);
   --dv-paneview-active-outline-color: var(--accent);
-  --dv-sash-color: var(--border-subtle);
-  --dv-active-sash-color: var(--accent-soft);
-  --dv-tabs-and-actions-container-height: 34px;
+  --dv-sash-color: var(--border-strong);
+  --dv-active-sash-color: var(--accent);
+  --dv-tabs-and-actions-container-height: 42px;
   background: var(--surface-primary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  height: calc(100vh - 190px);
-  min-height: 660px;
+  height: calc(100vh - 176px);
+  min-height: 720px;
   overflow: hidden;
+}
+
+.design-dockview .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
+  width: 10px;
+}
+
+.design-dockview .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
+  height: 10px;
+}
+
+.design-dockview .dv-sash:not(.dv-disabled):hover,
+.design-dockview .dv-sash:not(.disabled):active {
+  background: var(--accent);
+}
+
+.design-dockview .dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before {
+  width: 2px;
+}
+
+.design-dockview .dv-split-view-container.dv-vertical > .dv-view-container > .dv-view:not(:first-child)::before {
+  height: 2px;
 }
 
 .design-dockview-panel {
@@ -320,11 +341,95 @@ button {
 }
 
 .workspace-toolbar {
+  align-items: center;
   flex-wrap: wrap;
 }
 
 .workspace-toolbar span + span {
   margin-left: 0;
+}
+
+.workspace-hidden-panels {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.workspace-hidden-panels span {
+  margin-left: 0;
+}
+
+.workspace-tab {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(88px, 1fr) auto;
+  height: 100%;
+  min-width: 220px;
+}
+
+.workspace-tab-title {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: grab;
+  font: inherit;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.workspace-tab-actions button {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 5px;
+}
+
+.workspace-tab-actions button:hover {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+
+.design-workspace-popout {
+  max-width: none;
+}
+
+.design-popout-panel {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+.workspace-popout-header {
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
+}
+
+.workspace-popout-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.design-popout-panel .design-dockview-panel {
+  height: calc(100vh - 172px);
 }
 
 .focus-bar {
@@ -353,6 +458,10 @@ button {
 .focus-bar span {
   color: var(--text-secondary);
   margin-left: auto;
+}
+
+.focus-bar .workspace-hidden-panels span {
+  margin-left: 0;
 }
 
 .surface-layout {
