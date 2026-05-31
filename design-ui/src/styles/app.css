@@ -279,7 +279,7 @@ button {
   flex-direction: column;
   gap: 8px;
   height: calc(100vh - 148px);
-  min-height: 560px;
+  min-height: 420px;
   padding: 8px 10px 10px;
 }
 
@@ -290,7 +290,9 @@ button {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
+  position: relative;
+  width: 100%;
 }
 
 .golden-panel-host {
@@ -298,6 +300,7 @@ button {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .workspace-panel {
@@ -310,6 +313,7 @@ button {
   min-height: 0;
   overflow: hidden;
   padding: 12px;
+  width: 100%;
 }
 
 .discovery-panel {
@@ -462,7 +466,10 @@ button {
 .item-form,
 .chat-form {
   display: grid;
+  flex: 0 1 auto;
   gap: 8px;
+  min-height: 0;
+  min-width: 0;
 }
 
 .item-form input,
@@ -481,7 +488,7 @@ button {
 
 .item-form textarea,
 .chat-form textarea {
-  min-height: 72px;
+  min-height: 44px;
   resize: vertical;
 }
 
@@ -493,7 +500,7 @@ button {
 
 .chat-form textarea {
   max-height: 150px;
-  min-height: 52px;
+  min-height: 44px;
 }
 
 .item-list,
@@ -504,6 +511,7 @@ button {
   gap: 10px;
   margin-top: 0;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   padding-right: 2px;
 }
@@ -517,6 +525,7 @@ button {
   background: color-mix(in srgb, var(--surface-primary) 88%, var(--surface-secondary));
   border: 1px solid var(--border-color);
   border-radius: 4px;
+  min-width: 0;
   padding: 12px;
 }
 
@@ -531,8 +540,10 @@ button {
 .proposal-card-header {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .proposal-card-header span,

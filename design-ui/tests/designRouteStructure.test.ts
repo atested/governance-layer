@@ -66,9 +66,21 @@ test("default workspace layout registers primary panels and support panels", () 
   assert.match(workspaceShell, /workspaceComponent\("lineage", pendingCount\)/);
   assert.match(workspaceShell, /type: "row"[\s\S]*size: "76%"/);
   assert.match(workspaceShell, /type: "stack"[\s\S]*size: "24%"/);
-  assert.match(workspaceShell, /borderGrabWidth: 18/);
+  assert.match(workspaceShell, /minSize:[\s\S]*"160px"/);
+  assert.match(workspaceShell, /minSize:[\s\S]*"120px"/);
+  assert.match(workspaceShell, /borderGrabWidth: 14/);
+  assert.match(workspaceShell, /defaultMinItemWidth: "140px"/);
+  assert.match(workspaceShell, /defaultMinItemHeight: "120px"/);
   assert.match(workspaceShell, /popout: "Open in new window"/);
   assert.match(workspaceShell, /close: "Hide panel"/);
+});
+
+test("workspace syncs GoldenLayout sizing with its container", () => {
+  assert.match(workspaceShell, /resizeWithContainerAutomatically = true/);
+  assert.match(workspaceShell, /resizeDebounceInterval = 0/);
+  assert.match(workspaceShell, /resizeDebounceExtendedWhenPossible = false/);
+  assert.match(workspaceShell, /resizeLayoutToHost/);
+  assert.match(workspaceShell, /layout\.setSize/);
 });
 
 test("workspace can reset and recover hidden GoldenLayout panels", () => {
@@ -132,6 +144,9 @@ test("workspace CSS hosts GoldenLayout without hiding surfaces", () => {
   assert.match(cssSource, /\.lm_splitter:hover/);
   assert.match(cssSource, /\.lm_controls > \*/);
   assert.match(cssSource, /\.lm_dropTargetIndicator/);
+  assert.match(cssSource, /overflow:\s*clip/);
+  assert.match(cssSource, /position:\s*relative/);
+  assert.match(cssSource, /min-height:\s*420px/);
   assert.doesNotMatch(cssSource, /\.golden-panel-frame/);
   assert.doesNotMatch(cssSource, /display:\s*none/);
 });
