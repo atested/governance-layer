@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const mainTsx = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+const viteConfigTs = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const designRouteTsx = readFileSync(
   new URL("../src/routes/DesignRoute.tsx", import.meta.url),
   "utf8",
@@ -44,6 +45,12 @@ test("main.tsx uses named imports for React 19 + Vite 7", () => {
   assert.doesNotMatch(mainTsx, /ReactDOM\.createRoot/);
   // <StrictMode> must remain.
   assert.match(mainTsx, /<StrictMode>/);
+});
+
+test("Vite resolves Dockview package CSS through an exact alias", () => {
+  assert.match(mainTsx, /import "dockview\/dist\/styles\/dockview\.css";/);
+  assert.match(viteConfigTs, /"dockview\/dist\/styles\/dockview\.css"/);
+  assert.match(viteConfigTs, /node_modules\/dockview\/dist\/styles\/dockview\.css/);
 });
 
 test("DesignRoute imports FormEvent as a type, not as a value", () => {
