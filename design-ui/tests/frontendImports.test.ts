@@ -47,10 +47,11 @@ test("main.tsx uses named imports for React 19 + Vite 7", () => {
   assert.match(mainTsx, /<StrictMode>/);
 });
 
-test("Vite resolves Dockview package CSS through an exact alias", () => {
-  assert.match(mainTsx, /import "dockview\/dist\/styles\/dockview\.css";/);
-  assert.match(viteConfigTs, /"dockview\/dist\/styles\/dockview\.css"/);
-  assert.match(viteConfigTs, /node_modules\/dockview\/dist\/styles\/dockview\.css/);
+test("main.tsx imports GoldenLayout styles without a Dockview CSS alias", () => {
+  assert.match(mainTsx, /import "golden-layout\/dist\/css\/goldenlayout-base\.css";/);
+  assert.match(mainTsx, /import "golden-layout\/dist\/css\/themes\/goldenlayout-light-theme\.css";/);
+  assert.doesNotMatch(mainTsx, /dockview\/dist\/styles\/dockview\.css/);
+  assert.doesNotMatch(viteConfigTs, /dockview\/dist\/styles\/dockview\.css/);
 });
 
 test("DesignRoute imports FormEvent as a type, not as a value", () => {
