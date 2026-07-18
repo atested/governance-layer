@@ -48,13 +48,24 @@ python3 -m venv .venv
 .venv/bin/python3 -m pip install -r requirements.txt
 ```
 
-### 2. Start the proxy
+`./atested` automatically uses `.venv/bin/python3` when that interpreter is
+present, so shell activation is optional.
+
+### 2. Start Atested
 
 ```bash
-ANTHROPIC_API_KEY=sk-... python3 -m proxy.server
+./atested start
 ```
 
-The proxy starts on `http://127.0.0.1:8080`. It forwards to the Anthropic API by default.
+On a clean install, `./atested start` creates the runtime directory, local
+Ed25519 signing key, machine identity, primary machine registry, and an initial
+signed QA bootstrap snapshot. It then starts the proxy on
+`http://127.0.0.1:8080`, plus the local dashboard and background services.
+
+The decision signing key is stored at
+`gov_runtime/.atested-signing-key.pem` with mode `0600`. The QA bootstrap
+snapshot is written to `gov_runtime/LOGS/qa-chain.jsonl`; it is an initial
+installation state, not a completed periodic QA assessment.
 
 ### 3. Point your agent at the proxy
 
@@ -69,17 +80,28 @@ That's it. Your agent talks to Atested instead of the Anthropic API directly. Ev
 ### Options
 
 ```bash
-# Custom port and bind address
-python3 -m proxy.server --port 9000 --host 0.0.0.0
+# Lifecycle proxy command used under the supervisor
+GOV_RUNTIME_DIR=gov_runtime GOV_SIGNING_KEY_PATH=gov_runtime/.atested-signing-key.pem \
+  .venv/bin/python3 -m proxy.server --port 8080
 
-# Custom upstream (for non-Anthropic providers)
-python3 -m proxy.server --upstream https://api.openai.com
+# Advanced/manual proxy start with explicit prerequisites
+GOV_RUNTIME_DIR=gov_runtime \
+GOV_SIGNING_KEY_PATH=gov_runtime/.atested-signing-key.pem \
+ANTHROPIC_API_KEY=sk-... \
+  .venv/bin/python3 -m proxy.server --port 9000 --host 127.0.0.1
+
+# Advanced/testing: supervised lifecycle with a local Anthropic-compatible mock
+./atested start --upstream http://127.0.0.1:18090
 
 # Friendly identity label (default: system hostname)
-python3 -m proxy.server --user-identity "dev-machine-1"
+./atested start --user-identity "dev-machine-1"
 # Or via environment variable:
-ATESTED_USER_LABEL="dev-machine-1" python3 -m proxy.server
+ATESTED_USER_LABEL="dev-machine-1" ./atested start
 ```
+
+`ANTHROPIC_API_KEY` alone is not enough to start the proxy. Production startup
+also requires a signing key and a current QA chain state; the lifecycle command
+creates both.
 
 ---
 
@@ -105,7 +127,7 @@ Policy rules are declarative JSON (`capabilities/policy-rules.json`). First matc
 Atested includes a live dashboard for real-time visibility into governance activity.
 
 ```bash
-python3 dashboard/server.py
+.venv/bin/python3 dashboard/server.py
 ```
 
 The dashboard shows: chain health, mediated decisions, denied actions, operation approvals, audit queries, and reports — all backed by the governance chain.
