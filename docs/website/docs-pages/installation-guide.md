@@ -13,10 +13,14 @@ Atested is an HTTP proxy that sits between your AI agent and the model provider.
 Clone the repository and install the Python dependencies.
 
 ```bash
-git clone https://github.com/atested/governance-layer.git atested
-cd atested
-python3 -m venv mcp/.venv
-mcp/.venv/bin/python3 -m pip install -r mcp/requirements.txt
+git clone https://github.com/atested/governance-layer.git
+cd governance-layer
+
+python3 -m venv .venv
+.venv/bin/python3 -m pip install -r requirements.txt
+
+./atested start
+./atested status
 ```
 
 ## Initialize
