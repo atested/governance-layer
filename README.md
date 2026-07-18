@@ -7,7 +7,7 @@ Governance infrastructure for AI operations. Atested is an API governance proxy 
 
 **Website**: [atested.com](https://atested.com) | **Security**: [SECURITY.md](SECURITY.md)
 
-**License**: [Business Source License 1.1](LICENSE) — free for personal use, commercial use requires a paid license. Converts to Apache 2.0 on May 13, 2030.
+**License**: [Business Source License 1.1](LICENSE) — free for personal non-commercial use, evaluation and testing, qualifying academic and research use, and non-production development. Commercial or organizational production use, including entirely internal use, requires a paid commercial license. Converts to Apache 2.0 on May 13, 2030.
 
 ---
 
@@ -162,8 +162,9 @@ $GOV_RUNTIME_DIR/
 
 Atested is source-available under the [Business Source License 1.1](LICENSE).
 
-- **Personal use**: Free, no license key required.
-- **Commercial use**: Requires a paid license from [atested.com](https://atested.com/pricing.html).
+- **Permitted without a paid commercial license**: Personal non-commercial use, evaluation and testing, qualifying academic and research use, and non-production development.
+- **Paid commercial license required**: Any commercial or organizational production use, including use entirely within a business, nonprofit organization, government body, consultancy, or other organization, and any use that provides Atested governance functionality to a third party.
+- **Product entitlements**: Personal, Personal Plus, Crew, Team, and other product keys enable defined features, capacities, support, communications, or services. Those entitlements are separate from the BSL permission to use the code; machine, user, and feature limits are not clauses in the BSL itself.
 - **Change date**: May 13, 2030 — after this date, the code converts to Apache License 2.0.
 
 See [docs/LICENSING.md](docs/LICENSING.md) for full details.

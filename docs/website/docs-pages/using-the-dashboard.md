@@ -92,7 +92,7 @@ In view mode, you see the registry hash, integrity status, last verification tim
 
 To edit, enter your license key in the Unlock Editing form. After verification, the table becomes editable. You can add or remove directories for each tool, toggle constraint flags, and adjust hard caps. Save writes the changes. Cancel discards them.
 
-Edit mode requires a valid license key. During the trial period, editing is restricted to paid license holders.
+Edit mode requires a valid product license key with the applicable configuration entitlement. This is a product feature gate, not a machine or feature limit in the BSL itself. Separately, commercial or organizational production use—including entirely internal organizational use—requires a paid commercial license under the BSL Additional Use Grant. Trial access is for evaluation, not commercial production.
 
 The machine registry shows the local machine ID, registry hash, authorized machines, license status, last sync time, and version for each remote.
 

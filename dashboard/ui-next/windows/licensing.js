@@ -649,7 +649,7 @@ function _buildTermsPanel(state) {
   el.innerHTML = `
     <div class="lt-section">
       <h3 class="lt-heading">How Atested licensing works</h3>
-      <p class="lt-text">Atested demonstrates its capabilities on your real governance data during your trial. The trial is not time-limited \u2014 it ends when you have generated enough governance decisions to see the value. At that point you can license the tier that fits your organization, or continue on the free Personal tier.</p>
+      <p class="lt-text">Atested is source-available under BSL 1.1. Personal non-commercial use, evaluation and testing, qualifying academic and research use, and non-production development are permitted without a paid commercial license. Any commercial or organizational production use, including entirely internal use, requires a paid commercial license. Trial access is for evaluation. After evaluation, Personal is available only for uses permitted by the free Additional Use Grant.</p>
     </div>
 
     <div class="lt-section">
@@ -659,7 +659,7 @@ function _buildTermsPanel(state) {
 
     <div class="lt-section">
       <h3 class="lt-heading">Purchasing and license dating</h3>
-      <p class="lt-text">Crew and higher are annual licenses dated from trial completion. Personal Plus is dated from purchase. Personal is free and does not require purchase. All paid licenses renew annually. If you choose not to renew, your views revert to Personal capabilities. Governance continues uninterrupted \u2014 chain records are marked as unlicensed but never lost.</p>
+      <p class="lt-text">A paid license provides permission for the covered commercial or organizational production use and the selected tier's product entitlements, including its defined features, capacities, support, communications, and services. Crew and higher are annual licenses dated from trial completion. Personal Plus is dated from purchase. Personal is free for qualifying uses and does not require purchase. If a paid license is not renewed, product views revert to Personal capabilities and core governance may continue to record status, but commercial or organizational production use is no longer permitted.</p>
     </div>
 
     <div class="lt-section">
@@ -669,7 +669,7 @@ function _buildTermsPanel(state) {
 
     <div class="lt-section">
       <h3 class="lt-heading">What the trial means</h3>
-      <p class="lt-text">During trial, all tier capabilities are available. This lets you evaluate the full product before deciding. The trial threshold is based on governance activity, not time. Once you reach it, Atested prompts you to license or register for Personal. There is no lockout \u2014 governance continues regardless of licensing status.</p>
+      <p class="lt-text">During trial, all tier capabilities are available for evaluation. The trial threshold is based on governance activity, not time. Once you reach it, Atested prompts you to purchase the commercial license and product tier required for production use, or register for Personal if your continuing use qualifies under the free BSL Additional Use Grant. Product operation and legal permission are distinct: software may continue recording license status, but an unlicensed commercial or organizational production deployment is not permitted.</p>
     </div>
 
     <div class="lt-ack-area">
