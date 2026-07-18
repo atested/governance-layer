@@ -10,56 +10,78 @@ Atested is distributed under the **Business Source License 1.1** (BSL 1.1).
 |---|---|
 | **License** | Business Source License 1.1 |
 | **Licensor** | AIEngageTech, LLC |
-| **Licensed Work** | Atested governance layer |
+| **Licensed Work** | Atested v1.0.0 |
 | **Change Date** | May 13, 2030 |
 | **Change License** | Apache License 2.0 |
-| **Additional Use Grant** | Personal and evaluation use |
+| **Additional Use Grant** | Personal non-commercial use; evaluation and testing; qualifying academic and research use; non-production development |
 
 ---
 
 ## What this means
 
-### Personal and evaluation use — free
+### Uses permitted without a paid commercial license
 
 You may use Atested at no cost for:
 
 - Personal projects (single operator, non-commercial)
 - Evaluation and testing
-- Academic and research purposes
+- Academic and research purposes that are not organizational operational production
+- Non-production development
 - Contributing to the project
 
-No license key is required for personal use.
+These are copyright-license permissions under the BSL Additional Use Grant. A
+product license key may still be used to register an installation or enable a
+particular set of product entitlements.
 
 ### Commercial production use — paid license required
 
-If you use Atested in a commercial production environment (revenue-generating services, internal business operations with multiple users, or client-facing deployments), you need a paid license.
+Any commercial production use or organizational operational production use
+requires a paid commercial license from AIEngageTech, LLC. This includes use by
+or for a business, nonprofit organization, government body, consultancy, or
+other organization, even when the use is entirely internal or no separate fee
+is charged. Providing or making Atested governance functionality available to a
+third party also requires a paid commercial license.
 
-| Tier | Price | Use case |
-|---|---|---|
-| **Team** | $999/year | Small team (2–10 operators) |
-| **Business** | $4,999/year | Organization-wide deployment |
-| **Enterprise** | Custom | Custom terms, SLA, dedicated support |
+Current product tiers, prices, capacities, and included services are listed at
+[atested.com/pricing/](https://atested.com/pricing/). Those product terms do not
+change the scope of the BSL Additional Use Grant.
 
-Purchase at [atested.com/pricing.html](https://atested.com/pricing.html).
+### Source-available license and Change Date
 
-### Change date — Apache 2.0 on May 13, 2030
-
-On May 13, 2030, the entire codebase automatically converts to the **Apache License 2.0**. After that date, all use — including commercial production use — is free and unrestricted under Apache 2.0 terms.
+Before the Change Date, Atested is **source-available under BSL 1.1**, not open
+source. On May 13, 2030, or the fourth anniversary of the first publicly
+available distribution of the applicable version if earlier, that version
+converts to the **Apache License 2.0** under the terms of the BSL.
 
 ---
 
-## How licensing works in the governance engine
+## Copyright permission and product entitlements
 
-Licensing is recorded as evidentiary metadata in every governance record. It does **not** gate functionality — a governed action that would be ALLOW remains ALLOW regardless of license status. Licensing records the truth about the operator's status.
+Atested licensing has two distinct layers:
+
+1. **Copyright-license permission.** The BSL Additional Use Grant determines
+   whether a use is permitted without a paid commercial license. Commercial or
+   organizational production use requires payment regardless of which product
+   features are used.
+2. **Product entitlements.** A Personal, Personal Plus, Crew, Team,
+   Institution, or other product license key enables the features, capacities,
+   support, communications, and services assigned to that tier. Machine limits,
+   report-history ranges, dashboard capabilities, and support levels are
+   product entitlements; they are not restrictions written into the BSL.
+
+The core governance path continues to record its license posture as evidentiary
+metadata, but the product does gate defined paid capabilities. A paid commercial
+license permits the covered production use; the selected product tier determines
+which gated capabilities and services are included.
 
 ### License statuses
 
 | Status | Meaning |
 |---|---|
-| `trial` | First 30 days after initial deployment. Full functionality. |
+| `trial` | Evaluation status. Full product capabilities are available for evaluation, not commercial or organizational production use. |
 | `licensed` | A valid license key has been activated. |
-| `unlicensed` | Trial expired without activation. Full functionality continues — records state the truth. |
-| `personal` | Single-user installation after trial expiry. Free tier, no license required. |
+| `unlicensed` | No active paid product entitlement. Core governance may continue, but commercial or organizational production use is not permitted. |
+| `personal` | Personal product entitlement. It does not authorize commercial or organizational production use. |
 
 ### Governed tools
 

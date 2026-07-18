@@ -1339,7 +1339,7 @@ async function renderConfiguration() {
     <div class="card" style="border-left:3px solid var(--warn,#e8a000);padding-left:16px">
       <span class="eyebrow">Trial License</span>
       <p style="margin:4px 0 0">
-        Configuration editing requires a paid license.
+        Configuration editing requires a product license key with this entitlement.
         You are currently on the <strong>${escapeHtml(license.tier || "trial")}</strong> tier.
         ${license.trial_days_remaining !== undefined
           ? `<span class="status-warn">${license.trial_days_remaining} days remaining.</span>`

@@ -12,7 +12,7 @@
 The Atested Dashboard includes a Configuration tab where you can view and
 modify the capability registry without editing JSON files manually.
 
-### Viewing Configuration (no license required)
+### Viewing Configuration (no configuration entitlement required)
 
 All users can view:
 - Governed tools and their allowed directories
@@ -20,7 +20,13 @@ All users can view:
 - Hard caps (max bytes, max entries, recursive limits)
 - Registry integrity status (current hash, last verification time)
 
-### Editing Configuration (license required)
+### Editing Configuration (product entitlement required)
+
+Editing through the dashboard requires a product license key with the applicable
+configuration entitlement. This feature gate is separate from the BSL
+Additional Use Grant: the BSL determines whether the deployment itself is
+permitted, while the product key determines which dashboard features are
+enabled.
 
 To edit configuration through the dashboard:
 
@@ -45,7 +51,10 @@ Trial users cannot:
 - Adjust hard caps
 - Add unlimited directory scopes
 
-Full configuration requires an active license from [atested.com](https://atested.com/pricing.html).
+Full configuration requires an active product entitlement from
+[atested.com](https://atested.com/pricing/). Commercial or organizational
+production use also requires a paid commercial license under the BSL, even if a
+particular gated feature is not used.
 
 ---
 

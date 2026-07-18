@@ -5,12 +5,22 @@ Parameters
 Licensor:             AIEngageTech, LLC
 Licensed Work:        Atested v1.0.0
                       The Licensed Work is (c) 2026 AIEngageTech, LLC.
-Additional Use Grant: You may make use of the Licensed Work, provided that
-                      you may not use the Licensed Work for a Governance
-                      Service. A "Governance Service" is a commercial offering
-                      that allows third parties to access the functionality
-                      of the Licensed Work by providing governance
-                      infrastructure as a service.
+Additional Use Grant: You may make use of the Licensed Work only for personal
+                      non-commercial use; evaluation and testing; academic and
+                      research use that is not organizational operational
+                      production; and non-production development use.
+
+                      Any commercial production use or organizational
+                      operational production use requires a paid commercial
+                      license from the Licensor. This requirement applies to
+                      use by or for a business, nonprofit organization,
+                      government body, consultancy, or other organization,
+                      including use that is entirely internal and use for which
+                      no separate fee is charged.
+
+                      Use of the Licensed Work to provide or make available
+                      Atested governance functionality to any third party also
+                      requires a paid commercial license from the Licensor.
 Change Date:          May 13, 2030
 Change License:       Apache License, Version 2.0
 
