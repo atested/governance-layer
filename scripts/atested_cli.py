@@ -27,6 +27,7 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
@@ -54,11 +55,13 @@ CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
 RECORDS_DIR = RUNTIME / "LOGS" / "records"
 POLICY_RULES_PATH = REPO / "capabilities" / "policy-rules.json"
 SIGNING_KEY_NAME = ".atested-signing-key.pem"
+QA_SIGNING_KEY_NAME = ".atested-qa-signing-key.pem"
 SYNC_CONFIG_NAME = "config.json"
 SYNC_CLIENT_STATE_NAME = "client_state.json"
 SYNC_DEGRADED_NAME = "degraded.json"
 SUPERVISOR_DIR_NAME = "supervisor"
 OPERATOR_CONFIG_NAME = "operator.json"
+DEFAULT_PROXY_UPSTREAM = "https://api.anthropic.com"
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +330,174 @@ def _public_key_pem(private_key, serialization) -> str:
     ).decode("utf-8")
 
 
+def _qa_signing_key_path() -> Path:
+    return _runtime() / QA_SIGNING_KEY_NAME
+
+
+def _qa_chain_path() -> Path:
+    return _runtime() / "LOGS" / "qa-chain.jsonl"
+
+
+def _ensure_qa_signing_key():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization
+    from receipt_signing import _read_private_key, _public_key_fingerprint
+
+    key_path = _qa_signing_key_path()
+    created = False
+    if key_path.exists():
+        private_key, serialization = _read_private_key(key_path)
+    else:
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        private_key = Ed25519PrivateKey.generate()
+        pem_bytes = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        key_path.write_bytes(pem_bytes)
+        os.chmod(str(key_path), 0o600)
+        created = True
+    key_id = _public_key_fingerprint(private_key.public_key(), serialization)
+    return private_key, key_id, key_path, created
+
+
+def _current_qa_hashes() -> tuple[str, str]:
+    from policy_eval_v2 import load_policy_rules, compute_policy_rules_hash
+
+    policy_hash = compute_policy_rules_hash(load_policy_rules(POLICY_RULES_PATH))
+    capability_hash = "sha256:" + hashlib.sha256(CAP_REGISTRY_PATH.read_bytes()).hexdigest()
+    return policy_hash, capability_hash
+
+
+def _qa_chain_records(chain_path: Path) -> list[dict]:
+    try:
+        lines = chain_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return []
+    records: list[dict] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def _latest_qa_snapshot(records: list[dict]) -> dict | None:
+    for record in reversed(records):
+        if record.get("event_type") == "qa_environmental_snapshot":
+            return record
+    return None
+
+
+def _qa_snapshot_current(snapshot: dict | None, policy_hash: str, capability_hash: str) -> bool:
+    if not isinstance(snapshot, dict):
+        return False
+    return (
+        isinstance(snapshot.get("sequence"), int)
+        and snapshot.get("overall") == "healthy"
+        and snapshot.get("policy_rules_hash") == policy_hash
+        and snapshot.get("capability_registry_hash") == capability_hash
+        and snapshot.get("active_conditions") == []
+    )
+
+
+def _append_qa_record(chain_path: Path, record: dict) -> None:
+    from canonical_form import canonical_json
+
+    chain_path.parent.mkdir(parents=True, exist_ok=True)
+    line = canonical_json(record) + "\n"
+    fd = os.open(
+        str(chain_path),
+        os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+        _stat.S_IRUSR | _stat.S_IWUSR,
+    )
+    try:
+        os.write(fd, line.encode("utf-8"))
+    finally:
+        os.close(fd)
+
+
+def _ensure_initial_qa_state() -> dict:
+    """Create the signed first-run QA state needed by the production proxy.
+
+    This is an installation bootstrap snapshot, not a completed periodic QA
+    assessment. The quality service owns later periodic snapshots; the
+    bootstrap only prevents a clean install from starting with an absent QA
+    chain before the service has emitted its first heartbeat.
+    """
+    from canonical_form import non_action_signing_preimage, record_hash
+    from machine_identity import now_utc_z
+    from receipt_signing import _b64url_nopad
+
+    private_key, key_id, key_path, created_key = _ensure_qa_signing_key()
+    policy_hash, capability_hash = _current_qa_hashes()
+    chain_path = _qa_chain_path()
+    records = _qa_chain_records(chain_path)
+    latest_snapshot = _latest_qa_snapshot(records)
+    if _qa_snapshot_current(latest_snapshot, policy_hash, capability_hash):
+        return {
+            "created": False,
+            "reason": "current_qa_snapshot_present",
+            "chain_path": str(chain_path),
+            "signing_key_path": str(key_path),
+            "created_signing_key": created_key,
+            "sequence": latest_snapshot.get("sequence"),
+        }
+
+    latest_record = records[-1] if records else {}
+    latest_sequence = latest_record.get("sequence")
+    sequence = (latest_sequence + 1) if isinstance(latest_sequence, int) else 1
+    prev_hash = latest_record.get("record_hash")
+    if not isinstance(prev_hash, str):
+        prev_hash = None
+
+    record = {
+        "event_type": "qa_environmental_snapshot",
+        "sequence": sequence,
+        "timestamp_utc": now_utc_z(),
+        "policy_rules_hash": policy_hash,
+        "capability_registry_hash": capability_hash,
+        "checks": {
+            "INSTALL-BOOTSTRAP": {
+                "status": "pass",
+                "scope": "first_run_bootstrap",
+                "detail": "Initial install state created by lifecycle before the first governed request.",
+            }
+        },
+        "active_conditions": [],
+        "overall": "healthy",
+        "snapshot_source": "lifecycle_install_bootstrap",
+        "assessment_kind": "installation_bootstrap",
+        "completed_periodic_assessment": False,
+        "prev_record_hash": prev_hash,
+        "record_hash": None,
+        "signature": None,
+        "signing_key_id": None,
+    }
+    record["record_hash"] = record_hash(record)
+    signature = private_key.sign(non_action_signing_preimage(record).encode("utf-8"))
+    record["signature"] = _b64url_nopad(signature)
+    record["signing_key_id"] = key_id
+    _append_qa_record(chain_path, record)
+    return {
+        "created": True,
+        "reason": "initial_qa_snapshot_created",
+        "chain_path": str(chain_path),
+        "signing_key_path": str(key_path),
+        "created_signing_key": created_key,
+        "sequence": sequence,
+        "record_hash": record["record_hash"],
+    }
+
+
 def _ensure_runtime_initialized(role: str, *, force: bool = False, display_name: str | None = None) -> dict:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives import serialization
@@ -366,6 +537,7 @@ def _ensure_runtime_initialized(role: str, *, force: bool = False, display_name:
             public_key_fingerprint=key_id,
             public_key_pem=public_pem,
         )
+    qa_bootstrap = _ensure_initial_qa_state()
 
     return {
         "identity": identity,
@@ -373,6 +545,7 @@ def _ensure_runtime_initialized(role: str, *, force: bool = False, display_name:
         "public_key_pem": public_pem,
         "signing_key_path": str(signing_key_path),
         "created_signing_key": created_key,
+        "qa_bootstrap": qa_bootstrap,
         "registry": registry,
     }
 
@@ -589,7 +762,27 @@ def _detach_popen_kwargs() -> dict:
     return {"start_new_session": True}
 
 
-def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
+def _validate_proxy_upstream(value: str | None) -> str | None:
+    from urllib.parse import urlsplit
+
+    upstream = str(value or "").strip()
+    if not upstream:
+        return None
+    parsed = urlsplit(upstream)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(
+            "upstream must be an absolute credential-free http:// or https:// URL "
+            "(example: http://127.0.0.1:18090)"
+        )
+    return upstream.rstrip("/")
+
+
+def _start_supervisor(role: str, *, sync_host: str, sync_port: int, upstream: str | None = None) -> dict:
     if _supervisor_running():
         status = _supervisor_status()
         supervisor = status.get("supervisor", {})
@@ -619,9 +812,11 @@ def _start_supervisor(role: str, *, sync_host: str, sync_port: int) -> dict:
         sync_host,
         "--sync-port",
         str(sync_port),
-        "--token",
-        token,
+        f"--token={token}",
     ]
+    if upstream:
+        env["ATESTED_PROXY_UPSTREAM"] = upstream
+        argv.extend(["--upstream", upstream])
     try:
         proc = subprocess.Popen(
             argv,
@@ -1790,18 +1985,29 @@ def cmd_verification(args) -> int:
 
 def cmd_init(args) -> int:
     """First-run setup: create gov_runtime, generate signing key, configure base_dirs."""
-    runtime = RUNTIME
+    runtime = _runtime()
     signing_key_path = runtime / ".atested-signing-key.pem"
     logs_dir = runtime / "LOGS"
 
     # Guard against overwrite
     if signing_key_path.exists() and not getattr(args, "force", False):
-        print("Atested is already initialized.", file=sys.stderr)
-        print(f"  Signing key: {signing_key_path}", file=sys.stderr)
-        print(f"  Runtime:     {runtime}", file=sys.stderr)
-        print("", file=sys.stderr)
-        print("To reinitialize, run: atested init --force", file=sys.stderr)
-        return 1
+        operator_identity = _configured_operator_identity(args)
+        try:
+            bootstrap = _ensure_runtime_initialized(
+                "primary",
+                force=False,
+                display_name=operator_identity,
+            )
+        except Exception as exc:
+            print(f"error: failed to verify initialized runtime: {exc}", file=sys.stderr)
+            return 1
+        qa_bootstrap = bootstrap.get("qa_bootstrap") or {}
+        print("Atested is already initialized.")
+        print(f"  Signing key: {signing_key_path}")
+        print(f"  Runtime:     {runtime}")
+        print(f"  Machine ID:  {bootstrap['identity'].get('machine_id')}")
+        print(f"  QA chain:    {qa_bootstrap.get('chain_path') or _qa_chain_path()}")
+        return 0
 
     # 1. Create runtime directory structure
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -1862,6 +2068,14 @@ def cmd_init(args) -> int:
         for d in base_dirs[2:]:
             print(f"    base_dir: {d}")
 
+    try:
+        qa_bootstrap = _ensure_initial_qa_state()
+        print(f"  QA bootstrap chain:       {qa_bootstrap['chain_path']}")
+        print(f"  QA signing key:           {qa_bootstrap['signing_key_path']}")
+    except Exception as exc:
+        print(f"error: failed to create initial QA state: {exc}", file=sys.stderr)
+        return 1
+
     # 6. Summary
     print("")
     print("Atested is initialized.")
@@ -1877,6 +2091,11 @@ def cmd_start(args) -> int:
     role = str(args.role or "primary").strip().lower()
     if role not in {"primary", "remote"}:
         print("error: role must be primary or remote", file=sys.stderr)
+        return 2
+    try:
+        proxy_upstream = _validate_proxy_upstream(getattr(args, "upstream", None))
+    except ValueError as exc:
+        print(f"error: invalid --upstream: {exc}", file=sys.stderr)
         return 2
     if role == "remote" and not args.primary_url:
         print("error: remote start requires --primary-url", file=sys.stderr)
@@ -1962,23 +2181,32 @@ def cmd_start(args) -> int:
 
     supervisor = {}
     if not args.no_services:
-        supervisor = _start_supervisor(role, sync_host=args.sync_host, sync_port=int(args.sync_port))
+        supervisor = _start_supervisor(
+            role,
+            sync_host=args.sync_host,
+            sync_port=int(args.sync_port),
+            upstream=proxy_upstream,
+        )
         services = _service_statuses()
+    public_supervisor = dict(supervisor)
+    public_supervisor.pop("token", None)
 
     payload = {
         "started": True,
         "first_run": first_run,
         "role": role,
         "runtime": str(_runtime()),
+        "proxy_upstream": proxy_upstream or DEFAULT_PROXY_UPSTREAM,
         "machine_id": identity.get("machine_id"),
         "operator_identity": operator_identity,
         "public_key_fingerprint": bootstrap["public_key_fingerprint"],
         "public_key_pem": bootstrap["public_key_pem"],
+        "qa_bootstrap": bootstrap.get("qa_bootstrap"),
         "configured_base_dirs": configured_base_dirs,
         "shell_profile": profile_result,
         "launchd_env": launchd_result,
         "sync_config": sync_config,
-        "supervisor": supervisor or _supervisor_status().get("supervisor", {}),
+        "supervisor": public_supervisor or _supervisor_status().get("supervisor", {}),
         "services": services or _service_statuses(),
         "operator_action_required": (
             "confirm this remote on the primary with atested machine add"
@@ -1992,6 +2220,11 @@ def cmd_start(args) -> int:
         print(f"  Role:    {role}")
         print(f"  Runtime: {_runtime()}")
         print(f"  Machine: {identity.get('machine_id')}")
+        print(f"  Upstream: {proxy_upstream or DEFAULT_PROXY_UPSTREAM}")
+        qa_bootstrap = bootstrap.get("qa_bootstrap") or {}
+        if qa_bootstrap:
+            created = "created" if qa_bootstrap.get("created") else "present"
+            print(f"  QA:      {created} ({qa_bootstrap.get('chain_path')})")
         if supervisor:
             print(f"  Supervisor: running pid {supervisor.get('pid')}")
         current_services = services or _service_statuses()
@@ -2804,6 +3037,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_start.add_argument("--dirs", nargs="*", metavar="DIR",
                          help="Working directories for first-run setup")
     p_start.add_argument("--user-identity", default=None, help="Operator identity recorded on governance events")
+    p_start.add_argument(
+        "--upstream",
+        default=None,
+        help=(
+            "Anthropic upstream URL for the supervised proxy "
+            "(default: https://api.anthropic.com)"
+        ),
+    )
     p_start.add_argument("--yes-shell-profile", action="store_true", help=argparse.SUPPRESS)
     p_start.add_argument("--no-shell-profile", action="store_true", help=argparse.SUPPRESS)
     p_start.add_argument("--force", action="store_true", help="Regenerate local runtime key during start")

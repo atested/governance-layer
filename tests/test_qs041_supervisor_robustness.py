@@ -215,3 +215,95 @@ def test_clear_orphan_on_port_noop_when_free(monkeypatch):
     monkeypatch.setattr(ps, "_log", lambda msg: None)
     ps.clear_orphan_on_port(9700, "dashboard", managed_pids=set())
     assert killed == []
+
+
+# ---------- OBS-atested-005 PID-based orphan cleanup ----------
+
+def test_cleanup_prior_run_orphans_kills_live_pids(tmp_path, monkeypatch):
+    """Two fake live PIDs in file; both passed to _terminate_orphan."""
+    pid_file = tmp_path / "managed-pids.json"
+    pid_file.write_text(json.dumps({"proxy": 1001, "dashboard": 1002}))
+    monkeypatch.setattr(ps, "pid_alive", lambda pid: True)
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    monkeypatch.setattr(ps, "_log", lambda msg: None)
+    ps.cleanup_prior_run_orphans(pid_file, 9999)
+    assert sorted(killed) == [1001, 1002]
+
+
+def test_cleanup_prior_run_orphans_skips_dead_pid(tmp_path, monkeypatch):
+    """One live, one dead; only the live one terminated."""
+    pid_file = tmp_path / "managed-pids.json"
+    pid_file.write_text(json.dumps({"proxy": 1001, "dashboard": 1002}))
+    monkeypatch.setattr(ps, "pid_alive", lambda pid: pid == 1001)
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    monkeypatch.setattr(ps, "_log", lambda msg: None)
+    ps.cleanup_prior_run_orphans(pid_file, 9999)
+    assert killed == [1001]
+
+
+def test_cleanup_prior_run_orphans_skips_current_pid(tmp_path, monkeypatch):
+    """One PID equals current_pid; not passed to _terminate_orphan."""
+    pid_file = tmp_path / "managed-pids.json"
+    pid_file.write_text(json.dumps({"proxy": 1001, "supervisor": 9999}))
+    monkeypatch.setattr(ps, "pid_alive", lambda pid: True)
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    monkeypatch.setattr(ps, "_log", lambda msg: None)
+    ps.cleanup_prior_run_orphans(pid_file, 9999)
+    assert 9999 not in killed
+    assert 1001 in killed
+
+
+def test_cleanup_prior_run_orphans_missing_file(tmp_path, monkeypatch):
+    """File absent; no error, no kills."""
+    pid_file = tmp_path / "managed-pids.json"
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    ps.cleanup_prior_run_orphans(pid_file, 9999)
+    assert killed == []
+
+
+def test_cleanup_prior_run_orphans_malformed_file(tmp_path, monkeypatch):
+    """File contains invalid JSON; no error, no kills."""
+    pid_file = tmp_path / "managed-pids.json"
+    pid_file.write_text("not json {{")
+    killed = []
+    monkeypatch.setattr(ps, "_terminate_orphan", lambda pid: killed.append(pid))
+    ps.cleanup_prior_run_orphans(pid_file, 9999)
+    assert killed == []
+
+
+def test_write_managed_pids_running_services(tmp_path):
+    """Two running services; file is written with correct name→pid mapping."""
+    pid_file = tmp_path / "managed-pids.json"
+
+    class _Running:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def poll(self):
+            return None
+
+    svc1 = ps.ManagedService({"name": "proxy", "argv": ["x"]}, tmp_path, tmp_path / "logs", {})
+    svc2 = ps.ManagedService({"name": "quality_service", "argv": ["x"]}, tmp_path, tmp_path / "logs", {})
+    svc1.proc = _Running(5001)
+    svc2.proc = _Running(5002)
+
+    ps.write_managed_pids(pid_file, [svc1, svc2])
+
+    data = json.loads(pid_file.read_text())
+    assert data == {"proxy": 5001, "quality_service": 5002}
+
+
+def test_write_managed_pids_clears_on_no_running(tmp_path):
+    """No running services; file is written as {}."""
+    pid_file = tmp_path / "managed-pids.json"
+    svc = ps.ManagedService({"name": "proxy", "argv": ["x"]}, tmp_path, tmp_path / "logs", {})
+    # proc is None — service never started
+
+    ps.write_managed_pids(pid_file, [svc])
+
+    data = json.loads(pid_file.read_text())
+    assert data == {}

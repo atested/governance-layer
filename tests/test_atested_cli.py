@@ -243,6 +243,15 @@ def test_supervisor_status_paths_and_service_specs(tmp_path):
         "dashboard",
     ]
     assert any("scripts/sync_service.py" in part for part in primary_specs[-1]["argv"])
+    assert "--upstream" not in primary_specs[0]["argv"]
+    upstream_specs = process_supervisor.build_service_specs(
+        "primary",
+        "127.0.0.1",
+        8765,
+        runtime,
+        upstream="http://127.0.0.1:18090",
+    )
+    assert upstream_specs[0]["argv"][-2:] == ["--upstream", "http://127.0.0.1:18090"]
     # QS-033 A2: proxy spec gains a ready_file so the supervisor blocks on
     # the proxy's startup record before launching quality_service.
     proxy_spec = primary_specs[0]
@@ -250,6 +259,128 @@ def test_supervisor_status_paths_and_service_specs(tmp_path):
     assert "ready_file" in proxy_spec
     assert proxy_spec["ready_file"].endswith("proxy.ready")
     print("PASS: test_supervisor_status_paths_and_service_specs")
+
+
+def test_start_upstream_validation():
+    assert atested_cli._validate_proxy_upstream(None) is None
+    assert atested_cli._validate_proxy_upstream("") is None
+    assert atested_cli._validate_proxy_upstream("http://127.0.0.1:18090/") == "http://127.0.0.1:18090"
+    assert atested_cli._validate_proxy_upstream("https://api.example.test/base") == "https://api.example.test/base"
+    for bad in ["localhost:18090", "ftp://example.test", "http://", "not a url", "https://user:secret@example.test"]:
+        try:
+            atested_cli._validate_proxy_upstream(bad)
+        except ValueError as exc:
+            assert "absolute credential-free http:// or https:// URL" in str(exc)
+        else:
+            raise AssertionError(f"expected invalid upstream: {bad}")
+    print("PASS: test_start_upstream_validation")
+
+
+def test_start_supervisor_passes_token_as_single_argv_element(tmp_path, monkeypatch):
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    captured = {}
+
+    class FakePopen:
+        pid = 424242
+
+        def __init__(self, argv, **kwargs):
+            captured["argv"] = list(argv)
+            captured["kwargs"] = kwargs
+
+    for token in ["-abc123", "ordinary-token"]:
+        captured.clear()
+        monkeypatch.setattr(atested_cli.secrets, "token_urlsafe", lambda _n, value=token: value)
+        monkeypatch.setattr(atested_cli.subprocess, "Popen", FakePopen)
+        monkeypatch.setattr(atested_cli, "_supervisor_running", lambda: False)
+
+        result = atested_cli._start_supervisor("primary", sync_host="127.0.0.1", sync_port=8765)
+
+        assert result["pid"] == 424242
+        pid_record = json.loads(atested_cli._supervisor_pid_path().read_text(encoding="utf-8"))
+        assert pid_record["token"] == token
+        assert f"--token={token}" in captured["argv"]
+        assert "--token" not in captured["argv"]
+        assert token not in captured["argv"]
+        assert captured["kwargs"]["cwd"] == str(REPO)
+    print("PASS: test_start_supervisor_passes_token_as_single_argv_element")
+
+
+def test_process_supervisor_parser_accepts_equals_form_tokens(tmp_path, monkeypatch):
+    monkeypatch.setattr(process_supervisor, "build_service_specs", lambda *_a, **_k: [])
+
+    for token in ["-abc123", "ordinary-token"]:
+        runtime = tmp_path / f"runtime-{token.lstrip('-')}"
+        process_supervisor._stopping = False
+
+        def stop_after_first_tick(*_args, **_kwargs):
+            process_supervisor._stopping = True
+
+        monkeypatch.setattr(process_supervisor.time, "sleep", stop_after_first_tick)
+        rc = process_supervisor.main(
+            [
+                "--runtime",
+                str(runtime),
+                "--role",
+                "primary",
+                f"--token={token}",
+            ]
+        )
+
+        assert rc == 0
+        status = json.loads((runtime / "supervisor" / "status.json").read_text(encoding="utf-8"))
+        assert status["supervisor"]["token"] == token
+    process_supervisor._stopping = False
+    print("PASS: test_process_supervisor_parser_accepts_equals_form_tokens")
+
+
+def test_start_with_leading_hyphen_supervisor_token_hides_token_from_output(tmp_path, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    runtime = _make_isolated_runtime(tmp_path)
+    monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
+    monkeypatch.setattr(atested_cli.secrets, "token_urlsafe", lambda _n: "-abc123")
+    monkeypatch.setattr(atested_cli, "_configure_policy_base_dirs", lambda _base_dirs: None)
+    monkeypatch.setattr(
+        atested_cli,
+        "_configure_shell_profile",
+        lambda _args: {"updated": False, "reason": "test_disabled", "routes": {}},
+    )
+    monkeypatch.setattr(atested_cli, "_set_launchd_env", lambda: {"applied": False, "reason": "test_disabled"})
+
+    class FakePopen:
+        pid = 424243
+
+        def __init__(self, argv, **kwargs):
+            self.argv = list(argv)
+
+    monkeypatch.setattr(atested_cli.subprocess, "Popen", FakePopen)
+    args = SimpleNamespace(
+        role="primary",
+        primary_url=None,
+        primary_public_key_pem=None,
+        primary_public_key_pem_file=None,
+        sync_host="127.0.0.1",
+        sync_port=8765,
+        sync_interval=300,
+        dirs=[str(REPO)],
+        user_identity="token-test",
+        upstream=None,
+        yes_shell_profile=False,
+        no_shell_profile=True,
+        force=False,
+        no_services=False,
+        json=True,
+    )
+
+    assert atested_cli.cmd_start(args) == 0
+    captured = capsys.readouterr()
+    assert "-abc123" not in captured.out
+    assert "-abc123" not in captured.err
+    payload = json.loads(captured.out)
+    assert payload["supervisor"]["pid"] == 424243
+    assert "token" not in payload["supervisor"]
+    print("PASS: test_start_with_leading_hyphen_supervisor_token_hides_token_from_output")
 
 
 def test_supervisor_pid_record_requires_matching_runtime_and_token(tmp_path, monkeypatch):

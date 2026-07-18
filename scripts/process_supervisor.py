@@ -121,6 +121,33 @@ def clear_orphan_on_port(port: int, service_name: str, managed_pids: set[int]) -
         time.sleep(0.1)
 
 
+def write_managed_pids(path: Path, services: list[ManagedService]) -> None:
+    pids = {
+        svc.name: svc.proc.pid
+        for svc in services
+        if svc.proc is not None and svc.proc.poll() is None
+    }
+    write_json_atomic(path, pids)
+
+
+def cleanup_prior_run_orphans(path: Path, current_pid: int) -> None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+    for name, pid in data.items():
+        if not isinstance(pid, int):
+            continue
+        if pid == current_pid:
+            continue
+        if not pid_alive(pid):
+            continue
+        _terminate_orphan(pid)
+        _log(f"killed orphan {name} (pid {pid}) from prior supervisor run")
+
+
 def write_json_atomic(path: Path, data: dict) -> None:
     # QS-041 #15: use a unique temp file per call. The previous fixed name
     # (path.json.tmp) raced when two writers targeted the same path at once
@@ -287,7 +314,14 @@ def write_quality_service_degraded_marker(runtime: Path, reason: str | None) -> 
     write_json_atomic(marker, payload)
 
 
-def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path) -> list[dict]:
+def build_service_specs(
+    role: str,
+    sync_host: str,
+    sync_port: int,
+    runtime: Path,
+    *,
+    upstream: str | None = None,
+) -> list[dict]:
     proxy_port = os.environ.get("GOV_PROXY_PORT", "8080")
     binary, build_error = ensure_quality_service_binary(runtime)
     write_quality_service_degraded_marker(runtime, build_error)
@@ -317,10 +351,13 @@ def build_service_specs(role: str, sync_host: str, sync_port: int, runtime: Path
     # supervisor can clear an orphaned occupant before launching. The quality
     # service binds no port and has none.
     dashboard_port = int(os.environ.get("DASHBOARD_PORT", "9700"))
+    proxy_argv = [sys.executable, "-m", "proxy.server", "--port", proxy_port]
+    if upstream:
+        proxy_argv.extend(["--upstream", upstream])
     specs = [
         {
             "name": "proxy",
-            "argv": [sys.executable, "-m", "proxy.server", "--port", proxy_port],
+            "argv": proxy_argv,
             "ready_file": str(proxy_ready_file),
             "startup_timeout_seconds": 30,
             "port": int(proxy_port),
@@ -537,6 +574,7 @@ def main(argv=None) -> int:
     parser.add_argument("--sync-host", default="127.0.0.1")
     parser.add_argument("--sync-port", type=int, default=8765)
     parser.add_argument("--token", required=True)
+    parser.add_argument("--upstream", default=None)
     args = parser.parse_args(argv)
 
     runtime = Path(args.runtime).expanduser().resolve()
@@ -544,6 +582,7 @@ def main(argv=None) -> int:
     pid_path = supervisor_dir / "supervisor.pid"
     status_path = supervisor_dir / "status.json"
     services_path = supervisor_dir / "services.json"
+    managed_pids_path = supervisor_dir / "managed-pids.json"
     log_dir = supervisor_dir / "logs"
     supervisor_dir.mkdir(parents=True, exist_ok=True)
 
@@ -552,6 +591,8 @@ def main(argv=None) -> int:
     existing_token = str((existing or {}).get("token") or "")
     if existing_pid and existing_pid != os.getpid() and pid_alive(existing_pid):
         return 0 if existing_token == args.token else 1
+
+    cleanup_prior_run_orphans(managed_pids_path, os.getpid())
 
     write_json_atomic(pid_path, {
         "pid": os.getpid(),
@@ -593,7 +634,13 @@ def main(argv=None) -> int:
     started_utc = now_utc_z()
     services = [
         ManagedService(spec, runtime, log_dir, env)
-        for spec in build_service_specs(args.role, args.sync_host, args.sync_port, runtime)
+        for spec in build_service_specs(
+            args.role,
+            args.sync_host,
+            args.sync_port,
+            runtime,
+            upstream=args.upstream,
+        )
     ]
 
     def _startup_status_payload() -> dict:
@@ -677,6 +724,7 @@ def main(argv=None) -> int:
                 "updated_utc": now_utc_z(),
             }
             write_status(status_path, services_path, payload)
+            write_managed_pids(managed_pids_path, services)
             time.sleep(STATUS_INTERVAL_SECONDS)
     finally:
         for service in services:
@@ -706,6 +754,10 @@ def main(argv=None) -> int:
             "updated_utc": now_utc_z(),
         }
         write_status(status_path, services_path, payload)
+        try:
+            managed_pids_path.unlink()
+        except FileNotFoundError:
+            pass
         try:
             pid_path.unlink()
         except FileNotFoundError:

@@ -3,4 +3,29 @@
 # Resolves the repo root and dispatches to scripts/atested_cli.py.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec python3 "${SCRIPT_DIR}/scripts/atested_cli.py" "$@"
+
+if [[ -n "${ATESTED_PYTHON:-}" ]]; then
+  PYTHON_BIN="${ATESTED_PYTHON}"
+elif [[ -x "${SCRIPT_DIR}/.venv/bin/python3" ]]; then
+  PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
+else
+  PYTHON_BIN="python3"
+fi
+
+if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+  echo "ERROR: Python interpreter not found: ${PYTHON_BIN}" >&2
+  echo "Create the repository virtual environment with:" >&2
+  echo "  python3 -m venv .venv" >&2
+  echo "  .venv/bin/python3 -m pip install -r requirements.txt" >&2
+  exit 1
+fi
+
+if ! "${PYTHON_BIN}" -c "import cryptography, httpx" >/dev/null 2>&1; then
+  echo "ERROR: Missing Atested Python dependencies for interpreter: ${PYTHON_BIN}" >&2
+  echo "Install dependencies into the repository virtual environment with:" >&2
+  echo "  ${SCRIPT_DIR}/.venv/bin/python3 -m pip install -r ${SCRIPT_DIR}/requirements.txt" >&2
+  echo "Or set ATESTED_PYTHON to a Python interpreter with Atested dependencies installed." >&2
+  exit 1
+fi
+
+exec "${PYTHON_BIN}" "${SCRIPT_DIR}/scripts/atested_cli.py" "$@"
