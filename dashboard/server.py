@@ -1519,8 +1519,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_licensing_register()
             elif path == "/api/licensing/purchase":
                 self._handle_licensing_purchase()
-            elif path == "/api/licensing/auto-renewal":
-                self._handle_auto_renewal()
+            elif path == "/api/licensing/refresh":
+                self._handle_license_refresh()
             elif path == "/api/licensing/downgrade":
                 self._handle_licensing_downgrade()
             elif path == "/api/licensing/terms-acknowledge":
@@ -3552,7 +3552,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "license_expiry": term_end,
                 "license_start": term_start,
                 "payment_ref": payment_ref or "mock_payment",
-                "auto_renewal": True,
                 "operator_role": operator_role,
                 "how_found": how_found,
                 "deciding_factor": deciding_factor,
@@ -3653,7 +3652,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "purchase_date": now,
                 "license_start": term_start,
                 "license_expiry": term_end,
-                "auto_renewal": True,
             })
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
@@ -4171,58 +4169,31 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _json_response(self, {"ok": False, "error": str(exc)}, 500)
 
-    def _handle_auto_renewal(self):
-        """POST /api/licensing/auto-renewal — toggle auto-renewal state."""
+    def _handle_license_refresh(self):
+        """POST /api/licensing/refresh — retrieve and activate a renewed token."""
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length > 4096:
-                _json_response(self, {"error": "payload too large"}, 413)
+            from licensing import refresh_paid_license
+            result = refresh_paid_license(RUNTIME)
+            if not result.get("ok"):
+                _json_response(self, result, 502)
                 return
-            body = self.rfile.read(length)
-            data = json.loads(body) if body else {}
-        except (json.JSONDecodeError, ValueError):
-            _json_response(self, {"error": "invalid JSON"}, 400)
-            return
 
-        auto_renewal = bool(data.get("auto_renewal", True))
-
-        try:
             from event_model import build_non_action_event
-
-            # Update license file
-            license_file = RUNTIME / "license.json"
-            if not license_file.exists():
-                _json_response(self, {"error": "no license file found"}, 400)
-                return
-
-            existing = json.loads(license_file.read_text(encoding="utf-8"))
-            existing["auto_renewal"] = auto_renewal
-            license_file.write_text(
-                json.dumps(existing, indent=2, sort_keys=True),
-                encoding="utf-8",
-            )
-
-            # Write chain event
-            event_type = (
-                "auto_renewal_opted_in" if auto_renewal
-                else "auto_renewal_opted_out"
-            )
             event = build_non_action_event(
-                event_type,
+                "license_modified",
                 {
-                    "auto_renewal": auto_renewal,
-                    "tier": existing.get("license_tier", ""),
+                    "license_id": result.get("license_id", ""),
+                    "new_tier": result.get("license_tier", ""),
+                    "expiry": result.get("license_expiry", ""),
+                    "modification_type": "extend",
+                    "reason": "Paid subscription license refresh",
                 },
                 prev_record_hash=None,
             )
             _append_chain_record_atomic(event)
-
-            _json_response(self, {
-                "auto_renewal": auto_renewal,
-                "event_id": event.get("event_id"),
-            })
+            _json_response(self, {**result, "event_id": event.get("event_id")})
         except Exception as exc:
-            _json_response(self, {"error": str(exc)}, 500)
+            _json_response(self, {"ok": False, "error": str(exc)}, 500)
 
     def _handle_licensing_downgrade(self):
         """POST /api/licensing/downgrade — schedule a downgrade for next renewal.
@@ -5161,7 +5132,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     except (json.JSONDecodeError, OSError):
                         pass
                 result["registered"] = registered
-                result["auto_renewal"] = lic_data.get("auto_renewal", True)
                 result["purchase_date"] = lic_data.get("purchase_date", "")
                 result["operator_name"] = lic_data.get("operator_name", "")
                 result["pending_downgrade"] = lic_data.get("pending_downgrade", None)

@@ -501,14 +501,11 @@ export function postResearchOptIn({ opted_in } = {}) {
 }
 
 /**
- * Toggle auto-renewal state.
- * POST /api/licensing/auto-renewal
- * @param {Object} opts - { auto_renewal }
+ * Retrieve and activate an updated signed license after paid renewal.
+ * POST /api/licensing/refresh
  */
-export function postAutoRenewal({ auto_renewal } = {}) {
-  return _request('POST', '/licensing/auto-renewal', {
-    body: { auto_renewal },
-  });
+export function postLicenseRefresh() {
+  return _request('POST', '/licensing/refresh', { body: {} });
 }
 
 /**

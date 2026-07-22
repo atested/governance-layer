@@ -28,10 +28,14 @@ License key scheme (v2/v3):
 """
 import base64
 import hashlib
+import hmac
 import json
 import os
+import secrets
 import stat
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -42,6 +46,8 @@ from typing import Any, Dict, Optional
 
 LICENSE_FILENAME = "license.json"
 TRIAL_DAYS = 30
+LICENSE_REFRESH_URL = "https://license.atested.com/api/license/refresh"
+LICENSE_REFRESH_HMAC_DOMAIN = "ATESTED-LICENSE-REFRESH-V1\n"
 
 VALID_STATUSES = ("trial", "licensed", "personal", "clock_anomaly")
 VALID_TIERS = ("personal", "personal_plus", "crew", "team", "institution",
@@ -414,6 +420,81 @@ def activate_license(
         "license_tier": decoded["tier"],
         "license_expiry": decoded["expiry_iso"],
         "organization_id": config.get("organization_id", ""),
+    }
+
+
+def build_license_refresh_request(
+    license_id: str,
+    license_key: str,
+    *,
+    timestamp: Optional[str] = None,
+    nonce: Optional[str] = None,
+) -> Dict[str, str]:
+    """Build a proof-of-possession request without transmitting the license key."""
+    timestamp = timestamp or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    nonce = nonce or secrets.token_urlsafe(24)
+    canonical = f"{LICENSE_REFRESH_HMAC_DOMAIN}{license_id}\n{timestamp}\n{nonce}"
+    digest = hmac.new(
+        license_key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return {
+        "license_id": license_id,
+        "timestamp": timestamp,
+        "nonce": nonce,
+        "proof": f"hmac-sha256:{digest}",
+    }
+
+
+def refresh_paid_license(
+    runtime_dir: Path,
+    *,
+    endpoint: str = LICENSE_REFRESH_URL,
+    opener=None,
+) -> Dict[str, Any]:
+    """Retrieve and activate a renewed token using the installed token as proof."""
+    try:
+        config = load_license(runtime_dir)
+    except ValueError:
+        return {"ok": False, "error": "INVALID_LOCAL_LICENSE"}
+    license_key = str(config.get("license_key") or "").strip()
+    decoded = validate_license_key(license_key) if license_key else None
+    if not decoded or not decoded.get("license_id"):
+        return {"ok": False, "error": "PAID_LICENSE_REQUIRED"}
+
+    request_body = build_license_refresh_request(decoded["license_id"], license_key)
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps(request_body, separators=(",", ":")).encode("utf-8"),
+        headers={"Content-Type": "application/json", "User-Agent": "atested-dashboard"},
+        method="POST",
+    )
+    open_request = opener or urllib.request.urlopen
+    try:
+        with open_request(request, timeout=10) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        return {"ok": False, "error": "LICENSE_REFRESH_FAILED", "detail": str(exc)}
+
+    renewed_key = str(result.get("license_key") or "").strip()
+    renewed = validate_license_key(renewed_key) if renewed_key else None
+    if not renewed:
+        return {"ok": False, "error": "INVALID_RENEWED_LICENSE"}
+    if renewed.get("license_id") != decoded.get("license_id"):
+        return {"ok": False, "error": "LICENSE_ID_MISMATCH"}
+    if renewed.get("tier") != decoded.get("tier"):
+        return {"ok": False, "error": "LICENSE_TIER_MISMATCH"}
+    if str(renewed.get("expiry_date") or "") < str(decoded.get("expiry_date") or ""):
+        return {"ok": False, "error": "LICENSE_EXPIRY_REGRESSION"}
+
+    activation = activate_license(runtime_dir, renewed_key)
+    if not activation.get("ok"):
+        return activation
+    return {
+        "ok": True,
+        "license_id": renewed["license_id"],
+        "license_tier": renewed["tier"],
+        "license_expiry": renewed["expiry_iso"],
+        "updated": renewed_key != license_key,
     }
 
 
