@@ -1985,12 +1985,10 @@ function _wirePurchaseAction(bodyArea, el, tier, formData, state) {
 function _renderManagementView(el, state, formData, upgradeTarget) {
   const modeData = state.modeData || {};
   const currentTier = modeData.license_tier || 'personal';
-  const isLicensed = modeData.license_status === 'licensed';
   const TIER_ORDER = ['personal', 'personal_plus', 'crew', 'team', 'institution'];
   const currentIdx = TIER_ORDER.indexOf(currentTier);
   const purchaseDate = (modeData.purchase_date || modeData.registration_date || '').slice(0, 10) || 'N/A';
   const expiryDate = (modeData.license_expiry || '').slice(0, 10) || 'N/A';
-  const autoRenewal = modeData.auto_renewal !== false;
   const operatorName = modeData.operator_name || '';
 
   // Plan selector — informational
@@ -2027,8 +2025,8 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
     .map(f => `<div class="lup-mgmt-row"><span class="lup-mgmt-label">${_esc(f.label)}</span><span class="lup-mgmt-value">${_esc(f.value)}</span></div>`)
     .join('');
 
-  // Renewal section varies by tier
-  const showAutoRenewal = currentTier === 'personal_plus';
+  // Stripe manages billing for self-service paid tiers.
+  const showSubscriptionManagement = ['personal_plus', 'crew', 'team'].includes(currentTier);
   const showRenewalGuidance = ['crew', 'team', 'institution'].includes(currentTier);
 
   el.innerHTML = `
@@ -2073,16 +2071,18 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
       <div class="lup-pane-bar lup-pane-bar-green"></div>
       <div class="lup-purchase-header">
         <span class="lup-purchase-plan">${_esc(_tierLabel(currentTier))}</span>
-        <span class="lup-purchase-billing">Renewal: ${_esc(expiryDate)}</span>
+        <span class="lup-purchase-billing">Current license expires: ${_esc(expiryDate)}</span>
       </div>
-      ${showAutoRenewal ? `
+      ${showSubscriptionManagement ? `
       <div class="lup-renewal-section">
         <div class="lup-renewal-status">
-          <span class="lup-renewal-dot" style="background: ${autoRenewal ? '#22c55e' : '#f5a623'}"></span>
-          <span>Auto-renewal ${autoRenewal ? 'enabled' : 'disabled'}</span>
+          <span class="lup-renewal-dot" style="background:#22c55e"></span>
+          <span>Paid plans renew annually until canceled in Stripe. Cancellation takes effect at the end of the paid term.</span>
         </div>
-        <button class="lic-action-btn lup-renewal-toggle">${autoRenewal ? 'Turn Off' : 'Turn On'}</button>
+        <a class="lic-action-btn" href="https://atested.com/account/" target="_blank" rel="noopener noreferrer">Manage subscription</a>
+        <button class="lic-action-btn lup-license-refresh">Refresh renewed license</button>
       </div>
+      <div class="lup-refresh-status" style="display:none"></div>
       ` : ''}
       ${showRenewalGuidance ? `
       <div class="lup-renewal-guidance">
@@ -2260,16 +2260,27 @@ function _renderManagementView(el, state, formData, upgradeTarget) {
   const confirmArea = el.querySelector('.lup-confirm-dialog');
   const errorEl = el.querySelector('.lup-error');
 
-  const renewalToggle = el.querySelector('.lup-renewal-toggle');
-  if (renewalToggle) {
-    renewalToggle.addEventListener('click', () => {
-      _showConfirmDialog(confirmArea, errorEl, state, {
-        message: autoRenewal
-          ? `Auto-renewal will be disabled. Your license will expire on ${expiryDate} and revert to Personal.`
-          : `Auto-renewal will be enabled. Your license will renew automatically on ${expiryDate}.`,
-        action: () => api.postAutoRenewal({ auto_renewal: !autoRenewal }),
-        onSuccess: () => _loadUnifiedPurchase(el, state),
-      });
+  const refreshBtn = el.querySelector('.lup-license-refresh');
+  const refreshStatus = el.querySelector('.lup-refresh-status');
+  if (refreshBtn && refreshStatus) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshStatus.style.display = '';
+      refreshStatus.textContent = 'Checking for a renewed signed license…';
+      try {
+        const result = await api.postLicenseRefresh();
+        if (!result.ok || !result.data?.ok) {
+          throw new Error(result.data?.error || result.error || 'License refresh failed.');
+        }
+        refreshStatus.textContent = result.data.updated
+          ? `Renewed license activated through ${String(result.data.license_expiry || '').slice(0, 10)}.`
+          : `License is current through ${String(result.data.license_expiry || '').slice(0, 10)}.`;
+        await _refreshLicenseState();
+        setTimeout(() => _loadUnifiedPurchase(el, state), 1200);
+      } catch (err) {
+        refreshStatus.textContent = err.message || 'License refresh failed.';
+        refreshBtn.disabled = false;
+      }
     });
   }
 
