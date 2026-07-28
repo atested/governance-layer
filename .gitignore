@@ -34,4 +34,3 @@ __pycache__/
 .agent-workspaces/
 node_modules/
 dist/
-design-ui/.data/
