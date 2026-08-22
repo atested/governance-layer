@@ -1326,3 +1326,292 @@ def run_wp_rl_005_validator_suite(fixtures):
             continue
         results[name] = validator(fixtures[name])
     return results
+
+
+# ---------------------------------------------------------------------------
+# Five-destination lite operator experience validators (WP-RL-006).
+# ---------------------------------------------------------------------------
+
+LITE_DESTINATIONS = ("chat", "agents", "approvals", "results", "settings")
+
+ANALYST_CONTROL_ROOM_SURFACES = (
+    "pipeline",
+    "patterns",
+    "pattern_editor",
+    "policies",
+    "policy_editor",
+    "scaffolds",
+    "scaffold_editor",
+    "signal_registry",
+    "iteration",
+    "chain_administration",
+    "chain_admin",
+)
+
+DEFERRED_RESULT_METRICS = ("posting", "engagement", "click", "download")
+
+DEFERRED_SETTING_CAPABILITIES = (
+    "website_voice_derivation",
+    "website_analysis",
+    "linkedin",
+    "x_posting",
+    "substack",
+)
+
+AGENT_SCREEN_FIELDS = (
+    "name", "schedule", "mode", "last_run", "next_run",
+    "draft_count", "controls", "run_history", "weekly_summary",
+)
+
+
+def _screen_ref(value, attr):
+    """Return a stable string id from an object or dict record."""
+    if hasattr(value, attr):
+        return str(getattr(value, attr))
+    if isinstance(value, dict):
+        return str(value.get(attr, "?"))
+    return "?"
+
+
+def lite_information_architecture_validator(fixture):
+    """REQ-ATL-022: five lite destinations are reachable and the discarded
+    11-view analyst control room is absent from primary navigation."""
+    destinations = fixture.get("destinations", [])
+    navigation = fixture.get("navigation", [])
+    findings = []
+    present = {str(d).strip().lower() for d in destinations}
+    for required in LITE_DESTINATIONS:
+        if required not in present:
+            findings.append("destination not reachable: " + required)
+    for item in navigation:
+        lowered = str(item).strip().lower()
+        for surface in ANALYST_CONTROL_ROOM_SURFACES:
+            if surface in lowered:
+                findings.append("analyst control-room surface in navigation: " + repr(item))
+                break
+    return _result(
+        "LiteInformationArchitectureValidator",
+        [str(d) for d in destinations],
+        not findings, findings, [],
+    )
+
+
+def chat_proposal_validator(fixture):
+    """REQ-ATL-023: Chat presents proposed Agents as readable editable cards
+    with Create agent and Not now; Create enters the lifecycle and Not now
+    creates no Agent."""
+    cards = fixture.get("cards", [])
+    scenarios = fixture.get("scenarios", [])
+    findings = []
+    target_ids = []
+    for index, card in enumerate(cards):
+        card_id = str(card.get("card_id", "card-" + str(index)))
+        target_ids.append(card_id)
+        if not card.get("editable"):
+            findings.append("proposal card not editable: " + card_id)
+        if not str(card.get("brief_text") or "").strip():
+            findings.append("proposal card not readable (empty brief): " + card_id)
+        choices = {str(c).strip().lower() for c in card.get("choices", [])}
+        if "create_agent" not in choices:
+            findings.append("proposal card missing Create agent choice: " + card_id)
+        if "not_now" not in choices:
+            findings.append("proposal card missing Not now choice: " + card_id)
+    for scenario in scenarios:
+        action = str(scenario.get("action") or "").strip().lower()
+        created = scenario.get("created_agent")
+        target_ids.append("scenario:" + action)
+        if action == "create_agent":
+            if created is None:
+                findings.append("Create agent produced no Agent")
+            elif getattr(created, "state", None) not in AGENT_STATES:
+                findings.append("Create agent did not enter the Agent lifecycle")
+        elif action == "not_now":
+            if created is not None:
+                findings.append("Not now created an Agent")
+        else:
+            findings.append("unknown proposal action: " + repr(scenario.get("action")))
+    return _result("ChatProposalValidator", target_ids, not findings, findings, [])
+
+
+def agents_screen_validator(fixture):
+    """REQ-ATL-024: each Agent shows name, schedule, mode, last/next Run,
+    draft count, lifecycle controls, Run history, and weekly summary; the empty
+    state is explicit and pause/edit operate on the selected Agent."""
+    rows = fixture.get("rows", [])
+    empty_state = fixture.get("empty_state")
+    actions = fixture.get("actions", [])
+    findings = []
+    target_ids = []
+    if not rows and not empty_state:
+        findings.append("empty Agents screen lacks an explicit empty state")
+    for row in rows:
+        target_ids.append(str(row.get("name", "?")))
+        for field in AGENT_SCREEN_FIELDS:
+            if field not in row:
+                findings.append(
+                    "Agent row missing " + field + ": " + str(row.get("name"))
+                )
+    names = {str(r.get("name")) for r in rows}
+    for action in actions:
+        name = str(action.get("name") or "")
+        act = str(action.get("action") or "").strip().lower()
+        target_ids.append(name + ":" + act)
+        if act not in ("pause", "edit"):
+            findings.append("unsupported lifecycle action on Agents screen: " + repr(act))
+            continue
+        if name not in names:
+            findings.append("action targets unknown Agent: " + repr(name))
+            continue
+        if action.get("result") is None:
+            findings.append("action produced no result: " + repr(act))
+    return _result("AgentsScreenValidator", target_ids, not findings, findings, [])
+
+
+def approvals_screen_validator(fixture):
+    """REQ-ATL-025: pending Drafts are the primary working queue; all four
+    review actions complete in place; non-pending Drafts are not actionable."""
+    queue = fixture.get("queue", [])
+    actions = fixture.get("actions", [])
+    findings = []
+    target_ids = []
+    for entry in queue:
+        target_ids.append(str(entry.get("draft_id", "?")))
+        if entry.get("state") == "pending":
+            continue
+        if entry.get("actionable"):
+            findings.append(
+                "non-pending Draft remains actionable: " + repr(entry.get("draft_id"))
+            )
+    for action in actions:
+        act = str(action.get("action") or "").strip().lower()
+        if act not in APPROVAL_ACTIONS:
+            findings.append("unknown review action: " + repr(action.get("action")))
+        if action.get("visited_other_screen"):
+            findings.append("review action left the Approvals screen: " + repr(act))
+        if action.get("result") is None:
+            findings.append("review action produced no result: " + repr(act))
+    return _result("ApprovalsScreenValidator", target_ids, not findings, findings, [])
+
+
+def walking_skeleton_results_validator(fixture):
+    """REQ-ATL-026: Results reconcile only to Run and Draft records; deferred
+    metric classes (posting, engagement, click, download) are unavailable and
+    never fabricated."""
+    run_ids = {_screen_ref(r, "run_id") for r in fixture.get("runs", [])}
+    draft_ids = {_screen_ref(d, "draft_id") for d in fixture.get("drafts", [])}
+    displayed = fixture.get("displayed", [])
+    deferred = fixture.get("deferred_metrics", [])
+    findings = []
+    target_ids = []
+    for item in displayed:
+        item_id = str(item.get("id", "?"))
+        target_ids.append(item_id)
+        source = item.get("source")
+        ref = str(item.get("ref") or "")
+        if source == "run":
+            if ref not in run_ids:
+                findings.append("displayed item references unknown Run: " + repr(ref))
+        elif source == "draft":
+            if ref not in draft_ids:
+                findings.append("displayed item references unknown Draft: " + repr(ref))
+        else:
+            findings.append("displayed item lacks Run/Draft evidence: " + repr(item_id))
+    for metric in deferred:
+        lowered = str(metric).strip().lower()
+        is_deferred_class = any(marker in lowered for marker in DEFERRED_RESULT_METRICS)
+        marked_unavailable = ("unavailable" in lowered) or ("deferred" in lowered)
+        if is_deferred_class and not marked_unavailable:
+            findings.append("deferred metric shown as available: " + repr(metric))
+    return _result(
+        "WalkingSkeletonResultsValidator", target_ids, not findings, findings, [],
+    )
+
+
+def settings_boundary_validator(fixture):
+    """REQ-ATL-027: Reddit connection, provider routing, and run-log export are
+    exposed; deferred capabilities stay unavailable and are never falsely
+    enabled."""
+    exposed = fixture.get("exposed", [])
+    deferred = fixture.get("deferred", [])
+    findings = []
+    target_ids = [str(e) for e in exposed]
+    exposed_lower = {str(e).strip().lower() for e in exposed}
+    for required in ("reddit_connection", "provider_routing", "run_log_export"):
+        if required not in exposed_lower:
+            findings.append("required setting not exposed: " + required)
+    for entry in deferred:
+        name = str(entry.get("name") or "").strip().lower()
+        if name in DEFERRED_SETTING_CAPABILITIES and entry.get("available"):
+            findings.append("deferred capability falsely enabled: " + repr(entry.get("name")))
+    return _result("SettingsBoundaryValidator", target_ids, not findings, findings, [])
+
+
+def agent_creation_time_validator(fixture):
+    """REQ-ATL-034: a prepared operator reaches a persisted live Agent within
+    120 seconds using only brief + schedule + sources authoring inputs."""
+    scenario = fixture.get("scenario", {})
+    findings = []
+    target_ids = [str(scenario.get("name", "creation"))]
+    elapsed = scenario.get("elapsed_seconds")
+    if not isinstance(elapsed, (int, float)) or elapsed < 0:
+        findings.append("timed scenario missing a non-negative elapsed time")
+    elif elapsed > 120:
+        findings.append("Agent creation exceeded 120 seconds: " + str(elapsed))
+    agent = scenario.get("persisted_agent")
+    if agent is None or getattr(agent, "state", None) != "live":
+        findings.append("scenario did not end in a persisted live Agent")
+    for item in scenario.get("prohibited_authoring", []):
+        findings.append("prohibited authoring surface used: " + repr(item))
+    return _result("AgentCreationTimeValidator", target_ids, not findings, findings, [])
+
+
+def approval_clearance_time_validator(fixture):
+    """REQ-ATL-035: five pending Drafts with complete review context are
+    decided in place within 600 seconds using only the Approvals screen."""
+    scenario = fixture.get("scenario", {})
+    findings = []
+    decisions = scenario.get("decisions", [])
+    elapsed = scenario.get("elapsed_seconds")
+    target_ids = [str(d.get("draft_id", "?")) for d in decisions]
+    if not isinstance(elapsed, (int, float)) or elapsed < 0:
+        findings.append("timed scenario missing a non-negative elapsed time")
+    elif elapsed > 600:
+        findings.append("review clearance exceeded 600 seconds: " + str(elapsed))
+    if len(decisions) != 5:
+        findings.append("expected five decisions, got " + str(len(decisions)))
+    for decision in decisions:
+        act = str(decision.get("action") or "").strip().lower()
+        if act not in APPROVAL_ACTIONS:
+            findings.append("invalid review action: " + repr(decision.get("action")))
+        if decision.get("visited_other_screen"):
+            findings.append("decision left the Approvals screen")
+        if decision.get("result") is None:
+            findings.append("decision produced no result")
+    return _result("ApprovalClearanceTimeValidator", target_ids, not findings, findings, [])
+
+
+WP_RL_006_VALIDATORS = {
+    "LiteInformationArchitectureValidator": lite_information_architecture_validator,
+    "ChatProposalValidator": chat_proposal_validator,
+    "AgentsScreenValidator": agents_screen_validator,
+    "ApprovalsScreenValidator": approvals_screen_validator,
+    "WalkingSkeletonResultsValidator": walking_skeleton_results_validator,
+    "SettingsBoundaryValidator": settings_boundary_validator,
+    "AgentCreationTimeValidator": agent_creation_time_validator,
+    "ApprovalClearanceTimeValidator": approval_clearance_time_validator,
+    "BriefOnlyAuthoringValidator": brief_only_authoring_validator,
+    "CadenceDefaultValidator": cadence_default_validator,
+    "NoOutboundActionValidator": no_outbound_action_validator,
+}
+
+
+def run_wp_rl_006_validator_suite(fixtures):
+    """Run every WP-RL-006 five-destination validator against its supplied
+    fixture."""
+    results = {}
+    for name, validator in WP_RL_006_VALIDATORS.items():
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results
