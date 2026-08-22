@@ -34,6 +34,12 @@ LOG_RECORD_TYPES = ("run", "opportunity", "draft", "approval", "post")
 
 GENESIS_MARKER = "genesis"
 
+# Provider task boundary (WP-RL-002): one contract per task type, independent
+# of the selected provider, plus the per-provider routing vocabulary.
+TASK_TYPES = ("chat", "qualify", "compose")
+PROVIDERS = ("codex", "deepclaude", "local")
+INVOCATION_STATUSES = ("running", "succeeded", "failed")
+
 # Discarded first-class pipeline surface names; none may be exposed.
 PIPELINE_STAGE_NAMES = tuple(
     ["decision_pipeline", "pipeline", "pattern_editor", "policy_editor",
@@ -157,6 +163,20 @@ class RunLogRecord:
     payload: dict[str, Any]
     prev_hash: str
     record_hash: str
+
+
+@dataclass
+class ProviderTaskInvocation:
+    invocation_id: str
+    task_type: str
+    provider_requested: str
+    provider_used: str | None
+    input_ref: str
+    result_ref: str | None
+    started_at: str
+    finished_at: str | None
+    status: str
+    failure_reason: str | None
 
 
 # ---------------------------------------------------------------------------

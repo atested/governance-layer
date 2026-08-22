@@ -18,11 +18,14 @@ from .domain import (
     CONNECTION_STATUSES,
     CRYPTO_CLAIM_MARKERS,
     DRAFT_STATES,
+    INVOCATION_STATUSES,
     LOG_RECORD_TYPES,
     PIPELINE_STAGE_NAMES,
     PROHIBITED_ATTESTATION_CAPABILITIES,
     PROHIBITED_OPERATOR_CONTROLS,
+    PROVIDERS,
     RUN_STATUSES,
+    TASK_TYPES,
     compute_record_hash,
     verify_log,
 )
@@ -468,6 +471,228 @@ def run_log_record_schema_validator(fixture):
     )
 
 
+# ---------------------------------------------------------------------------
+# Provider task boundary validators (WP-RL-002).
+# ---------------------------------------------------------------------------
+
+def provider_task_contract_validator(fixture):
+    """REQ-ATL-012: one task contract per chat/qualify/compose, provider-independent."""
+    task_contracts = fixture.get("task_contracts", {})
+    provider_contracts = fixture.get("provider_contracts", [])
+    findings = []
+    target_ids = []
+    for task_type in TASK_TYPES:
+        target_ids.append(task_type)
+        contract = task_contracts.get(task_type)
+        if contract is None:
+            findings.append("missing task contract for " + repr(task_type))
+            continue
+        input_shape = contract.get("input_shape")
+        output_shape = contract.get("output_shape")
+        if not isinstance(input_shape, list) or not input_shape:
+            findings.append(task_type + ": missing or empty input_shape")
+        if not isinstance(output_shape, list) or not output_shape:
+            findings.append(task_type + ": missing or empty output_shape")
+    if provider_contracts:
+        findings.append(
+            "provider-specific prompt contract present: " + repr(provider_contracts)
+        )
+    return _result(
+        "ProviderTaskContractValidator", target_ids, not findings, findings, [],
+    )
+
+
+def provider_choice_validator(fixture):
+    """REQ-ATL-013: distinct selectable providers; unavailable/invalid reported before execution."""
+    providers = fixture.get("providers", [])
+    availability = fixture.get("availability", {})
+    selections = fixture.get("selections", [])
+    findings = []
+    if sorted(list(providers)) != sorted(list(PROVIDERS)):
+        findings.append(
+            "configured providers are not the three distinct choices: " + repr(providers)
+        )
+    for selection in selections:
+        provider = selection.get("provider")
+        started = bool(selection.get("started", False))
+        reason = selection.get("reason")
+        invocation = selection.get("invocation")
+        if provider not in PROVIDERS:
+            if started or invocation is not None:
+                findings.append(
+                    "invalid provider " + repr(provider) + " started execution"
+                )
+            elif not reason:
+                findings.append(
+                    "invalid provider " + repr(provider) + " reported without reason"
+                )
+            continue
+        if not bool(availability.get(provider, False)):
+            if started or invocation is not None:
+                findings.append(
+                    "unavailable provider " + repr(provider) + " started a false invocation"
+                )
+            if not reason:
+                findings.append(
+                    "unavailable provider " + repr(provider) + " reported without reason"
+                )
+        else:
+            if started and invocation is None:
+                findings.append(
+                    "available provider " + repr(provider) + " started without invocation"
+                )
+    target_ids = [str(s.get("provider", "?")) for s in selections]
+    return _result(
+        "ProviderChoiceValidator", target_ids, not findings, findings, [],
+    )
+
+
+def provider_routing_validator(fixture):
+    """REQ-ATL-014: per-task mapping applied without substitution; actual provider recorded."""
+    routing = fixture.get("routing", {})
+    dispatches = fixture.get("dispatches", [])
+    findings = []
+    for dispatch in dispatches:
+        task_type = dispatch.get("task_type")
+        requested = dispatch.get("provider_requested")
+        used = dispatch.get("provider_used")
+        evidence = dispatch.get("evidence") or {}
+        expected = routing.get(task_type)
+        if expected is None:
+            findings.append("no routing mapping for task " + repr(task_type))
+        elif requested != expected:
+            findings.append(
+                "dispatch for " + repr(task_type) + " requested " + repr(requested)
+                + " but mapping requires " + repr(expected)
+            )
+        if used != requested:
+            findings.append(
+                "dispatch for " + repr(task_type) + " substituted provider "
+                + repr(used) + " for requested " + repr(requested)
+            )
+        if evidence.get("provider") != used:
+            findings.append(
+                "dispatch for " + repr(task_type) + " evidence provider "
+                + repr(evidence.get("provider")) + " differs from used " + repr(used)
+            )
+    target_ids = [str(d.get("task_type", "?")) for d in dispatches]
+    return _result(
+        "ProviderRoutingValidator", target_ids, not findings, findings, [],
+    )
+
+
+def provider_failure_validator(fixture):
+    """REQ-ATL-015: truthful failure; no silent provider change or substituted result."""
+    failures = fixture.get("failures", [])
+    findings = []
+    for failure in failures:
+        requested = failure.get("provider_requested")
+        status = failure.get("status")
+        reason = failure.get("failure_reason")
+        result_ref = failure.get("result_ref")
+        provider_used = failure.get("provider_used")
+        substituted_result = failure.get("substituted_result")
+        if status != "failed":
+            findings.append(
+                "requested " + repr(requested) + ": status is " + repr(status)
+                + ", expected failed"
+            )
+        if not reason or not str(reason).strip():
+            findings.append("requested " + repr(requested) + ": missing failure reason")
+        if result_ref is not None:
+            findings.append(
+                "requested " + repr(requested) + ": conforming result present despite failure"
+            )
+        if provider_used not in (None, requested):
+            findings.append(
+                "requested " + repr(requested) + ": silently changed provider to "
+                + repr(provider_used)
+            )
+        if substituted_result:
+            findings.append(
+                "requested " + repr(requested)
+                + ": substituted result from another provider present"
+            )
+    target_ids = [str(f.get("provider_requested", "?")) for f in failures]
+    return _result(
+        "ProviderFailureValidator", target_ids, not findings, findings, [],
+    )
+
+
+def provider_swap_gate_validator(fixture):
+    """REQ-ATL-016: 20 candidate verdicts + 10 voice-judged drafts gate activation."""
+    golden_set = fixture.get("golden_set", {})
+    activation = fixture.get("activation", {})
+    findings = []
+    verdicts = golden_set.get("candidate_verdicts", [])
+    drafts = golden_set.get("voice_judged_drafts", [])
+    activated = bool(activation.get("activated", False))
+    mismatched = [v.get("id", "?") for v in verdicts if not v.get("match", False)]
+    failing_drafts = [d.get("id", "?") for d in drafts if not d.get("passes", False)]
+    sufficient = (
+        len(verdicts) >= 20
+        and len(drafts) >= 10
+        and not mismatched
+        and not failing_drafts
+    )
+    if activated != sufficient:
+        if activated:
+            findings.append("activation allowed without sufficient golden-set evidence")
+        else:
+            findings.append("activation blocked despite sufficient golden-set evidence")
+    target_ids = [str(activation.get("provider", "activation"))]
+    return _result(
+        "ProviderSwapGateValidator", target_ids, not findings, findings, [],
+    )
+
+
+def provider_invocation_schema_validator(fixture):
+    """SCH-ATL-008."""
+    invocations = fixture.get("invocations", [])
+    input_refs = set(fixture.get("input_refs", []))
+    result_refs = set(fixture.get("result_refs", []))
+    findings = []
+    for inv in invocations:
+        iid = inv.invocation_id
+        if inv.task_type not in TASK_TYPES:
+            findings.append("invocation " + repr(iid) + ": invalid task_type " + repr(inv.task_type))
+        if inv.provider_requested not in PROVIDERS:
+            findings.append("invocation " + repr(iid) + ": invalid provider_requested")
+        if inv.provider_used is not None and inv.provider_used not in PROVIDERS:
+            findings.append("invocation " + repr(iid) + ": invalid provider_used")
+        if inv.input_ref not in input_refs:
+            findings.append("invocation " + repr(iid) + ": input_ref does not resolve")
+        if inv.result_ref is not None and inv.result_ref not in result_refs:
+            findings.append("invocation " + repr(iid) + ": result_ref does not resolve")
+        if inv.status not in INVOCATION_STATUSES:
+            findings.append("invocation " + repr(iid) + ": invalid status " + repr(inv.status))
+        if inv.status == "succeeded":
+            if inv.result_ref is None:
+                findings.append("invocation " + repr(iid) + ": succeeded without result_ref")
+            if inv.provider_used is None:
+                findings.append("invocation " + repr(iid) + ": succeeded without provider_used")
+            elif inv.provider_used != inv.provider_requested:
+                findings.append("invocation " + repr(iid) + ": succeeded with substituted provider")
+            if inv.finished_at is None:
+                findings.append("invocation " + repr(iid) + ": succeeded without finished_at")
+        elif inv.status == "running":
+            if inv.finished_at is not None:
+                findings.append("invocation " + repr(iid) + ": running claims a finish")
+            if inv.failure_reason is not None:
+                findings.append("invocation " + repr(iid) + ": running has a failure_reason")
+        elif inv.status == "failed":
+            if not inv.failure_reason or not str(inv.failure_reason).strip():
+                findings.append("invocation " + repr(iid) + ": failed without failure_reason")
+            if inv.result_ref is not None:
+                findings.append("invocation " + repr(iid) + ": failed with conforming result_ref")
+        if inv.finished_at is not None and inv.finished_at < inv.started_at:
+            findings.append("invocation " + repr(iid) + ": finished before started")
+    target_ids = [str(inv.invocation_id) for inv in invocations]
+    return _result(
+        "ProviderInvocationSchemaValidator", target_ids, not findings, findings, [],
+    )
+
+
 ALL_VALIDATORS = {
     "AgentAtomValidator": agent_atom_validator,
     "BriefOnlyAuthoringValidator": brief_only_authoring_validator,
@@ -491,6 +716,27 @@ def run_validator_suite(fixtures):
     """Run every WP-RL-001 validator against its supplied fixture."""
     results = {}
     for name, validator in ALL_VALIDATORS.items():
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results
+
+
+PROVIDER_VALIDATORS = {
+    "ProviderTaskContractValidator": provider_task_contract_validator,
+    "ProviderChoiceValidator": provider_choice_validator,
+    "ProviderRoutingValidator": provider_routing_validator,
+    "ProviderFailureValidator": provider_failure_validator,
+    "ProviderSwapGateValidator": provider_swap_gate_validator,
+    "ProviderInvocationSchemaValidator": provider_invocation_schema_validator,
+}
+
+
+def run_provider_validator_suite(fixtures):
+    """Run every WP-RL-002 provider validator against its supplied fixture."""
+    results = {}
+    for name, validator in PROVIDER_VALIDATORS.items():
         if name not in fixtures:
             results[name] = _result(name, [], False, ["missing usable input"], [])
             continue

@@ -16,6 +16,9 @@ from .domain import (  # noqa: F401
     DRAFT_STATES,
     CONNECTION_STATUSES,
     LOG_RECORD_TYPES,
+    TASK_TYPES,
+    PROVIDERS,
+    INVOCATION_STATUSES,
     Agent,
     Run,
     Opportunity,
@@ -23,6 +26,7 @@ from .domain import (  # noqa: F401
     Connection,
     Person,
     RunLogRecord,
+    ProviderTaskInvocation,
     default_schedule,
     default_budget,
     new_agent,
@@ -32,7 +36,12 @@ from .domain import (  # noqa: F401
     verify_log,
     transition_agent,
 )
-from .validators import ALL_VALIDATORS, run_validator_suite  # noqa: F401
+from .validators import (  # noqa: F401
+    ALL_VALIDATORS,
+    PROVIDER_VALIDATORS,
+    run_validator_suite,
+    run_provider_validator_suite,
+)
 
 __all__ = [
     "GENESIS_MARKER",
@@ -44,6 +53,9 @@ __all__ = [
     "DRAFT_STATES",
     "CONNECTION_STATUSES",
     "LOG_RECORD_TYPES",
+    "TASK_TYPES",
+    "PROVIDERS",
+    "INVOCATION_STATUSES",
     "Agent",
     "Run",
     "Opportunity",
@@ -51,6 +63,7 @@ __all__ = [
     "Connection",
     "Person",
     "RunLogRecord",
+    "ProviderTaskInvocation",
     "default_schedule",
     "default_budget",
     "new_agent",
@@ -60,5 +73,7 @@ __all__ = [
     "verify_log",
     "transition_agent",
     "ALL_VALIDATORS",
+    "PROVIDER_VALIDATORS",
     "run_validator_suite",
+    "run_provider_validator_suite",
 ]
