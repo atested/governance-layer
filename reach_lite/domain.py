@@ -13,7 +13,7 @@ import hashlib
 import json
 import re
 from dataclasses import asdict, dataclass, replace
-from typing import Any
+from typing import Any, Callable, Sequence
 
 # ---------------------------------------------------------------------------
 # Enumerated vocabularies (single source of truth for all later packages).
@@ -492,3 +492,88 @@ def evaluate_schedule(agents, triggers, existing_runs, now):
             )
         )
     return ScheduleOutcome(admitted=admitted, skipped=skipped)
+
+
+# ---------------------------------------------------------------------------
+# Reddit discovery and brief-driven qualification (WP-RL-004).
+# ---------------------------------------------------------------------------
+
+def authorized_source_keys(agent: Agent) -> set[tuple[str, str]]:
+    """Return the set of (kind, value) source identities an Agent authorizes."""
+    keys: set[tuple[str, str]] = set()
+    for source in agent.sources:
+        if isinstance(source, dict) and source.get("value"):
+            keys.add((source.get("kind"), source["value"]))
+    return keys
+
+
+def retrieve_authorized_candidates(
+    agent: Agent, candidates: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Retrieve only candidates whose source is Agent-authorized, retaining
+    source identity and URL (REQ-ATL-007)."""
+    keys = authorized_source_keys(agent)
+    return [
+        candidate
+        for candidate in candidates
+        if (candidate.get("source") or {}).get("value") is not None
+        and ((candidate.get("source") or {}).get("kind"), (candidate.get("source") or {}).get("value"))
+        in keys
+    ]
+
+
+def deduplicate_candidates(
+    candidates: Sequence[dict[str, Any]],
+    key: Callable[[dict[str, Any]], Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Surface each candidate identity at most once per Agent while keeping a
+    distinct later interaction (a distinct identity) representable
+    (REQ-ATL-008)."""
+    seen: set[Any] = set()
+    out: list[dict[str, Any]] = []
+    for candidate in candidates:
+        identity = key(candidate) if key is not None else candidate.get("url")
+        if identity in seen:
+            continue
+        seen.add(identity)
+        out.append(candidate)
+    return out
+
+
+def qualify_candidate(
+    candidate: dict[str, Any], qualifier: dict[str, str]
+) -> dict[str, Any]:
+    """Apply the brief's inclusion/exclusion intent to one candidate and return
+    a deterministic verdict with a score and prose reason (REQ-ATL-009)."""
+    text = (candidate.get("excerpt") or "").lower()
+    include = (qualifier.get("include") or "").lower()
+    exclude = (qualifier.get("exclude") or "").lower()
+    include_terms = [t for t in re.split(r"[\s,;]+", include) if t]
+    exclude_terms = [t for t in re.split(r"[\s,;]+", exclude) if t]
+    if exclude_terms and any(t in text for t in exclude_terms):
+        return {
+            "verdict": "excluded",
+            "score": 0.0,
+            "reason": "matches exclusion intent: " + qualifier.get("exclude", ""),
+        }
+    if include_terms:
+        matched = [t for t in include_terms if t in text]
+        if matched:
+            score = round(len(matched) / len(include_terms), 4)
+            return {
+                "verdict": "included",
+                "score": score,
+                "reason": "matches inclusion intent: " + qualifier.get("include", ""),
+            }
+    return {"verdict": "excluded", "score": 0.0, "reason": "no inclusion or exclusion match"}
+
+
+def qualify_candidates(
+    candidates: Sequence[dict[str, Any]], qualifier: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Return the candidates that qualify (are included) under the brief."""
+    return [
+        candidate
+        for candidate in candidates
+        if qualify_candidate(candidate, qualifier)["verdict"] == "included"
+    ]

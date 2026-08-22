@@ -35,12 +35,21 @@ from .domain import (  # noqa: F401
     append_record,
     verify_log,
     transition_agent,
+    authorized_source_keys,
+    retrieve_authorized_candidates,
+    deduplicate_candidates,
+    qualify_candidate,
+    qualify_candidates,
 )
 from .validators import (  # noqa: F401
     ALL_VALIDATORS,
     PROVIDER_VALIDATORS,
+    WP_RL_003_VALIDATORS,
+    WP_RL_004_VALIDATORS,
     run_validator_suite,
     run_provider_validator_suite,
+    run_wp_rl_003_validator_suite,
+    run_wp_rl_004_validator_suite,
 )
 
 __all__ = [
@@ -72,8 +81,17 @@ __all__ = [
     "append_record",
     "verify_log",
     "transition_agent",
+    "authorized_source_keys",
+    "retrieve_authorized_candidates",
+    "deduplicate_candidates",
+    "qualify_candidate",
+    "qualify_candidates",
     "ALL_VALIDATORS",
     "PROVIDER_VALIDATORS",
+    "WP_RL_003_VALIDATORS",
+    "WP_RL_004_VALIDATORS",
     "run_validator_suite",
     "run_provider_validator_suite",
+    "run_wp_rl_003_validator_suite",
+    "run_wp_rl_004_validator_suite",
 ]

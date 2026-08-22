@@ -26,10 +26,15 @@ from .domain import (
     PROVIDERS,
     RUN_STATUSES,
     TASK_TYPES,
+    authorized_source_keys,
     compute_record_hash,
     default_budget,
     default_schedule,
+    deduplicate_candidates,
     evaluate_schedule,
+    qualify_candidate,
+    qualify_candidates,
+    retrieve_authorized_candidates,
     verify_log,
 )
 
@@ -916,6 +921,180 @@ def run_wp_rl_003_validator_suite(fixtures):
     """Run every WP-RL-003 scheduling validator against its supplied fixture."""
     results = {}
     for name, validator in WP_RL_003_VALIDATORS.items():
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Reddit discovery and brief-driven qualification validators (WP-RL-004).
+# ---------------------------------------------------------------------------
+
+def reddit_source_boundary_validator(fixture):
+    """REQ-ATL-007: candidates are retrieved only from Agent-authorized Reddit
+    sources, retaining source identity and URL."""
+    agent = fixture.get("agent")
+    candidates = fixture.get("candidates", [])
+    retrieved = fixture.get("retrieved")
+    findings = []
+    if agent is None:
+        findings.append("no agent supplied")
+        return _result("RedditSourceBoundaryValidator", [], False, findings, [])
+    if retrieved is None:
+        retrieved = retrieve_authorized_candidates(agent, candidates)
+    expected = retrieve_authorized_candidates(agent, candidates)
+    expected_ids = {c.get("candidate_id") for c in expected}
+    retrieved_ids = {c.get("candidate_id") for c in retrieved}
+    target_ids = [c.get("candidate_id", "?") for c in candidates]
+    missing = expected_ids - retrieved_ids
+    extra = retrieved_ids - expected_ids
+    if missing:
+        findings.append("authorized candidates dropped: " + repr(sorted(missing)))
+    if extra:
+        findings.append("unauthorized candidates retrieved: " + repr(sorted(extra)))
+    for candidate in retrieved:
+        source = candidate.get("source") or {}
+        if not source.get("value") or not candidate.get("url"):
+            findings.append(
+                "retrieved candidate missing source identity or URL: "
+                + repr(candidate.get("candidate_id"))
+            )
+    return _result(
+        "RedditSourceBoundaryValidator", target_ids, not findings, findings, [],
+    )
+
+
+def candidate_deduplication_validator(fixture):
+    """REQ-ATL-008: a candidate is surfaced at most once per Agent; a distinct
+    later interaction carries a distinct source_url and remains representable."""
+    opportunities = fixture.get("opportunities", [])
+    agent_id = fixture.get("agent_id", "")
+    findings = []
+    seen: dict = {}
+    target_ids = []
+    for opp in opportunities:
+        target_ids.append(opp.opportunity_id)
+        key = (agent_id, opp.source_url)
+        if key in seen:
+            findings.append(
+                "duplicate Opportunity for source_url " + repr(opp.source_url)
+            )
+        seen[key] = opp
+    return _result(
+        "CandidateDeduplicationValidator", target_ids, not findings, findings, [],
+    )
+
+
+def brief_qualification_validator(fixture):
+    """REQ-ATL-009: verdicts are consistent with the brief; every retained
+    Opportunity carries a score and a non-empty prose reason."""
+    qualifier = fixture.get("qualifier", {})
+    candidates = fixture.get("candidates", [])
+    opportunities = fixture.get("opportunities", [])
+    findings = []
+    retained_urls = {opp.source_url for opp in opportunities}
+    target_ids = []
+    for candidate in candidates:
+        url = candidate.get("url")
+        target_ids.append(candidate.get("candidate_id", url))
+        expected = qualify_candidate(candidate, qualifier)
+        retained = url in retained_urls
+        if expected["verdict"] == "included" and not retained:
+            findings.append(
+                "included candidate not retained: " + repr(candidate.get("candidate_id"))
+            )
+        if expected["verdict"] == "excluded" and retained:
+            findings.append(
+                "excluded candidate retained: " + repr(candidate.get("candidate_id"))
+            )
+    for opp in opportunities:
+        if not isinstance(opp.qualify_score, (int, float)) or not (0 <= opp.qualify_score <= 1):
+            findings.append(
+                "Opportunity " + repr(opp.opportunity_id) + ": score out of range"
+            )
+        if not opp.qualify_reason or not str(opp.qualify_reason).strip():
+            findings.append(
+                "Opportunity " + repr(opp.opportunity_id) + ": empty qualification reason"
+            )
+    return _result(
+        "BriefQualificationValidator", target_ids, not findings, findings, [],
+    )
+
+
+def seed_knowledge_boundary_validator(fixture):
+    """REQ-ATL-010: qualification evidence identifies the seed-corpus version;
+    ordinary Agent creation and execution do not author the seed corpus."""
+    seed_corpus_version = fixture.get("seed_corpus_version")
+    qualification_evidence = fixture.get("qualification_evidence", [])
+    requires_corpus_edit = fixture.get("requires_corpus_edit", [])
+    findings = []
+    target_ids = []
+    if not seed_corpus_version or not str(seed_corpus_version).strip():
+        findings.append("seed-corpus version not identified")
+    for evidence in qualification_evidence:
+        target_ids.append(evidence.get("evidence_id", "?"))
+        if evidence.get("seed_corpus_version") != seed_corpus_version:
+            findings.append(
+                "qualification evidence " + repr(evidence.get("evidence_id"))
+                + " references seed version " + repr(evidence.get("seed_corpus_version"))
+            )
+    for requirement in requires_corpus_edit:
+        findings.append("runtime corpus authoring required: " + repr(requirement))
+    return _result(
+        "SeedKnowledgeBoundaryValidator", target_ids, not findings, findings, [],
+    )
+
+
+def optional_person_resolution_validator(fixture):
+    """REQ-ATL-033: a known handle resolves to its Person; an unknown handle
+    stays null without dropping the Opportunity."""
+    persons = fixture.get("persons", [])
+    opportunities = fixture.get("opportunities", [])
+    findings = []
+    handle_to_person: dict = {}
+    for person in persons:
+        for handle in person.handles:
+            value = handle.get("value") if isinstance(handle, dict) else handle
+            if value:
+                handle_to_person[value] = person.person_id
+    target_ids = []
+    for opp in opportunities:
+        target_ids.append(opp.opportunity_id)
+        expected = handle_to_person.get(opp.author_handle)
+        if expected is not None and opp.person_id != expected:
+            findings.append(
+                "known handle " + repr(opp.author_handle) + " not resolved to "
+                + repr(expected)
+            )
+        if expected is None and opp.person_id is not None:
+            findings.append(
+                "unknown handle " + repr(opp.author_handle)
+                + " fabricated person_id " + repr(opp.person_id)
+            )
+    return _result(
+        "OptionalPersonResolutionValidator", target_ids, not findings, findings, [],
+    )
+
+
+WP_RL_004_VALIDATORS = {
+    "RedditSourceBoundaryValidator": reddit_source_boundary_validator,
+    "CandidateDeduplicationValidator": candidate_deduplication_validator,
+    "BriefQualificationValidator": brief_qualification_validator,
+    "SeedKnowledgeBoundaryValidator": seed_knowledge_boundary_validator,
+    "RunBudgetValidator": run_budget_validator,
+    "OptionalPersonResolutionValidator": optional_person_resolution_validator,
+    "OpportunitySchemaValidator": opportunity_schema_validator,
+    "PersonSchemaValidator": person_schema_validator,
+}
+
+
+def run_wp_rl_004_validator_suite(fixtures):
+    """Run every WP-RL-004 discovery/qualification validator against its
+    supplied fixture."""
+    results = {}
+    for name, validator in WP_RL_004_VALIDATORS.items():
         if name not in fixtures:
             results[name] = _result(name, [], False, ["missing usable input"], [])
             continue
