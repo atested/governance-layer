@@ -415,3 +415,80 @@ def verify_log(chain: list[RunLogRecord]) -> tuple[bool, list[str]]:
             )
         expected_prev = record.record_hash
     return (not findings), findings
+
+
+# ---------------------------------------------------------------------------
+# Live-Agent scheduling and internal Run orchestration (WP-RL-003).
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ScheduleTrigger:
+    """One occurrence of an Agent schedule that may admit a Run.
+
+    A disabled trigger (operator turned a schedule off) never admits a Run;
+    an enabled trigger admits a Run only when its Agent is live, the
+    occurrence is due (due_at <= now), and no Run already covers it.
+    """
+
+    trigger_id: str
+    agent_id: str
+    due_at: str
+    enabled: bool = True
+
+
+@dataclass
+class ScheduleOutcome:
+    """Result of evaluating a batch of schedule occurrences."""
+
+    admitted: list  # list[Run]
+    skipped: list  # list[dict] with trigger_id and reason
+
+
+def evaluate_schedule(agents, triggers, existing_runs, now):
+    """Turn each eligible live-Agent schedule occurrence into exactly one
+    attributable, budget-bounded internal Run.
+
+    Eligibility requires, in order: the trigger is enabled; the referenced
+    Agent exists and is live; the occurrence is due (not early); and no Run
+    already covers the same occurrence (not duplicate). Ineligible
+    occurrences produce no Run and are reported with a reason.
+    """
+    agent_by_id = {a.agent_id: a for a in agents}
+    covered = {(r.agent_id, r.started_at) for r in existing_runs}
+    admitted: list = []
+    skipped: list = []
+    admitted_occurrences: set = set()
+    for trigger in triggers:
+        occurrence = (trigger.agent_id, trigger.due_at)
+        reason: str | None = None
+        if not trigger.enabled:
+            reason = "disabled"
+        agent = agent_by_id.get(trigger.agent_id)
+        if reason is None and (agent is None or agent.state != "live"):
+            reason = "not_live"
+        if reason is None and trigger.due_at > now:
+            reason = "early"
+        if reason is None and occurrence in covered:
+            reason = "duplicate"
+        if reason is None and occurrence in admitted_occurrences:
+            reason = "duplicate"
+        if reason is not None:
+            skipped.append({"trigger_id": trigger.trigger_id, "reason": reason})
+            continue
+        admitted_occurrences.add(occurrence)
+        admitted.append(
+            Run(
+                run_id="run-" + trigger.trigger_id,
+                agent_id=trigger.agent_id,
+                started_at=trigger.due_at,
+                finished_at=None,
+                sources_polled=list(agent.sources),
+                candidates_seen=0,
+                candidates_qualified=0,
+                drafts_produced=0,
+                provider_used="",
+                token_cost=None,
+                status="running",
+            )
+        )
+    return ScheduleOutcome(admitted=admitted, skipped=skipped)

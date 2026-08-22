@@ -27,6 +27,9 @@ from .domain import (
     RUN_STATUSES,
     TASK_TYPES,
     compute_record_hash,
+    default_budget,
+    default_schedule,
+    evaluate_schedule,
     verify_log,
 )
 
@@ -737,6 +740,182 @@ def run_provider_validator_suite(fixtures):
     """Run every WP-RL-002 provider validator against its supplied fixture."""
     results = {}
     for name, validator in PROVIDER_VALIDATORS.items():
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Live-Agent scheduling validators (WP-RL-003).
+# ---------------------------------------------------------------------------
+
+ALLOWED_AUTONOMOUS_TASKS = ("scan", "qualify", "draft", "report")
+
+
+def scheduled_run_validator(fixture):
+    """REQ-ATL-005: a due schedule yields exactly one attributable Run; an
+    early, duplicate, paused, draft, or disabled trigger yields none."""
+    agents = fixture.get("agents", [])
+    triggers = fixture.get("triggers", [])
+    existing_runs = fixture.get("existing_runs", [])
+    now = fixture.get("now")
+    outcome = fixture.get("outcome")
+    if outcome is None:
+        outcome = evaluate_schedule(agents, triggers, existing_runs, now)
+    admitted = list(outcome.admitted)
+    agent_by_id = {a.agent_id: a for a in agents}
+    covered = {(r.agent_id, r.started_at) for r in existing_runs}
+    findings = []
+    admitted_occurrences = set()
+    for trigger in triggers:
+        occurrence = (trigger.agent_id, trigger.due_at)
+        eligible = (
+            bool(trigger.enabled)
+            and agent_by_id.get(trigger.agent_id) is not None
+            and agent_by_id[trigger.agent_id].state == "live"
+            and trigger.due_at <= now
+            and occurrence not in covered
+            and occurrence not in admitted_occurrences
+        )
+        if eligible:
+            admitted_occurrences.add(occurrence)
+        matching = [
+            r for r in admitted
+            if r.agent_id == trigger.agent_id and r.started_at == trigger.due_at
+        ]
+        if eligible and len(matching) != 1:
+            findings.append(
+                "trigger " + repr(trigger.trigger_id) + ": expected exactly one Run, "
+                "got " + str(len(matching))
+            )
+        if not eligible and matching:
+            findings.append(
+                "trigger " + repr(trigger.trigger_id) + ": ineligible but produced a Run"
+            )
+    for run in admitted:
+        agent = agent_by_id.get(run.agent_id)
+        if agent is None or agent.state != "live":
+            findings.append(
+                "admitted Run " + repr(run.run_id) + " not attributable to a live Agent"
+            )
+    return _result(
+        "ScheduledRunValidator",
+        [t.trigger_id for t in triggers],
+        not findings, findings, [],
+    )
+
+
+def run_budget_validator(fixture):
+    """REQ-ATL-011: a Run exposes no more than the per-run surfaced-opportunity
+    and draft budgets, even when excess candidates are available."""
+    items = fixture.get("runs", [])
+    findings = []
+    target_ids = []
+    for item in items:
+        run = item["run"]
+        budget = item.get("budget") or default_budget()
+        target_ids.append(run.run_id)
+        max_surfaced = budget.get("max_surfaced_per_run")
+        max_drafts = budget.get("max_drafts_per_run")
+        if isinstance(max_surfaced, int) and run.candidates_qualified > max_surfaced:
+            findings.append(
+                "Run " + repr(run.run_id) + ": surfaced "
+                + str(run.candidates_qualified) + " exceeds max " + str(max_surfaced)
+            )
+        if isinstance(max_drafts, int) and run.drafts_produced > max_drafts:
+            findings.append(
+                "Run " + repr(run.run_id) + ": drafts " + str(run.drafts_produced)
+                + " exceeds max " + str(max_drafts)
+            )
+    return _result("RunBudgetValidator", target_ids, not findings, findings, [])
+
+
+def autonomy_boundary_validator(fixture):
+    """REQ-ATL-021: unattended work is limited to scan/qualify/draft/report; no
+    outward task is eligible from an unapproved Draft."""
+    tasks = fixture.get("tasks", [])
+    drafts = fixture.get("drafts", [])
+    outward_attempts = fixture.get("outward_attempts", [])
+    findings = []
+    target_ids = []
+    for task in tasks:
+        name = task.get("name")
+        target_ids.append(str(name))
+        if task.get("autonomous") and name not in ALLOWED_AUTONOMOUS_TASKS:
+            findings.append("autonomous task outside internal set: " + repr(name))
+    for draft in drafts:
+        if draft.get("outward_eligible") and draft.get("state") != "approved":
+            findings.append(
+                "outward task eligible from unapproved Draft "
+                + repr(draft.get("draft_id"))
+            )
+    for attempt in outward_attempts:
+        findings.append("outward task attempted: " + repr(attempt))
+    return _result("AutonomyBoundaryValidator", target_ids, not findings, findings, [])
+
+
+def cadence_default_validator(fixture):
+    """REQ-ATL-030: weekday 09:00 schedule with 5 surfaced and 3 drafts by
+    default; operator changes persist in allowed fields and affect later Runs."""
+    defaults = fixture.get("defaults", {})
+    agents = fixture.get("agents", [])
+    operator_changes = fixture.get("operator_changes", [])
+    findings = []
+    target_ids = [a.agent_id for a in agents]
+    ds = default_schedule()
+    db = default_budget()
+    if defaults.get("schedule") != ds:
+        findings.append(
+            "default schedule diverges: " + repr(defaults.get("schedule"))
+        )
+    if defaults.get("budget") != db:
+        findings.append("default budget diverges: " + repr(defaults.get("budget")))
+    if (
+        ds.get("cadence") != "weekly"
+        or ds.get("time") != "09:00"
+        or sorted(ds.get("days", [])) != ["fri", "mon", "thu", "tue", "wed"]
+    ):
+        findings.append("weekday 09:00 default schedule not met: " + repr(ds))
+    if db.get("max_surfaced_per_run") != 5 or db.get("max_drafts_per_run") != 3:
+        findings.append("default budget is not 5 surfaced / 3 drafts: " + repr(db))
+    agent_by_id = {a.agent_id: a for a in agents}
+    for change in operator_changes:
+        if not change.get("persisted"):
+            findings.append(
+                "operator change not persisted for " + repr(change.get("agent_id"))
+            )
+            continue
+        agent = agent_by_id.get(change.get("agent_id"))
+        if agent is None:
+            findings.append(
+                "operator change references missing Agent " + repr(change.get("agent_id"))
+            )
+            continue
+        field = change.get("field")
+        after = change.get("after")
+        if getattr(agent, field, None) != after:
+            findings.append(
+                "operator change for " + repr(change.get("agent_id")) + "." + repr(field)
+                + " not reflected (observed " + repr(getattr(agent, field, None))
+                + ", expected " + repr(after) + ")"
+            )
+    return _result("CadenceDefaultValidator", target_ids, not findings, findings, [])
+
+
+WP_RL_003_VALIDATORS = {
+    "ScheduledRunValidator": scheduled_run_validator,
+    "RunBudgetValidator": run_budget_validator,
+    "AutonomyBoundaryValidator": autonomy_boundary_validator,
+    "CadenceDefaultValidator": cadence_default_validator,
+}
+
+
+def run_wp_rl_003_validator_suite(fixtures):
+    """Run every WP-RL-003 scheduling validator against its supplied fixture."""
+    results = {}
+    for name, validator in WP_RL_003_VALIDATORS.items():
         if name not in fixtures:
             results[name] = _result(name, [], False, ["missing usable input"], [])
             continue
