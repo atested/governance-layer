@@ -14,6 +14,7 @@ from .domain import (
     AGENT_ACTIONS,
     AGENT_MODES,
     AGENT_STATES,
+    APPROVAL_ACTIONS,
     CADENCES,
     CONNECTION_STATUSES,
     CRYPTO_CLAIM_MARKERS,
@@ -26,12 +27,16 @@ from .domain import (
     PROVIDERS,
     RUN_STATUSES,
     TASK_TYPES,
+    apply_approval_action,
     authorized_source_keys,
+    compose_drafts,
     compute_record_hash,
     default_budget,
     default_schedule,
     deduplicate_candidates,
+    draft_review_context,
     evaluate_schedule,
+    evaluate_slop,
     qualify_candidate,
     qualify_candidates,
     retrieve_authorized_candidates,
@@ -1095,6 +1100,227 @@ def run_wp_rl_004_validator_suite(fixtures):
     supplied fixture."""
     results = {}
     for name, validator in WP_RL_004_VALIDATORS.items():
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results
+
+
+
+# ---------------------------------------------------------------------------
+# Composition, advisory slop review, and local approval validators (WP-RL-005).
+# ---------------------------------------------------------------------------
+
+def single_draft_validator(fixture):
+    """REQ-ATL-017: at most one Draft per qualifying Opportunity; provider and
+    target attribution are retained; never multiple response options."""
+    opportunities = fixture.get("opportunities", [])
+    budget = fixture.get("budget")
+    provider_used = fixture.get("provider_used")
+    drafts = fixture.get("drafts")
+    findings = []
+    if drafts is None:
+        drafts = compose_drafts(opportunities, provider_used=provider_used, budget=budget)
+    opp_ids = {getattr(o, "opportunity_id") for o in opportunities}
+    by_opp: dict = {}
+    for draft in drafts:
+        if draft.opportunity_id not in opp_ids:
+            findings.append(
+                "Draft " + repr(draft.draft_id) + " links to a non-qualifying or missing "
+                "Opportunity " + repr(draft.opportunity_id)
+            )
+        by_opp.setdefault(draft.opportunity_id, []).append(draft)
+    for opp_id, group in by_opp.items():
+        if len(group) > 1:
+            findings.append(
+                "Opportunity " + repr(opp_id) + ": multiple response options ("
+                + str(len(group)) + " Drafts)"
+            )
+    for draft in drafts:
+        if not draft.provider_used or not str(draft.provider_used).strip():
+            findings.append("Draft " + repr(draft.draft_id) + ": provider attribution missing")
+        if not draft.target_url or not str(draft.target_url).strip():
+            findings.append("Draft " + repr(draft.draft_id) + ": target attribution missing")
+    if isinstance(budget, dict):
+        max_drafts = budget.get("max_drafts_per_run")
+        if isinstance(max_drafts, int) and len(drafts) > max_drafts:
+            findings.append(
+                "composed " + str(len(drafts)) + " Drafts exceeding budget "
+                + str(max_drafts)
+            )
+    return _result(
+        "SingleDraftValidator",
+        [str(d.draft_id) for d in drafts],
+        not findings, findings, [],
+    )
+
+
+def draft_review_context_validator(fixture):
+    """REQ-ATL-018: source, body, channel, target, and qualification reason are
+    presented together for each review fixture."""
+    drafts = fixture.get("drafts", [])
+    opportunities = fixture.get("opportunities", [])
+    opp_by_id = {o.opportunity_id: o for o in opportunities}
+    findings = []
+    target_ids = []
+    for draft in drafts:
+        target_ids.append(str(draft.draft_id))
+        opportunity = opp_by_id.get(draft.opportunity_id)
+        if opportunity is None:
+            findings.append(
+                "Draft " + repr(draft.draft_id) + ": opportunity does not resolve"
+            )
+            continue
+        context = draft_review_context(draft, opportunity)
+        for field in ("source", "body", "channel", "target", "qualification_reason"):
+            if not context.get(field) or not str(context.get(field)).strip():
+                findings.append(
+                    "Draft " + repr(draft.draft_id) + ": missing review context "
+                    + repr(field)
+                )
+    return _result(
+        "DraftReviewContextValidator", target_ids, not findings, findings, [],
+    )
+
+
+def approval_action_validator(fixture):
+    """REQ-ATL-019: approve, edit-and-approve, regenerate, and skip each create
+    one attributable state result; edit preserves the accepted body; skip is
+    rejected; regenerate replaces the candidate without iteration mode."""
+    actions = fixture.get("actions", [])
+    findings = []
+    target_ids = []
+    for action in actions:
+        draft = action.get("draft")
+        name = action.get("action")
+        result = action.get("result")
+        new_body = action.get("new_body")
+        new_draft_id = action.get("new_draft_id")
+        target_ids.append(str(draft.draft_id) if draft is not None else "?")
+        if name not in APPROVAL_ACTIONS:
+            findings.append("unknown approval action: " + repr(name))
+            continue
+        if result is None:
+            result = apply_approval_action(
+                draft, name, new_body=new_body, new_draft_id=new_draft_id
+            )
+        if result is None:
+            findings.append("action " + repr(name) + " produced no result")
+            continue
+        if name == "approve":
+            if result.state != "approved":
+                findings.append("approve did not yield approved: " + repr(result.state))
+            if result.draft_id != draft.draft_id:
+                findings.append("approve changed draft identity")
+            if result.body != draft.body:
+                findings.append("approve altered the body")
+        elif name == "edit_approve":
+            if result.state != "edited":
+                findings.append("edit-and-approve did not yield edited: " + repr(result.state))
+            if new_body is not None and result.body != new_body:
+                findings.append("edit-and-approve did not preserve the accepted body")
+            if result.draft_id != draft.draft_id:
+                findings.append("edit-and-approve changed draft identity")
+        elif name == "regenerate":
+            if result.state != "pending":
+                findings.append("regenerate did not yield a pending candidate: " + repr(result.state))
+            if result.draft_id == draft.draft_id:
+                findings.append("regenerate did not replace the review candidate")
+            if getattr(result, "iteration", None) is not None or getattr(result, "version", None) is not None:
+                findings.append("regenerate created iteration mode")
+        elif name == "skip":
+            if result.state != "rejected":
+                findings.append("skip did not yield rejected: " + repr(result.state))
+            if result.draft_id != draft.draft_id:
+                findings.append("skip changed draft identity")
+    return _result(
+        "ApprovalActionValidator", target_ids, not findings, findings, [],
+    )
+
+
+def no_outbound_action_validator(fixture):
+    """REQ-ATL-020: no transmit/publish/email/message leaves the dashboard;
+    approval changes Draft state only and never reaches posted."""
+    outbound_actions = fixture.get("outbound_actions", [])
+    network_evidence = fixture.get("network_evidence", [])
+    drafts = fixture.get("drafts", [])
+    approval_paths = fixture.get("approval_paths", [])
+    findings = []
+    target_ids = [str(d.draft_id) for d in drafts]
+    for action in outbound_actions:
+        findings.append("outward action present: " + repr(action))
+    outward_markers = ("transmit", "publish", "email", "message", "post", "send")
+    for evidence in network_evidence:
+        lowered = str(evidence).lower()
+        if any(marker in lowered for marker in outward_markers):
+            findings.append("network evidence contains outward action: " + repr(evidence))
+    for draft in drafts:
+        if draft.state == "posted":
+            findings.append("Draft " + repr(draft.draft_id) + ": posted is reachable")
+    for path in approval_paths:
+        before = path.get("before")
+        after = path.get("after")
+        if before is None or after is None:
+            continue
+        if after.draft_id != before.draft_id:
+            findings.append(
+                "approval path replaced identity: " + repr(before.draft_id)
+                + " -> " + repr(after.draft_id)
+            )
+        if after.opportunity_id != before.opportunity_id:
+            findings.append("approval path changed opportunity linkage")
+    return _result(
+        "NoOutboundActionValidator", target_ids, not findings, findings, [],
+    )
+
+
+def slop_warning_validator(fixture):
+    """REQ-ATL-032: a Draft is evaluated for slop and any warning is review
+    guidance, never an automatic gate."""
+    cases = fixture.get("cases", [])
+    findings = []
+    target_ids = []
+    for case in cases:
+        draft = case.get("draft")
+        expected_flagged = bool(case.get("flagged", False))
+        target_ids.append(str(draft.draft_id) if draft is not None else "?")
+        evaluation = evaluate_slop(draft.body)
+        if evaluation["flagged"] != expected_flagged:
+            findings.append(
+                "Draft " + repr(draft.draft_id) + ": slop flag observed "
+                + repr(evaluation["flagged"]) + " expected " + repr(expected_flagged)
+            )
+        if expected_flagged and not evaluation.get("warning"):
+            findings.append("Draft " + repr(draft.draft_id) + ": flagged without a warning")
+        if not expected_flagged and evaluation.get("warning"):
+            findings.append("Draft " + repr(draft.draft_id) + ": unflagged yet warned")
+        if case.get("auto_gated"):
+            findings.append(
+                "Draft " + repr(draft.draft_id) + ": slop warning acted as a gate"
+            )
+    return _result(
+        "SlopWarningValidator", target_ids, not findings, findings, [],
+    )
+
+
+WP_RL_005_VALIDATORS = {
+    "SingleDraftValidator": single_draft_validator,
+    "DraftReviewContextValidator": draft_review_context_validator,
+    "ApprovalActionValidator": approval_action_validator,
+    "NoOutboundActionValidator": no_outbound_action_validator,
+    "AutonomyBoundaryValidator": autonomy_boundary_validator,
+    "SlopWarningValidator": slop_warning_validator,
+    "DraftSchemaValidator": draft_schema_validator,
+    "RunBudgetValidator": run_budget_validator,
+}
+
+
+def run_wp_rl_005_validator_suite(fixtures):
+    """Run every WP-RL-005 composition/approval validator against its supplied
+    fixture."""
+    results = {}
+    for name, validator in WP_RL_005_VALIDATORS.items():
         if name not in fixtures:
             results[name] = _result(name, [], False, ["missing usable input"], [])
             continue

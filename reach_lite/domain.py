@@ -577,3 +577,161 @@ def qualify_candidates(
         for candidate in candidates
         if qualify_candidate(candidate, qualifier)["verdict"] == "included"
     ]
+
+# ---------------------------------------------------------------------------
+# Composition, advisory slop review, and local approval (WP-RL-005).
+# ---------------------------------------------------------------------------
+
+APPROVAL_ACTIONS = ("approve", "edit_approve", "regenerate", "skip")
+
+# Slop vocabulary and phrase tells taken from the locked voice-and-anti-slop
+# direction (design/foundation/voice-and-anti-slop.md). A warning is review
+# guidance only; it never gates or mutates a Draft.
+SLOP_WORDS = (
+    "delve", "unpack", "ascertain", "multifaceted",
+    "leverage", "optimize", "endeavor", "comprehensive", "vital", "crucial",
+    "robust", "essential", "drive", "powerful",
+    "ever-evolving", "tapestry", "nuance", "landscape",
+    "furthermore", "moreover", "in conclusion",
+    "navigate", "journey", "unlock", "empower", "elevate", "transform",
+    "seamless", "cutting-edge", "innovative", "game-changing",
+    "revolutionizing", "revolutionary", "democratizing",
+    "best-in-class", "mission-critical", "next-generation", "bleeding-edge",
+    "synergies", "best",
+)
+
+SLOP_PHRASES = (
+    "in today's rapidly evolving",
+    "it's more important than ever",
+    "let's dive in",
+    "in an era of",
+    "as ai becomes",
+    "whether you're",
+    "in summary",
+    "so as you can see",
+    "we're building the future of",
+    "don't miss out",
+    "limited time",
+    "act now",
+)
+
+
+def evaluate_slop(body: str) -> dict[str, Any]:
+    """Evaluate a Draft body for slop tells and return a guidance warning.
+
+    The result never changes Draft state; it only reports whether a tell was
+    found and what it was (REQ-ATL-032).
+    """
+    text = (body or "").lower()
+    findings: list[str] = []
+    for word in SLOP_WORDS:
+        if re.search(r"\b" + re.escape(word) + r"\b", text):
+            findings.append("slop vocabulary: " + word)
+    for phrase in SLOP_PHRASES:
+        if phrase in text:
+            findings.append("slop phrase: " + phrase)
+    if "\u2014" in (body or ""):
+        findings.append("em dash rhythm")
+    flagged = bool(findings)
+    return {
+        "flagged": flagged,
+        "findings": findings,
+        "warning": ("Slop tell detected: " + "; ".join(findings)) if flagged else None,
+    }
+
+
+def compose_drafts(
+    opportunities: Sequence[Any],
+    *,
+    provider_used: str,
+    budget: dict[str, Any] | None = None,
+    body_fn: Callable[[Any], str] | None = None,
+) -> list[Draft]:
+    """Compose zero or one Draft per qualifying Opportunity, stopping when the
+    per-run draft budget is exhausted (REQ-ATL-017). Each Draft retains provider
+    and target attribution and never produces multiple response options.
+    """
+    max_drafts = None
+    if isinstance(budget, dict):
+        value = budget.get("max_drafts_per_run")
+        if isinstance(value, int):
+            max_drafts = value
+    drafts: list[Draft] = []
+    for opportunity in opportunities:
+        if max_drafts is not None and len(drafts) >= max_drafts:
+            break
+        body = (
+            body_fn(opportunity)
+            if body_fn is not None
+            else "Reply drafted for: " + (getattr(opportunity, "excerpt", "") or "")
+        )
+        drafts.append(
+            Draft(
+                draft_id="draft-" + getattr(opportunity, "opportunity_id", "?"),
+                opportunity_id=getattr(opportunity, "opportunity_id", "?"),
+                body=body,
+                channel=getattr(opportunity, "channel", ""),
+                target_url=getattr(opportunity, "source_url", ""),
+                provider_used=provider_used,
+                attribution_link=None,
+                state="pending",
+            )
+        )
+    return drafts
+
+
+def draft_review_context(draft: Draft, opportunity: Any) -> dict[str, Any]:
+    """Present the five review information classes together (REQ-ATL-018):
+    source, body, channel, target, and qualification reason."""
+    return {
+        "source": getattr(opportunity, "source_url", "") or "",
+        "body": draft.body or "",
+        "channel": draft.channel or "",
+        "target": draft.target_url or "",
+        "qualification_reason": getattr(opportunity, "qualify_reason", "") or "",
+    }
+
+
+def approve_draft(draft: Draft) -> Draft:
+    """Approve a pending Draft: one attributable state result."""
+    return replace(draft, state="approved")
+
+
+def edit_and_approve_draft(draft: Draft, new_body: str) -> Draft:
+    """Edit and approve: preserves the accepted (edited) body."""
+    return replace(draft, state="edited", body=new_body)
+
+
+def skip_draft(draft: Draft) -> Draft:
+    """Skip a pending Draft: yields the rejected state."""
+    return replace(draft, state="rejected")
+
+
+def regenerate_draft(draft: Draft, new_body: str, *, new_draft_id: str) -> Draft:
+    """Replace the review candidate with a fresh pending Draft without creating
+    iteration mode (no version history)."""
+    return replace(draft, draft_id=new_draft_id, body=new_body, state="pending")
+
+
+def apply_approval_action(
+    draft: Draft,
+    action: str,
+    *,
+    new_body: str | None = None,
+    new_draft_id: str | None = None,
+) -> Draft | None:
+    """Apply one of the four local approval actions, returning None for an
+    unknown action."""
+    if action == "approve":
+        return approve_draft(draft)
+    if action == "edit_approve":
+        return edit_and_approve_draft(draft, new_body if new_body is not None else draft.body)
+    if action == "regenerate":
+        return regenerate_draft(
+            draft,
+            new_body if new_body is not None else draft.body,
+            new_draft_id=new_draft_id or (draft.draft_id + "-regen"),
+        )
+    if action == "skip":
+        return skip_draft(draft)
+    return None
