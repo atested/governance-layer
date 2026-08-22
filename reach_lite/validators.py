@@ -1615,3 +1615,134 @@ def run_wp_rl_006_validator_suite(fixtures):
             continue
         results[name] = validator(fixtures[name])
     return results
+
+
+# ---------------------------------------------------------------------------
+# Complete validator catalog and reconciliation (WP-RL-007).
+# ---------------------------------------------------------------------------
+
+# The 43 source validators, in canonical order, that the completed walking
+# skeleton must reconcile to before a downstream completion claim. Names are
+# unique across packages; names repeated in per-package lists are shared.
+EXPECTED_VALIDATOR_NAMES = (
+    # WP-RL-001 domain contracts, lifecycle, and run-log foundation.
+    "AgentAtomValidator",
+    "BriefOnlyAuthoringValidator",
+    "BriefInterpretationValidator",
+    "AgentLifecycleValidator",
+    "RunAccountingValidator",
+    "ResignableRunLogValidator",
+    "AttestationDropValidator",
+    "SingleOperatorBoundaryValidator",
+    "AgentSchemaValidator",
+    "RunSchemaValidator",
+    "OpportunitySchemaValidator",
+    "DraftSchemaValidator",
+    "ConnectionSchemaValidator",
+    "PersonSchemaValidator",
+    "RunLogRecordSchemaValidator",
+    # WP-RL-002 provider task boundary and activation evidence.
+    "ProviderTaskContractValidator",
+    "ProviderChoiceValidator",
+    "ProviderRoutingValidator",
+    "ProviderFailureValidator",
+    "ProviderSwapGateValidator",
+    "ProviderInvocationSchemaValidator",
+    # WP-RL-003 live-Agent scheduling and internal Run orchestration.
+    "ScheduledRunValidator",
+    "RunBudgetValidator",
+    "AutonomyBoundaryValidator",
+    "CadenceDefaultValidator",
+    # WP-RL-004 Reddit discovery and brief-driven qualification.
+    "RedditSourceBoundaryValidator",
+    "CandidateDeduplicationValidator",
+    "BriefQualificationValidator",
+    "SeedKnowledgeBoundaryValidator",
+    "OptionalPersonResolutionValidator",
+    # WP-RL-005 composition, advisory slop review, and local approval.
+    "SingleDraftValidator",
+    "DraftReviewContextValidator",
+    "ApprovalActionValidator",
+    "NoOutboundActionValidator",
+    "SlopWarningValidator",
+    # WP-RL-006 five-destination lite operator experience.
+    "LiteInformationArchitectureValidator",
+    "ChatProposalValidator",
+    "AgentsScreenValidator",
+    "ApprovalsScreenValidator",
+    "WalkingSkeletonResultsValidator",
+    "SettingsBoundaryValidator",
+    "AgentCreationTimeValidator",
+    "ApprovalClearanceTimeValidator",
+)
+
+
+def _build_validator_catalog():
+    """Merge every package validator dict into one canonical catalog without
+    duplicating shared validator names."""
+    catalog = {}
+    for source in (
+        ALL_VALIDATORS,
+        PROVIDER_VALIDATORS,
+        WP_RL_003_VALIDATORS,
+        WP_RL_004_VALIDATORS,
+        WP_RL_005_VALIDATORS,
+        WP_RL_006_VALIDATORS,
+    ):
+        for name, validator in source.items():
+            catalog.setdefault(name, validator)
+    return catalog
+
+
+VALIDATOR_CATALOG = _build_validator_catalog()
+
+
+def validator_catalog_completeness_validator(fixture):
+    """Validate that the supplied catalog contains exactly the 43 expected
+    source validators with no missing, extra, or substituted entries."""
+    catalog = fixture.get("catalog", VALIDATOR_CATALOG)
+    expected = fixture.get("expected", list(EXPECTED_VALIDATOR_NAMES))
+    findings = []
+    expected_set = set(expected)
+    catalog_keys = set(catalog)
+    missing = expected_set - catalog_keys
+    extra = catalog_keys - expected_set
+    if missing:
+        findings.append("catalog missing validators: " + repr(sorted(missing)))
+    if extra:
+        findings.append("catalog contains unexpected validators: " + repr(sorted(extra)))
+    if len(expected) != len(expected_set):
+        findings.append("expected names contain duplicates")
+    for name, validator in catalog.items():
+        if not callable(validator):
+            findings.append("catalog entry not callable: " + repr(name))
+    return _result(
+        "ValidatorCatalogCompletenessValidator",
+        list(catalog),
+        not findings,
+        findings,
+        [],
+    )
+
+
+COMPLETE_VALIDATOR_CATALOG = dict(VALIDATOR_CATALOG)
+COMPLETE_VALIDATOR_CATALOG["ValidatorCatalogCompletenessValidator"] = (
+    validator_catalog_completeness_validator
+)
+
+
+def run_complete_catalog(fixtures):
+    """Run every validator in the complete catalog against its supplied
+    fixture; the completeness validator receives the catalog itself."""
+    results = {}
+    for name, validator in COMPLETE_VALIDATOR_CATALOG.items():
+        if name == "ValidatorCatalogCompletenessValidator":
+            results[name] = validator(
+                fixtures.get(name, {"catalog": VALIDATOR_CATALOG})
+            )
+            continue
+        if name not in fixtures:
+            results[name] = _result(name, [], False, ["missing usable input"], [])
+            continue
+        results[name] = validator(fixtures[name])
+    return results

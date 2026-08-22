@@ -46,10 +46,15 @@ from .validators import (  # noqa: F401
     PROVIDER_VALIDATORS,
     WP_RL_003_VALIDATORS,
     WP_RL_004_VALIDATORS,
+    EXPECTED_VALIDATOR_NAMES,
+    VALIDATOR_CATALOG,
+    COMPLETE_VALIDATOR_CATALOG,
+    validator_catalog_completeness_validator,
     run_validator_suite,
     run_provider_validator_suite,
     run_wp_rl_003_validator_suite,
     run_wp_rl_004_validator_suite,
+    run_complete_catalog,
 )
 
 __all__ = [
@@ -94,4 +99,9 @@ __all__ = [
     "run_provider_validator_suite",
     "run_wp_rl_003_validator_suite",
     "run_wp_rl_004_validator_suite",
+    "EXPECTED_VALIDATOR_NAMES",
+    "VALIDATOR_CATALOG",
+    "COMPLETE_VALIDATOR_CATALOG",
+    "validator_catalog_completeness_validator",
+    "run_complete_catalog",
 ]
