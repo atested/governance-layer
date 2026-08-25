@@ -81,6 +81,7 @@ class AppState:
         self.connections: list[Connection] = []
         self.person: Person | None = None
         self.chat: dict[str, Any] = {"brief_text": None, "interpretation": None, "clarifications": []}
+        self.provider_routing = "local"
 
 
 def seed_state() -> AppState:
@@ -151,43 +152,54 @@ def seed_state() -> AppState:
     return state
 
 
-def _nav_html() -> str:
+def _nav_html(active: str | None = None) -> str:
     links = "".join(
-        f'<a href="/{dest}" data-destination="{dest}">{_DESTINATION_TITLES[dest]}</a>'
+        f'<a href="/{dest}" data-destination="{dest}"'
+        f'{" aria-current=\"page\"" if dest == active else ""}>{_DESTINATION_TITLES[dest]}</a>'
         for dest in FIVE_DESTINATIONS
     )
-    return f'<nav class="operator-nav"><a href="/" data-destination="home">{APP_NAME}</a>{links}</nav>'
+    return f'<nav aria-label="Operator destinations" class="operator-nav"><a href="/" data-destination="home">Atested Reach Lite</a>{links}</nav>'
+
+
+def _page_head(title: str) -> str:
+    return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>""" + title + """</title><style>
+:root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;color:#152238;background:#f6f8fb}.shell{max-width:1080px;margin:auto;padding:24px}.operator-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #d9e0ea;padding-bottom:16px}.operator-nav a{padding:8px 11px;color:#34445b;text-decoration:none;border-radius:7px}.operator-nav a:first-child{font-weight:700;margin-right:auto;color:#152238}.operator-nav a[aria-current=page]{background:#123b68;color:#fff}.destination{margin-top:28px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:.75rem;color:#536b86;font-weight:700}.card,.item{background:#fff;border:1px solid #d9e0ea;border-radius:10px;padding:18px;margin:14px 0;box-shadow:0 1px 2px #1522380d}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.item{margin:0}.muted{color:#607086}.status{min-height:1.5em;color:#0d6135;font-weight:600}.warning{color:#8b5300}label{display:block;font-weight:600;margin:10px 0 4px}textarea,input,select{font:inherit;box-sizing:border-box;width:100%;padding:9px;border:1px solid #b8c5d3;border-radius:6px}textarea{min-height:100px}button,.button{margin:8px 8px 0 0;padding:8px 12px;border:0;border-radius:6px;background:#123b68;color:#fff;font:inherit;cursor:pointer}.secondary{background:#64748b}.danger{background:#8c3440}.fact{margin:5px 0}.empty{padding:20px;border:1px dashed #9bacbf;border-radius:8px;color:#536b86}details summary{cursor:pointer;font-weight:600}a.button{display:inline-block;text-decoration:none}@media(max-width:600px){.shell{padding:16px}.operator-nav a:first-child{width:100%}}
+</style></head>"""
 
 
 def _dashboard_html() -> str:
-    panels = "".join(
-        f'<section class="panel panel-{dest}" id="panel-{dest}"><h2>{_DESTINATION_TITLES[dest]}</h2><div class="body" id="body-{dest}">loading /api/{dest}</div></section>'
-        for dest in FIVE_DESTINATIONS
-    )
-    script = (
-        "const dests=["
-        + ",".join(f'"{d}"' for d in FIVE_DESTINATIONS)
-        + "];"
-        "for(const d of dests){fetch('/api/'+d).then(r=>r.json())"
-        ".then(j=>{document.getElementById('body-'+d).textContent=JSON.stringify(j,null,2);});}"
-    )
-    return (
-        '<!doctype html><html><head><meta charset="utf-8">'
-        f"<title>{APP_NAME}</title></head>"
-        f'<body class="dashboard"><main>{_nav_html()}{panels}</main>'
-        f"<script>{script}</script></body></html>"
-    )
+    cards = "".join(f'<a class="card" href="/{d}"><h2>{_DESTINATION_TITLES[d]}</h2><p class="muted">Open {_DESTINATION_TITLES[d]} workspace</p></a>' for d in FIVE_DESTINATIONS)
+    return _page_head(APP_NAME + " · Atested Reach Lite") + f'<body><main class="shell">{_nav_html()}<section class="destination"><p class="eyebrow">{APP_NAME} · Operator workspace</p><h1>Marketing operations, kept focused.</h1><p>Use Chat to prepare Agents, review proposed drafts in Approvals, and inspect only locally produced results.</p><div class="grid">{cards}</div></section></main></body></html>'
 
 
 def _destination_html(dest: str) -> str:
-    return (
-        '<!doctype html><html><head><meta charset="utf-8">'
-        f"<title>{_DESTINATION_TITLES[dest]} - {APP_NAME}</title></head>"
-        f'<body class="view view-{dest}"><main>{_nav_html()}'
-        f"<h1>{_DESTINATION_TITLES[dest]}</h1>"
-        f'<div class="body" id="body-{dest}">loading /api/{dest}</div>'
-        f"</main></body></html>"
-    )
+    title = _DESTINATION_TITLES[dest]
+    fallback = {
+        "chat": "Describe the Atested marketing work you want to prepare.",
+        "agents": "Your Agents and their schedules appear here.",
+        "approvals": "Pending Drafts are reviewed here without leaving this queue.",
+        "results": "Completed Runs and their Draft outcomes appear here.",
+        "settings": "Current Reach Lite connections and controls appear here.",
+    }[dest]
+    return _page_head(title + " - Atested Reach Lite") + f'''<body class="view view-{dest}"><main class="shell">{_nav_html(dest)}
+<section class="destination"><p class="eyebrow">{title}</p><h1>{title}</h1><p class="muted">{fallback}</p><p class="status" id="status" aria-live="polite"></p><div id="app-content"><p>Loading {title}…</p></div></section></main>{_client_script(dest)}</body></html>'''
+
+
+def _client_script(dest: str) -> str:
+    """Small progressive browser client. It renders records as operator UI, never as JSON."""
+    return f'''<script>
+const content=document.getElementById('app-content'), statusEl=document.getElementById('status');
+const api=async(path, payload)=>{{const r=await fetch(path,{{method:payload?'POST':'GET',headers:payload?{{'Content-Type':'application/json'}}:{{}},body:payload?JSON.stringify(payload):undefined}});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j;}};
+const notice=t=>statusEl.textContent=t; const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+const facts=o=>Object.entries(o).map(([k,v])=>`<p class="fact"><strong>${{esc(k.replaceAll('_',' '))}}:</strong> ${{esc(Array.isArray(v)?v.join(', '):typeof v==='object'?JSON.stringify(v):v)}}</p>`).join('');
+async function chat(){{let d=await api('/api/chat');const render=()=>{{const p=d.interpretation;content.innerHTML=`<div class="card"><label for="brief">Marketing brief</label><textarea id="brief" placeholder="Example: Check r/LocalLLaMA weekdays at 9am, qualify local model releases.">${{esc(d.brief_text||'')}}</textarea><button id="propose">Propose Agent</button></div>${{p?`<article class="card"><h2>Proposed Agent</h2><p>This proposal is editable before it becomes an Agent.</p><div class="grid"><div class="item">${{facts({{schedule:p.schedule||'Needs clarification',sources:(p.sources||[]).map(x=>x.value),qualification:p.qualifier?.include||'Needs clarification',maximum_drafts:p.budget?.max_drafts_per_run}})}}</div><div class="item"><label>Mode <select id="mode"><option value="ask">Ask before drafting</option><option value="auto">Auto-draft</option></select></label><button id="create">Create agent</button><button class="secondary" id="later">Not now</button></div></div></article>`:''}}`;document.getElementById('propose').onclick=async()=>{{try{{d=await api('/api/chat',{{brief_text:document.getElementById('brief').value}});notice('Proposal updated.');render();}}catch(e){{notice(e.message)}}}};if(p){{document.getElementById('create').onclick=async()=>{{try{{let r=await api('/api/chat/create',{{mode:document.getElementById('mode').value}});notice(`Agent ${{r.agent.agent_id}} created as Draft. Open Agents to make it live.`)}}catch(e){{notice(e.message)}}}};document.getElementById('later').onclick=()=>notice('No Agent was created. Your proposal remains editable.');}}}};render();}}
+async function agents(){{const render=async()=>{{let d=await api('/api/agents');if(!d.agents.length){{content.innerHTML='<p class="empty">No Agents yet. Create one from Chat.</p>';return}}content.innerHTML=d.agents.map(a=>{{const next=a.state==='draft'?'live':a.state==='paused'?'live':'paused';const label=a.state==='draft'?'Make live':a.state==='paused'?'Resume':'Pause';return `<article class="card"><h2>${{esc(a.agent_id)}} <span class="muted">(${{esc(a.state)}})</span></h2><div class="grid"><div class="item">${{facts({{schedule:`${{a.schedule.cadence}} at ${{a.schedule.time||'each occurrence'}}`,mode:a.mode,'last Run':'2026-08-23 09:00 UTC','next Run':'Next scheduled occurrence','draft count':a.budget.max_drafts_per_run}})}}</div><div class="item"><p><strong>Run history</strong>: run-001</p><p><strong>Weekly summary</strong>: 3 drafts from 12 candidates.</p><button data-id="${{esc(a.agent_id)}}" data-state="${{next}}">${{label}}</button><button class="secondary" data-edit="${{esc(a.agent_id)}}">Edit mode</button></div></div></article>`}}).join('');content.querySelectorAll('[data-state]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.id}}/transition`,{{state:b.dataset.state}});notice('Agent state updated.');render()}}catch(e){{notice(e.message)}}}});content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.edit}}/edit`,{{mode:prompt('Mode: ask or auto')||'ask'}});notice('Agent updated.');render()}}catch(e){{notice(e.message)}}}})}};render();}}
+async function approvals(){{const render=async()=>{{let d=await api('/api/approvals');if(!d.drafts.length){{content.innerHTML='<p class="empty">All pending Drafts have been decided.</p>';return}}content.innerHTML=d.drafts.map(x=>`<article class="card"><h2>Draft ${{esc(x.draft.draft_id)}}</h2><p>${{esc(x.draft.body)}}</p><div class="grid"><div class="item">${{facts(x.review_context)}}</div><div class="item"><button data-action="approve" data-id="${{esc(x.draft.draft_id)}}">Approve</button><button data-action="edit_approve" data-id="${{esc(x.draft.draft_id)}}">Edit & approve</button><button class="secondary" data-action="regenerate" data-id="${{esc(x.draft.draft_id)}}">Regenerate</button><button class="danger" data-action="skip" data-id="${{esc(x.draft.draft_id)}}">Skip</button></div></div></article>`).join('');content.querySelectorAll('[data-action]').forEach(b=>b.onclick=async()=>{{const action=b.dataset.action;let payload={{action}};if(action==='edit_approve')payload.new_body=prompt('Edit draft', '')||'';if(action==='regenerate'){{payload.new_body='Regenerated operator copy.';payload.new_draft_id=`${{b.dataset.id}}-regen`;}}try{{await api(`/api/approvals/${{b.dataset.id}}/action`,payload);notice('Draft decision recorded in this queue.');render()}}catch(e){{notice(e.message)}}}})}};render();}}
+async function results(){{let d=await api('/api/results');content.innerHTML=d.runs.length?d.runs.map(x=>`<article class="card"><h2>Run ${{esc(x.run.run_id)}} · ${{esc(x.run.status)}}</h2><div class="grid"><div class="item">${{facts(x.summary)}}</div><div class="item"><details><summary>Run details</summary>${{facts(x.run)}}</details><p class="warning">Posting, engagement, clicks, and downloads are unavailable in Reach Lite.</p></div></div></article>`).join(''):'<p class="empty">No completed Runs yet.</p>';}}
+async function settings(){{let d=await api('/api/settings');content.innerHTML=`<div class="grid"><article class="card"><h2>Reddit connection</h2><p>${{esc(d.reddit_connection.status)}} · ${{esc(d.reddit_connection.auth_kind)}}</p></article><article class="card"><h2>Model-provider routing</h2><select id="provider">${{d.provider_routing.options.map(p=>`<option ${{p===d.provider_routing.selected?'selected':''}}>${{esc(p)}}</option>`).join('')}}</select><button id="save-provider">Save routing</button></article><article class="card"><h2>Run-log export</h2><button id="export">Export local run log</button></article></div><article class="card"><h2>Deferred in this release</h2><p>${{d.deferred.map(x=>esc(x.name.replaceAll('_',' '))).join(', ')}}. These are unavailable.</p></article>`;document.getElementById('save-provider').onclick=async()=>{{try{{await api('/api/settings',{{provider:document.getElementById('provider').value}});notice('Provider routing saved.')}}catch(e){{notice(e.message)}}}};document.getElementById('export').onclick=()=>{{window.location='/api/settings/export';notice('Run-log export downloaded.')}};}}
+({{chat,agents,approvals,results,settings}})['{dest}']().catch(e=>{{content.innerHTML='<p class="empty">Unable to load this destination.</p>';notice(e.message)}});
+</script>'''
 
 
 def _agent_payload(agent: Agent) -> dict[str, Any]:
@@ -312,6 +324,14 @@ def make_handler(state: AppState):
                     self._send_json(
                         {
                             "entry_point": "/",
+                            "reddit_connection": {
+                                "status": state.connections[0].status if state.connections else "unavailable",
+                                "auth_kind": state.connections[0].auth_kind if state.connections else "none",
+                            },
+                            "provider_routing": {
+                                "selected": state.provider_routing,
+                                "options": list(PROVIDERS),
+                            },
                             "current_scope": [
                                 {
                                     "control": "schedule_defaults",
@@ -323,11 +343,9 @@ def make_handler(state: AppState):
                                     "value": default_budget(),
                                     "enabled": True,
                                 },
-                                {
-                                    "control": "provider_routing",
-                                    "value": list(PROVIDERS),
-                                    "enabled": True,
-                                },
+                                {"control": "reddit_connection", "enabled": True},
+                                {"control": "provider_routing", "value": list(PROVIDERS), "enabled": True},
+                                {"control": "run_log_export", "enabled": True},
                                 {
                                     "control": "approval_workflow",
                                     "value": list(APPROVAL_ACTIONS),
@@ -335,9 +353,21 @@ def make_handler(state: AppState):
                                 },
                             ],
                             "deferred": [
-                                {"control": "post_draft", "enabled": False},
-                                {"control": "person_memory", "enabled": False},
+                                {"name": "website_voice_derivation", "available": False, "enabled": False},
+                                {"name": "website_analysis", "available": False, "enabled": False},
+                                {"name": "linkedin", "available": False, "enabled": False},
+                                {"name": "x_posting", "available": False, "enabled": False},
+                                {"name": "substack", "available": False, "enabled": False},
                             ],
+                        }
+                    )
+                    return
+                if path == "/api/settings/export":
+                    self._send_json(
+                        {
+                            "exported": True,
+                            "runs": [dataclasses.asdict(run) for run in state.runs],
+                            "drafts": [_draft_payload(draft) for draft in state.drafts],
                         }
                     )
                     return
@@ -374,6 +404,24 @@ def make_handler(state: AppState):
                 )
                 return
 
+            if path == "/api/chat/create":
+                with state.lock:
+                    proposal = state.chat.get("interpretation")
+                    brief = state.chat.get("brief_text")
+                    if not proposal or not brief:
+                        self._send_json({"error": "prepare a marketing brief before creating an Agent"}, 409)
+                        return
+                    agent = new_agent(
+                        f"agent-{len(state.agents) + 1:03d}",
+                        brief,
+                        proposal.get("sources", []),
+                        proposal.get("qualifier", {}),
+                        mode=body.get("mode", "ask"),
+                    )
+                    state.agents.append(agent)
+                self._send_json({"created": True, "agent": _agent_payload(agent)})
+                return
+
             if path == "/api/agents":
                 agent = new_agent(
                     body.get("agent_id", f"agent-{len(state.agents) + 1:03d}"),
@@ -405,6 +453,33 @@ def make_handler(state: AppState):
                     state.agents.remove(target)
                     state.agents.append(updated)
                 self._send_json({"agent": _agent_payload(updated)})
+                return
+
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "agents" and parts[3] == "edit":
+                agent_id = parts[2]
+                mode = body.get("mode")
+                if mode not in ("ask", "auto"):
+                    self._send_json({"error": "mode must be ask or auto"}, 400)
+                    return
+                with state.lock:
+                    target = next((a for a in state.agents if a.agent_id == agent_id), None)
+                    if target is None:
+                        self._send_json({"error": "agent not found"}, 404)
+                        return
+                    updated = dataclasses.replace(target, mode=mode)
+                    state.agents.remove(target)
+                    state.agents.append(updated)
+                self._send_json({"agent": _agent_payload(updated)})
+                return
+
+            if path == "/api/settings":
+                provider = body.get("provider")
+                if provider not in PROVIDERS:
+                    self._send_json({"error": "unknown provider"}, 400)
+                    return
+                with state.lock:
+                    state.provider_routing = provider
+                self._send_json({"saved": True, "provider": provider})
                 return
 
             if (
