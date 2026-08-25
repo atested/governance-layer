@@ -43,9 +43,16 @@ def resolve_provider(raw_path: str) -> tuple[BaseProvider, str]:
 
     Raises ValueError if no provider prefix matches.
     """
+    # Match a provider prefix as a complete URL path segment.  A plain
+    # ``startswith`` would route paths such as ``/openai-escape/...`` to the
+    # OpenAI upstream, making a malformed or unintended endpoint look like a
+    # configured provider boundary.
+    path_only, separator, query = raw_path.partition("?")
     for prefix, provider_name in PROVIDER_PREFIXES.items():
-        if raw_path.startswith(prefix):
-            path = raw_path[len(prefix):]
+        if path_only == prefix or path_only.startswith(prefix + "/"):
+            path = path_only[len(prefix):] or "/"
+            if separator:
+                path += "?" + query
             if not path:
                 path = "/"
             return PROVIDERS[provider_name], path

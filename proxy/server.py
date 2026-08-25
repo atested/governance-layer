@@ -2254,12 +2254,12 @@ class ProxyServer:
             try:
                 provider, path = resolve_provider(raw_path)
             except ValueError:
-                # No provider prefix matched — try legacy /anthropic fallback
-                if raw_path.startswith("/anthropic"):
-                    path = raw_path[len("/anthropic"):]
-                    if not path:
-                        path = "/"
-                # else: pass raw_path through as-is (non-provider endpoint)
+                # A request must enter through a configured provider boundary.
+                # Do not retain the old prefix-based fallback here: paths such
+                # as /anthropic-escape/... must not be able to reach the
+                # Anthropic upstream without provider routing and governance.
+                provider = None
+                path = raw_path
 
             # Read headers
             headers: dict[str, str] = {}
@@ -2383,52 +2383,24 @@ class ProxyServer:
                     writer.write(resp_body)
                     await writer.drain()
             else:
-                # Legacy Anthropic-only path (no provider prefix matched)
-                forward_headers = {}
-                for k, v in headers.items():
-                    if k == "x-api-key":
-                        forward_headers["x-api-key"] = v
-                    elif k == "anthropic-version":
-                        forward_headers["anthropic-version"] = v
-                    elif k == "anthropic-beta":
-                        forward_headers["anthropic-beta"] = v
-                    elif k == "content-type":
-                        forward_headers["content-type"] = v
-                    elif k == "authorization":
-                        forward_headers["authorization"] = v
-                    elif k == "accept":
-                        forward_headers["accept"] = v
-
-                is_streaming = False
-                path_base = path.split("?")[0]
-                is_messages = path_base.rstrip("/").endswith("/v1/messages")
-                if is_messages and body:
-                    try:
-                        is_streaming = json.loads(body).get("stream", False)
-                    except (json.JSONDecodeError, AttributeError) as e:
-                        logger.warning("Failed to parse request body for streaming detection: %s (body_len=%d)", e, len(body))
-
-                logger.info("Request: %s %s messages=%s streaming=%s body_len=%d",
-                            method, path[:60], is_messages, is_streaming, len(body))
-
-                if is_streaming:
-                    await self._proxy.handle_streaming_to_writer(
-                        path, forward_headers, body, writer
-                    )
-                else:
-                    status, resp_headers, resp_body = await self._proxy.handle_request(
-                        method, path, forward_headers, body
-                    )
-                    status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
-                    writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
-                    for k, v in resp_headers.items():
-                        if k.lower() not in ("transfer-encoding",):
-                            writer.write(f"{k}: {v}\r\n".encode())
-                    if "content-length" not in {k.lower() for k in resp_headers}:
-                        writer.write(f"content-length: {len(resp_body)}\r\n".encode())
-                    writer.write(b"\r\n")
-                    writer.write(resp_body)
-                    await writer.drain()
+                # No provider prefix means the request is outside the governed
+                # boundary. Reject it instead of forwarding through a legacy
+                # Anthropic-only path.
+                err_body = json.dumps({
+                    "error": "provider endpoint must use a configured proxy boundary"
+                }).encode()
+                self._proxy._append_request_observed(
+                    provider_name="unknown", method=method, path=path,
+                    status_code=404, tool_endpoint=False, examined=False,
+                    forwarded=False, request_body=body,
+                    detail="request did not match a configured provider boundary",
+                )
+                writer.write(b"HTTP/1.1 404 Not Found\r\n")
+                writer.write(b"content-type: application/json\r\n")
+                writer.write(f"content-length: {len(err_body)}\r\n".encode())
+                writer.write(b"\r\n")
+                writer.write(err_body)
+                await writer.drain()
 
         except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
             pass
