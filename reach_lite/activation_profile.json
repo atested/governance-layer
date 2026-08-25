@@ -1,0 +1,39 @@
+{
+  "schema": "SCH-ATL-009",
+  "profile_id": "reach-lite-operator-default",
+  "authoritative": true,
+  "prerequisites": [
+    "python3 (Python 3.9 or newer) available on the host",
+    "loopback TCP port 9700 (or the configured OPERATOR_UI_PORT) can be bound by the operator application"
+  ],
+  "activation_operation": "python3 -m reach_lite.operator_app --port 9700",
+  "working_context": {
+    "cwd": ".",
+    "interpreter": "python3",
+    "entrypoint": "reach_lite.operator_app"
+  },
+  "configuration_inputs": [
+    {
+      "name": "OPERATOR_UI_PORT",
+      "description": "TCP port the operator application binds. Defaults to 9700; overridable via --port or the OPERATOR_UI_PORT environment variable.",
+      "default": 9700,
+      "secret": false
+    }
+  ],
+  "readiness": {
+    "condition": "GET /api/health returns HTTP 200 with body app == reach-lite-operator",
+    "method": "GET",
+    "endpoint": "/api/health",
+    "expected_status": 200,
+    "timeout_seconds": 20
+  },
+  "browser_url": {
+    "mode": "runtime",
+    "scheme": "http",
+    "host": "127.0.0.1",
+    "port": 9700,
+    "path": "/"
+  },
+  "cleanup_operation": "Send SIGTERM to the operator application process; if it has not exited within 5 seconds, send SIGKILL. The application is stateless and starts no external services, so no further cleanup is required.",
+  "operator_surface_marker": "reach-lite-operator"
+}
