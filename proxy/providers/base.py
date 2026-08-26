@@ -26,6 +26,17 @@ class StreamAction:
     action: str         # "pass", "buffer", or "replace"
     index: int = 0
     completed_tool_call: Optional[ToolCall] = None
+    # Some provider events complete more than one call at once (notably an
+    # OpenAI chat-completions finish event).  Keep the singular field for
+    # compatibility with existing consumers while exposing every completed
+    # call to the mediation boundary.
+    completed_tool_calls: tuple[ToolCall, ...] = ()
+
+    def all_completed_tool_calls(self) -> tuple[ToolCall, ...]:
+        """Return every completed call represented by this stream action."""
+        if self.completed_tool_calls:
+            return self.completed_tool_calls
+        return (self.completed_tool_call,) if self.completed_tool_call else ()
 
 
 class BaseProvider(ABC):

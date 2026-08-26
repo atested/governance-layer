@@ -1231,28 +1231,34 @@ class GovernanceProxy:
         stream_action = collector.process_event(event_type, data)
         if stream_action.action == "buffer":
             collector.add_buffered_event(stream_action.index, message)
-            if not stream_action.completed_tool_call:
+            tool_calls = stream_action.all_completed_tool_calls()
+            if not tool_calls:
                 return [], 0
 
-            tc = stream_action.completed_tool_call
-            record = mediate_decision(
-                tc.tool_name, tc.args,
-                policy=self._policy,
-                chain_recorder=self._chain_recorder,
-                approval_store=approval_store,
-                session_id=self._session_id,
-                user_identity=self._user_identity,
-                provider_name=provider.name,
-                integrity_monitor=self._integrity_monitor,
-                qa_gate=self._qa_gate,
-            )
-            if _is_blocking_record(record):
-                reasons = record.get("policy_reasons", [])
-                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
-                return [_websocket_denial_message(
-                    tc, reason_text, record.get("matched_rule", ""),
-                )], 1
-            return collector.get_buffered_events(stream_action.index) + [message], 1
+            records = []
+            for tc in tool_calls:
+                records.append((tc, mediate_decision(
+                    tc.tool_name, tc.args,
+                    policy=self._policy,
+                    chain_recorder=self._chain_recorder,
+                    approval_store=approval_store,
+                    session_id=self._session_id,
+                    user_identity=self._user_identity,
+                    provider_name=provider.name,
+                    integrity_monitor=self._integrity_monitor,
+                    qa_gate=self._qa_gate,
+                )))
+            blocked = [(tc, record) for tc, record in records if _is_blocking_record(record)]
+            if blocked:
+                return [
+                    _websocket_denial_message(
+                        tc,
+                        (record.get("policy_reasons", [{}])[0].get("detail", "policy denied")),
+                        record.get("matched_rule", ""),
+                    )
+                    for tc, record in blocked
+                ], len(tool_calls)
+            return collector.get_buffered_events(stream_action.index) + [message], len(tool_calls)
 
         if stream_action.action == "pass":
             return [message], 0
@@ -1610,7 +1616,15 @@ class GovernanceProxy:
         writer: asyncio.StreamWriter,
         provider: BaseProvider,
     ) -> None:
-        """Handle streaming with provider interface."""
+        """Handle streaming with provider interface.
+
+        WP-GOV-002: the provider streaming collector identifies every
+        tool-call block in the model response for classification while
+        text blocks pass through to the client unmodified, including in
+        streaming responses. Each completed tool-call block is surfaced
+        via StreamAction.completed_tool_call for governance mediation;
+        all non-tool (text) blocks are forwarded byte-for-byte.
+        """
         url, fwd_headers, is_tool_ep, _ = self._prepare_request_with_provider(
             "POST", path, headers, body, provider
         )
@@ -1691,43 +1705,43 @@ class GovernanceProxy:
 
                     if stream_action.action == "buffer":
                         collector.add_buffered_event(stream_action.index, event_bytes)
-                        if stream_action.completed_tool_call:
-                            _tool_call_count += 1
-                            tc = stream_action.completed_tool_call
-                            logger.info("Tool call #%d (%s) detected: %s",
-                                        _tool_call_count, provider.name, tc.tool_name)
+                        tool_calls = stream_action.all_completed_tool_calls()
+                        if tool_calls:
+                            _tool_call_count += len(tool_calls)
+                            decisions = []
+                            for tc in tool_calls:
+                                decisions.append((tc, mediate_decision(
+                                    tc.tool_name, tc.args,
+                                    policy=self._policy,
+                                    chain_recorder=self._chain_recorder,
+                                    approval_store=approval_store,
+                                    session_id=self._session_id,
+                                    user_identity=self._user_identity,
+                                    provider_name=provider.name,
+                                    integrity_monitor=self._integrity_monitor,
+                                    qa_gate=self._qa_gate,
+                                )))
+                            blocked = [(tc, record) for tc, record in decisions if _is_blocking_record(record)]
 
-                            # Mediate the completed tool call
-                            record = mediate_decision(
-                                tc.tool_name, tc.args,
-                                policy=self._policy,
-                                chain_recorder=self._chain_recorder,
-                                approval_store=approval_store,
-                                session_id=self._session_id,
-                                user_identity=self._user_identity,
-                                provider_name=provider.name,
-                                integrity_monitor=self._integrity_monitor,
-                                qa_gate=self._qa_gate,
-                            )
-
-                            if _is_blocking_record(record):
-                                reasons = record.get("policy_reasons", [])
-                                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
-                                logger.info("Tool DENIED (%s): %s — %s",
-                                            provider.name, tc.tool_name,
-                                            record.get("matched_rule", ""))
-                                for denial_event in collector.build_denial_events(
-                                    stream_action.index, tc,
-                                    reason_text, record.get("matched_rule", ""),
-                                ):
-                                    writer.write(denial_event)
+                            if blocked:
+                                for tc, record in blocked:
+                                    reasons = record.get("policy_reasons", [])
+                                    reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                                    logger.info("Tool DENIED (%s): %s — %s",
+                                                provider.name, tc.tool_name,
+                                                record.get("matched_rule", ""))
+                                    for denial_event in collector.build_denial_events(
+                                        stream_action.index, tc,
+                                        reason_text, record.get("matched_rule", ""),
+                                    ):
+                                        writer.write(denial_event)
                                 await writer.drain()
                             else:
-                                logger.info("Tool ALLOWED (%s): %s",
-                                            provider.name, tc.tool_name)
+                                for tc, _ in decisions:
+                                    logger.info("Tool ALLOWED (%s): %s", provider.name, tc.tool_name)
                                 for buf_event in collector.get_buffered_events(stream_action.index):
                                     writer.write(buf_event)
-                                # Also write the current stop event
+                                # Also write the current stop event.
                                 writer.write(event_bytes)
                                 await writer.drain()
 
@@ -2163,29 +2177,33 @@ class GovernanceProxy:
 
                     if stream_action.action == "buffer":
                         collector.add_buffered_event(stream_action.index, event_bytes)
-                        if stream_action.completed_tool_call:
-                            tool_call_count += 1
-                            tc = stream_action.completed_tool_call
-                            record = mediate_decision(
-                                tc.tool_name, tc.args,
-                                policy=self._policy,
-                                chain_recorder=self._chain_recorder,
-                                approval_store=approval_store,
-                                session_id=self._session_id,
-                                user_identity=self._user_identity,
-                                provider_name=provider.name,
-                                integrity_monitor=self._integrity_monitor,
-                                qa_gate=self._qa_gate,
-                            )
+                        tool_calls = stream_action.all_completed_tool_calls()
+                        if tool_calls:
+                            tool_call_count += len(tool_calls)
+                            decisions = []
+                            for tc in tool_calls:
+                                decisions.append((tc, mediate_decision(
+                                    tc.tool_name, tc.args,
+                                    policy=self._policy,
+                                    chain_recorder=self._chain_recorder,
+                                    approval_store=approval_store,
+                                    session_id=self._session_id,
+                                    user_identity=self._user_identity,
+                                    provider_name=provider.name,
+                                    integrity_monitor=self._integrity_monitor,
+                                    qa_gate=self._qa_gate,
+                                )))
+                            blocked = [(tc, record) for tc, record in decisions if _is_blocking_record(record)]
 
-                            if _is_blocking_record(record):
-                                reasons = record.get("policy_reasons", [])
-                                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
-                                for denial_event in collector.build_denial_events(
-                                    stream_action.index, tc,
-                                    reason_text, record.get("matched_rule", ""),
-                                ):
-                                    output_chunks.append(denial_event)
+                            if blocked:
+                                for tc, record in blocked:
+                                    reasons = record.get("policy_reasons", [])
+                                    reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
+                                    for denial_event in collector.build_denial_events(
+                                        stream_action.index, tc,
+                                        reason_text, record.get("matched_rule", ""),
+                                    ):
+                                        output_chunks.append(denial_event)
                             else:
                                 for buf_event in collector.get_buffered_events(stream_action.index):
                                     output_chunks.append(buf_event)

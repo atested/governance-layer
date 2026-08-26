@@ -125,6 +125,7 @@ class GeminiStreamingCollector(BaseStreamingCollector):
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
 
+        completed = []
         for part in parts:
             fc = part.get("functionCall")
             if fc:
@@ -136,11 +137,15 @@ class GeminiStreamingCollector(BaseStreamingCollector):
                     call_id=call_id,
                     raw_block=part,
                 )
-                return StreamAction(
-                    action="buffer",
-                    index=0,
-                    completed_tool_call=tc,
-                )
+                completed.append(tc)
+
+        if completed:
+            return StreamAction(
+                action="buffer",
+                index=0,
+                completed_tool_call=completed[0],
+                completed_tool_calls=tuple(completed),
+            )
 
         return StreamAction(action="pass")
 

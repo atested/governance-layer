@@ -283,32 +283,22 @@ class OpenAIStreamingCollector(BaseStreamingCollector):
                     self._pending[tc_idx]["arguments"] += func["arguments"]
             return StreamAction(action="buffer")
 
-        # Check for finish_reason == "tool_calls" — all pending are now complete
+        # Check for finish_reason == "tool_calls" — all pending are now complete.
+        # A single finish event can close several calls, so surface each one
+        # rather than silently classifying only the first.
         if finish_reason == "tool_calls" and self._pending:
-            # Return the first pending tool call; caller will get the rest
-            # Actually, return all as a batch via completed_tool_call on idx 0
-            # We use index=0 as a sentinel; the proxy should check all pending
             first_idx = min(self._pending.keys())
-            first = self._pending[first_idx]
-            try:
-                args = json.loads(first["arguments"])
-            except json.JSONDecodeError:
-                args = {"_raw": first["arguments"]}
-            tc = ToolCall(
-                tool_name=first["name"],
-                args=args,
-                call_id=first["id"],
-                raw_block=first,
-            )
+            completed = tuple(self.get_all_completed_tool_calls())
             return StreamAction(
                 action="buffer",
                 index=first_idx,
-                completed_tool_call=tc,
+                completed_tool_call=completed[0],
+                completed_tool_calls=completed,
             )
 
-        if self._has_tool_calls:
-            return StreamAction(action="buffer")
-
+        # Text deltas remain independent of a preceding tool-call block and
+        # must reach the agent unchanged. Only the tool-call fragments and
+        # their completion event belong behind the mediation boundary.
         return StreamAction(action="pass")
 
     @staticmethod
@@ -371,8 +361,8 @@ class OpenAIStreamingCollector(BaseStreamingCollector):
                 return self._complete_responses_tool_call(idx, entry)
             return StreamAction(action="buffer", index=idx)
 
-        if self._has_tool_calls:
-            return StreamAction(action="buffer", index=idx)
+        # Responses API text and lifecycle events are not part of a function
+        # call. Do not let an earlier function call delay or alter them.
         return StreamAction(action="pass")
 
     @staticmethod
@@ -395,7 +385,12 @@ class OpenAIStreamingCollector(BaseStreamingCollector):
             },
             response_format="responses",
         )
-        return StreamAction(action="buffer", index=idx, completed_tool_call=tc)
+        return StreamAction(
+            action="buffer",
+            index=idx,
+            completed_tool_call=tc,
+            completed_tool_calls=(tc,),
+        )
 
     def get_all_completed_tool_calls(self) -> list[ToolCall]:
         """Return all accumulated tool calls (called after finish_reason=tool_calls)."""
