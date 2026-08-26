@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "title": "Locked governance policy mediation contracts",
+  "contracts": {
+    "MediatedDecision": {
+      "required": ["decision_id", "tool", "target", "operator_identity", "confidence_tier", "decision", "matched_rule", "timestamp", "policy_evaluation"],
+      "decision_values": ["ALLOW", "DENY"],
+      "deny_requires": ["reason_code", "matched_rule"]
+    },
+    "PolicyRule": {
+      "required": ["rule_id", "condition", "action", "reason_code", "category"],
+      "action_values": ["allow", "deny"]
+    },
+    "CapabilityEntry": {
+      "required": ["tool", "risk_level", "allowed_directories", "constraint_flags", "hard_caps"],
+      "risk_levels": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    }
+  }
+}
