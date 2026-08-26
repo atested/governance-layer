@@ -312,7 +312,10 @@ class ChainRecorder:
                     record.pop("developer_mode", None)
                 add_machine_identity_fields(record, REPO)
                 add_record_freshness_fields(record, REPO)
-                record["prev_record_hash"] = self._last_hash()
+                # Do not extend a chain whose tail is malformed or has been
+                # altered.  Returning an ALLOW after such a finding would
+                # make the governance decision unauditable.
+                record["prev_record_hash"] = self._last_hash(fail_closed=True)
                 # Set signature fields to null BEFORE hashing so they're
                 # included in the canonical form (stable hash regardless
                 # of signing state).
@@ -358,14 +361,14 @@ class ChainRecorder:
         self.append_atomic(event)
         return event
 
-    def _last_hash(self) -> Optional[str]:
+    def _last_hash(self, *, fail_closed: bool = False) -> Optional[str]:
         """Read and verify the record_hash from the last line.
 
         Must be called under lock.  Recomputes the tail record's hash
-        and compares it to the stored record_hash.  If they disagree,
-        logs a chain integrity warning (evidence of tampering or
-        corruption) but still returns the stored hash so the chain
-        can continue appending.
+        and compares it to the stored record_hash.  ``fail_closed`` is used
+        by the append path: a detected alteration raises IntegrityViolation
+        before a new decision can be released.  The default preserves this
+        method's diagnostic-only compatibility for read-only callers.
         """
         if not self._chain_path.exists():
             return None
@@ -380,16 +383,31 @@ class ChainRecorder:
                 return None
             tail_record = json.loads(last_line)
             stored_hash = tail_record.get("record_hash")
-            if stored_hash:
-                recomputed = _compute_record_hash(tail_record)
-                if recomputed != stored_hash:
-                    logger.error(
-                        "[CHAIN INTEGRITY] Tail record hash mismatch: "
-                        "stored=%s recomputed=%s chain=%s",
-                        stored_hash, recomputed, self._chain_path,
-                    )
+            if not isinstance(stored_hash, str) or not stored_hash:
+                message = f"[CHAIN INTEGRITY] Tail record missing record_hash: chain={self._chain_path}"
+                logger.error(message)
+                if fail_closed:
+                    raise IntegrityViolation(message)
+                return None
+            recomputed = (
+                _compute_event_record_hash(tail_record)
+                if is_non_action_event(tail_record)
+                else _compute_record_hash(tail_record)
+            )
+            if recomputed != stored_hash:
+                message = (
+                    "[CHAIN INTEGRITY] Tail record hash mismatch: "
+                    f"stored={stored_hash} recomputed={recomputed} chain={self._chain_path}"
+                )
+                logger.error(message)
+                if fail_closed:
+                    raise IntegrityViolation(message)
             return stored_hash
-        except (OSError, json.JSONDecodeError, KeyError):
+        except (OSError, json.JSONDecodeError, KeyError) as exc:
+            if fail_closed:
+                raise IntegrityViolation(
+                    f"[CHAIN INTEGRITY] Unable to read tail record from {self._chain_path}: {exc}"
+                ) from exc
             return None
 
     def _acquire_file_lock(self) -> Path:

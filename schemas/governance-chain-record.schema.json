@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "SCH-GOV-001",
+  "title": "GovernanceChainRecord",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["record_id", "record_type", "recorded_at", "subject_id", "payload", "prev_record_hash", "record_hash"],
+  "properties": {
+    "record_id": {"type": "string", "minLength": 1},
+    "record_type": {"type": "string", "enum": ["mediated_decision"]},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "subject_id": {"type": "string", "minLength": 1},
+    "payload": {"type": "object"},
+    "prev_record_hash": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "record_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "signature": {"type": ["string", "null"]},
+    "signing_key_id": {"type": ["string", "null"], "pattern": "^ed25519:[0-9a-f]{64}$"}
+  }
+}
