@@ -72,7 +72,7 @@ _DESTINATION_TITLES = {
 class AppState:
     """In-memory operator state, guarded by a single lock."""
 
-    def __init__(self) -> None:
+    def __init__(self, failure_modes: set[str] | None = None) -> None:
         self.lock = threading.Lock()
         self.agents: list[Agent] = []
         self.runs: list[Run] = []
@@ -82,11 +82,40 @@ class AppState:
         self.person: Person | None = None
         self.chat: dict[str, Any] = {"brief_text": None, "interpretation": None, "clarifications": []}
         self.provider_routing = "local"
+        # Testable fault boundary for the five operator-triggered workflows.
+        # A forced failure is checked before mutation so the affected input or
+        # selected record remains recoverable for retry.
+        self.failure_modes = set(failure_modes or ())
+
+    def failure_message(self, workflow: str) -> str | None:
+        messages = {
+            "creation": (
+                "Agent creation couldn't be completed. Your brief and editable "
+                "proposal are still here; review them and try again."
+            ),
+            "lifecycle_change": (
+                "The Agent state couldn't be changed. The selected Agent is "
+                "unchanged; try again or open another destination."
+            ),
+            "draft_decision": (
+                "The Draft decision couldn't be recorded. This pending Draft and "
+                "your edited copy are still available; try again."
+            ),
+            "provider_routing": (
+                "Provider routing couldn't be saved. Your selected provider is "
+                "still shown; try again or continue elsewhere."
+            ),
+            "export": (
+                "The run log couldn't be exported. No records were changed; try "
+                "again or continue elsewhere."
+            ),
+        }
+        return messages.get(workflow) if workflow in self.failure_modes else None
 
 
-def seed_state() -> AppState:
+def seed_state(failure_modes: set[str] | None = None) -> AppState:
     """Seed one live agent, one succeeded run, and three pending drafts."""
-    state = AppState()
+    state = AppState(failure_modes=failure_modes)
     agent = new_agent(
         "agent-llama",
         "Check r/LocalLLaMA on weekdays at 9am.",
@@ -164,7 +193,7 @@ def _nav_html(active: str | None = None) -> str:
 def _page_head(title: str) -> str:
     return """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>""" + title + """</title><style>
-:root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;color:#152238;background:#f6f8fb}.shell{max-width:1080px;margin:auto;padding:24px}.operator-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #d9e0ea;padding-bottom:16px}.operator-nav a{padding:8px 11px;color:#34445b;text-decoration:none;border-radius:7px}.operator-nav a:first-child{font-weight:700;margin-right:auto;color:#152238}.operator-nav a[aria-current=page]{background:#123b68;color:#fff}.destination{margin-top:28px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:.75rem;color:#536b86;font-weight:700}.card,.item{background:#fff;border:1px solid #d9e0ea;border-radius:10px;padding:18px;margin:14px 0;box-shadow:0 1px 2px #1522380d}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.item{margin:0}.muted{color:#607086}.status{min-height:1.5em;color:#0d6135;font-weight:600}.warning{color:#8b5300}label{display:block;font-weight:600;margin:10px 0 4px}textarea,input,select{font:inherit;box-sizing:border-box;width:100%;padding:9px;border:1px solid #b8c5d3;border-radius:6px}textarea{min-height:100px}button,.button{margin:8px 8px 0 0;padding:8px 12px;border:0;border-radius:6px;background:#123b68;color:#fff;font:inherit;cursor:pointer}.secondary{background:#64748b}.danger{background:#8c3440}.fact{margin:5px 0}.empty{padding:20px;border:1px dashed #9bacbf;border-radius:8px;color:#536b86}details summary{cursor:pointer;font-weight:600}a.button{display:inline-block;text-decoration:none}@media(max-width:600px){.shell{padding:16px}.operator-nav a:first-child{width:100%}}
+:root{color-scheme:light;font-family:ui-sans-serif,system-ui,sans-serif;color:#152238;background:#f6f8fb}.shell{max-width:1080px;margin:auto;padding:24px}.operator-nav{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #d9e0ea;padding-bottom:16px}.operator-nav a{padding:8px 11px;color:#34445b;text-decoration:none;border-radius:7px}.operator-nav a:first-child{font-weight:700;margin-right:auto;color:#152238}.operator-nav a[aria-current=page]{background:#123b68;color:#fff}.destination{margin-top:28px}.eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:.75rem;color:#536b86;font-weight:700}.card,.item{background:#fff;border:1px solid #d9e0ea;border-radius:10px;padding:18px;margin:14px 0;box-shadow:0 1px 2px #1522380d}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.item{margin:0}.muted{color:#607086}.status{min-height:1.5em;color:#0d6135;font-weight:600}.workflow-error{margin:10px 0 0;padding:10px 12px;border-left:4px solid #a52935;border-radius:4px;background:#fff0f1;color:#7b1f2a;font-weight:600}.warning{color:#8b5300}label{display:block;font-weight:600;margin:10px 0 4px}textarea,input,select{font:inherit;box-sizing:border-box;width:100%;padding:9px;border:1px solid #b8c5d3;border-radius:6px}textarea{min-height:100px}button,.button{margin:8px 8px 0 0;padding:8px 12px;border:0;border-radius:6px;background:#123b68;color:#fff;font:inherit;cursor:pointer}.secondary{background:#64748b}.danger{background:#8c3440}.fact{margin:5px 0}.empty{padding:20px;border:1px dashed #9bacbf;border-radius:8px;color:#536b86}details summary{cursor:pointer;font-weight:600}a.button{display:inline-block;text-decoration:none}@media(max-width:600px){.shell{padding:16px}.operator-nav a:first-child{width:100%}}
 </style></head>"""
 
 
@@ -192,12 +221,13 @@ def _client_script(dest: str) -> str:
 const content=document.getElementById('app-content'), statusEl=document.getElementById('status');
 const api=async(path, payload)=>{{const r=await fetch(path,{{method:payload?'POST':'GET',headers:payload?{{'Content-Type':'application/json'}}:{{}},body:payload?JSON.stringify(payload):undefined}});const j=await r.json();if(!r.ok)throw Error(j.error||'Request failed');return j;}};
 const notice=t=>statusEl.textContent=t; const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+const workflowError=(control,message)=>{{const host=control?.closest('.card,.item')||content;let el=host.querySelector(':scope > .workflow-error');if(!el){{el=document.createElement('p');el.className='workflow-error';el.setAttribute('role','alert');el.setAttribute('aria-live','assertive');host.appendChild(el)}}el.textContent=message;notice(message)}};
 const facts=o=>Object.entries(o).map(([k,v])=>`<p class="fact"><strong>${{esc(k.replaceAll('_',' '))}}:</strong> ${{esc(Array.isArray(v)?v.join(', '):typeof v==='object'?JSON.stringify(v):v)}}</p>`).join('');
-async function chat(){{let d=await api('/api/chat');const render=()=>{{const p=d.interpretation;content.innerHTML=`<div class="card"><label for="brief">Marketing brief</label><textarea id="brief" placeholder="Example: Check r/LocalLLaMA weekdays at 9am, qualify local model releases.">${{esc(d.brief_text||'')}}</textarea><button id="propose">Propose Agent</button></div>${{p?`<article class="card"><h2>Proposed Agent</h2><p>This proposal is editable before it becomes an Agent.</p><div class="grid"><div class="item">${{facts({{schedule:p.schedule||'Needs clarification',sources:(p.sources||[]).map(x=>x.value),qualification:p.qualifier?.include||'Needs clarification',maximum_drafts:p.budget?.max_drafts_per_run}})}}</div><div class="item"><label>Mode <select id="mode"><option value="ask">Ask before drafting</option><option value="auto">Auto-draft</option></select></label><button id="create">Create agent</button><button class="secondary" id="later">Not now</button></div></div></article>`:''}}`;document.getElementById('propose').onclick=async()=>{{try{{d=await api('/api/chat',{{brief_text:document.getElementById('brief').value}});notice('Proposal updated.');render();}}catch(e){{notice(e.message)}}}};if(p){{document.getElementById('create').onclick=async()=>{{try{{let r=await api('/api/chat/create',{{mode:document.getElementById('mode').value}});notice(`Agent ${{r.agent.agent_id}} created as Draft. Open Agents to make it live.`)}}catch(e){{notice(e.message)}}}};document.getElementById('later').onclick=()=>notice('No Agent was created. Your proposal remains editable.');}}}};render();}}
-async function agents(){{const render=async()=>{{let d=await api('/api/agents');if(!d.agents.length){{content.innerHTML='<p class="empty">No Agents yet. Create one from Chat.</p>';return}}content.innerHTML=d.agents.map(a=>{{const next=a.state==='draft'?'live':a.state==='paused'?'live':'paused';const label=a.state==='draft'?'Make live':a.state==='paused'?'Resume':'Pause';return `<article class="card"><h2>${{esc(a.agent_id)}} <span class="muted">(${{esc(a.state)}})</span></h2><div class="grid"><div class="item">${{facts({{schedule:`${{a.schedule.cadence}} at ${{a.schedule.time||'each occurrence'}}`,mode:a.mode,'last Run':'2026-08-23 09:00 UTC','next Run':'Next scheduled occurrence','draft count':a.budget.max_drafts_per_run}})}}</div><div class="item"><p><strong>Run history</strong>: run-001</p><p><strong>Weekly summary</strong>: 3 drafts from 12 candidates.</p><button data-id="${{esc(a.agent_id)}}" data-state="${{next}}">${{label}}</button><button class="secondary" data-edit="${{esc(a.agent_id)}}">Edit mode</button></div></div></article>`}}).join('');content.querySelectorAll('[data-state]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.id}}/transition`,{{state:b.dataset.state}});notice('Agent state updated.');render()}}catch(e){{notice(e.message)}}}});content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.edit}}/edit`,{{mode:prompt('Mode: ask or auto')||'ask'}});notice('Agent updated.');render()}}catch(e){{notice(e.message)}}}})}};render();}}
-async function approvals(){{const render=async()=>{{let d=await api('/api/approvals');if(!d.drafts.length){{content.innerHTML='<p class="empty">All pending Drafts have been decided.</p>';return}}content.innerHTML=d.drafts.map(x=>`<article class="card"><h2>Draft ${{esc(x.draft.draft_id)}}</h2><p>${{esc(x.draft.body)}}</p><div class="grid"><div class="item">${{facts(x.review_context)}}</div><div class="item"><button data-action="approve" data-id="${{esc(x.draft.draft_id)}}">Approve</button><button data-action="edit_approve" data-id="${{esc(x.draft.draft_id)}}">Edit & approve</button><button class="secondary" data-action="regenerate" data-id="${{esc(x.draft.draft_id)}}">Regenerate</button><button class="danger" data-action="skip" data-id="${{esc(x.draft.draft_id)}}">Skip</button></div></div></article>`).join('');content.querySelectorAll('[data-action]').forEach(b=>b.onclick=async()=>{{const action=b.dataset.action;let payload={{action}};if(action==='edit_approve')payload.new_body=prompt('Edit draft', '')||'';if(action==='regenerate'){{payload.new_body='Regenerated operator copy.';payload.new_draft_id=`${{b.dataset.id}}-regen`;}}try{{await api(`/api/approvals/${{b.dataset.id}}/action`,payload);notice('Draft decision recorded in this queue.');render()}}catch(e){{notice(e.message)}}}})}};render();}}
+async function chat(){{let d=await api('/api/chat');const render=()=>{{const p=d.interpretation;const sch=p&&p.schedule?p.schedule:{{cadence:'weekly',time:'09:00'}};const incl=(p&&p.qualifier&&p.qualifier.include)||'';content.innerHTML=`<div class='card'><label for='brief'>Marketing brief</label><textarea id='brief' placeholder='Example: Check r/LocalLLaMA weekdays at 9am, qualify local model releases.'>${{esc(d.brief_text||'')}}</textarea><button id='propose'>Propose Agent</button></div>${{p?`<article class='card'><h2>Proposed Agent</h2><p>This proposal is editable before it becomes an Agent.</p><div class='grid'><div class='item'><label for='schedule-time'>Schedule time</label><input id='schedule-time' value='${{esc(sch.time||'09:00')}}'><label for='qualifier-include'>Qualification intent</label><input id='qualifier-include' value='${{esc(incl)}}'><p class='fact'><strong>sources:</strong> ${{esc((p.sources||[]).map(x=>x.value).join(', '))}}</p><p class='fact'><strong>maximum drafts:</strong> ${{esc(p.budget?.max_drafts_per_run)}}</p></div><div class='item'><label>Mode <select id='mode'><option value='ask'>Ask before drafting</option><option value='auto'>Auto-draft</option></select></label><button id='save-proposal'>Save proposal</button><button id='create'>Create agent</button><button class='secondary' id='later'>Not now</button></div></div></article>`:''}}`;const propose=document.getElementById('propose');propose.onclick=async()=>{{try{{d=await api('/api/chat',{{brief_text:document.getElementById('brief').value}});notice('Proposal updated.');render();}}catch(e){{workflowError(propose,e.message)}}}};if(p){{const save=document.getElementById('save-proposal'),create=document.getElementById('create');save.onclick=async()=>{{try{{const payload={{schedule:Object.assign({{}},sch,{{time:document.getElementById('schedule-time').value}}),qualifier:{{include:document.getElementById('qualifier-include').value,exclude:(p.qualifier&&p.qualifier.exclude)||''}},mode:document.getElementById('mode').value}};d=await api('/api/chat/proposal',payload);notice('Proposal saved.');render();}}catch(e){{workflowError(save,e.message)}}}};create.onclick=async()=>{{try{{let r=await api('/api/chat/create',{{mode:document.getElementById('mode').value}});notice(`Agent ${{r.agent.agent_id}} created as Draft. Open Agents to make it live.`)}}catch(e){{workflowError(create,e.message)}}}};document.getElementById('later').onclick=()=>notice('No Agent was created. Your proposal remains editable.');}}}};render();}}
+async function agents(){{const render=async()=>{{let d=await api('/api/agents');if(!d.agents.length){{content.innerHTML='<p class="empty">No Agents yet. Create one from Chat.</p>';return}}content.innerHTML=d.agents.map(a=>{{const next=a.state==='draft'?'live':a.state==='paused'?'live':'paused';const label=a.state==='draft'?'Make live':a.state==='paused'?'Resume':'Pause';return `<article class="card"><h2>${{esc(a.agent_id)}} <span class="muted">(${{esc(a.state)}})</span></h2><div class="grid"><div class="item">${{facts({{schedule:`${{a.schedule.cadence}} at ${{a.schedule.time||'each occurrence'}}`,mode:a.mode,'last Run':'2026-08-23 09:00 UTC','next Run':'Next scheduled occurrence','draft count':a.budget.max_drafts_per_run}})}}</div><div class="item"><p><strong>Run history</strong>: run-001</p><p><strong>Weekly summary</strong>: 3 drafts from 12 candidates.</p><button data-id="${{esc(a.agent_id)}}" data-state="${{next}}">${{label}}</button><button class="secondary" data-edit="${{esc(a.agent_id)}}">Edit mode</button></div></div></article>`}}).join('');content.querySelectorAll('[data-state]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.id}}/transition`,{{state:b.dataset.state}});notice('Agent state updated.');render()}}catch(e){{workflowError(b,e.message)}}}});content.querySelectorAll('[data-edit]').forEach(b=>b.onclick=async()=>{{try{{await api(`/api/agents/${{b.dataset.edit}}/edit`,{{mode:prompt('Mode: ask or auto')||'ask'}});notice('Agent updated.');render()}}catch(e){{workflowError(b,e.message)}}}})}};render();}}
+async function approvals(){{const render=async()=>{{let d=await api('/api/approvals');if(!d.drafts.length){{content.innerHTML='<p class="empty">All pending Drafts have been decided.</p>';return}}content.innerHTML=d.drafts.map(x=>`<article class="card"><h2>Draft ${{esc(x.draft.draft_id)}}</h2><p>${{esc(x.draft.body)}}</p><div class="grid"><div class="item">${{facts(x.review_context)}}</div><div class="item"><button data-action="approve" data-id="${{esc(x.draft.draft_id)}}">Approve</button><button data-action="edit_approve" data-id="${{esc(x.draft.draft_id)}}">Edit & approve</button><button class="secondary" data-action="regenerate" data-id="${{esc(x.draft.draft_id)}}">Regenerate</button><button class="danger" data-action="skip" data-id="${{esc(x.draft.draft_id)}}">Skip</button></div></div></article>`).join('');content.querySelectorAll('[data-action]').forEach(b=>b.onclick=async()=>{{const action=b.dataset.action;let payload={{action}};if(action==='edit_approve')payload.new_body=prompt('Edit draft', '')||'';if(action==='regenerate'){{payload.new_body='Regenerated operator copy.';payload.new_draft_id=`${{b.dataset.id}}-regen`;}}try{{await api(`/api/approvals/${{b.dataset.id}}/action`,payload);notice('Draft decision recorded in this queue.');render()}}catch(e){{workflowError(b,e.message)}}}})}};render();}}
 async function results(){{let d=await api('/api/results');content.innerHTML=d.runs.length?d.runs.map(x=>`<article class="card"><h2>Run ${{esc(x.run.run_id)}} · ${{esc(x.run.status)}}</h2><div class="grid"><div class="item">${{facts(x.summary)}}</div><div class="item"><details><summary>Run details</summary>${{facts(x.run)}}</details><p class="warning">Posting, engagement, clicks, and downloads are unavailable in Reach Lite.</p></div></div></article>`).join(''):'<p class="empty">No completed Runs yet.</p>';}}
-async function settings(){{let d=await api('/api/settings');content.innerHTML=`<div class="grid"><article class="card"><h2>Reddit connection</h2><p>${{esc(d.reddit_connection.status)}} · ${{esc(d.reddit_connection.auth_kind)}}</p></article><article class="card"><h2>Model-provider routing</h2><select id="provider">${{d.provider_routing.options.map(p=>`<option ${{p===d.provider_routing.selected?'selected':''}}>${{esc(p)}}</option>`).join('')}}</select><button id="save-provider">Save routing</button></article><article class="card"><h2>Run-log export</h2><button id="export">Export local run log</button></article></div><article class="card"><h2>Deferred in this release</h2><p>${{d.deferred.map(x=>esc(x.name.replaceAll('_',' '))).join(', ')}}. These are unavailable.</p></article>`;document.getElementById('save-provider').onclick=async()=>{{try{{await api('/api/settings',{{provider:document.getElementById('provider').value}});notice('Provider routing saved.')}}catch(e){{notice(e.message)}}}};document.getElementById('export').onclick=()=>{{window.location='/api/settings/export';notice('Run-log export downloaded.')}};}}
+async function settings(){{let d=await api('/api/settings');content.innerHTML=`<div class="grid"><article class="card"><h2>Reddit connection</h2><p>${{esc(d.reddit_connection.status)}} · ${{esc(d.reddit_connection.auth_kind)}}</p></article><article class="card"><h2>Model-provider routing</h2><select id="provider">${{d.provider_routing.options.map(p=>`<option ${{p===d.provider_routing.selected?'selected':''}}>${{esc(p)}}</option>`).join('')}}</select><button id="save-provider">Save routing</button></article><article class="card"><h2>Run-log export</h2><button id="export">Export local run log</button></article></div><article class="card"><h2>Deferred in this release</h2><p>${{d.deferred.map(x=>esc(x.name.replaceAll('_',' '))).join(', ')}}. These are unavailable.</p></article>`;const save=document.getElementById('save-provider'),exportButton=document.getElementById('export');save.onclick=async()=>{{try{{await api('/api/settings',{{provider:document.getElementById('provider').value}});notice('Provider routing saved.')}}catch(e){{workflowError(save,e.message)}}}};exportButton.onclick=async()=>{{try{{const payload=await api('/api/settings/export');const blob=new Blob([JSON.stringify(payload,null,2)],{{type:'application/json'}}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='reach-lite-run-log.json';link.click();URL.revokeObjectURL(url);notice('Run-log export downloaded.')}}catch(e){{workflowError(exportButton,e.message)}}}};}}
 ({{chat,agents,approvals,results,settings}})['{dest}']().catch(e=>{{content.innerHTML='<p class="empty">Unable to load this destination.</p>';notice(e.message)}});
 </script>'''
 
@@ -363,6 +393,10 @@ def make_handler(state: AppState):
                     )
                     return
                 if path == "/api/settings/export":
+                    failure = state.failure_message("export")
+                    if failure:
+                        self._send_json({"error": failure, "recoverable": True}, 503)
+                        return
                     self._send_json(
                         {
                             "exported": True,
@@ -404,7 +438,38 @@ def make_handler(state: AppState):
                 )
                 return
 
+            if path == "/api/chat/proposal":
+                with state.lock:
+                    proposal = state.chat.get("interpretation")
+                    if not proposal or not state.chat.get("brief_text"):
+                        self._send_json({"error": "prepare a marketing brief before editing the proposal"}, 409)
+                        return
+                    updated = dict(proposal)
+                    for key in ("schedule", "sources", "qualifier", "budget"):
+                        if key in body:
+                            updated[key] = body[key]
+                    if "mode" in body:
+                        state.chat["mode"] = body["mode"]
+                    state.chat["interpretation"] = updated
+                self._send_json(
+                    {
+                        "brief_text": state.chat.get("brief_text"),
+                        "interpretation": state.chat.get("interpretation"),
+                        "mode": state.chat.get("mode", "ask"),
+                        "proposal": {
+                            "editable": True,
+                            "readable": True,
+                            "choices": ["create_agent", "not_now"],
+                        },
+                    }
+                )
+                return
+
             if path == "/api/chat/create":
+                failure = state.failure_message("creation")
+                if failure:
+                    self._send_json({"error": failure, "recoverable": True}, 503)
+                    return
                 with state.lock:
                     proposal = state.chat.get("interpretation")
                     brief = state.chat.get("brief_text")
@@ -416,13 +481,26 @@ def make_handler(state: AppState):
                         brief,
                         proposal.get("sources", []),
                         proposal.get("qualifier", {}),
-                        mode=body.get("mode", "ask"),
+                        mode=body.get("mode") or state.chat.get("mode", "ask"),
                     )
+                    # Propagate the edited proposal card's schedule and budget
+                    # so the persisted Agent matches what the operator confirmed
+                    # on the visible card (REQ-ATL-043).
+                    proposal_schedule = proposal.get("schedule")
+                    if isinstance(proposal_schedule, dict) and proposal_schedule.get("cadence"):
+                        agent = dataclasses.replace(agent, schedule=proposal_schedule)
+                    proposal_budget = proposal.get("budget")
+                    if isinstance(proposal_budget, dict):
+                        agent = dataclasses.replace(agent, budget=proposal_budget)
                     state.agents.append(agent)
                 self._send_json({"created": True, "agent": _agent_payload(agent)})
                 return
 
             if path == "/api/agents":
+                failure = state.failure_message("creation")
+                if failure:
+                    self._send_json({"error": failure, "recoverable": True}, 503)
+                    return
                 agent = new_agent(
                     body.get("agent_id", f"agent-{len(state.agents) + 1:03d}"),
                     body.get("brief_text", ""),
@@ -440,6 +518,10 @@ def make_handler(state: AppState):
                 new_state = body.get("state")
                 if new_state not in AGENT_STATES:
                     self._send_json({"error": "unknown agent state"}, 409)
+                    return
+                failure = state.failure_message("lifecycle_change")
+                if failure:
+                    self._send_json({"error": failure, "recoverable": True}, 503)
                     return
                 with state.lock:
                     target = next((a for a in state.agents if a.agent_id == agent_id), None)
@@ -477,6 +559,10 @@ def make_handler(state: AppState):
                 if provider not in PROVIDERS:
                     self._send_json({"error": "unknown provider"}, 400)
                     return
+                failure = state.failure_message("provider_routing")
+                if failure:
+                    self._send_json({"error": failure, "recoverable": True}, 503)
+                    return
                 with state.lock:
                     state.provider_routing = provider
                 self._send_json({"saved": True, "provider": provider})
@@ -492,6 +578,10 @@ def make_handler(state: AppState):
                 action = body.get("action")
                 if action not in APPROVAL_ACTIONS:
                     self._send_json({"error": "unknown approval action"}, 400)
+                    return
+                failure = state.failure_message("draft_decision")
+                if failure:
+                    self._send_json({"error": failure, "recoverable": True}, 503)
                     return
                 with state.lock:
                     target = next((d for d in state.drafts if d.draft_id == draft_id), None)
@@ -519,7 +609,12 @@ def make_handler(state: AppState):
 
 def create_app(port: int = 0, bind: str = DEFAULT_BIND, state: AppState | None = None) -> tuple[ThreadingHTTPServer, AppState]:
     """Build the operator application server; returns (server, state)."""
-    app_state = state if state is not None else seed_state()
+    configured_failures = {
+        item.strip()
+        for item in os.environ.get("REACH_LITE_FAILURE_MODES", "").split(",")
+        if item.strip()
+    }
+    app_state = state if state is not None else seed_state(configured_failures)
     server = ThreadingHTTPServer((bind, port), make_handler(app_state))
     return server, app_state
 
