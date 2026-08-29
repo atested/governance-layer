@@ -1,5 +1,17 @@
 # Distribution Manifest (External Use)
 
+## Required Proof-Bundle Files
+- `proof_packet.tar`
+- `proof_packet_verify_summary.json`
+- `proof_packet.sha256`
+- `release_gate_log.txt`
+- `versions.txt`
+
+## Optional Proof-Bundle Files
+- `queue_drift_scan.txt`
+- `queue_drift_scan.json`
+- `status_bundle.json`
+
 ## Purpose
 This document lists the minimum files and outputs needed to distribute and validate the project for external use without relying on local development state.
 

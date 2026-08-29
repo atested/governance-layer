@@ -1,5 +1,10 @@
 # External Contracts (v1)
 
+## Proof-Bundle Output Contract
+
+Required outputs: `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`.
+Optional outputs: `queue_drift_scan.txt`, `queue_drift_scan.json`, `status_bundle.json`.
+
 **Last Updated:** 2026-02-25
 **Status:** Active
 

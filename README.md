@@ -1,5 +1,10 @@
 # Atested
 
+## Proof-Bundle Output Files
+
+Required: `proof_packet.tar`, `proof_packet_verify_summary.json`, `proof_packet.sha256`, `release_gate_log.txt`, `versions.txt`.
+Optional: `queue_drift_scan.txt`, `queue_drift_scan.json`, `status_bundle.json`.
+
 [![CI](https://github.com/atested/governance-layer/actions/workflows/ci.yml/badge.svg)](https://github.com/atested/governance-layer/actions/workflows/ci.yml)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 

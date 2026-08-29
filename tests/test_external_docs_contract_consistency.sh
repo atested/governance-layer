@@ -17,7 +17,7 @@ PY
 
 require_ref() {
   local file="$1" needle="$2" label="$3"
-  if rg -F -q "$needle" "$file"; then
+  if grep -F -q "$needle" "$file"; then
     echo "PASS: $label"
   else
     echo "FAIL: $label"
@@ -48,7 +48,7 @@ run_once() {
     )
     local f
     for f in "${required_files[@]}"; do
-      if rg -F -q "$f" "$README_F" || rg -F -q "$f" "$EXTERNAL_F"; then
+      if grep -F -q "$f" "$README_F" || grep -F -q "$f" "$EXTERNAL_F"; then
         echo "PASS: required file referenced in README or EXTERNAL_CONTRACTS: $f"
       else
         echo "FAIL: missing required file reference in README/EXTERNAL_CONTRACTS: $f"
