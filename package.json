@@ -2,6 +2,7 @@
   "name": "atested-governance-validation",
   "private": true,
   "scripts": {
-    "verify:wp-001": "python3 scripts/verify_wp_001.py"
+    "verify:wp-001": "python3 scripts/verify_wp_001.py",
+    "verify:wp-002": "python3 scripts/verify_wp_002.py"
   }
 }
