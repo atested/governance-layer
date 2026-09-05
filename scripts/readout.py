@@ -876,6 +876,7 @@ def governance_activity_view(
     policy_decision: Optional[str] = None,
     tool_name: Optional[str] = None,
     provider: Optional[str] = None,
+    confidence_tier: Optional[str] = None,
     machine_scope: str = "all",
     machine_ids: Optional[str | list[str]] = None,
 ) -> dict:
@@ -926,6 +927,11 @@ def governance_activity_view(
             e for e in entries
             if e.get("provider", "") == provider
         ]
+    if confidence_tier:
+        entries = [
+            e for e in entries
+            if str(e["detail"].get("confidence_tier", "")) == str(confidence_tier)
+        ]
 
     # Reverse chronological order (most recent first).
     entries.reverse()
@@ -975,6 +981,7 @@ def governance_activity_view(
             "policy_decision": policy_decision,
             "tool_name": tool_name,
             "provider": provider,
+            "confidence_tier": confidence_tier,
             "machine_scope": machine_scope,
             "machine_ids": sorted(unified_context.get("machine_ids", [])) if unified_context else [],
         },

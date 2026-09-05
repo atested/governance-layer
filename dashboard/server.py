@@ -4795,6 +4795,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 policy_decision=qs("policy_decision") or None,
                 tool_name=qs("tool_name") or None,
                 provider=qs("provider") or None,
+                confidence_tier=qs("confidence_tier") or None,
                 machine_scope=qs("machine_scope", "all") or "all",
                 machine_ids=qs_machines(),
             )

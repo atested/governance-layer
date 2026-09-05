@@ -86,6 +86,7 @@ export function openActivityWindow(trigger, opts = {}) {
     userFilter: '',
     providerFilter: opts.providerFilter || '',
     machineFilter: opts.machineFilter || '',
+    tierFilter: opts.tierFilter || '',
     // Pagination
     currentPage: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -148,6 +149,10 @@ export function openActivityWindow(trigger, opts = {}) {
     toggles.forEach(b => {
       b.classList.toggle('aw-dtoggle-active', b.dataset.decision === state.decisionFilter);
     });
+  }
+  if (state.tierFilter) {
+    const tierEl = state.el.querySelector('#aw-tier-filter');
+    if (tierEl) tierEl.value = state.tierFilter;
   }
 
   _loadData(state);
@@ -271,6 +276,15 @@ function _buildUI(state) {
               </select>
             </label>
             <label class="aw-fp-label">
+              Evidence tier
+              <select class="aw-select" id="aw-tier-filter">
+                <option value="">All tiers</option>
+                <option value="1">Tier 1</option>
+                <option value="2">Tier 2</option>
+                <option value="3">Tier 3</option>
+              </select>
+            </label>
+            <label class="aw-fp-label">
               Machine
               <select class="aw-select" id="aw-machine-filter">
                 <option value="">All machines</option>
@@ -357,6 +371,7 @@ function _applyStaticTooltips(state) {
     ['#aw-rule-filter', 'Filter by the policy rule that matched.'],
     ['#aw-user-filter', 'Filter by user or agent identity.'],
     ['#aw-provider-filter', 'Filter by model provider API.'],
+    ['#aw-tier-filter', 'Filter by the evidence confidence tier assigned to the operation.'],
     ['#aw-machine-filter', 'Filter by the machine that produced the record.'],
     ['#aw-apply', 'Apply the selected filters to the Activity list.'],
     ['#aw-clear', 'Clear all Activity filters.'],
@@ -432,6 +447,7 @@ function _wireControls(state) {
     el.querySelector('#aw-rule-filter').value = '';
     el.querySelector('#aw-user-filter').value = '';
     el.querySelector('#aw-provider-filter').value = '';
+    el.querySelector('#aw-tier-filter').value = '';
     // Reset decision toggles
     el.querySelectorAll('#aw-decision-toggles .aw-dtoggle').forEach(b => b.classList.remove('aw-dtoggle-active'));
     el.querySelector('[data-decision=""]').classList.add('aw-dtoggle-active');
@@ -446,6 +462,7 @@ function _wireControls(state) {
     state.ruleFilter = '';
     state.userFilter = '';
     state.providerFilter = '';
+    state.tierFilter = '';
     state.includeArchives = false;
     state.currentPage = 1;
     _loadData(state);
@@ -523,6 +540,7 @@ function _readFilters(state) {
   state.ruleFilter = el.querySelector('#aw-rule-filter').value;
   state.userFilter = el.querySelector('#aw-user-filter').value;
   state.providerFilter = el.querySelector('#aw-provider-filter').value;
+  state.tierFilter = el.querySelector('#aw-tier-filter').value;
   state.machineFilter = el.querySelector('#aw-machine-filter').value;
 }
 
@@ -544,6 +562,7 @@ async function _loadData(state, options = {}) {
   if (state.eventTypeFilter) params.event_category = state.eventTypeFilter;
   if (state.toolFilter) params.tool_name = state.toolFilter;
   if (state.providerFilter) params.provider = state.providerFilter;
+  if (state.tierFilter) params.confidence_tier = state.tierFilter;
   _applyMachineParams(params, state.machineFilter);
   if (state.includeArchives) params.include_archives = '1';
 
