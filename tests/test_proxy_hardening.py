@@ -56,9 +56,7 @@ class TestRequestBodySizeLimit:
 
         writer, written_data = _make_writer()
 
-        asyncio.get_event_loop().run_until_complete(
-            server._handle_client(reader, writer)
-        )
+        asyncio.run(server._handle_client(reader, writer))
 
         response = written_data.decode()
         assert "413" in response
@@ -90,9 +88,7 @@ class TestGenericErrorMessages:
 
         writer, written_data = _make_writer()
 
-        asyncio.get_event_loop().run_until_complete(
-            server._handle_client(reader, writer)
-        )
+        asyncio.run(server._handle_client(reader, writer))
 
         response = written_data.decode()
         assert "502" in response

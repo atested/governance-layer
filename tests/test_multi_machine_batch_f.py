@@ -11,6 +11,7 @@ if str(SCRIPTS) not in sys.path:
 
 from event_model import build_non_action_event  # noqa: E402
 from machine_identity import ensure_machine_identity, ensure_primary_machine_registry  # noqa: E402
+from privacy_boundaries import aggregate_local_telemetry_summary  # noqa: E402
 from multi_machine_ops import (  # noqa: E402
     apply_machine_coverage_to_telemetry_artifact,
     normalize_communications,
@@ -30,7 +31,8 @@ def test_primary_telemetry_artifact_includes_remote_machine_coverage(tmp_path, m
     telemetry_dir.mkdir(parents=True, exist_ok=True)
     (telemetry_dir / "summary.json").write_text(json.dumps(local_summary), encoding="utf-8")
 
-    remote_summary = {"schema_version": 1, "lifetime": {"flushes": 4}, "periods": {}}
+    remote_local_summary = {"schema_version": 1, "lifetime": {"flushes": 4}, "periods": {}}
+    remote_summary = aggregate_local_telemetry_summary(remote_local_summary)
     stored = store_remote_telemetry_summary(
         REPO,
         "remote-telemetry-1",

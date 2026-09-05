@@ -199,6 +199,7 @@ def test_lifecycle_supervisor_propagates_mock_upstream_and_signs_record(
     monkeypatch.setenv("GOV_RUNTIME_DIR", str(runtime))
     monkeypatch.setenv("GOV_PROXY_PORT", str(proxy_port))
     monkeypatch.setenv("DASHBOARD_PORT", str(dashboard_port))
+    monkeypatch.setenv("ATESTED_RUNTIME_CONTEXT", "local-development")
     monkeypatch.setattr(
         atested_cli,
         "_set_launchd_env",
@@ -229,11 +230,11 @@ def test_lifecycle_supervisor_propagates_mock_upstream_and_signs_record(
             _start_args(no_services=False, upstream=upstream_url, sync_port=sync_port)
         )
         assert rc == 0
+        _wait_for_listen(proxy_port)
         status = atested_cli._service_statuses()
         proxy_argv = status["proxy"]["argv"]
         assert "--upstream" in proxy_argv
         assert upstream_url in proxy_argv
-        _wait_for_listen(proxy_port)
     except AssertionError:
         _run_lifecycle_stop()
         raise

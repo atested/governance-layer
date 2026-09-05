@@ -2,6 +2,7 @@
 """Tests for D-2026-0404-037: atested CLI."""
 
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -43,6 +44,10 @@ def _make_isolated_runtime(tmpdir):
     runtime = Path(tmpdir) / "runtime"
     (runtime / "LOGS").mkdir(parents=True)
     return runtime
+
+
+def _operation_identity(label: str) -> str:
+    return "sha256:" + hashlib.sha256(label.encode("utf-8")).hexdigest()
 
 
 def test_help():
@@ -97,16 +102,17 @@ def test_approve_then_lookup():
     """Approve writes a chain event and the approval store reflects it."""
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "test_operator"}
+        identity = _operation_identity("approve-then-lookup")
 
         rc, out, err = _run_cli(
-            ["approve", "sha256:abcdef0123456789", "--operator", "test_operator"],
+            ["approve", identity, "--operator", "test_operator"],
             env_overrides=env,
         )
         assert rc == 0, f"stderr: {err}"
         data = json.loads(out)
         assert data["approved"] is True
-        assert data["artifact_identity"] == "sha256:abcdef0123456789"
+        assert data["artifact_identity"] == identity
         assert data["approving_operator"] == "test_operator"
         assert data.get("event_id")
 
@@ -117,7 +123,7 @@ def test_approve_then_lookup():
         assert len(lines) == 1
         rec = json.loads(lines[0])
         assert rec["event_type"] == "opaque_artifact_approval"
-        assert rec["artifact_identity"] == "sha256:abcdef0123456789"
+        assert rec["artifact_identity"] == identity
         assert "machine_id" in rec
         assert rec["machine_role"] == "primary"
         assert "event_timestamp_utc" in rec
@@ -127,7 +133,7 @@ def test_approve_then_lookup():
         assert rc == 0
         data = json.loads(out)
         assert data["total_count"] == 1
-        assert data["active_approvals"][0]["artifact_identity"] == "sha256:abcdef0123456789"
+        assert data["active_approvals"][0]["artifact_identity"] == identity
     print("PASS: test_approve_then_lookup")
 
 
@@ -135,11 +141,12 @@ def test_approve_then_revoke():
     """Revoke removes an existing approval."""
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "op1"}
+        identity = _operation_identity("approve-then-revoke")
 
-        _run_cli(["approve", "sha256:deadbeef", "--operator", "op1"], env_overrides=env)
+        _run_cli(["approve", identity, "--operator", "op1"], env_overrides=env)
         rc, out, err = _run_cli(
-            ["revoke", "sha256:deadbeef", "--operator", "op1"],
+            ["revoke", identity, "--operator", "op1"],
             env_overrides=env,
         )
         assert rc == 0, f"stderr: {err}"
@@ -157,11 +164,13 @@ def test_chain_verify_after_writes():
     """After CLI writes, the chain remains structurally valid."""
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "op"}
+        first = _operation_identity("chain-first")
+        second = _operation_identity("chain-second")
 
-        _run_cli(["approve", "sha256:aaa", "--operator", "op"], env_overrides=env)
-        _run_cli(["approve", "sha256:bbb", "--operator", "op"], env_overrides=env)
-        _run_cli(["revoke", "sha256:aaa", "--operator", "op"], env_overrides=env)
+        _run_cli(["approve", first, "--operator", "op"], env_overrides=env)
+        _run_cli(["approve", second, "--operator", "op"], env_overrides=env)
+        _run_cli(["revoke", first, "--operator", "op"], env_overrides=env)
 
         rc, out, err = _run_cli(["chain", "verify"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
@@ -174,8 +183,8 @@ def test_chain_verify_after_writes():
 def test_status_command():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
-        _run_cli(["approve", "sha256:zzz", "--operator", "op"], env_overrides=env)
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "op"}
+        _run_cli(["approve", _operation_identity("status"), "--operator", "op"], env_overrides=env)
         rc, out, err = _run_cli(["--json", "status"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         data = json.loads(out)
@@ -621,10 +630,10 @@ def test_collect_base_dirs_defaults_to_repo_root_noninteractive(monkeypatch):
 def test_restore_verify_primary_runtime():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "op"}
         rc, out, err = _run_cli(["start", "--role", "primary", "--no-services"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
-        rc, out, err = _run_cli(["approve", "sha256:restoretest", "--operator", "op"], env_overrides=env)
+        rc, out, err = _run_cli(["approve", _operation_identity("restore-test"), "--operator", "op"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
 
         rc, out, err = _run_cli(["restore", "verify", "--runtime", str(runtime)], env_overrides=env)
@@ -852,8 +861,8 @@ def test_cli_remote_sync_imports_pending_records_to_primary():
 def test_activity_command():
     with tempfile.TemporaryDirectory() as tmp:
         runtime = _make_isolated_runtime(tmp)
-        env = {"GOV_RUNTIME_DIR": str(runtime)}
-        _run_cli(["approve", "sha256:act1", "--operator", "op"], env_overrides=env)
+        env = {"GOV_RUNTIME_DIR": str(runtime), "ATESTED_USER_LABEL": "op"}
+        _run_cli(["approve", _operation_identity("activity"), "--operator", "op"], env_overrides=env)
         rc, out, err = _run_cli(["activity", "--limit", "5"], env_overrides=env)
         assert rc == 0, f"stderr: {err}"
         data = json.loads(out)

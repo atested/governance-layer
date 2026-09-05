@@ -23,6 +23,7 @@ ALLOWLIST = {
     "dashboard/server.py",       # _append_chain_record_atomic
     "proxy/server.py",           # ChainRecorder.append_atomic
     "scripts/atested_cli.py",    # _append_chain_record_atomic
+    "scripts/decision_evidence.py",  # DecisionEvidenceRecorder._append
     "scripts/remote_import.py",  # append_import_envelope
     "scripts/append-record-runtime.sh",  # production shell writer
     "scripts/append-record.sh",  # in-repo test fixture writer (audited, conformant)

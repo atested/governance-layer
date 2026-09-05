@@ -46,7 +46,7 @@ def _make_valid_record(prev_hash=None, **extra):
 class TestChainIntegrityCheck:
     def test_empty_chain_returns_none(self):
         """Empty chain file → None hash."""
-        tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+        tmpdir = tempfile.mkdtemp()
         chain_path = Path(tmpdir) / "chain.jsonl"
         chain_path.touch()
         recorder = ChainRecorder(chain_path)
@@ -54,13 +54,13 @@ class TestChainIntegrityCheck:
 
     def test_missing_chain_returns_none(self):
         """Non-existent chain file → None hash."""
-        tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+        tmpdir = tempfile.mkdtemp()
         recorder = ChainRecorder(Path(tmpdir) / "missing.jsonl")
         assert recorder._last_hash() is None
 
     def test_valid_tail_returns_hash(self):
         """Valid tail record → returns its hash without warnings."""
-        tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+        tmpdir = tempfile.mkdtemp()
         record = _make_valid_record()
         chain_path = _make_chain(tmpdir, [record])
         recorder = ChainRecorder(chain_path)
@@ -68,7 +68,7 @@ class TestChainIntegrityCheck:
 
     def test_tampered_tail_logs_error(self, caplog):
         """Tampered tail record → logs integrity error, still returns hash."""
-        tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+        tmpdir = tempfile.mkdtemp()
         record = _make_valid_record()
         original_hash = record["record_hash"]
 
@@ -91,7 +91,7 @@ class TestChainIntegrityCheck:
 
     def test_multi_record_checks_only_tail(self):
         """Only the tail record is verified, not the entire chain."""
-        tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+        tmpdir = tempfile.mkdtemp()
         r1 = _make_valid_record()
         r2 = _make_valid_record(prev_hash=r1["record_hash"], data="second")
         chain_path = _make_chain(tmpdir, [r1, r2])

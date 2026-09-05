@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Optional
@@ -741,7 +742,7 @@ class TestNonStreamingProxy(unittest.TestCase):
 
 class TestQS052ProxyPosture(unittest.TestCase):
     def _capability_registry(self, mode: str) -> Path:
-        path = Path(os.environ.get("TMPDIR", "/private/tmp")) / f"qs052-capability-{mode}.json"
+        path = Path(tempfile.gettempdir()) / f"qs052-capability-{mode}.json"
         path.write_text(json.dumps({
             "version": "0.1",
             "governance_posture": {"mode": mode},
@@ -753,7 +754,7 @@ class TestQS052ProxyPosture(unittest.TestCase):
         posture_patch = patch.object(proxy_server, "CAP_REGISTRY_PATH", self._capability_registry("production"))
         posture_patch.start()
         self.addCleanup(posture_patch.stop)
-        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp")) / chain_name
+        chain_path = Path(tempfile.gettempdir()) / chain_name
         chain_path.unlink(missing_ok=True)
         recorder = ChainRecorder(chain_path)
         proxy = GovernanceProxy(
@@ -1475,7 +1476,7 @@ class TestProxyServerEndToEnd(unittest.TestCase):
         which shares the same StreamingToolCollector as handle_streaming_to_writer.
         This validates SSE parsing, tool_use detection, and chain recording.
         """
-        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp/claude-501")) / "test_e2e_chain.jsonl"
+        chain_path = Path(tempfile.gettempdir()) / "test_e2e_chain.jsonl"
         chain_path.unlink(missing_ok=True)
 
         from proxy.server import ChainRecorder, GovernanceProxy
@@ -1543,7 +1544,7 @@ class TestProxyServerEndToEnd(unittest.TestCase):
 
     def test_non_streaming_tool_use_recorded(self):
         """Non-streaming path also records governance decisions."""
-        chain_path = Path(os.environ.get("TMPDIR", "/private/tmp/claude-501")) / "test_e2e_nonstream.jsonl"
+        chain_path = Path(tempfile.gettempdir()) / "test_e2e_nonstream.jsonl"
         chain_path.unlink(missing_ok=True)
 
         from proxy.server import ChainRecorder, GovernanceProxy
@@ -1729,8 +1730,8 @@ class TestRecordDetailV2Target(unittest.TestCase):
 class TestApprovalOverride(unittest.TestCase):
     """Proxy allows previously-denied operations when approved."""
 
-    def test_denied_then_approved_by_tool_name(self):
-        """An operation denied by policy is allowed after tool-name approval."""
+    def test_tool_name_approval_cannot_override_denied_operation(self):
+        """A legacy tool-name approval cannot authorize an exact operation."""
         from approval_store import ApprovalStore
 
         policy = _make_policy(base_dirs=[_REPO_STR])
@@ -1752,17 +1753,17 @@ class TestApprovalOverride(unittest.TestCase):
             "policy_version": "baseline-v1",
         })
 
-        # Same operation with approval store → ALLOW
-        record_allow = mediate_decision(
+        # Same operation with the legacy approval store remains denied.
+        record = mediate_decision(
             "Bash", {"command": "rm -rf /"},
             policy=policy,
             approval_store=store,
         )
-        self.assertEqual(record_allow["policy_decision"], "ALLOW")
-        self.assertEqual(record_allow["matched_rule"], "approved_lookup")
+        self.assertEqual(record["policy_decision"], "DENY")
+        self.assertNotEqual(record["matched_rule"], "approved_lookup")
 
-    def test_tool_name_approval_is_case_insensitive(self):
-        """Approval for bash matches the Bash tool name recorded by the proxy."""
+    def test_case_insensitive_tool_name_approval_still_cannot_override(self):
+        """Case folding does not turn a legacy approval into exact authority."""
         from approval_store import ApprovalStore
 
         policy = _make_policy(base_dirs=[_REPO_STR])
@@ -1781,8 +1782,8 @@ class TestApprovalOverride(unittest.TestCase):
             approval_store=store,
         )
 
-        self.assertEqual(record["policy_decision"], "ALLOW")
-        self.assertEqual(record["matched_rule"], "approved_lookup")
+        self.assertEqual(record["policy_decision"], "DENY")
+        self.assertNotEqual(record["matched_rule"], "approved_lookup")
 
     def test_denied_not_overridden_without_matching_approval(self):
         """Approval for a different tool does not override denial."""
@@ -1820,8 +1821,8 @@ class TestApprovalOverride(unittest.TestCase):
         self.assertEqual(record["policy_decision"], "ALLOW")
         self.assertNotEqual(record["matched_rule"], "approved_lookup")
 
-    def test_approval_by_target_path(self):
-        """Approval by target path overrides denial."""
+    def test_target_path_approval_cannot_override_denial(self):
+        """A legacy target-path approval cannot authorize an exact operation."""
         from approval_store import ApprovalStore
 
         policy = _make_policy(base_dirs=[_REPO_STR])
@@ -1839,8 +1840,8 @@ class TestApprovalOverride(unittest.TestCase):
             policy=policy,
             approval_store=store,
         )
-        self.assertEqual(record["policy_decision"], "ALLOW")
-        self.assertEqual(record["matched_rule"], "approved_lookup")
+        self.assertEqual(record["policy_decision"], "DENY")
+        self.assertNotEqual(record["matched_rule"], "approved_lookup")
 
 
 if __name__ == "__main__":

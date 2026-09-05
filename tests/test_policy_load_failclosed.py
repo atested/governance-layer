@@ -19,9 +19,7 @@ from policy_eval_v2 import load_policy_rules, evaluate
 
 def _make_tmp_file(content: str, suffix=".json") -> Path:
     """Write content to a temp file and return its path."""
-    f = tempfile.NamedTemporaryFile(
-        mode="w", suffix=suffix, delete=False, dir="/private/tmp/claude-501"
-    )
+    f = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False)
     f.write(content)
     f.close()
     return Path(f.name)

