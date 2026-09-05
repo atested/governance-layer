@@ -1,0 +1,9 @@
+{
+  "release_schema_version": 1,
+  "host_profile": "static-pwa",
+  "delivery": "cloudflare-static-web",
+  "stable_release_url": "https://atested-governance-layer.pages.dev/",
+  "accepted_release_version": "1.0.0",
+  "artifact_root": "static-pwa",
+  "rollback": "Republish the previously accepted artifact to the same stable URL, then restore the previous latest catalog record."
+}

@@ -1,0 +1,5 @@
+# The stable pages.dev hostname is the public release endpoint.  Cloudflare
+# Pages serves static-pwa directly; no worker runtime is part of this release.
+name = "atested-governance-layer"
+pages_build_output_dir = "static-pwa"
+compatibility_date = "2026-09-04"

@@ -9,6 +9,8 @@
     "verify:wp-005": "python3 scripts/verify_wp_005.py",
     "verify:wp-006": "python3 scripts/verify_wp_006.py",
     "verify:wp-007": "python3 scripts/verify_wp_007.py",
-    "verify:wp-008": "python3 scripts/verify_wp_008.py"
+    "verify:wp-008": "python3 scripts/verify_wp_008.py",
+    "verify:wp-009": "python3 scripts/verify_wp_009.py",
+    "release:static-pwa": "python3 scripts/publish_static_pwa.py"
   }
 }

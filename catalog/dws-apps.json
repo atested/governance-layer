@@ -1,0 +1,15 @@
+{
+  "catalog_schema_version": 1,
+  "catalog": "DWS Apps",
+  "apps": [
+    {
+      "app_id": "atested-governance-layer",
+      "name": "Atested",
+      "version": "1.0.0",
+      "version_status": "latest",
+      "host_profile": "static-pwa",
+      "delivery": "cloudflare-static-web",
+      "url": "https://atested-governance-layer.pages.dev/"
+    }
+  ]
+}
