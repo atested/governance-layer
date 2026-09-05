@@ -1893,12 +1893,17 @@ def cmd_approvals(args) -> int:
 
 def cmd_approve(args) -> int:
     from event_model import build_non_action_event
+    from approval_store import explicit_operator_action_fields, valid_operation_identity
 
     artifact_identity = args.artifact_identity.strip()
-    if not artifact_identity:
-        print("error: artifact_identity is required", file=sys.stderr)
+    if not valid_operation_identity(artifact_identity):
+        print("error: a sha256 governed operation identity is required", file=sys.stderr)
         return 2
-    operator = (args.operator or _configured_operator_identity()).strip()
+    operator = _configured_operator_identity().strip()
+    requested_operator = str(args.operator or "").strip()
+    if requested_operator and requested_operator != operator:
+        print("error: --operator must match the authenticated local operator", file=sys.stderr)
+        return 2
 
     payload = {
         "artifact_identity": artifact_identity,
@@ -1907,6 +1912,7 @@ def cmd_approve(args) -> int:
         "governed_family": _governed_family(),
         "deployment_context": _deployment_context(),
         "policy_version": _policy_version(),
+        **explicit_operator_action_fields(operator, channel="local_operator_cli"),
     }
     event = build_non_action_event("opaque_artifact_approval", payload, prev_record_hash=None)
     event = _append_chain_record_atomic(event)
@@ -1922,12 +1928,17 @@ def cmd_approve(args) -> int:
 
 def cmd_revoke(args) -> int:
     from event_model import build_non_action_event
+    from approval_store import explicit_operator_action_fields, valid_operation_identity
 
     artifact_identity = args.artifact_identity.strip()
-    if not artifact_identity:
-        print("error: artifact_identity is required", file=sys.stderr)
+    if not valid_operation_identity(artifact_identity):
+        print("error: a sha256 governed operation identity is required", file=sys.stderr)
         return 2
-    operator = (args.operator or _configured_operator_identity()).strip()
+    operator = _configured_operator_identity().strip()
+    requested_operator = str(args.operator or "").strip()
+    if requested_operator and requested_operator != operator:
+        print("error: --operator must match the authenticated local operator", file=sys.stderr)
+        return 2
 
     payload = {
         "artifact_identity": artifact_identity,
@@ -1936,6 +1947,7 @@ def cmd_revoke(args) -> int:
         "governed_family": _governed_family(),
         "deployment_context": _deployment_context(),
         "policy_version": _policy_version(),
+        **explicit_operator_action_fields(operator, channel="local_operator_cli"),
     }
     event = build_non_action_event("opaque_artifact_revocation", payload, prev_record_hash=None)
     event = _append_chain_record_atomic(event)

@@ -30,7 +30,7 @@ import logging
 import hashlib
 import fnmatch
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 try:
     from canonical_form import canonical_json as _canonical_form_json
@@ -40,6 +40,8 @@ except ImportError:  # pragma: no cover - package import path
 logger = logging.getLogger("atested.approval_store")
 
 APPROVAL_STORE_VERSION = "0.1"
+OPERATION_IDENTITY_SCHEMA = "atested-governed-operation-v1"
+AUTHENTICATED_OPERATOR_ORIGIN = "authenticated_operator_action"
 DEFAULT_APPROVAL_STORE_FILENAMES = (
     "approval-store.json",
     "approval-store.jsonl",
@@ -53,6 +55,62 @@ def _canonical_json(obj) -> str:
 
 def _normalize_artifact_identity(value: str) -> str:
     return str(value or "").strip().casefold()
+
+
+def compute_operation_identity(
+    tool_name: str,
+    args: Optional[Mapping[str, Any]],
+    classification: Mapping[str, Any],
+    governed_family: str,
+    deployment_context: str,
+    policy_version: str,
+) -> str:
+    """Return the stable identity of one materially scoped operation.
+
+    The policy and deployment dimensions are included because changing any of
+    them changes the context the operator reviewed. Volatile decision fields
+    such as request IDs and timestamps are deliberately excluded.
+    """
+    material = {
+        "schema": OPERATION_IDENTITY_SCHEMA,
+        "tool_name": str(tool_name or ""),
+        "args": dict(args or {}),
+        "classification": {
+            "action_type": classification.get("action_type"),
+            "targets": list(classification.get("targets") or []),
+            "scope": classification.get("scope"),
+            "confidence_tier": classification.get("confidence_tier"),
+        },
+        "governed_family": str(governed_family or ""),
+        "deployment_context": str(deployment_context or ""),
+        "policy_version": str(policy_version or ""),
+    }
+    digest = hashlib.sha256(_canonical_json(material).encode("utf-8")).hexdigest()
+    return "sha256:" + digest
+
+
+def explicit_operator_action_fields(operator_id: str, *, channel: str) -> dict[str, Any]:
+    """Build provenance fields required for an approval-capable action.
+
+    Callers must already have authenticated their operator channel. Merely
+    writing an approval-shaped record without these explicit fields never
+    creates an approval that the mediation path can consume.
+    """
+    operator = str(operator_id or "").strip()
+    action_channel = str(channel or "").strip()
+    if not operator:
+        raise ValueError("authenticated operator identity is required")
+    if action_channel not in {"local_operator_cli", "authenticated_dashboard"}:
+        raise ValueError("approval action must use an authenticated operator channel")
+    return {
+        "authorization_origin": AUTHENTICATED_OPERATOR_ORIGIN,
+        "explicit_operator_action": True,
+        "authenticated_operator_id": operator,
+        "operator_action_channel": action_channel,
+        "delegated_by": None,
+        "scheduled_for": None,
+        "policy_rule_origin": None,
+    }
 
 
 def approval_store_hash(store: Optional["ApprovalStore"] = None) -> str:
@@ -139,6 +197,13 @@ class ApprovalStore:
             "policy_version": event["policy_version"],
             "event_id": event.get("event_id"),
             "timestamp_utc": event.get("timestamp_utc"),
+            "authorization_origin": event.get("authorization_origin"),
+            "explicit_operator_action": event.get("explicit_operator_action"),
+            "authenticated_operator_id": event.get("authenticated_operator_id"),
+            "operator_action_channel": event.get("operator_action_channel"),
+            "delegated_by": event.get("delegated_by"),
+            "scheduled_for": event.get("scheduled_for"),
+            "policy_rule_origin": event.get("policy_rule_origin"),
         }
         if isinstance(event.get("match"), dict):
             record["match"] = event["match"]
@@ -260,6 +325,48 @@ class ApprovalStore:
                 return approval
         return None
 
+    def lookup_governed_operation(
+        self,
+        operation_identity: str,
+        authenticated_operator_id: str,
+        governed_family: str,
+        deployment_context: str,
+        policy_version: str,
+    ) -> Optional[dict]:
+        """Return only an explicit operator approval for this exact context.
+
+        Legacy tool-name, target, pattern, automatic, scheduled, policy-derived,
+        and delegated records are intentionally ineligible here. This is the
+        only lookup used to transform a mediated DENY into ALLOW.
+        """
+        identity = _normalize_artifact_identity(operation_identity)
+        operator = str(authenticated_operator_id or "").strip()
+        if not valid_operation_identity(identity) or not operator:
+            return None
+        approval = self.lookup(
+            identity,
+            governed_family,
+            deployment_context,
+            policy_version,
+        )
+        if approval is None:
+            return None
+        if approval.get("authorization_origin") != AUTHENTICATED_OPERATOR_ORIGIN:
+            return None
+        if approval.get("explicit_operator_action") is not True:
+            return None
+        if approval.get("operator_action_channel") not in {
+            "local_operator_cli", "authenticated_dashboard",
+        }:
+            return None
+        if approval.get("delegated_by") or approval.get("scheduled_for") or approval.get("policy_rule_origin"):
+            return None
+        if approval.get("authenticated_operator_id") != operator:
+            return None
+        if approval.get("approving_operator") != operator:
+            return None
+        return approval
+
     def all_approvals(self) -> list[dict]:
         """Return all current approvals (for testing/inspection)."""
         return list(self._approvals.values()) + list(self._pattern_approvals)
@@ -294,6 +401,16 @@ class ApprovalStore:
             event["deployment_context"],
             event["policy_version"],
         )
+
+
+def valid_operation_identity(value: Any) -> bool:
+    """Return whether value is a canonical governed-operation identity."""
+    identity = str(value or "").strip().casefold()
+    return (
+        identity.startswith("sha256:")
+        and len(identity) == 71
+        and all(character in "0123456789abcdef" for character in identity[7:])
+    )
 
 
 def _as_list(value: Any) -> list:

@@ -1614,14 +1614,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": "invalid JSON"}, 400)
             return
 
-        artifact_identity = str(data.get("artifact_identity", "")).strip()
-        operator = str(data.get("operator", "")).strip() or _configured_operator_identity()
-        if not artifact_identity:
-            _json_response(self, {"error": "artifact_identity is required"}, 400)
+        artifact_identity = str(data.get("operation_identity") or data.get("artifact_identity", "")).strip()
+        operator = _configured_operator_identity()
+        requested_operator = str(data.get("operator", "")).strip()
+        if requested_operator and requested_operator != operator:
+            _json_response(self, {"error": "operator does not match authenticated session"}, 403)
             return
 
         try:
             from event_model import build_non_action_event
+            from approval_store import explicit_operator_action_fields, valid_operation_identity
+            if not valid_operation_identity(artifact_identity):
+                _json_response(self, {"error": "a sha256 governed operation identity is required"}, 400)
+                return
             payload = {
                 "artifact_identity": artifact_identity,
                 "approving_operator": operator,
@@ -1629,6 +1634,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "governed_family": _governed_family(),
                 "deployment_context": _deployment_context(),
                 "policy_version": _policy_version(),
+                **explicit_operator_action_fields(operator, channel="authenticated_dashboard"),
             }
             event = build_non_action_event(
                 "opaque_artifact_approval",
@@ -1658,14 +1664,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             _json_response(self, {"error": "invalid JSON"}, 400)
             return
 
-        artifact_identity = str(data.get("artifact_identity", "")).strip()
-        operator = str(data.get("operator", "")).strip() or _configured_operator_identity()
-        if not artifact_identity:
-            _json_response(self, {"error": "artifact_identity is required"}, 400)
+        artifact_identity = str(data.get("operation_identity") or data.get("artifact_identity", "")).strip()
+        operator = _configured_operator_identity()
+        requested_operator = str(data.get("operator", "")).strip()
+        if requested_operator and requested_operator != operator:
+            _json_response(self, {"error": "operator does not match authenticated session"}, 403)
             return
 
         try:
             from event_model import build_non_action_event
+            from approval_store import explicit_operator_action_fields, valid_operation_identity
+            if not valid_operation_identity(artifact_identity):
+                _json_response(self, {"error": "a sha256 governed operation identity is required"}, 400)
+                return
             payload = {
                 "artifact_identity": artifact_identity,
                 "revoking_operator": operator,
@@ -1673,6 +1684,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 "governed_family": _governed_family(),
                 "deployment_context": _deployment_context(),
                 "policy_version": _policy_version(),
+                **explicit_operator_action_fields(operator, channel="authenticated_dashboard"),
             }
             event = build_non_action_event(
                 "opaque_artifact_revocation",

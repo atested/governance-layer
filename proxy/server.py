@@ -62,7 +62,12 @@ from policy_eval_v2 import evaluate, load_policy_rules, _compute_record_hash, co
 # that loader at line ~493 (_load_approval_store). The legacy
 # from_chain helper is still exported by approval_store for callers that
 # already have a chain path in hand.
-from approval_store import ApprovalStore, approval_store_hash, load_approval_store_from_runtime
+from approval_store import (
+    ApprovalStore,
+    approval_store_hash,
+    compute_operation_identity,
+    load_approval_store_from_runtime,
+)
 from event_model import (
     build_non_action_event,
     is_non_action_event,
@@ -527,29 +532,20 @@ def _policy_version() -> str:
 
 def _check_approval(
     approval_store: ApprovalStore,
-    tool_name: str,
-    targets: list[str],
-    args: Optional[dict] = None,
+    operation_identity: str,
+    authenticated_operator_id: str,
     *,
-    operation_description: str = "",
+    governed_family: str,
+    deployment_context: str,
+    policy_version: str,
 ) -> Optional[dict]:
-    """Check if an operation is approved by description, tool, or target."""
-    family = _governed_family()
-    context = _deployment_context()
-    version = _policy_version()
-
-    return approval_store.lookup_operation(
-        tool_name,
-        args or {},
-        targets,
-        family,
-        context,
-        version,
-        repo_path=str(REPO),
-        # QS-062: prefer matching on the operation_description so an
-        # approval for "Push commits to origin/main" doesn't accidentally
-        # authorise every Bash call.
-        operation_description=operation_description,
+    """Check for explicit approval of the exact operation and operator context."""
+    return approval_store.lookup_governed_operation(
+        operation_identity,
+        authenticated_operator_id,
+        governed_family,
+        deployment_context,
+        policy_version,
     )
 
 
@@ -571,9 +567,8 @@ def mediate_decision(
     Returns the decision record. Does NOT execute the tool — in the API proxy
     model, the agent executes its own tools. The proxy only decides.
 
-    If approval_store is provided and the policy decision is DENY, checks
-    whether the operation has been approved. Approved operations are overridden
-    to ALLOW with resolution "approved_lookup".
+    A DENY can be transformed only by an explicit authenticated operator
+    approval bound to the exact operation and current operator context.
     """
     provider_name = provider_name or "unknown"
     qa_relaxation: Optional[dict] = None
@@ -626,6 +621,18 @@ def mediate_decision(
 
     classification = classify(tool_name, args)
 
+    governed_family = _governed_family()
+    deployment_context = _deployment_context()
+    policy_version = _policy_version()
+    operation_identity = compute_operation_identity(
+        tool_name,
+        args,
+        classification,
+        governed_family,
+        deployment_context,
+        policy_version,
+    )
+
     record = evaluate(
         classification,
         policy=policy,
@@ -636,24 +643,23 @@ def mediate_decision(
     )
 
     record["provider"] = provider_name
+    record["operation_identity"] = operation_identity
     if developer_mode_active():
         record["developer_mode"] = True
     if qa_relaxation is not None:
         record["developer_mode_qa_relaxation"] = qa_relaxation
     record["record_hash"] = _compute_record_hash(record)
 
-    # Check approval store for denied operations
+    # A policy DENY remains fail-closed in every posture unless the exact
+    # operation and authenticated operator context have an explicit approval.
     if record["policy_decision"] == "DENY" and approval_store is not None:
-        targets = classification.get("targets", [])
         approval = _check_approval(
             approval_store,
-            tool_name,
-            targets,
-            args,
-            # QS-062: pass the description so an operator-issued approval
-            # keyed on the exact operation phrase ("Push commits to
-            # origin/main") wins before falling back to tool-name scope.
-            operation_description=classification.get("operation_description", ""),
+            operation_identity,
+            user_identity,
+            governed_family=governed_family,
+            deployment_context=deployment_context,
+            policy_version=policy_version,
         )
         if approval:
             logger.info(
@@ -666,6 +672,8 @@ def mediate_decision(
             record["policy_reasons"] = []
             record["matched_rule"] = "approved_lookup"
             record["approval_event_id"] = approval.get("event_id")
+            record["approval_operator_id"] = approval.get("authenticated_operator_id")
+            record["decision_basis"] = "explicit_operator_approval"
             record["record_hash"] = _compute_record_hash(record)
 
     if chain_recorder is not None:

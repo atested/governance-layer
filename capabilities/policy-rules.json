@@ -169,8 +169,8 @@
           3
         ]
       },
-      "decision": "ALLOW",
-      "reason": "Temporarily allowing tier-3 operations while approval store is rebuilt. Original: DENY with operator approval required."
+      "decision": "DENY",
+      "reason": "Tier-3 opaque operation requires explicit authenticated operator approval"
     },
     {
       "id": "outside-base-dirs-deny",
