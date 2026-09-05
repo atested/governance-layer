@@ -6,6 +6,7 @@
     "verify:wp-002": "python3 scripts/verify_wp_002.py",
     "verify:wp-003": "python3 scripts/verify_wp_003.py",
     "verify:wp-004": "python3 scripts/verify_wp_004.py",
-    "verify:wp-005": "python3 scripts/verify_wp_005.py"
+    "verify:wp-005": "python3 scripts/verify_wp_005.py",
+    "verify:wp-006": "python3 scripts/verify_wp_006.py"
   }
 }
