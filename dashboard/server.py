@@ -32,6 +32,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 from storage_contract import runtime_root
 from env_compat import read_env_preferred  # QS-039 #14: ATESTED_*/GOV_* fallback
 from governance_foundation import GovernedSessionStore, maturity_tier_catalog
+from privacy_boundaries import PrivacyBoundaryError, aggregate_telemetry_export
 
 RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
@@ -409,6 +410,9 @@ def _build_summary_telemetry_artifact():
             "lifetime": summary.get("lifetime", {}),
         },
         "categories": categories,
+        # The local artifact may document its construction, but egress uses
+        # only this fixed count-only payload (see _handle_telemetry_submit).
+        "export_payload": aggregate_telemetry_export(summary, categories),
     }
     artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode("utf-8")
     artifact["artifact_hash"] = f"sha256:{hashlib.sha256(artifact_bytes).hexdigest()}"
@@ -2421,7 +2425,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             if send_to_remote:
                 remote_result = send_artifact_to_remote(
-                    artifact, "https://license.atested.com/api/telemetry"
+                    artifact["export_payload"], "https://license.atested.com/api/telemetry"
                 )
                 result["remote"] = remote_result
 
@@ -2532,6 +2536,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     pass
 
             _json_response(self, result)
+        except PrivacyBoundaryError as exc:
+            _json_response(self, {"error": str(exc)}, 400)
         except Exception as exc:
             _json_response(self, {"error": str(exc)}, 500)
 

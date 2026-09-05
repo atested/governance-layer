@@ -13,10 +13,12 @@ try:
     from machine_identity import load_machine_identity, load_machine_registry, save_machine_registry, now_utc_z
     from storage_contract import runtime_root
     from sync_protocol import SYNC_PROTOCOL_VERSION, canonical_json, sha256_json
+    from privacy_boundaries import aggregate_local_telemetry_summary, PrivacyBoundaryError, validate_aggregate_only_telemetry
 except ImportError:  # pragma: no cover - package import path
     from scripts.machine_identity import load_machine_identity, load_machine_registry, save_machine_registry, now_utc_z
     from scripts.storage_contract import runtime_root
     from scripts.sync_protocol import SYNC_PROTOCOL_VERSION, canonical_json, sha256_json
+    from scripts.privacy_boundaries import aggregate_local_telemetry_summary, PrivacyBoundaryError, validate_aggregate_only_telemetry
 
 
 REMOTE_TELEMETRY_DIR = "sync/remote_telemetry"
@@ -125,12 +127,16 @@ def remote_telemetry_payload(repo_root: Path) -> Optional[dict]:
     summary = load_local_telemetry_summary(repo_root)
     if not summary:
         return None
+    try:
+        safe_summary = aggregate_local_telemetry_summary(summary)
+    except PrivacyBoundaryError:
+        return None
     identity = load_machine_identity(repo_root) or {}
     return {
         "machine_id": identity.get("machine_id"),
         "machine_role": identity.get("machine_role"),
-        "summary": summary,
-        "summary_hash": sha256_json(summary),
+        "summary": safe_summary,
+        "summary_hash": sha256_json(safe_summary),
     }
 
 
@@ -140,6 +146,10 @@ def store_remote_telemetry_summary(repo_root: Path, source_machine_id: str, tele
     summary = telemetry_payload.get("summary")
     if not isinstance(summary, dict):
         return None
+    try:
+        summary = validate_aggregate_only_telemetry(summary)
+    except PrivacyBoundaryError as exc:
+        raise ValueError("REMOTE_TELEMETRY_PRIVACY_REJECTED") from exc
     reported_hash = telemetry_payload.get("summary_hash")
     actual_hash = sha256_json(summary)
     if isinstance(reported_hash, str) and reported_hash and reported_hash != actual_hash:
