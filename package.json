@@ -4,6 +4,7 @@
   "scripts": {
     "verify:wp-001": "python3 scripts/verify_wp_001.py",
     "verify:wp-002": "python3 scripts/verify_wp_002.py",
-    "verify:wp-003": "python3 scripts/verify_wp_003.py"
+    "verify:wp-003": "python3 scripts/verify_wp_003.py",
+    "verify:wp-004": "python3 scripts/verify_wp_004.py"
   }
 }

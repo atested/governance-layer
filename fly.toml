@@ -16,7 +16,8 @@ primary_region = 'iad'
   GOVMCP_REMOTE_AUTH_MODE = 'bearer'
   GOVMCP_STREAMABLE_HTTP_PATH = '/mcp'
   GOV_RUNTIME_DIR = '/data'
-  GOV_SIGNING_DEV_MODE = '1'
+  ATESTED_RUNTIME_CONTEXT = 'production'
+  ATESTED_GOVERNANCE_CAPACITY = '32'
 
 [[mounts]]
   source = 'govmcp_data'

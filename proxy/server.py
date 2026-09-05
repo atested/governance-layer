@@ -99,6 +99,12 @@ from proxy.providers.base import BaseProvider, BaseStreamingCollector, ToolCall,
 from proxy.boundary import govern_provider_response
 from proxy.qa_gate import QAChainTailReader, ProxyQualityGate
 from governance_foundation import GovernedSessionStore, SESSION_HEADER, SESSION_ROUTE
+from production_safety import (
+    LOCAL_DEVELOPMENT,
+    ProductionSafetyBoundary,
+    RuntimeSafetyConfig,
+    StartupSafetyError,
+)
 
 logger = logging.getLogger("atested.proxy")
 
@@ -2040,13 +2046,22 @@ class GovernanceProxy:
 class ProxyServer:
     """Minimal async HTTP server wrapping GovernanceProxy."""
 
-    def __init__(self, proxy: GovernanceProxy, host: str, port: int):
+    def __init__(
+        self,
+        proxy: GovernanceProxy,
+        host: str,
+        port: int,
+        *,
+        safety: Optional[ProductionSafetyBoundary] = None,
+    ):
         self._proxy = proxy
         self._host = host
         self._port = port
+        self._safety = safety
 
     async def _handle_client(self, reader: asyncio.StreamReader,
                               writer: asyncio.StreamWriter):
+        admission_lease = None
         try:
             request_line = await asyncio.wait_for(
                 reader.readline(), timeout=30.0
@@ -2062,6 +2077,35 @@ class ProxyServer:
 
             method = parts[0]
             raw_path = parts[1]
+
+            if self._safety is not None and raw_path.split("?", 1)[0] in {"/livez", "/readyz"}:
+                snapshot = self._safety.health()
+                is_liveness = raw_path.split("?", 1)[0] == "/livez"
+                healthy = snapshot["live"] if is_liveness else snapshot["ready"]
+                response_body = json.dumps(snapshot, sort_keys=True).encode("utf-8")
+                status = 200 if healthy else 503
+                status_text = HTTPStatus(status).phrase
+                writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+                writer.write(b"content-type: application/json\r\n")
+                writer.write(f"content-length: {len(response_body)}\r\n".encode())
+                writer.write(b"cache-control: no-store\r\n\r\n")
+                writer.write(response_body)
+                await writer.drain()
+                return
+
+            if self._safety is not None:
+                admission_lease = self._safety.try_admit()
+                if admission_lease is None:
+                    refusal = self._safety.current_refusal()
+                    refusal["health"] = self._safety.health()
+                    err_body = json.dumps(refusal, sort_keys=True).encode("utf-8")
+                    writer.write(b"HTTP/1.1 503 Service Unavailable\r\n")
+                    writer.write(b"content-type: application/json\r\n")
+                    writer.write(b"retry-after: 1\r\n")
+                    writer.write(f"content-length: {len(err_body)}\r\n\r\n".encode())
+                    writer.write(err_body)
+                    await writer.drain()
+                    return
 
             # Route to provider by URL prefix
             provider = None
@@ -2230,6 +2274,8 @@ class ProxyServer:
             except Exception:
                 pass
         finally:
+            if admission_lease is not None:
+                admission_lease.release()
             try:
                 writer.close()
                 await writer.wait_closed()
@@ -2301,19 +2347,21 @@ def main():
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
 
-    # INV-005: Proxy records are trust-grade and MUST be signed.
-    # Refuse to start without a valid signing key — no silent degradation.
-    if _SIGNING_KEY is None:
-        key_path = (read_env_preferred("ATESTED_SIGNING_KEY_PATH", "GOV_SIGNING_KEY_PATH") or "").strip()
-        if not key_path:
-            logger.error(
-                "No signing key found — proxy requires a signing key (INV-005). "
-                "Run 'python3 scripts/atested_cli.py init' to generate one, "
-                "or set GOV_SIGNING_KEY_PATH to an existing Ed25519 PEM file."
-            )
-        else:
-            logger.error("Failed to load signing key from %s — proxy requires a valid key (INV-005)", key_path)
+    try:
+        safety_config = RuntimeSafetyConfig.from_environment()
+        safety = ProductionSafetyBoundary(
+            safety_config,
+            signing_usable=_SIGNING_KEY is not None,
+            effective_uid=os.geteuid() if hasattr(os, "geteuid") else None,
+        )
+    except StartupSafetyError as exc:
+        logger.error("Refusing unsafe governance startup: %s", exc)
         sys.exit(1)
+
+    if _SIGNING_KEY is None and safety_config.context == LOCAL_DEVELOPMENT:
+        logger.warning(
+            "Unsigned governance records are enabled only for explicit local-development context"
+        )
 
     # Verify API key is available
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -2475,7 +2523,7 @@ def main():
         qa_gate=qa_gate,
     )
 
-    server = ProxyServer(proxy, args.host, args.port)
+    server = ProxyServer(proxy, args.host, args.port, safety=safety)
 
     try:
         asyncio.run(server.start())
