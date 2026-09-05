@@ -17,7 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "dashboard"))
 
 # Patch RUNTIME before importing so _get_install_fingerprint uses our temp dir
-_tmpdir = tempfile.mkdtemp(dir="/private/tmp/claude-501")
+_tmpdir = tempfile.mkdtemp()
 _RUNTIME = Path(_tmpdir)
 
 with patch.dict(os.environ, {}, clear=False):
@@ -31,7 +31,7 @@ with patch.dict(os.environ, {}, clear=False):
 class TestInstallFingerprint:
     def setup_method(self):
         """Reset RUNTIME to a fresh temp dir for each test."""
-        self._tmpdir = Path(tempfile.mkdtemp(dir="/private/tmp/claude-501"))
+        self._tmpdir = Path(tempfile.mkdtemp())
         _srv_mod.RUNTIME = self._tmpdir
 
     def teardown_method(self):

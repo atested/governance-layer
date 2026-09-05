@@ -9,14 +9,8 @@ as identified by D-2026-0413-BASE-DIRS-MATCHER-INVESTIGATION.
 """
 
 import logging
-import sys
-from pathlib import Path
 
-# Add proxy package to path so we can import the real function.
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "proxy"))
-
-from server import resolve_policy_base_dirs
+from proxy.server import resolve_policy_base_dirs
 
 # Fixed test values for repo and runtime paths.
 REPO_PATH = "/test/repo"
