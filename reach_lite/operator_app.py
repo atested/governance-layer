@@ -182,12 +182,15 @@ def seed_state(failure_modes: set[str] | None = None) -> AppState:
 
 
 def _nav_html(active: str | None = None) -> str:
-    links = "".join(
-        f'<a href="/{dest}" data-destination="{dest}"'
-        f'{" aria-current=\"page\"" if dest == active else ""}>{_DESTINATION_TITLES[dest]}</a>'
-        for dest in FIVE_DESTINATIONS
-    )
-    return f'<nav aria-label="Operator destinations" class="operator-nav"><a href="/" data-destination="home">Atested Reach Lite</a>{links}</nav>'
+    links = []
+    for dest in FIVE_DESTINATIONS:
+        aria_current = ' aria-current="page"' if dest == active else ""
+        links.append(
+            f'<a href="/{dest}" data-destination="{dest}"{aria_current}>'
+            f'{_DESTINATION_TITLES[dest]}</a>'
+        )
+    links_html = "".join(links)
+    return f'<nav aria-label="Operator destinations" class="operator-nav"><a href="/" data-destination="home">Atested Reach Lite</a>{links_html}</nav>'
 
 
 def _page_head(title: str) -> str:
