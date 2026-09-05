@@ -31,6 +31,7 @@ from policy_eval_shared import (
     sanitize_base_dir,
     resolve_base_dirs,
 )
+from governance_foundation import maturity_tier_from_policy
 try:
     from machine_identity import add_machine_identity_fields
     from canonical_form import canonical_json as _canonical_form_json
@@ -79,7 +80,7 @@ def load_policy_rules(path: Optional[Path] = None) -> dict:
 
 
 # Deny-all fallback: empty rules list means default-DENY catches everything
-_DENY_ALL_POLICY = {"rules": [], "_fallback": True}
+_DENY_ALL_POLICY = {"rules": [], "maturity_tier": "personal", "_fallback": True}
 
 
 def _log_policy_error(msg: str) -> None:
@@ -353,6 +354,7 @@ def evaluate(
         "request_id": str(uuid.uuid4()),
         "session_id": session_id or "",
         "user_identity": user_identity or "",
+        "maturity_tier": maturity_tier_from_policy(policy),
         "original_tool": classification.get("original_tool", ""),
         "operation_description": classification.get(
             "operation_description",

@@ -462,6 +462,7 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "record_type": record_type,
             "verification_state": rec.get("verification_state", ""),
             "target": target,
+            "maturity_tier": rec.get("maturity_tier", ""),
         }
         if is_v2:
             detail["confidence_tier"] = confidence_tier
@@ -473,6 +474,7 @@ def _normalize_activity_entry(rec: dict, sequence_position: int) -> Optional[dic
             "request_id": rec.get("request_id", ""),
             "record_hash": rec.get("record_hash", ""),
             "policy_decision": policy_decision,
+            "maturity_tier": rec.get("maturity_tier", ""),
         }
 
     elif category == "verification_transition":

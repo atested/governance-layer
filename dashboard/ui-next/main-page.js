@@ -149,6 +149,28 @@ export function renderMainPage() {
       <h1 class="mp-page-title">Atested Operations Dashboard</h1>
       <div class="mp-machine-status" id="mp-machine-status">Machine role loading</div>
     </div>
+    <section class="mp-governed-session" aria-labelledby="mp-session-title">
+      <div>
+        <h2 id="mp-session-title">Governed agent session</h2>
+        <p>Set the intended working scope. The session becomes ready only after provider traffic is observed through the HTTP governance proxy.</p>
+      </div>
+      <label>Working scope
+        <input id="mp-session-scope" type="text" placeholder="/path/to/project" autocomplete="off" />
+      </label>
+      <label>Governance maturity
+        <select id="mp-session-tier">
+          <option value="personal">Personal</option>
+          <option value="crew">Crew</option>
+          <option value="team">Team</option>
+          <option value="institution">Institution</option>
+        </select>
+      </label>
+      <label>HTTP governance proxy
+        <input id="mp-session-proxy" type="url" value="http://127.0.0.1:8080" autocomplete="off" />
+      </label>
+      <button id="mp-session-configure" type="button">Configure session</button>
+      <output id="mp-session-state" aria-live="polite">NOT READY — scope and proxy observation required</output>
+    </section>
     <div class="mp-conformance mp-conformance-halted" id="mp-conformance-indicator">
       <button class="mp-conformance-summary" id="mp-conformance-toggle" type="button" aria-expanded="false">
         <span class="mp-conformance-state" id="mp-conformance-state">HALTED</span>
@@ -271,6 +293,26 @@ export function renderMainPage() {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openActivityWindow(recentPane); }
   });
 
+  _page.querySelector('#mp-session-configure').addEventListener('click', async () => {
+    const state = _page.querySelector('#mp-session-state');
+    const scope = _page.querySelector('#mp-session-scope').value.trim();
+    if (!scope) {
+      state.textContent = 'NOT READY — intended working scope is required';
+      return;
+    }
+    state.textContent = 'Configuring…';
+    const result = await api.postGovernedSessionConfigure({
+      scope: { working_directory: scope },
+      proxy_url: _page.querySelector('#mp-session-proxy').value.trim(),
+      maturity_tier: _page.querySelector('#mp-session-tier').value,
+    });
+    if (!result.ok) {
+      state.textContent = `NOT READY — ${result.error}`;
+      return;
+    }
+    _renderGovernedSession(result.data);
+  });
+
   // Render workflow launcher groups with section headings
   const grid = _page.querySelector('#launcher-grid');
   for (const group of LAUNCHER_GROUPS) {
@@ -356,12 +398,17 @@ export function renderMainPage() {
 export async function loadMainPageData() {
   if (!_page) return;
 
-  const [healthRes, statusRes, activityRes, conformanceRes] = await Promise.all([
+  const [healthRes, statusRes, activityRes, conformanceRes, sessionRes] = await Promise.all([
     api.getHealth(),
     api.getStatus(),
     api.getActivity({ limit: 5 }),
     api.getConformance(),
+    api.getGovernedSession(),
   ]);
+
+  if (sessionRes.ok && sessionRes.data.session) {
+    _renderGovernedSession(sessionRes.data.session);
+  }
 
   // Chain Health pane
   if (healthRes.ok) {
@@ -506,6 +553,20 @@ export function setLicenseMode(modeData) {
     const launchers = _page.querySelector('#mp-launchers');
     _page.insertBefore(card, launchers);
   }
+}
+
+function _renderGovernedSession(session) {
+  if (!_page || !session) return;
+  const state = _page.querySelector('#mp-session-state');
+  const scope = session.scope?.working_directory || '';
+  if (scope) _page.querySelector('#mp-session-scope').value = scope;
+  if (session.proxy_url) _page.querySelector('#mp-session-proxy').value = session.proxy_url;
+  if (session.maturity_tier) _page.querySelector('#mp-session-tier').value = session.maturity_tier;
+  state.dataset.sessionId = session.session_id || '';
+  state.textContent = session.governed_ready
+    ? `READY — ${session.maturity_tier} traffic observed through governance proxy`
+    : `NOT READY — session ${session.session_id || 'unconfigured'} awaits governance proxy traffic`;
+  state.classList.toggle('mp-session-ready', Boolean(session.governed_ready));
 }
 
 // ---------- Internal helpers ----------
@@ -1313,6 +1374,40 @@ mpStyles.textContent = `
     background: rgba(245, 166, 35, 0.12);
   }
 
+  /* ---- Governed session ---- */
+  .mp-governed-session {
+    display: grid;
+    grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(150px, 1fr)) auto;
+    gap: 14px;
+    align-items: end;
+    margin: 18px 0;
+    padding: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    background: #22262e;
+  }
+  .mp-governed-session h2 { margin: 0 0 4px; font-size: 1rem; }
+  .mp-governed-session p { margin: 0; color: #a8adb5; font-size: 0.78rem; }
+  .mp-governed-session label { color: #a8adb5; font-size: 0.72rem; }
+  .mp-governed-session input,
+  .mp-governed-session select {
+    display: block;
+    width: 100%;
+    margin-top: 5px;
+    padding: 8px;
+    color: #e4e6eb;
+    background: #1a1d23;
+    border: 1px solid #454b55;
+    border-radius: 3px;
+  }
+  .mp-governed-session button { padding: 9px 14px; }
+  .mp-governed-session output {
+    grid-column: 1 / -1;
+    color: #e8b04a;
+    font: 500 0.76rem "JetBrains Mono", monospace;
+  }
+  .mp-governed-session output.mp-session-ready { color: #62c98d; }
+
   /* ---- Utility ---- */
   .mp-placeholder {
     color: #8b919a;
@@ -1332,6 +1427,7 @@ mpStyles.textContent = `
 
   /* ---- Responsive ---- */
   @media (max-width: 900px) {
+    .mp-governed-session { grid-template-columns: 1fr 1fr; }
     .mp-launcher-row {
       grid-template-columns: repeat(2, 1fr);
     }

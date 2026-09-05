@@ -1,5 +1,6 @@
 {
   "policy_version": "2.0",
+  "maturity_tier": "personal",
   "description": "GovMCP v2 action-based policy rules. Evaluated in order; first matching rule wins.",
   "default_decision": "DENY",
   "default_reason": "No matching policy rule",

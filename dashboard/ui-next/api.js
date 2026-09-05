@@ -108,6 +108,20 @@ export function getConformance() {
   return _request('GET', '/conformance');
 }
 
+/** Current governed-session readiness and the four maturity identities. */
+export function getGovernedSession(sessionId = '') {
+  return _request('GET', '/governed-session', {
+    params: sessionId ? { session_id: sessionId } : {},
+  });
+}
+
+/** Configure intended scope. Proxy observation is still required for ready. */
+export function postGovernedSessionConfigure({ scope, proxy_url, maturity_tier }) {
+  return _request('POST', '/governed-session/configure', {
+    body: { scope, proxy_url, maturity_tier },
+  });
+}
+
 /**
  * Governance activity feed.
  * GET /api/activity

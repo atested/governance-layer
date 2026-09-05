@@ -39,6 +39,7 @@ import struct
 import sys
 import time as _time_mod
 import threading
+from contextvars import ContextVar
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Optional
@@ -90,7 +91,9 @@ signing_preimage_payload = _vr_mod.signing_preimage_payload
 # Provider registry
 from proxy.providers import resolve_provider, PROVIDER_PREFIXES
 from proxy.providers.base import BaseProvider, BaseStreamingCollector, ToolCall, StreamAction
+from proxy.boundary import govern_provider_response
 from proxy.qa_gate import QAChainTailReader, ProxyQualityGate
+from governance_foundation import GovernedSessionStore, SESSION_HEADER, SESSION_ROUTE
 
 logger = logging.getLogger("atested.proxy")
 
@@ -1050,6 +1053,7 @@ class GovernanceProxy:
         provider_config: Optional[dict] = None,
         integrity_monitor: Optional[IntegrityMonitor] = None,
         qa_gate: Optional[ProxyQualityGate] = None,
+        session_store: Optional[GovernedSessionStore] = None,
     ):
         self._upstream_base = upstream_base.rstrip("/")
         self._policy = policy or self._load_default_policy()
@@ -1062,6 +1066,11 @@ class GovernanceProxy:
         self._approval_lock = threading.Lock()
         self._integrity_monitor = integrity_monitor
         self._qa_gate = qa_gate
+        self._session_store = session_store or GovernedSessionStore(runtime_root(REPO))
+        self._request_governance_context: ContextVar[tuple[str, str]] = ContextVar(
+            f"atested_request_context_{id(self)}",
+            default=(self._session_id, ""),
+        )
         # Provider-specific config (upstream URLs, etc.)
         self._provider_config = provider_config or {}
         # Default: put the legacy upstream_base as the anthropic upstream
@@ -1083,6 +1092,15 @@ class GovernanceProxy:
                 logger.info("Approval store reloaded: %d active approvals",
                             len(self._approval_store.all_approvals()))
         return self._approval_store
+
+    def _request_session_id(self) -> str:
+        return self._request_governance_context.get()[0] or self._session_id
+
+    def _request_policy(self) -> dict:
+        maturity_tier = self._request_governance_context.get()[1]
+        if not maturity_tier or self._policy.get("maturity_tier") == maturity_tier:
+            return self._policy
+        return {**self._policy, "maturity_tier": maturity_tier}
 
     def _append_request_observed(
         self,
@@ -1125,7 +1143,7 @@ class GovernanceProxy:
             condition_source="unsupported_provider_format",
             condition_detail=f"{method} {path}: {detail}",
             user_identity=self._user_identity,
-            session_id=self._session_id,
+            session_id=self._request_session_id(),
             provider_name=provider_name,
             condition_id="QA-GATE:unsupported_provider_format",
         )
@@ -1257,10 +1275,10 @@ class GovernanceProxy:
             for tc in tool_calls:
                 records.append((tc, mediate_decision(
                     tc.tool_name, tc.args,
-                    policy=self._policy,
+                    policy=self._request_policy(),
                     chain_recorder=self._chain_recorder,
                     approval_store=approval_store,
-                    session_id=self._session_id,
+                    session_id=self._request_session_id(),
                     user_identity=self._user_identity,
                     provider_name=provider.name,
                     integrity_monitor=self._integrity_monitor,
@@ -1291,6 +1309,17 @@ class GovernanceProxy:
         provider: BaseProvider,
     ) -> None:
         """Proxy and govern an OpenAI Responses WebSocket session."""
+        request_session_id = str(headers.get(SESSION_HEADER, "") or "").strip()
+        session_state = self._session_store.observe_route(
+            request_session_id,
+            route=SESSION_ROUTE,
+            provider=provider.name,
+            path=path,
+        ) if request_session_id else None
+        self._request_governance_context.set((
+            request_session_id or self._session_id,
+            str((session_state or {}).get("maturity_tier", "")),
+        ))
         upstream_url = self._websocket_upstream_url(path, provider)
         fwd_headers = self._websocket_forward_headers(headers, provider)
         request_marker = f"WS {path}".encode("utf-8")
@@ -1402,6 +1431,19 @@ class GovernanceProxy:
         If provider is given, uses the provider interface for parsing/rewriting.
         Otherwise falls back to legacy Anthropic-only behavior.
         """
+        request_session_id = str(headers.get(SESSION_HEADER, "") or "").strip()
+        session_state = None
+        if request_session_id:
+            session_state = self._session_store.observe_route(
+                request_session_id,
+                route=SESSION_ROUTE,
+                provider=provider.name if provider is not None else "anthropic",
+                path=path,
+            )
+        self._request_governance_context.set((
+            request_session_id or self._session_id,
+            str((session_state or {}).get("maturity_tier", "")),
+        ))
         if provider is not None:
             return await self._handle_request_with_provider(
                 method, path, headers, body, provider
@@ -1468,313 +1510,46 @@ class GovernanceProxy:
         writer: asyncio.StreamWriter,
         provider: Optional[BaseProvider] = None,
     ) -> None:
-        """Handle a streaming request, forwarding text events in real time.
-
-        Text blocks are written to the client immediately as they arrive.
-        Tool calls are buffered until complete, governed, then flushed
-        (ALLOW) or replaced with denial text (DENY).
-        """
+        """Buffer the complete stream, govern every call, then release once."""
+        request_session_id = str(headers.get(SESSION_HEADER, "") or "").strip()
+        if request_session_id:
+            session_state = self._session_store.observe_route(
+                request_session_id,
+                route=SESSION_ROUTE,
+                provider=provider.name if provider is not None else "anthropic",
+                path=path,
+            )
+        else:
+            session_state = None
+        self._request_governance_context.set((
+            request_session_id or self._session_id,
+            str((session_state or {}).get("maturity_tier", "")),
+        ))
         if provider is not None:
-            return await self._handle_streaming_to_writer_provider(
-                path, headers, body, writer, provider
+            url, forwarded_headers, _, _ = self._prepare_request_with_provider(
+                "POST", path, headers, body, provider
             )
-
-        # Legacy Anthropic path
-        url, fwd_headers, is_messages, _ = self._prepare_request(
-            "POST", path, headers, body
-        )
-        collector = StreamingToolCollector(
-            self._policy, self._chain_recorder,
-            self._session_id, self._user_identity,
-            approval_store=self._get_approval_store(),
-            integrity_monitor=self._integrity_monitor,
-            qa_gate=self._qa_gate,
-        )
-        buffered_events: dict[int, list[bytes]] = {}
-        _tool_use_count = 0
-
-        logger.info("Streaming handler entered for path=%s", path)
-
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST", url, headers=fwd_headers, content=body,
-            ) as resp:
-                if resp.status_code != 200:
-                    content = await resp.aread()
-                    # QS-053: every request through the proxy produces a chain
-                    # record, including streaming non-200s.
-                    self._append_request_observed(
-                        provider_name="anthropic", method="POST", path=url,
-                        status_code=resp.status_code, tool_endpoint=is_messages,
-                        examined=False, forwarded=True, request_body=body,
-                        detail="streaming upstream non-200 response",
-                    )
-                    writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
-                    writer.write(b"content-type: application/json\r\n")
-                    writer.write(f"content-length: {len(content)}\r\n".encode())
-                    writer.write(b"\r\n")
-                    writer.write(content)
-                    await writer.drain()
-                    return
-
-                writer.write(b"HTTP/1.1 200 OK\r\n")
-                writer.write(b"content-type: text/event-stream\r\n")
-                writer.write(b"cache-control: no-cache\r\n")
-                writer.write(b"connection: keep-alive\r\n")
-                for key in ("x-request-id", "request-id"):
-                    val = resp.headers.get(key)
-                    if val:
-                        writer.write(f"{key}: {val}\r\n".encode())
-                writer.write(b"\r\n")
-                await writer.drain()
-
-                current_event_type = ""
-                async for raw_line in resp.aiter_lines():
-                    line = raw_line.strip()
-                    if not line:
-                        continue
-
-                    if line.startswith("event:"):
-                        current_event_type = line[6:].strip()
-                        continue
-
-                    if not line.startswith("data:"):
-                        continue
-
-                    data_str = line[5:].strip()
-
-                    if data_str == "[DONE]":
-                        logger.info("Stream complete: %d tool_use blocks mediated", _tool_use_count)
-                        writer.write(b"event: done\ndata: [DONE]\n\n")
-                        await writer.drain()
-                        continue
-
-                    try:
-                        data = json.loads(data_str)
-                    except json.JSONDecodeError as exc:
-                        if not developer_mode_active():
-                            record = self._append_unexaminable_error(
-                                provider_name=provider.name,
-                                method="POST",
-                                path=url,
-                                detail=f"stream JSON parse failed: {exc}",
-                            )
-                            err = json.dumps({
-                                "error": "governance_integrity_error",
-                                "condition_source": record.get("condition_source"),
-                                "condition_detail": record.get("condition_detail"),
-                            })
-                            writer.write(f"event: error\ndata: {err}\n\n".encode())
-                            await writer.drain()
-                            return
-                        chunk = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                        writer.write(chunk)
-                        await writer.drain()
-                        continue
-
-                    action = collector.process_event(current_event_type, data)
-
-                    if action == "buffer":
-                        idx = data.get("index", 0)
-                        msg_type = data.get("type", "")
-                        if msg_type == "content_block_start":
-                            _tool_use_count += 1
-                            block_name = data.get("content_block", {}).get("name", "?")
-                            logger.info("Tool use #%d detected: %s (idx=%d)", _tool_use_count, block_name, idx)
-                        buffered_events.setdefault(idx, []).append(
-                            f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                        )
-
-                    elif action == "replace":
-                        idx = data.get("index", 0)
-                        decision = collector.get_decision(idx)
-                        logger.info("Tool DENIED (idx=%d): %s", idx, decision.get("matched_rule", "") if decision else "?")
-                        for event_bytes in collector.get_replacement_events(idx):
-                            writer.write(event_bytes)
-                        await writer.drain()
-                        buffered_events.pop(idx, None)
-
-                    elif action == "pass":
-                        msg_type = data.get("type", "")
-                        idx = data.get("index", 0)
-
-                        if msg_type == "content_block_stop" and idx in buffered_events:
-                            decision = collector.get_decision(idx)
-                            if decision:
-                                logger.info("Tool ALLOWED (idx=%d): %s → %s",
-                                            idx, decision.get("original_tool", "?"),
-                                            decision.get("policy_decision", "?"))
-                            for event_bytes in buffered_events.pop(idx):
-                                writer.write(event_bytes)
-                            writer.write(
-                                f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                            )
-                            await writer.drain()
-                        else:
-                            writer.write(
-                                f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                            )
-                            await writer.drain()
-
-        # QS-053: a streaming response with no tool_use blocks still produces
-        # a chain record (mirrors the non-streaming no-tool-blocks path), so
-        # every request through the proxy is recorded — not just those that
-        # carry a governed tool call. Fires on normal stream end regardless of
-        # whether the upstream emitted a [DONE] sentinel.
-        if _tool_use_count == 0:
-            self._append_request_observed(
-                provider_name="anthropic", method="POST", path=url,
-                status_code=200, tool_endpoint=is_messages,
-                examined=True, forwarded=True, request_body=body,
-                detail="recognized streaming response contained no tool_use blocks",
+            status, response_headers, response_body = await self._handle_streaming_buffered_provider(
+                url, forwarded_headers, body, provider
             )
-
-    async def _handle_streaming_to_writer_provider(
-        self, path: str, headers: dict, body: bytes,
-        writer: asyncio.StreamWriter,
-        provider: BaseProvider,
-    ) -> None:
-        """Handle streaming with provider interface.
-
-        WP-GOV-002: the provider streaming collector identifies every
-        tool-call block in the model response for classification while
-        text blocks pass through to the client unmodified, including in
-        streaming responses. Each completed tool-call block is surfaced
-        via StreamAction.completed_tool_call for governance mediation;
-        all non-tool (text) blocks are forwarded byte-for-byte.
-        """
-        url, fwd_headers, is_tool_ep, _ = self._prepare_request_with_provider(
-            "POST", path, headers, body, provider
-        )
-        collector = provider.create_streaming_collector()
-        _tool_call_count = 0
-        approval_store = self._get_approval_store()
-
-        logger.info("Streaming handler (%s) entered for path=%s", provider.name, path)
-
-        # QS-061: pick a timeout that fits the provider. Cloud APIs answer
-        # well under 120s, but local Ollama can take minutes per token.
-        async with httpx.AsyncClient(
-            timeout=provider_timeout_seconds(provider.name, self._provider_config)
-        ) as client:
-            async with client.stream(
-                "POST", url, headers=fwd_headers, content=body,
-            ) as resp:
-                if resp.status_code != 200:
-                    content = await resp.aread()
-                    # QS-053: record every request, including streaming non-200s.
-                    self._append_request_observed(
-                        provider_name=provider.name, method="POST", path=url,
-                        status_code=resp.status_code, tool_endpoint=is_tool_ep,
-                        examined=False, forwarded=True, request_body=body,
-                        detail="streaming upstream non-200 response",
-                    )
-                    writer.write(f"HTTP/1.1 {resp.status_code} Error\r\n".encode())
-                    writer.write(b"content-type: application/json\r\n")
-                    writer.write(f"content-length: {len(content)}\r\n".encode())
-                    writer.write(b"\r\n")
-                    writer.write(content)
-                    await writer.drain()
-                    return
-
-                writer.write(b"HTTP/1.1 200 OK\r\n")
-                writer.write(b"content-type: text/event-stream\r\n")
-                writer.write(b"cache-control: no-cache\r\n")
-                writer.write(b"connection: keep-alive\r\n")
-                for key in ("x-request-id", "request-id"):
-                    val = resp.headers.get(key)
-                    if val:
-                        writer.write(f"{key}: {val}\r\n".encode())
-                writer.write(b"\r\n")
-                await writer.drain()
-
-                current_event_type = ""
-                async for raw_line in resp.aiter_lines():
-                    line = raw_line.strip()
-                    if not line:
-                        continue
-
-                    if line.startswith("event:"):
-                        current_event_type = line[6:].strip()
-                        continue
-
-                    if not line.startswith("data:"):
-                        continue
-
-                    data_str = line[5:].strip()
-
-                    if data_str == "[DONE]":
-                        logger.info("Stream complete (%s): %d tool calls mediated",
-                                    provider.name, _tool_call_count)
-                        writer.write(b"event: done\ndata: [DONE]\n\n")
-                        await writer.drain()
-                        continue
-
-                    try:
-                        data = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        chunk = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                        writer.write(chunk)
-                        await writer.drain()
-                        continue
-
-                    event_bytes = f"event: {current_event_type}\ndata: {data_str}\n\n".encode()
-                    stream_action = collector.process_event(current_event_type, data)
-
-                    if stream_action.action == "buffer":
-                        collector.add_buffered_event(stream_action.index, event_bytes)
-                        tool_calls = stream_action.all_completed_tool_calls()
-                        if tool_calls:
-                            _tool_call_count += len(tool_calls)
-                            decisions = []
-                            for tc in tool_calls:
-                                decisions.append((tc, mediate_decision(
-                                    tc.tool_name, tc.args,
-                                    policy=self._policy,
-                                    chain_recorder=self._chain_recorder,
-                                    approval_store=approval_store,
-                                    session_id=self._session_id,
-                                    user_identity=self._user_identity,
-                                    provider_name=provider.name,
-                                    integrity_monitor=self._integrity_monitor,
-                                    qa_gate=self._qa_gate,
-                                )))
-                            blocked = [(tc, record) for tc, record in decisions if _is_blocking_record(record)]
-
-                            if blocked:
-                                for tc, record in blocked:
-                                    reasons = record.get("policy_reasons", [])
-                                    reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
-                                    logger.info("Tool DENIED (%s): %s — %s",
-                                                provider.name, tc.tool_name,
-                                                record.get("matched_rule", ""))
-                                    for denial_event in collector.build_denial_events(
-                                        stream_action.index, tc,
-                                        reason_text, record.get("matched_rule", ""),
-                                    ):
-                                        writer.write(denial_event)
-                                await writer.drain()
-                            else:
-                                for tc, _ in decisions:
-                                    logger.info("Tool ALLOWED (%s): %s", provider.name, tc.tool_name)
-                                for buf_event in collector.get_buffered_events(stream_action.index):
-                                    writer.write(buf_event)
-                                # Also write the current stop event.
-                                writer.write(event_bytes)
-                                await writer.drain()
-
-                    elif stream_action.action == "pass":
-                        writer.write(event_bytes)
-                        await writer.drain()
-
-        # QS-053: record the request even when the stream carried no tool call.
-        if _tool_call_count == 0:
-            self._append_request_observed(
-                provider_name=provider.name, method="POST", path=url,
-                status_code=200, tool_endpoint=is_tool_ep,
-                examined=True, forwarded=True, request_body=body,
-                detail="recognized streaming response contained no tool calls",
+        else:
+            url, forwarded_headers, _, _ = self._prepare_request(
+                "POST", path, headers, body
             )
+            status, response_headers, response_body = await self._handle_streaming_buffered(
+                url, forwarded_headers, body
+            )
+        status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
+        writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+        for key, value in response_headers.items():
+            if key.lower() != "transfer-encoding":
+                writer.write(f"{key}: {value}\r\n".encode())
+        if "content-length" not in {key.lower() for key in response_headers}:
+            writer.write(f"content-length: {len(response_body)}\r\n".encode())
+        writer.write(b"\r\n")
+        writer.write(response_body)
+        await writer.drain()
+        return
 
     async def _handle_non_streaming(
         self, url: str, method: str, headers: dict, body: bytes,
@@ -1851,10 +1626,10 @@ class GovernanceProxy:
             record = mediate_decision(
                 block["name"],
                 block.get("input", {}),
-                policy=self._policy,
+                policy=self._request_policy(),
                 chain_recorder=self._chain_recorder,
                 approval_store=approval_store,
-                session_id=self._session_id,
+                session_id=self._request_session_id(),
                 user_identity=self._user_identity,
                 provider_name="anthropic",
                 integrity_monitor=self._integrity_monitor,
@@ -1979,29 +1754,25 @@ class GovernanceProxy:
             )
             return resp.status_code, resp_headers, resp_body
 
-        denials: list[tuple[ToolCall, str, str]] = []
         approval_store = self._get_approval_store()
-        for tc in tool_calls:
-            record = mediate_decision(
+        governed = govern_provider_response(
+            provider,
+            data,
+            lambda tc: mediate_decision(
                 tc.tool_name,
                 tc.args,
-                policy=self._policy,
+                policy=self._request_policy(),
                 chain_recorder=self._chain_recorder,
                 approval_store=approval_store,
-                session_id=self._session_id,
+                session_id=self._request_session_id(),
                 user_identity=self._user_identity,
                 provider_name=provider.name,
                 integrity_monitor=self._integrity_monitor,
                 qa_gate=self._qa_gate,
-            )
-
-            if _is_blocking_record(record):
-                reasons = record.get("policy_reasons", [])
-                reason_text = reasons[0].get("detail", "policy denied") if reasons else "policy denied"
-                denials.append((tc, reason_text, record.get("matched_rule", "")))
-
-        if denials:
-            data = provider.apply_denials(data, denials)
+            ),
+        )
+        if any(_is_blocking_record(record) for _, record in governed.decisions):
+            data = governed.body
             resp_body = json.dumps(data).encode()
             resp_headers = self._forward_response_headers(resp_headers, resp_body)
 
@@ -2012,8 +1783,8 @@ class GovernanceProxy:
     ) -> tuple[int, dict, bytes]:
         """Handle a streaming request with full buffering (legacy Anthropic)."""
         collector = StreamingToolCollector(
-            self._policy, self._chain_recorder,
-            self._session_id, self._user_identity,
+            self._request_policy(), self._chain_recorder,
+            self._request_session_id(), self._user_identity,
             approval_store=self._get_approval_store(),
             integrity_monitor=self._integrity_monitor,
             qa_gate=self._qa_gate,
@@ -2202,10 +1973,10 @@ class GovernanceProxy:
                             for tc in tool_calls:
                                 decisions.append((tc, mediate_decision(
                                     tc.tool_name, tc.args,
-                                    policy=self._policy,
+                                    policy=self._request_policy(),
                                     chain_recorder=self._chain_recorder,
                                     approval_store=approval_store,
-                                    session_id=self._session_id,
+                                    session_id=self._request_session_id(),
                                     user_identity=self._user_identity,
                                     provider_name=provider.name,
                                     integrity_monitor=self._integrity_monitor,
@@ -2400,24 +2171,22 @@ class ProxyServer:
                 logger.info("Request (%s): %s %s tool_ep=%s streaming=%s body_len=%d",
                             provider.name, method, path[:60], is_tool_ep, is_streaming, len(body))
 
-                if is_streaming:
-                    await self._proxy.handle_streaming_to_writer(
-                        path, headers, body, writer, provider=provider
-                    )
-                else:
-                    status, resp_headers, resp_body = await self._proxy.handle_request(
-                        method, path, headers, body, provider=provider
-                    )
-                    status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
-                    writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
-                    for k, v in resp_headers.items():
-                        if k.lower() not in ("transfer-encoding",):
-                            writer.write(f"{k}: {v}\r\n".encode())
-                    if "content-length" not in {k.lower() for k in resp_headers}:
-                        writer.write(f"content-length: {len(resp_body)}\r\n".encode())
-                    writer.write(b"\r\n")
-                    writer.write(resp_body)
-                    await writer.drain()
+                # Tool-bearing streams are fully buffered at the governance
+                # boundary.  This ensures every call in the response is
+                # classified before any part of that response is released.
+                status, resp_headers, resp_body = await self._proxy.handle_request(
+                    method, path, headers, body, provider=provider
+                )
+                status_text = HTTPStatus(status).phrase if status in HTTPStatus._value2member_map_ else "OK"
+                writer.write(f"HTTP/1.1 {status} {status_text}\r\n".encode())
+                for k, v in resp_headers.items():
+                    if k.lower() not in ("transfer-encoding",):
+                        writer.write(f"{k}: {v}\r\n".encode())
+                if "content-length" not in {k.lower() for k in resp_headers}:
+                    writer.write(f"content-length: {len(resp_body)}\r\n".encode())
+                writer.write(b"\r\n")
+                writer.write(resp_body)
+                await writer.drain()
             else:
                 # No provider prefix means the request is outside the governed
                 # boundary. Reject it instead of forwarding through a legacy

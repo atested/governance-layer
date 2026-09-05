@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 REPO = Path(__file__).resolve().parents[1]
 DASHBOARD_DIR = Path(__file__).resolve().parent
@@ -31,6 +31,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from storage_contract import runtime_root
 from env_compat import read_env_preferred  # QS-039 #14: ATESTED_*/GOV_* fallback
+from governance_foundation import GovernedSessionStore, maturity_tier_catalog
 
 RUNTIME = runtime_root(REPO)
 CHAIN = RUNTIME / "LOGS" / "decision-chain.jsonl"
@@ -1378,11 +1379,9 @@ def _compute_asset_version() -> str:
 
 _ASSET_VERSION = _compute_asset_version()
 
-# Static UI filenames served without authentication
-_STATIC_FILES = {"index.html", "app.js", "styles.css", ""}
-
 _DASHBOARD_TOKEN = None
 _DASHBOARD_PORT = None
+_DASHBOARD_COOKIE = "atested_dashboard_session"
 
 CSP_HEADER = (
     "default-src 'self'; "
@@ -1404,11 +1403,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def _check_auth(self):
-        """Return True if the request carries a valid bearer token."""
+        """Accept the local bearer token or an authenticated browser cookie."""
         auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return False
-        return auth[len("Bearer "):] == _DASHBOARD_TOKEN
+        if auth.startswith("Bearer ") and secrets.compare_digest(
+            auth[len("Bearer "):], _DASHBOARD_TOKEN or ""
+        ):
+            return True
+        cookie_header = self.headers.get("Cookie", "")
+        for item in cookie_header.split(";"):
+            name, separator, value = item.strip().partition("=")
+            if separator and name == _DASHBOARD_COOKIE:
+                return secrets.compare_digest(value, _DASHBOARD_TOKEN or "")
+        return False
 
     def _origin_allowed(self):
         """Return True if the Origin header (if present) is localhost."""
@@ -1433,10 +1439,23 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         _check_and_reload()
         parsed = urlparse(self.path)
-        if parsed.path.startswith("/api/"):
-            if not self._check_auth():
+        if parsed.path == "/auth":
+            supplied = parse_qs(parsed.query).get("token", [""])[0]
+            if not supplied or not secrets.compare_digest(supplied, _DASHBOARD_TOKEN or ""):
                 _json_response(self, {"error": "Unauthorized"}, 401)
                 return
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.send_header(
+                "Set-Cookie",
+                f"{_DASHBOARD_COOKIE}={_DASHBOARD_TOKEN}; Path=/; HttpOnly; SameSite=Strict",
+            )
+            self.end_headers()
+            return
+        if not self._check_auth():
+            _json_response(self, {"error": "Unauthorized"}, 401)
+            return
+        if parsed.path.startswith("/api/"):
             self._handle_api(parsed)
         elif parsed.path in ("/", "/index.html", ""):
             self._serve_index_html()
@@ -1483,6 +1502,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._handle_config_update()
             elif path == "/api/config/verify-license":
                 self._handle_config_verify_license()
+            elif path == "/api/governed-session/configure":
+                self._handle_governed_session_configure()
             elif path == "/api/export/authorize":
                 self._handle_export_authorize()
             elif path == "/api/export/package":
@@ -1558,6 +1579,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.end_headers()
+
+    def _handle_governed_session_configure(self):
+        """Configure scope; readiness remains false until proxy traffic arrives."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length <= 0 or length > 65536:
+                _json_response(self, {"error": "invalid request size"}, 400)
+                return
+            data = json.loads(self.rfile.read(length))
+            store = GovernedSessionStore(RUNTIME)
+            state = store.configure(
+                data.get("scope", {}),
+                proxy_url=data.get("proxy_url") or os.environ.get(
+                    "ATESTED_PROXY_URL", "http://127.0.0.1:8080"
+                ),
+                maturity_tier=data.get("maturity_tier", "personal"),
+            )
+            _json_response(self, state, 201)
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            _json_response(self, {"error": str(exc)}, 400)
 
 
     def _handle_approve(self):
@@ -4702,7 +4743,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         path = parsed.path
 
-        if path == "/api/status":
+        if path == "/api/governed-session":
+            store = GovernedSessionStore(RUNTIME)
+            state = store.status(qs("session_id")) if qs("session_id") else store.latest()
+            _json_response(self, {
+                "session": state,
+                "maturity_tiers": maturity_tier_catalog(),
+            })
+
+        elif path == "/api/status":
             # DEPRECATED: /api/status is part of the legacy health surface.
             # Operator-facing health/state is now sourced from /api/conformance.
             # Response continues to function for backward compatibility but is
@@ -5346,7 +5395,8 @@ def main():
     if not token:
         token = secrets.token_hex(32)
     _DASHBOARD_TOKEN = token
-    print(f"Dashboard auth token: {token}", file=sys.stderr)
+    configured_url = f"http://127.0.0.1:{port}/auth?token={quote(token, safe='')}"
+    print(f"Dashboard authenticated URL: {configured_url}", file=sys.stderr)
 
     # Write token to runtime dir so callers (e.g. MCP tool) can retrieve it
     if runtime_dir:
