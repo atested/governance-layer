@@ -8,7 +8,7 @@ Optional: `queue_drift_scan.txt`, `queue_drift_scan.json`, `status_bundle.json`.
 [![CI](https://github.com/atested/governance-layer/actions/workflows/ci.yml/badge.svg)](https://github.com/atested/governance-layer/actions/workflows/ci.yml)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 
-Governance infrastructure for AI operations. Atested is an API governance proxy that sits between your AI agents and their model providers. It intercepts every tool call before execution, classifies it by observable evidence, evaluates it against policy, and records the decision in a tamper-evident chain. One environment variable. Every tool call governed. The agent never knows governance is in the path.
+Governance infrastructure for AI operations. Atested is an API governance proxy that sits between your AI agents and their model providers. The proxy intercepts model tool-call proposals before the agent receives them, the classifier assigns an evidence-based confidence tier, the policy evaluator produces an ALLOW or DENY decision, and the chain writer records that decision with a tamper-evident hash link. See the [public product assertion register](docs/PUBLIC_PRODUCT_ASSERTIONS.md) for the evidence basis and limits of these claims.
 
 **Website**: [atested.com](https://atested.com) | **Security**: [SECURITY.md](SECURITY.md)
 
@@ -39,6 +39,10 @@ Agent → Atested Proxy → Model Provider API
 - **Deterministic evaluation.** Same action, same evidence, same decision. Where a decision cannot be made deterministically, the system marks it explicitly as requiring operator judgment.
 - **Signed records.** Every decision is recorded with a SHA-256 hash linking to the previous record, forming a tamper-evident chain.
 - **Streaming support.** Text streams through in real time. Tool calls are buffered, governed, then passed or replaced. Sub-millisecond classification latency.
+
+The public product assertions in this README are indexed with their concrete
+subject, action, and evidence basis in
+[docs/PUBLIC_PRODUCT_ASSERTIONS.md](docs/PUBLIC_PRODUCT_ASSERTIONS.md).
 
 ---
 
